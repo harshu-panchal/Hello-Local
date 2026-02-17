@@ -626,7 +626,7 @@ export default function OrderDetail() {
   const handleShare = async () => {
     const shareData = {
       title: `Order #${order?.id?.split("-").slice(-1)[0]}`,
-      text: `Track my Zeto Mart order: Order #${order?.id?.split("-").slice(-1)[0]
+      text: `Track my Hello Local order: Order #${order?.id?.split("-").slice(-1)[0]
         }`,
       url: window.location.href,
     };
@@ -842,7 +842,7 @@ export default function OrderDetail() {
               <ArrowLeftIcon className="w-6 h-6" />
             </motion.button>
           </Link>
-          <h2 className="font-semibold text-lg">Zeto Mart</h2>
+          <h2 className="font-semibold text-lg">Hello Local</h2>
           <motion.button
             className="w-10 h-10 flex items-center justify-center"
             whileTap={{ scale: 0.9 }}
@@ -1073,7 +1073,7 @@ export default function OrderDetail() {
               <span className="text-2xl">🛒</span>
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-gray-900">Zeto Mart Store</p>
+              <p className="font-semibold text-gray-900">Hello Local Store</p>
               <p className="text-sm text-gray-500">
                 {order.address?.city || "Local Area"}
               </p>

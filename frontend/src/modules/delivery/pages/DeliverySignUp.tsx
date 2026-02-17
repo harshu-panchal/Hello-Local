@@ -279,8 +279,8 @@ export default function DeliverySignUp() {
           }}>
           <div className="mb-0 -mt-4">
             <img
-              src="/assets/zeto-mart.jpeg"
-              alt="Zeto Mart Delivery"
+              src="/assets/hello-local.jpeg"
+              alt="Hello Local Delivery"
               className="h-44 w-full max-w-xs mx-auto object-fill object-bottom"
             />
           </div>
@@ -691,7 +691,7 @@ export default function DeliverySignUp() {
 
       {/* Footer Text */}
       <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
-        By continuing, you agree to Zeto Mart's Terms of Service and Privacy Policy
+        By continuing, you agree to Hello Local's Terms of Service and Privacy Policy
       </p>
     </div>
   );

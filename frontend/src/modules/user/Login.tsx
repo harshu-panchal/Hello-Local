@@ -87,8 +87,8 @@ export default function Login() {
           {/* Logo */}
           <div className="mb-2">
             <img
-              src="/assets/zeto-mart.jpeg"
-              alt="Zeto Mart"
+              src="/assets/hello-local.jpeg"
+              alt="Hello Local"
               className="h-16 w-auto object-contain drop-shadow-md"
             />
           </div>
@@ -201,7 +201,7 @@ export default function Login() {
       {/* Footer Branding */}
       <div className="absolute bottom-6 left-0 right-0 text-center">
         <p className="text-xs font-medium text-neutral-500 opacity-60 uppercase tracking-widest">
-          Powered by Zeto Mart
+          Powered by Hello Local
         </p>
       </div>
 

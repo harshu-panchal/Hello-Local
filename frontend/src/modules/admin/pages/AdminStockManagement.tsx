@@ -720,7 +720,7 @@ export default function AdminStockManagement() {
       <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
         Copyright © 2025. Developed By{" "}
         <a href="#" className="text-blue-600 hover:underline">
-          Zeto Mart - 10 Minute App
+          Hello Local - 10 Minute App
         </a>
       </footer>
     </div>

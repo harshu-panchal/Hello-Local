@@ -132,7 +132,7 @@ export default function DeliveryWallet() {
         key: razorpayKey,
         amount: amount,
         currency: currency,
-        name: "Zeto Mart",
+        name: "Hello Local",
         description: "Admin Payout for COD Collections",
         order_id: razorpayOrderId,
         handler: async (response: any) => {

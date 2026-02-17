@@ -899,7 +899,7 @@ export default function AdminAllOrders() {
       <div className="text-center py-4 text-xs sm:text-sm text-neutral-600">
         Copyright © 2025. Developed By{" "}
         <Link to="/" className="text-blue-600 hover:text-blue-700">
-          Zeto Mart - 10 Minute App
+          Hello Local - 10 Minute App
         </Link>
       </div>
     </div>

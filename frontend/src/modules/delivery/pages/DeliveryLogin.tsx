@@ -93,8 +93,8 @@ export default function DeliveryLogin() {
         <div className="px-6 py-4 text-center border-b border-green-700" style={{ backgroundColor: 'rgb(21 178 74 / var(--tw-bg-opacity, 1))' }}>
           <div className="mb-0 -mt-4">
             <img
-              src="/assets/zeto-mart.jpeg"
-              alt="Zeto Mart"
+              src="/assets/hello-local.jpeg"
+              alt="Hello Local"
               className="h-44 w-full max-w-xs mx-auto object-fill object-bottom"
             />
           </div>
@@ -211,7 +211,7 @@ export default function DeliveryLogin() {
 
       {/* Footer Text */}
       <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
-        By continuing, you agree to Zeto Mart's Terms of Service and Privacy Policy
+        By continuing, you agree to Hello Local's Terms of Service and Privacy Policy
       </p>
     </div>
   );

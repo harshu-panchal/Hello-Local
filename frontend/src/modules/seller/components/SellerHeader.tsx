@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import zetoMartLogo from '@assets/zeto-mart.jpeg';
+import helloLocalLogo from '@assets/hello-local.jpeg';
 import { useAuth } from '../../../context/AuthContext';
 
 interface SellerHeaderProps {
@@ -88,14 +88,14 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
               </svg>
             )}
           </button>
-          {/* Zeto Mart Logo */}
+          {/* Hello Local Logo */}
           <button
             onClick={handleLogoClick}
             className="hover:opacity-80 transition-opacity"
           >
             <img
-              src={zetoMartLogo}
-              alt="Zeto Mart"
+              src={helloLocalLogo}
+              alt="Hello Local"
               className="h-10 sm:h-12 w-auto object-contain cursor-pointer"
               style={{ maxWidth: '200px' }}
             />

@@ -700,7 +700,7 @@ export default function AdminSystemUser() {
       <div className="text-center text-sm text-neutral-500 py-4 px-6">
         Copyright © 2025. Developed By{' '}
         <a href="#" className="text-teal-600 hover:text-teal-700">
-          Zeto Mart - 10 Minute App
+          Hello Local - 10 Minute App
         </a>
       </div>
     </div>

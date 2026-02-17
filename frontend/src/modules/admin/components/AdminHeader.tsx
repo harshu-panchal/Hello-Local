@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import zetoMartLogo from '@assets/zeto-mart.jpeg';
+import helloLocalLogo from '@assets/hello-local.jpeg';
 
 interface AdminHeaderProps {
   onMenuClick: () => void;
@@ -74,14 +74,14 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
               </svg>
             )}
           </button>
-          {/* Zeto Mart Logo */}
+          {/* Hello Local Logo */}
           <button
             onClick={handleLogoClick}
             className="hover:opacity-80 transition-opacity"
           >
             <img
-              src={zetoMartLogo}
-              alt="Zeto Mart"
+              src={helloLocalLogo}
+              alt="Hello Local"
               className="h-10 sm:h-12 w-auto object-contain cursor-pointer"
               style={{ maxWidth: '200px' }}
             />
