@@ -1,7 +1,7 @@
 import Admin from '../models/Admin';
 
 const DEFAULT_ADMIN_MOBILE = process.env.DEFAULT_ADMIN_MOBILE || '9876543210';
-const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@dhakadsnazzy.com';
+const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@hellolocal.com';
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123';
 const DEFAULT_ADMIN_FIRST = process.env.DEFAULT_ADMIN_FIRST || 'Default';
 const DEFAULT_ADMIN_LAST = process.env.DEFAULT_ADMIN_LAST || 'Admin';
@@ -10,7 +10,7 @@ const DEFAULT_ADMIN_ROLE = (process.env.DEFAULT_ADMIN_ROLE as 'Super Admin' | 'A
 /**
  * Ensure a default admin user exists for quick access to the admin panel.
  * Mobile: 9876543210 (default)
- * Email: admin@dhakadsnazzy.com (default)
+ * Email: admin@hellolocal.com (default)
  * Password: Admin@123 (not used for OTP login but stored for completeness)
  */
 export async function ensureDefaultAdmin() {

@@ -227,9 +227,14 @@ export const getCategoryById = async (req: Request, res: Response) => {
       }
 
       console.log(`[getCategoryById] Category not found: ${id}`);
-      return res.status(404).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         message: `Category not found: ${id}`,
+        data: {
+          category: null,
+          subcategories: [],
+          currentSubcategory: null,
+        },
       });
     }
 

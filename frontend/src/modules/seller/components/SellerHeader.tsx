@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import helloLocalLogo from '@assets/hello-local.jpeg';
+
 import { useAuth } from '../../../context/AuthContext';
 
 interface SellerHeaderProps {
@@ -51,9 +51,6 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
     setShowSettingsDropdown(false);
   };
 
-  const handleLogoClick = () => {
-    navigate('/seller');
-  };
 
   return (
     <header className="bg-white shadow-sm border-b border-neutral-200 sticky top-0 z-30">
@@ -87,18 +84,6 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
                 />
               </svg>
             )}
-          </button>
-          {/* Hello Local Logo */}
-          <button
-            onClick={handleLogoClick}
-            className="hover:opacity-80 transition-opacity"
-          >
-            <img
-              src={helloLocalLogo}
-              alt="Hello Local"
-              className="h-10 sm:h-12 w-auto object-contain cursor-pointer"
-              style={{ maxWidth: '200px' }}
-            />
           </button>
 
           {/* Mobile Logout Button - Only visible on mobile */}

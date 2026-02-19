@@ -87,9 +87,9 @@ export default function Login() {
           {/* Logo */}
           <div className="mb-2">
             <img
-              src="/assets/hello-local.jpeg"
+              src="/logo.png?v=2"
               alt="Hello Local"
-              className="h-16 w-auto object-contain drop-shadow-md"
+              className="h-24 w-auto object-contain drop-shadow-lg"
             />
           </div>
 
@@ -142,8 +142,8 @@ export default function Login() {
                 onClick={handleContinue}
                 disabled={mobileNumber.length !== 10 || loading}
                 className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 ${mobileNumber.length === 10 && !loading
-                    ? 'bg-gradient-to-r from-green-600 to-green-500 text-white'
-                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-green-600 to-green-500 text-white'
+                  : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   }`}
               >
                 {loading ? (

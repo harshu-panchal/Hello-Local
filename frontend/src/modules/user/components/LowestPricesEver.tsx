@@ -26,12 +26,14 @@ const ProductCard = memo(({
   product,
   cartQuantity,
   onAddToCart,
-  onUpdateQuantity
+  onUpdateQuantity,
+  theme
 }: {
   product: Product;
   cartQuantity: number;
   onAddToCart: (product: Product, element?: HTMLElement | null) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
+  theme: any;
 }) => {
   const navigate = useNavigate();
   const { isWishlisted, toggleWishlist } = useWishlist(product.id);
@@ -126,61 +128,54 @@ const ProductCard = memo(({
                       onAddToCart(product, e.currentTarget);
                     }}
                     className={`bg-white/95 backdrop-blur-sm text-[10px] font-semibold px-2 py-1 rounded shadow-md transition-colors ${product.isAvailable === false
-                        ? 'text-neutral-400 border-2 border-neutral-300 cursor-not-allowed'
-                        : 'text-green-600 border-2 border-green-600 hover:bg-white'
+                      ? 'text-neutral-400 border-2 border-neutral-300 cursor-not-allowed'
+                      : 'active:scale-95'
                       }`}
+                    style={{
+                      color: product.isAvailable !== false ? theme.accentColor : undefined,
+                      borderColor: product.isAvailable !== false ? theme.primary[0] : undefined,
+                      borderWidth: '2px'
+                    }}
                   >
                     {product.isAvailable === false ? 'Out of Range' : 'ADD'}
                   </motion.button>
                 ) : (
-                  <motion.div
-                    key="stepper"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex items-center gap-1 bg-green-600 rounded px-1.5 py-1 shadow-md"
-                    onClick={(e) => e.stopPropagation()}
+                  <div
+                    className="flex items-center justify-center gap-1.5 bg-white rounded px-1.5 py-0.5 h-7 w-full shadow-sm"
+                    style={{
+                      borderColor: theme.primary[0],
+                      borderWidth: '1.5px',
+                      color: theme.accentColor
+                    }}
                   >
-                    <motion.button
-                      whileTap={{ scale: 0.9 }}
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         onUpdateQuantity(product.id, inCartQty - 1);
                       }}
-                      className="w-4 h-4 flex items-center justify-center text-white font-bold hover:bg-green-700 rounded transition-colors p-0 leading-none"
-                      style={{ lineHeight: 1, fontSize: '14px' }}
+                      className="w-5 h-5 flex items-center justify-center font-bold"
+                      style={{ color: theme.accentColor }}
                     >
-                      <span className="relative top-[-1px]">−</span>
-                    </motion.button>
-                    <motion.span
-                      key={inCartQty}
-                      initial={{ scale: 1.2, y: -2 }}
-                      animate={{ scale: 1, y: 0 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 15 }}
-                      className="text-white font-bold min-w-[0.75rem] text-center"
-                      style={{ fontSize: '12px' }}
-                    >
+                      −
+                    </button>
+                    <span className="text-xs font-bold min-w-[1rem] text-center">
                       {inCartQty}
-                    </motion.span>
-                    <motion.button
-                      whileTap={product.isAvailable === false ? {} : { scale: 0.9 }}
-                      disabled={product.isAvailable === false}
+                    </span>
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         onUpdateQuantity(product.id, inCartQty + 1);
                       }}
-                      className={`w-4 h-4 flex items-center justify-center font-bold rounded transition-colors p-0 leading-none ${product.isAvailable === false
-                          ? 'text-neutral-300 cursor-not-allowed'
-                          : 'text-white hover:bg-green-700'
-                        }`}
-                      style={{ lineHeight: 1, fontSize: '14px' }}
+                      className="w-5 h-5 flex items-center justify-center font-bold"
+                      style={{ color: theme.accentColor }}
                     >
-                      <span className="relative top-[-1px]">+</span>
-                    </motion.button>
-                  </motion.div>
+                      +
+                    </button>
+                  </div>
                 )}
               </AnimatePresence>
             </div>
@@ -538,6 +533,7 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
               cartQuantity={cartQuantity}
               onAddToCart={handleAddToCart}
               onUpdateQuantity={handleUpdateQuantity}
+              theme={theme}
             />
           );
         })}

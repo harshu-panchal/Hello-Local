@@ -291,10 +291,10 @@ export default function DeliveryDashboard() {
         {/* Wallet Balance Card */}
         <div
           onClick={() => navigate("/delivery/wallet")}
-          className="bg-gradient-to-br from-green-500 to-green-700 rounded-xl p-4 text-white shadow-md cursor-pointer active:scale-[0.98] transition-transform">
+          className="bg-gradient-to-br from-rose-500 to-rose-700 rounded-xl p-4 text-white shadow-md cursor-pointer active:scale-[0.98] transition-transform">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-green-100 text-xs">Available Wallet Balance</p>
-            <div className="bg-green-400/30 p-1.5 rounded-lg">
+            <p className="text-rose-100 text-xs">Available Wallet Balance</p>
+            <div className="bg-rose-400/30 p-1.5 rounded-lg">
               <svg
                 width="18"
                 height="18"
@@ -313,7 +313,7 @@ export default function DeliveryDashboard() {
             <p className="text-2xl font-bold">
               ₹ {stats?.walletBalance?.toFixed(2) || "0.00"}
             </p>
-            <p className="text-green-100 text-[10px] flex items-center gap-1">
+            <p className="text-rose-100 text-[10px] flex items-center gap-1">
               View Details
               <svg
                 width="10"
@@ -333,11 +333,11 @@ export default function DeliveryDashboard() {
         {/* Real-time Seller Radius Indicator */}
         <div
           onClick={() => isOnline && navigate("/delivery/sellers-in-range")}
-          className={`p-4 rounded-xl border cursor-pointer transition-all active:scale-95 ${isOnline ? "bg-teal-50 border-teal-100 hover:bg-teal-100" : "bg-neutral-50 border-neutral-200"}`}>
+          className={`p-4 rounded-xl border cursor-pointer transition-all active:scale-95 ${isOnline ? "bg-rose-50 border-rose-100 hover:bg-rose-100" : "bg-neutral-50 border-neutral-200"}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div
-                className={`p-2 rounded-full ${isOnline ? "bg-teal-100 text-teal-600" : "bg-neutral-200 text-neutral-400"}`}>
+                className={`p-2 rounded-full ${isOnline ? "bg-rose-100 text-rose-600" : "bg-neutral-200 text-neutral-400"}`}>
                 <svg
                   width="24"
                   height="24"
@@ -351,7 +351,7 @@ export default function DeliveryDashboard() {
               </div>
               <div>
                 <h3
-                  className={`text-sm font-semibold ${isOnline ? "text-teal-900" : "text-neutral-500"}`}>
+                  className={`text-sm font-semibold ${isOnline ? "text-rose-900" : "text-neutral-500"}`}>
                   {isOnline ? "Active Service Areas" : "Offline"}
                 </h3>
                 <p className="text-xs text-neutral-500">
@@ -364,10 +364,10 @@ export default function DeliveryDashboard() {
             {isOnline && (
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
                 </span>
-                <span className="text-xl font-bold text-teal-600">
+                <span className="text-xl font-bold text-rose-600">
                   {sellersInRangeCount}
                 </span>
               </div>
@@ -455,11 +455,10 @@ export default function DeliveryDashboard() {
                       </p>
                     </div>
                     <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        order.status === "Ready for pickup"
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${order.status === "Ready for pickup"
                           ? "bg-yellow-100 text-yellow-700"
                           : "bg-blue-100 text-blue-700"
-                      }`}>
+                        }`}>
                       {order.status}
                     </span>
                   </div>

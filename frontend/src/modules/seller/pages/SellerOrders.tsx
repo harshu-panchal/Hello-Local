@@ -159,7 +159,7 @@ export default function SellerOrders() {
         {/* White Card Container */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
           {/* Green Banner */}
-          <div className="bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-t-lg">
+          <div className="bg-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-t-lg">
             <h2 className="text-base sm:text-lg font-semibold">View Order List</h2>
           </div>
 
@@ -220,7 +220,7 @@ export default function SellerOrders() {
                     setStatus(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option>All Status</option>
                   <option>Pending</option>
@@ -239,7 +239,7 @@ export default function SellerOrders() {
                     setEntriesPerPage(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option>10</option>
                   <option>25</option>
@@ -260,7 +260,7 @@ export default function SellerOrders() {
                     setSearchQuery(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                   placeholder="Search by Order ID, Status, or Amount"
                 />
               </div>
@@ -269,7 +269,7 @@ export default function SellerOrders() {
               <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                 <button
                   onClick={handleExport}
-                  className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
+                  className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
                 >
                   <svg
                     width="16"
@@ -339,7 +339,7 @@ export default function SellerOrders() {
                           viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'orderId' ? 'text-green-600' : 'text-neutral-400'
+                          className={`cursor-pointer ${sortField === 'orderId' ? 'text-pink-600' : 'text-neutral-400'
                             }`}
                         >
                           <path
@@ -368,7 +368,7 @@ export default function SellerOrders() {
                           viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'deliveryDate' ? 'text-green-600' : 'text-neutral-400'
+                          className={`cursor-pointer ${sortField === 'deliveryDate' ? 'text-pink-600' : 'text-neutral-400'
                             }`}
                         >
                           <path
@@ -397,7 +397,7 @@ export default function SellerOrders() {
                           viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'orderDate' ? 'text-green-600' : 'text-neutral-400'
+                          className={`cursor-pointer ${sortField === 'orderDate' ? 'text-pink-600' : 'text-neutral-400'
                             }`}
                         >
                           <path
@@ -426,7 +426,7 @@ export default function SellerOrders() {
                           viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'status' ? 'text-green-600' : 'text-neutral-400'
+                          className={`cursor-pointer ${sortField === 'status' ? 'text-pink-600' : 'text-neutral-400'
                             }`}
                         >
                           <path
@@ -455,7 +455,7 @@ export default function SellerOrders() {
                           viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'amount' ? 'text-green-600' : 'text-neutral-400'
+                          className={`cursor-pointer ${sortField === 'amount' ? 'text-pink-600' : 'text-neutral-400'
                             }`}
                         >
                           <path
@@ -507,7 +507,7 @@ export default function SellerOrders() {
                         <td className="px-3 sm:px-4 md:px-6 py-3">
                           <button
                             onClick={() => navigate(`/seller/orders/${order.id}`)}
-                            className="text-green-600 hover:text-green-700 text-xs sm:text-sm font-medium transition-colors"
+                            className="text-pink-600 hover:text-pink-700 text-xs sm:text-sm font-medium transition-colors"
                           >
                             View
                           </button>

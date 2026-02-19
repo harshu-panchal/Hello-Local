@@ -1,7 +1,7 @@
 {
-  "name": "dhakad-snazzy-backend",
+  "name": "hello-local-backend",
   "version": "1.0.0",
-  "description": "Dhakad Snazzy Backend API Server",
+  "description": "Hello Local Backend API Server",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
@@ -63,5 +63,8 @@
     "socket.io": "^4.8.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6"
   }
 }

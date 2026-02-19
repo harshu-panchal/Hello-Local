@@ -212,7 +212,7 @@ export default function SellerSignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-green-50 flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-50 flex flex-col items-center justify-center px-4 py-8">
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
@@ -227,16 +227,16 @@ export default function SellerSignUp() {
       {/* Sign Up Card */}
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header Section */}
-        <div className="px-6 py-4 text-center border-b border-green-700" style={{ backgroundColor: 'rgb(21 178 74 / var(--tw-bg-opacity, 1))' }}>
-          <div className="mb-0 -mt-4">
+        <div className="px-6 py-4 text-center border-b border-pink-700" style={{ backgroundColor: '#db2777' }}>
+          <div className="mb-4">
             <img
-              src="/assets/hello-local.jpeg"
+              src="/logo.png?v=2"
               alt="Hello Local"
-              className="h-44 w-full max-w-xs mx-auto object-fill object-bottom"
+              className="h-20 w-auto mx-auto object-contain drop-shadow-md bg-white/20 p-2 rounded-xl"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1 -mt-12">Seller Sign Up</h1>
-          <p className="text-green-50 text-sm -mt-2">Create your seller account</p>
+          <h1 className="text-2xl font-bold text-white mb-1">Seller Sign Up</h1>
+          <p className="text-pink-50 text-sm -mt-2">Create your seller account</p>
         </div>
 
         {/* Sign Up Form */}
@@ -263,7 +263,7 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter your name"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                     disabled={loading}
                   />
                 </div>
@@ -272,7 +272,7 @@ export default function SellerSignUp() {
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
                     Mobile Number <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-200">
+                  <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-pink-500 focus-within:ring-2 focus-within:ring-pink-200">
                     <div className="px-3 py-2.5 text-sm font-medium text-neutral-600 border-r border-neutral-300 bg-neutral-50">
                       +91
                     </div>
@@ -301,7 +301,7 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter email address"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                     disabled={loading}
                   />
                 </div>
@@ -317,7 +317,7 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter store name"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                     disabled={loading}
                   />
                 </div>
@@ -341,7 +341,7 @@ export default function SellerSignUp() {
                               checked={checked}
                               onChange={() => toggleCategory(cat.name)}
                               disabled={loading}
-                              className="h-4 w-4 text-teal-600 border-neutral-300 rounded focus:ring-teal-500"
+                              className="h-4 w-4 text-pink-600 border-neutral-300 rounded focus:ring-pink-500"
                             />
                             <span>{cat.name}</span>
                           </label>
@@ -406,7 +406,7 @@ export default function SellerSignUp() {
                           setError('Geolocation is not supported by your browser');
                         }
                       }}
-                      className="p-2.5 bg-teal-50 text-teal-600 rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors"
+                      className="p-2.5 bg-pink-50 text-pink-600 rounded-lg border border-pink-200 hover:bg-pink-100 transition-colors"
                       title="Use Current Location"
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -420,7 +420,7 @@ export default function SellerSignUp() {
                   {formData.latitude && formData.longitude ? (
                     <div className="mt-4 animate-fadeIn">
                       <p className="text-sm font-medium text-neutral-700 mb-2">
-                        Exact Location <span className="text-teal-600 text-xs font-normal">(Move the map to place the pin on your store's entrance)</span>
+                        Exact Location <span className="text-pink-600 text-xs font-normal">(Move the map to place the pin on your store's entrance)</span>
                       </p>
                       <LocationPickerMap
                         initialLat={parseFloat(formData.latitude)}
@@ -464,7 +464,7 @@ export default function SellerSignUp() {
                     min="0.1"
                     max="100"
                     step="0.1"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                     disabled={loading}
                   />
                   <p className="mt-1 text-xs text-neutral-500">
@@ -483,7 +483,7 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter city"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                     disabled={loading}
                   />
                 </div>
@@ -509,7 +509,7 @@ export default function SellerSignUp() {
                       value={formData.panCard}
                       onChange={handleInputChange}
                       placeholder="PAN Card Number"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                       disabled={loading}
                     />
                   </div>
@@ -522,7 +522,7 @@ export default function SellerSignUp() {
                       value={formData.taxName}
                       onChange={handleInputChange}
                       placeholder="Tax Name"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                       disabled={loading}
                     />
                   </div>
@@ -535,7 +535,7 @@ export default function SellerSignUp() {
                       value={formData.taxNumber}
                       onChange={handleInputChange}
                       placeholder="Tax Number"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                       disabled={loading}
                     />
                   </div>
@@ -548,7 +548,7 @@ export default function SellerSignUp() {
                       value={formData.ifsc}
                       onChange={handleInputChange}
                       placeholder="IFSC Code"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                       disabled={loading}
                     />
                   </div>
@@ -565,7 +565,7 @@ export default function SellerSignUp() {
                 type="submit"
                 disabled={loading}
                 className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${!loading
-                  ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-md'
+                  ? 'bg-pink-600 text-white hover:bg-pink-700 shadow-md'
                   : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
                   }`}
               >
@@ -579,7 +579,7 @@ export default function SellerSignUp() {
                   <button
                     type="button"
                     onClick={() => navigate('/seller/login')}
-                    className="text-teal-600 hover:text-teal-700 font-semibold"
+                    className="text-pink-600 hover:text-pink-700 font-semibold"
                   >
                     Login
                   </button>
@@ -628,7 +628,7 @@ export default function SellerSignUp() {
                     }
                   }}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-pink-600 text-white hover:bg-pink-700 transition-colors"
                 >
                   {loading ? 'Sending...' : 'Resend OTP'}
                 </button>

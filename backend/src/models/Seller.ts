@@ -205,7 +205,7 @@ const SellerSchema = new Schema<ISeller>(
       type: Number,
       default: 10,
       min: [0.1, 'Service radius must be at least 0.1 km'],
-      max: [100, 'Service radius cannot exceed 100 km'],
+      max: [20000, 'Service radius cannot exceed 20000 km'],
     },
 
     // Payment Details

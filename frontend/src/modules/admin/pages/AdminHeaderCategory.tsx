@@ -8,9 +8,11 @@ import {
 } from '../../../services/api/headerCategoryService';
 import { themes } from '../../../utils/themes';
 import { ICON_LIBRARY, getIconByName, IconDef } from '../../../utils/iconLibrary';
+import { getCategories, Category } from '../../../services/api/admin/adminProductService';
 
 export default function AdminHeaderCategory() {
   const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>([]);
+  const [productCategories, setProductCategories] = useState<any[]>([]); // Use any to allow slug property
   const [loading, setLoading] = useState(true);
 
   // Form states
@@ -36,7 +38,25 @@ export default function AdminHeaderCategory() {
 
   useEffect(() => {
     fetchCategories();
+    fetchProductCategories();
   }, []);
+
+  const fetchProductCategories = async () => {
+    try {
+      // Fetch only root categories (parentId is null/undefined) to avoid clutter
+      // We pass an empty object or specific filter if API supports it
+      const response = await getCategories();
+      if (response && response.success && response.data) {
+        // Filter for root categories if the API returns all
+        // Assuming root categories have no parentId or parentId is null
+        const rootCategories = response.data.filter((c: any) => !c.parentId);
+        setProductCategories(rootCategories);
+      }
+    } catch (error) {
+      console.error('Failed to fetch product categories', error);
+      // Fail silently for dropdown population
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -320,12 +340,11 @@ export default function AdminHeaderCategory() {
                 className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
               >
                 <option value="">Select Category</option>
-                <option value="fashion">Fashion</option>
-                <option value="electronics">Electronics</option>
-                <option value="home">Home</option>
-                <option value="beauty">Beauty</option>
-                <option value="mobiles">Mobiles</option>
-                <option value="grocery">Grocery</option>
+                {productCategories.map((cat) => (
+                  <option key={cat._id} value={cat.slug || cat._id}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
 

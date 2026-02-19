@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import helloLocalLogo from '@assets/hello-local.jpeg';
+import helloLocalLogo from '@assets/logo.png';
 
 interface AdminHeaderProps {
   onMenuClick: () => void;
@@ -144,7 +144,7 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
                       }
                     }}
                     placeholder="Search orders, customers, products..."
-                    className="w-full px-4 py-2 pl-10 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 pl-10 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
                     autoFocus
                   />
                   <svg
@@ -211,7 +211,7 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
                       navigate('/admin/notification');
                       setShowNotificationsDropdown(false);
                     }}
-                    className="w-full text-center text-sm text-teal-600 hover:text-teal-700 font-medium"
+                    className="w-full text-center text-sm text-rose-600 hover:text-rose-700 font-medium"
                   >
                     View All Notifications
                   </button>

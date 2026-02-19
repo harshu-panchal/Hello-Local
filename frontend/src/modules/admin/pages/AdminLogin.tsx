@@ -62,7 +62,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-green-50 flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-rose-100 flex flex-col items-center justify-center px-4 py-8">
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
@@ -88,21 +88,19 @@ export default function AdminLogin() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header Section */}
         <div
-          className="px-6 py-4 text-center border-b border-green-700"
+          className="px-6 py-4 text-center border-b border-rose-600"
           style={{
-            backgroundColor: "rgb(21 178 74 / var(--tw-bg-opacity, 1))",
+            backgroundColor: "#e11d48", // rose-600
           }}>
-          <div className="mb-0 -mt-4">
+          <div className="mb-4">
             <img
-              src="/assets/hello-local.jpeg"
+              src="/logo.png?v=2"
               alt="Hello Local"
-              className="h-44 w-full max-w-xs mx-auto object-fill object-bottom"
+              className="h-20 w-auto mx-auto object-contain drop-shadow-md bg-white/20 p-2 rounded-xl"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1 -mt-12">
-            Admin Login
-          </h1>
-          <p className="text-green-50 text-sm -mt-2">
+          <h1 className="text-2xl font-bold text-white mb-1">Admin Login</h1>
+          <p className="text-rose-100 text-sm -mt-2">
             Access your admin dashboard
           </p>
         </div>
@@ -116,7 +114,7 @@ export default function AdminLogin() {
                 <label className="block text-sm font-medium text-neutral-700 mb-2">
                   Mobile Number
                 </label>
-                <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-200 transition-all">
+                <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-200 transition-all">
                   <div className="px-3 py-2.5 text-sm font-medium text-neutral-600 border-r border-neutral-300 bg-neutral-50">
                     +91
                   </div>
@@ -146,7 +144,7 @@ export default function AdminLogin() {
                 onClick={handleMobileLogin}
                 disabled={mobileNumber.length !== 10 || loading}
                 className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${mobileNumber.length === 10 && !loading
-                  ? "bg-teal-600 text-white hover:bg-teal-700 shadow-md"
+                  ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
                   : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
                   }`}>
                 {loading ? "Sending..." : "Continue"}
@@ -185,7 +183,7 @@ export default function AdminLogin() {
                 <button
                   onClick={handleMobileLogin}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors">
+                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-rose-600 text-white hover:bg-rose-700 transition-colors">
                   {loading ? "Verifying..." : "Resend OTP"}
                 </button>
               </div>
