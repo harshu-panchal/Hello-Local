@@ -85,8 +85,8 @@ export default function CategoryTileSection({
   const gapClass = columns >= 6 ? "gap-1.5 md:gap-2.5" : "gap-2.5 md:gap-4";
 
   return (
-    <div className="mb-6 md:mb-8 mt-0 overflow-visible">
-      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight">
+    <div className="mt-2 md:mt-3 mb-6 md:mb-8 overflow-visible">
+      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight leading-tight">
         {title}
       </h2>
       <div className="px-4 md:px-6 lg:px-8 overflow-visible">
@@ -207,7 +207,7 @@ export default function CategoryTileSection({
 
                   {/* Tile name - inside card only for bestsellers */}
                   {showProductCount && (
-                    <div className="text-[11px] font-semibold text-neutral-900 line-clamp-2 leading-tight text-center w-full block">
+                    <div className="text-[11px] md:text-xs font-medium text-neutral-800 line-clamp-2 leading-snug text-center w-full block tracking-tight">
                       {tile.name}
                     </div>
                   )}
@@ -216,7 +216,7 @@ export default function CategoryTileSection({
                 {/* Category name - outside card for non-bestsellers */}
                 {!showProductCount && (
                   <div className="mt-1.5 text-center">
-                    <span className="text-xs font-semibold text-neutral-900 line-clamp-2 leading-tight">
+                    <span className="text-[13px] md:text-sm font-medium text-neutral-800 line-clamp-2 leading-snug tracking-tight">
                       {tile.name}
                     </span>
                   </div>

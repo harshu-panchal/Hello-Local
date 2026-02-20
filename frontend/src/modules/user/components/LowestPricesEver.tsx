@@ -486,49 +486,46 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
 
       {/* LOWEST PRICES EVER Banner - Eye-catching design */}
       <div className="px-4 relative z-10" style={{ marginTop: '30px', marginBottom: '12px' }} data-section="lowest-prices">
-        <div className="flex flex-col items-center justify-center gap-0">
-          {/* Accent bar above text */}
-          <div
-            className="h-1 rounded-full mb-2"
-            style={{
-              width: '80px',
-              background: `linear-gradient(90deg, transparent, ${theme.accentColor}, transparent)`,
+        <div className="flex flex-col items-center justify-center gap-2">
+          <motion.h2
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{
+              opacity: fontLoaded ? 1 : 0,
+              y: fontLoaded ? 0 : 8,
+              scale: fontLoaded ? 1 : 0.98,
+              backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
             }}
-          />
-          <div
-            className="relative inline-block px-8 py-2.5 rounded-full"
+            transition={{
+              opacity: { duration: 0.22, ease: 'easeOut' },
+              y: { duration: 0.3, ease: 'easeOut' },
+              scale: { duration: 0.3, ease: 'easeOut' },
+              backgroundPosition: { duration: 3.2, repeat: Infinity, ease: 'linear' },
+            }}
+            className="font-black text-center whitespace-nowrap uppercase select-none"
             style={{
-              background: `linear-gradient(135deg, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.14) 100%)`,
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08)`,
+              fontFamily: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
+              fontSize: 'clamp(24px, 6vw, 32px)',
+              fontWeight: 900,
+              lineHeight: '1.15',
+              letterSpacing: '0.14em',
+              backgroundImage: `linear-gradient(90deg, #ffffff 0%, ${theme.accentColor} 48%, #ffffff 100%)`,
+              backgroundSize: '200% 100%',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              color: 'transparent',
+              WebkitTextFillColor: 'transparent',
+              textShadow: '0 2px 10px rgba(0,0,0,0.12)',
             }}
           >
-            <h2
-              className="font-black text-center whitespace-nowrap tracking-wider uppercase"
-              style={{
-                fontFamily: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
-                fontSize: 'clamp(24px, 6vw, 32px)',
-                color: '#ffffff',
-                opacity: fontLoaded ? 1 : 0,
-                transition: 'opacity 0.2s ease-in',
-                textShadow:
-                  `0 1px 0 rgba(0,0,0,0.2), ` +
-                  `0 2px 4px rgba(0,0,0,0.3), ` +
-                  `0 4px 8px rgba(0,0,0,0.25), ` +
-                  `0 0 0 2px rgba(0,0,0,0.15), ` +
-                  `0 0 20px rgba(255,255,255,0.2)`,
-                fontWeight: 900,
-                lineHeight: '1.15',
-                letterSpacing: '0.15em',
-              } as React.CSSProperties}
-            >
-              LOWEST PRICES EVER
-            </h2>
-          </div>
-          {/* Accent bar below text */}
-          <div
-            className="h-1 rounded-full mt-2"
+            LOWEST PRICES EVER
+          </motion.h2>
+
+          <motion.div
+            className="h-[3px] rounded-full"
+            initial={{ width: 52, opacity: 0.65 }}
+            animate={{ width: [52, 108, 52], opacity: [0.65, 1, 0.65] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
             style={{
-              width: '80px',
               background: `linear-gradient(90deg, transparent, ${theme.accentColor}, transparent)`,
             }}
           />

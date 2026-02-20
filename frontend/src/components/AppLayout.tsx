@@ -5,8 +5,6 @@ import FloatingCartPill from './FloatingCartPill';
 import { useLocation as useLocationContext } from '../hooks/useLocation';
 import LocationPermissionRequest from './LocationPermissionRequest';
 import { useThemeContext } from '../context/ThemeContext';
-import ServiceNotAvailable from './ServiceNotAvailable';
-import { checkServiceability } from '../services/api/customerHomeService';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -24,30 +22,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showLocationRequest, setShowLocationRequest] = useState(false);
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
   const { currentTheme } = useThemeContext();
-
-  // State to track if service is available at user's location
-  const [isServiceAvailable, setIsServiceAvailable] = useState<boolean>(true);
-
-  // Check serviceability when user location changes
-  useEffect(() => {
-    const performCheck = async () => {
-      if (userLocation && userLocation.latitude && userLocation.longitude) {
-        try {
-          const result = await checkServiceability(userLocation.latitude, userLocation.longitude);
-          setIsServiceAvailable(result.isServiceAvailable);
-        } catch (error) {
-          console.error("Failed to check serviceability:", error);
-          // Default to true on error to avoid blocking user due to network issues
-          setIsServiceAvailable(true);
-        }
-      } else {
-        // If no location, we can't determine, so we assume available or waiting for location
-        setIsServiceAvailable(true);
-      }
-    };
-
-    performCheck();
-  }, [userLocation]);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -361,17 +335,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 className="w-full max-w-full"
                 style={{ minHeight: '100%' }}
               >
-                {/* Service Availability Check */}
-                {
-                  (() => {
-                    // If we have a location but service is NOT available, show the unavailable screen
-                    // We check the component state 'isServiceAvailable' which is updated by useEffect
-                    if (isLocationEnabled && userLocation && !isServiceAvailable && !showLocationRequest) {
-                      return <ServiceNotAvailable onChangeLocation={() => setShowLocationChangeModal(true)} />;
-                    }
-                    return children;
-                  })()
-                }
+                {children}
               </motion.div>
             </AnimatePresence>
           </main>
