@@ -35,6 +35,9 @@ import paymentRoutes from "./paymentRoutes";
 import sellerWalletRoutes from "./sellerWalletRoutes";
 import deliveryWalletRoutes from "./deliveryWalletRoutes";
 import adminWithdrawalRoutes from "./adminWithdrawalRoutes";
+import { getActiveShopAds } from "../modules/admin/controllers/adminShopAdController";
+import * as sellerAdRequestController from "../modules/seller/controllers/sellerAdRequestController";
+import * as adminAdRequestController from "../modules/admin/controllers/adminAdRequestController";
 
 import {
   createOrder,
@@ -54,6 +57,9 @@ router.get("/health", (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Public route for shop ads carousel (no auth required)
+router.get("/shop-ads/active", getActiveShopAds);
 
 // Authentication routes
 router.use("/auth/admin", adminAuthRoutes);
@@ -159,6 +165,23 @@ router.use("/delivery/wallet", authenticate, requireUserType("Delivery"), delive
 
 // Admin withdrawal management routes (protected, admin only)
 router.use("/admin/withdrawals", authenticate, requireUserType("Admin"), adminWithdrawalRoutes);
+
+// Seller ad request routes (protected, seller only)
+router.post("/seller/ad-requests", authenticate, requireUserType("Seller"), sellerAdRequestController.createAdRequest);
+router.get("/seller/ad-requests", authenticate, requireUserType("Seller"), sellerAdRequestController.getMyAdRequests);
+router.get("/seller/ad-requests/:id", authenticate, requireUserType("Seller"), sellerAdRequestController.getMyAdRequestById);
+router.post("/seller/ad-requests/:id/payment", authenticate, requireUserType("Seller"), sellerAdRequestController.submitPaymentProof);
+router.delete("/seller/ad-requests/:id", authenticate, requireUserType("Seller"), sellerAdRequestController.cancelAdRequest);
+router.get("/seller/ad-requests/availability", authenticate, requireUserType("Seller"), sellerAdRequestController.getPublicAdStats);
+
+
+// Admin ad request management routes
+router.get("/admin/ad-requests", authenticate, requireUserType("Admin"), adminAdRequestController.getAllAdRequests);
+router.get("/admin/ad-requests/stats", authenticate, requireUserType("Admin"), adminAdRequestController.getAdRequestStats);
+router.get("/admin/ad-requests/:id", authenticate, requireUserType("Admin"), adminAdRequestController.getAdRequestById);
+router.post("/admin/ad-requests/:id/approve", authenticate, requireUserType("Admin"), adminAdRequestController.approveAdRequest);
+router.post("/admin/ad-requests/:id/reject", authenticate, requireUserType("Admin"), adminAdRequestController.rejectAdRequest);
+router.post("/admin/ad-requests/:id/verify-payment", authenticate, requireUserType("Admin"), adminAdRequestController.verifyPaymentAndActivate);
 
 // Admin commission management routes (protected, admin only)
 

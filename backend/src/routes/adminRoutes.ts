@@ -74,6 +74,9 @@ import * as lowestPricesController from "../modules/admin/controllers/adminLowes
 // PromoStrip Controllers
 import * as promoStripController from "../modules/admin/controllers/adminPromoStripController";
 
+// Shop Ad Controllers
+import * as shopAdController from "../modules/admin/controllers/adminShopAdController";
+
 const router = Router();
 
 // All routes require admin authentication
@@ -353,5 +356,14 @@ router.get("/promo-strips/:id", promoStripController.getPromoStripById);
 router.post("/promo-strips", promoStripController.createPromoStrip);
 router.put("/promo-strips/:id", promoStripController.updatePromoStrip);
 router.delete("/promo-strips/:id", promoStripController.deletePromoStrip);
+
+// ==================== Shop Ad Carousel Routes ====================
+router.get("/shop-ads", shopAdController.getAllShopAds);
+router.get("/shop-ads/:id", shopAdController.getShopAdById);
+router.post("/shop-ads", shopAdController.createShopAd);
+router.put("/shop-ads/:id", shopAdController.updateShopAd);
+router.delete("/shop-ads/:id", shopAdController.deleteShopAd);
+router.patch("/shop-ads/:id/toggle", shopAdController.toggleShopAdStatus);
+router.put("/shop-ads/reorder", shopAdController.reorderShopAds);
 
 export default router;

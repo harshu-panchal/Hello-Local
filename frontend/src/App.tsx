@@ -121,6 +121,7 @@ const AdminBestsellerCards = lazy(() => import("./modules/admin/pages/AdminBests
 const AdminPromoStrip = lazy(() => import("./modules/admin/pages/AdminPromoStrip"));
 const AdminLowestPrices = lazy(() => import("./modules/admin/pages/AdminLowestPrices"));
 const AdminShopByStore = lazy(() => import("./modules/admin/pages/AdminShopByStore"));
+const AdminShopAds = lazy(() => import("./modules/admin/pages/AdminShopAds"));
 const AdminAllOrders = lazy(() => import("./modules/admin/pages/AdminAllOrders"));
 const AdminPendingOrders = lazy(() => import("./modules/admin/pages/AdminPendingOrders"));
 const AdminReceivedOrders = lazy(() => import("./modules/admin/pages/AdminReceivedOrders"));
@@ -140,6 +141,7 @@ const AdminWithdrawals = lazy(() => import("./modules/admin/pages/AdminWithdrawa
 const AdminPayments = lazy(() => import("./modules/admin/pages/AdminPayments"));
 const AdminWallet = lazy(() => import("./modules/admin/pages/AdminWallet"));
 const AdminBillingSettings = lazy(() => import("./modules/admin/pages/AdminBillingSettings"));
+const SellerAdRequests = lazy(() => import("./modules/seller/pages/SellerAdRequests"));
 
 function App() {
   // Initialize push notifications on app load
@@ -288,6 +290,7 @@ function App() {
                                       <Route path="wallet" element={<SellerWallet />} />
                                       <Route path="reports/sales" element={<SellerSalesReport />} />
                                       <Route path="account-settings" element={<SellerAccountSettings />} />
+                                      <Route path="ad-requests" element={<SellerAdRequests />} />
                                     </Routes>
                                   </SellerLayout>
                                 </Suspense>
@@ -337,6 +340,7 @@ function App() {
                                       <Route path="promo-strip" element={<AdminPromoStrip />} />
                                       <Route path="lowest-prices" element={<AdminLowestPrices />} />
                                       <Route path="shop-by-store" element={<AdminShopByStore />} />
+                                      <Route path="shop-ads" element={<AdminShopAds />} />
                                       <Route path="orders/all" element={<AdminAllOrders />} />
                                       <Route path="orders/pending" element={<AdminPendingOrders />} />
                                       <Route path="orders/received" element={<AdminReceivedOrders />} />

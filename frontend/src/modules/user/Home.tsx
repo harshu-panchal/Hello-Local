@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import HomeHero from "./components/HomeHero";
-import PromoStrip from "./components/PromoStrip";
+import ShopAdCarousel from "./components/ShopAdCarousel";
 import LowestPricesEver from "./components/LowestPricesEver";
 import CategoryTileSection from "./components/CategoryTileSection";
 import FeaturedThisWeek from "./components/FeaturedThisWeek";
@@ -262,8 +262,8 @@ export default function Home() {
       {/* Hero Header with Gradient and Tabs */}
       <HomeHero activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Promo Strip */}
-      <PromoStrip activeTab={activeTab} />
+      {/* Shop Ad Carousel - Sponsored Shop Ads */}
+      <ShopAdCarousel />
 
       {/* LOWEST PRICES EVER Section */}
       <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />

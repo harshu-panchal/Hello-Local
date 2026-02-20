@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardCard from "../components/DashboardCard";
 import OrderChart from "../components/OrderChart";
 import SalesLineChart from "../components/SalesLineChart";
@@ -22,6 +23,7 @@ import {
 } from "../../../services/api/admin/adminDashboardService";
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const { isAuthenticated, token } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [newOrders, setNewOrders] = useState<RecentOrder[]>([]);
@@ -350,6 +352,19 @@ export default function AdminDashboard() {
     </svg>
   );
 
+  const adsIcon = (
+    <svg
+      width="32"
+      height="32"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="7" width="20" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 12v3M9.5 14.5L12 12l2.5 2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+
   // Transform sales analytics data for charts
   const salesThisMonth = salesAnalytics?.thisPeriod || [];
   const salesLastMonth = salesAnalytics?.lastPeriod || [];
@@ -503,6 +518,13 @@ export default function AdminDashboard() {
           title="Product low on Stock"
           value={stats.lowStockProducts}
           accentColor="#eab308"
+        />
+        <DashboardCard
+          icon={adsIcon}
+          title="Pending Ad Requests"
+          value={stats.pendingAdRequests || 0}
+          accentColor="#7c3aed"
+          onClick={() => navigate("/admin/shop-ads?tab=requests")}
         />
       </div>
 

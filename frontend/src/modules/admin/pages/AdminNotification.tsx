@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getNotifications,
   createNotification,
@@ -8,6 +9,7 @@ import {
 } from '../../../services/api/admin/adminNotificationService';
 
 export default function AdminNotification() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     recipientType: 'All' as 'All' | 'Admin' | 'Seller' | 'Customer' | 'Delivery',
     title: '',
@@ -475,7 +477,20 @@ export default function AdminNotification() {
                           <td className="p-4 align-middle">{notification.title}</td>
                           <td className="p-4 align-middle max-w-md">{notification.message}</td>
                           <td className="p-4 align-middle">{formatDate(notification.createdAt)}</td>
-                          <td className="p-4 align-middle">
+                          <td className="p-4 align-middle flex gap-2">
+                            {notification.link && (
+                              <button
+                                onClick={() => navigate(notification.link!)}
+                                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                                title={notification.actionLabel || 'View'}
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                  <polyline points="15 3 21 3 21 9"></polyline>
+                                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                                </svg>
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDelete(notification._id)}
                               disabled={loading}
@@ -515,11 +530,10 @@ export default function AdminNotification() {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                     disabled={currentPage === 1 || loading}
-                    className={`p-2 border border-green-600 rounded ${
-                      currentPage === 1
-                        ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                        : 'text-green-600 hover:bg-green-50'
-                    }`}
+                    className={`p-2 border border-green-600 rounded ${currentPage === 1
+                      ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
+                      : 'text-green-600 hover:bg-green-50'
+                      }`}
                     aria-label="Previous page"
                   >
                     <svg
@@ -554,11 +568,10 @@ export default function AdminNotification() {
                         key={pageNum}
                         onClick={() => setCurrentPage(pageNum)}
                         disabled={loading}
-                        className={`px-3 py-1.5 border border-green-600 rounded font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-                          currentPage === pageNum
-                            ? 'bg-green-600 text-white'
-                            : 'text-green-600 hover:bg-green-50'
-                        }`}
+                        className={`px-3 py-1.5 border border-green-600 rounded font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${currentPage === pageNum
+                          ? 'bg-green-600 text-white'
+                          : 'text-green-600 hover:bg-green-50'
+                          }`}
                       >
                         {pageNum}
                       </button>
@@ -570,11 +583,10 @@ export default function AdminNotification() {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages || loading}
-                    className={`p-2 border border-green-600 rounded ${
-                      currentPage === totalPages
-                        ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                        : 'text-green-600 hover:bg-green-50'
-                    }`}
+                    className={`p-2 border border-green-600 rounded ${currentPage === totalPages
+                      ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
+                      : 'text-green-600 hover:bg-green-50'
+                      }`}
                     aria-label="Next page"
                   >
                     <svg

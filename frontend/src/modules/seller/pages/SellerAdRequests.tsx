@@ -1,0 +1,1009 @@
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../../../context/ToastContext';
+import { uploadImage } from '../../../services/api/uploadService';
+import {
+    createSellerAdRequest,
+    getMyAdRequests,
+    submitPaymentProof,
+    cancelAdRequest,
+    getAdAvailability,
+    type SellerAdRequestPayload,
+} from '../../../services/api/sellerAdRequestService';
+import { useNavigate } from 'react-router-dom';
+
+type AdRequest = {
+    _id: string;
+    shopName: string;
+    tagline: string;
+    description?: string;
+    imageUrl: string;
+    badge?: string;
+    badgeColor?: string;
+    ctaText?: string;
+    ctaLink?: string;
+    durationDays: number;
+    adPrice: number;
+    requestedPrice?: number;
+    status: 'Pending' | 'Approved' | 'Rejected' | 'PaymentPending' | 'PaymentVerified' | 'Live' | 'Expired';
+    paymentStatus: 'Unpaid' | 'Paid' | 'Refunded';
+    paymentMethod?: string;
+    paymentReference?: string;
+    paymentScreenshotUrl?: string;
+    adminNote?: string;
+    expiresAt?: string;
+    createdAt: string;
+};
+
+type FormState = {
+    shopName: string;
+    tagline: string;
+    description: string;
+    imageUrl: string;
+    badge: string;
+    badgeColor: string;
+    ctaText: string;
+    ctaLink: string;
+    durationDays: number;
+    requestedPrice: string;
+    paymentNote: string;
+    payNow: boolean;
+    paymentMethod: string;
+    paymentReference: string;
+    paymentScreenshotUrl: string;
+};
+
+const DURATIONS = [7, 14, 30, 60, 90];
+
+const DURATION_PRICES: Record<number, number> = {
+    7: 299,
+    14: 499,
+    30: 799,
+    60: 1299,
+    90: 1799,
+};
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+    Pending: { label: 'Under Review', color: '#f59e0b', bg: '#fef3c7', icon: '🕐' },
+    Approved: { label: 'Approved - Pay Now', color: '#3b82f6', bg: '#dbeafe', icon: '✅' },
+    Rejected: { label: 'Rejected', color: '#ef4444', bg: '#fee2e2', icon: '❌' },
+    PaymentPending: { label: 'Payment Under Review', color: '#8b5cf6', bg: '#ede9fe', icon: '💳' },
+    PaymentVerified: { label: 'Payment Verified', color: '#10b981', bg: '#d1fae5', icon: '✔️' },
+    Live: { label: '🔴 LIVE on Website', color: '#059669', bg: '#d1fae5', icon: '🟢' },
+    Expired: { label: 'Expired', color: '#6b7280', bg: '#f3f4f6', icon: '⏰' },
+};
+
+export default function SellerAdRequests() {
+    const navigate = useNavigate();
+    const { showToast } = useToast();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [adRequests, setAdRequests] = useState<AdRequest[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [selectedRequest, setSelectedRequest] = useState<AdRequest | null>(null);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+    const [availability, setAvailability] = useState<{ activeAds: number, maxAds: number, slotsAvailable: number } | null>(null);
+
+    const [paymentForm, setPaymentForm] = useState({
+        paymentMethod: 'UPI',
+        paymentReference: '',
+        paymentScreenshotUrl: '',
+        paymentNote: '',
+    });
+    const [paymentUploading, setPaymentUploading] = useState(false);
+
+    const [form, setForm] = useState<FormState>({
+        shopName: '',
+        tagline: '',
+        description: '',
+        imageUrl: '',
+        badge: 'FEATURED',
+        badgeColor: '#FF4B6E',
+        ctaText: 'Visit Shop',
+        ctaLink: '',
+        durationDays: 30,
+        requestedPrice: '799',
+        paymentNote: '',
+        payNow: true,
+        paymentMethod: 'UPI',
+        paymentReference: '',
+        paymentScreenshotUrl: '',
+    });
+
+    const ensureAbsoluteUrl = (url?: string) => {
+        if (!url) return '/';
+        const trimmed = url.trim();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/')) return trimmed;
+        return `https://${trimmed}`;
+    };
+
+    useEffect(() => {
+        fetchRequests();
+        fetchAvailability();
+    }, []);
+
+    useEffect(() => {
+        const requestId = new URLSearchParams(window.location.search).get('requestId');
+        if (requestId && adRequests.length > 0) {
+            setTimeout(() => {
+                const el = document.getElementById(`request-${requestId}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-pink-500', 'ring-offset-4');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-pink-500', 'ring-offset-4'), 3000);
+                }
+            }, 500);
+        }
+    }, [adRequests]);
+
+    const fetchAvailability = async () => {
+        try {
+            const res = await getAdAvailability();
+            if (res.success) setAvailability(res.data);
+        } catch (err) {
+            console.error('Failed to load availability:', err);
+        }
+    };
+
+    const fetchRequests = async () => {
+        try {
+            setLoading(true);
+            const res = await getMyAdRequests();
+            if (res.success) setAdRequests(res.data);
+        } catch {
+            showToast('Failed to load ad requests', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingImage(true);
+        try {
+            const result = await uploadImage(file);
+            setForm(f => ({ ...f, imageUrl: result.url }));
+            showToast('Image uploaded!', 'success');
+        } catch {
+            showToast('Image upload failed', 'error');
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
+    const handlePaymentScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setPaymentUploading(true);
+        try {
+            const result = await uploadImage(file);
+            setPaymentForm(f => ({ ...f, paymentScreenshotUrl: result.url }));
+            showToast('Screenshot uploaded!', 'success');
+        } catch {
+            showToast('Upload failed', 'error');
+        } finally {
+            setPaymentUploading(false);
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (!form.shopName || !form.tagline || !form.imageUrl) {
+            showToast('Please fill Shop Name, Tagline, and upload an Image', 'error');
+            return;
+        }
+        setSubmitting(true);
+        try {
+            const payload: SellerAdRequestPayload = {
+                ...form,
+                requestedPrice: parseFloat(form.requestedPrice),
+                paymentMethod: form.payNow ? form.paymentMethod : undefined,
+                paymentReference: form.payNow ? form.paymentReference : undefined,
+                paymentScreenshotUrl: form.payNow ? form.paymentScreenshotUrl : undefined,
+            };
+            const res = await createSellerAdRequest(payload);
+            if (res.success) {
+                showToast(form.payNow ? 'Ad and payment submitted! Admin will verify and make it LIVE.' : 'Ad request submitted! Admin will review it.', 'success');
+                setShowForm(false);
+                setForm({
+                    shopName: '', tagline: '', description: '', imageUrl: '',
+                    badge: 'FEATURED', badgeColor: '#FF4B6E', ctaText: 'Visit Shop',
+                    ctaLink: '', durationDays: 30, requestedPrice: '799', paymentNote: '',
+                    payNow: true, paymentMethod: 'UPI', paymentReference: '', paymentScreenshotUrl: '',
+                });
+                fetchRequests();
+            }
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Failed to submit request', 'error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleSubmitPayment = async () => {
+        if (!selectedRequest) return;
+        if (!paymentForm.paymentReference && !paymentForm.paymentScreenshotUrl) {
+            showToast('Please provide a payment reference or screenshot', 'error');
+            return;
+        }
+        setSubmitting(true);
+        try {
+            const res = await submitPaymentProof(selectedRequest._id, paymentForm);
+            if (res.success) {
+                showToast('Payment proof submitted! Admin will verify.', 'success');
+                setShowPaymentModal(false);
+                setPaymentForm({
+                    paymentMethod: 'UPI',
+                    paymentReference: '',
+                    paymentScreenshotUrl: '',
+                    paymentNote: '',
+                });
+                fetchRequests();
+            }
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Failed to submit payment', 'error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleCancel = async (id: string) => {
+        try {
+            await cancelAdRequest(id);
+            showToast('Request cancelled', 'success');
+            setShowCancelConfirm(null);
+            fetchRequests();
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Failed to cancel', 'error');
+        }
+    };
+
+    const getAdminPaymentInfo = () => {
+        return {
+            upi: 'hellolocal@upi',
+            accountName: 'Hello Local Admin',
+            accountNumber: 'XXXX XXXX XXXX',
+            bank: 'State Bank of India',
+            ifsc: 'SBIN0001234',
+        };
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Loading your ad requests...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const pendingCount = adRequests.filter(r => r.status === 'Pending').length;
+    const liveCount = adRequests.filter(r => r.status === 'Live').length;
+    const approvedCount = adRequests.filter(r => r.status === 'Approved').length;
+
+    return (
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* Header */}
+            <div className="bg-white border-b sticky top-0 z-20 shadow-sm">
+                <div className="px-4 py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => navigate(-1)}
+                                className="p-2 -ml-2 text-gray-400 hover:text-gray-900 transition-colors"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+                            </button>
+                            <div>
+                                <h1 className="text-xl font-bold text-gray-900">📢 Advertise</h1>
+                                <p className="text-xs text-gray-500 mt-0.5">Reach local customers</p>
+                            </div>
+                        </div>
+                        {!showForm && (
+                            <div className="flex items-center gap-3">
+                                {availability && (
+                                    <div className="hidden sm:flex flex-col items-end">
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${availability.slotsAvailable > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {availability.slotsAvailable} SLOTS VACANT
+                                        </span>
+                                        <span className="text-[9px] text-gray-400 font-medium uppercase mt-0.5">Limit: {availability.maxAds} Ads</span>
+                                    </div>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        if (availability && availability.slotsAvailable <= 0) {
+                                            showToast('Sorry, all ad slots are currently occupied. Please check back later!', 'error');
+                                            return;
+                                        }
+                                        setShowForm(true);
+                                    }}
+                                    className={`${availability && availability.slotsAvailable <= 0 ? 'bg-gray-400' : 'bg-gradient-to-r from-pink-500 to-rose-500'} text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all active:scale-95`}
+                                >
+                                    + Request Ad
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Stats Row */}
+            {!showForm && (
+                <div className="grid grid-cols-3 gap-3 p-4">
+                    {[
+                        { label: 'Pending', value: pendingCount, color: '#f59e0b', bg: '#fef3c7', icon: '🕐' },
+                        { label: 'Live Now', value: liveCount, color: '#10b981', bg: '#d1fae5', icon: '🟢' },
+                        { label: 'Approved', value: approvedCount, color: '#3b82f6', bg: '#dbeafe', icon: '✅' },
+                    ].map(stat => (
+                        <div key={stat.label} className="bg-white rounded-xl p-3 text-center shadow-sm border border-gray-100">
+                            <div className="text-xl mb-1">{stat.icon}</div>
+                            <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+                            <p className="text-xs text-gray-500">{stat.label}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Ad Request Form */}
+            <AnimatePresence>
+                {showForm && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="mx-4 mt-4"
+                    >
+                        <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+                            {/* Form Header */}
+                            <div className="bg-gradient-to-r from-pink-500 to-rose-500 text-white p-4">
+                                <h2 className="font-bold text-lg">Create Your Ad Request</h2>
+                                <p className="text-xs text-pink-100 mt-0.5">Fill in your shop details — admin will review and contact you with pricing</p>
+                            </div>
+
+                            <div className="p-4 space-y-4">
+                                {/* Image Upload */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Banner Image *</label>
+                                    {form.imageUrl ? (
+                                        <div className="relative rounded-xl overflow-hidden h-40 border-2 border-pink-200">
+                                            <img src={form.imageUrl} alt="Ad preview" className="w-full h-full object-cover" />
+                                            <button
+                                                onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}
+                                                className="absolute top-2 right-2 bg-white rounded-full p-1 shadow text-red-500 hover:bg-red-50"
+                                            >
+                                                ✕
+                                            </button>
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent flex items-end p-3">
+                                                <p className="text-white text-xs font-medium">Banner preview</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="h-40 border-2 border-dashed border-pink-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-pink-50 transition-colors"
+                                        >
+                                            {uploadingImage ? (
+                                                <div className="text-center">
+                                                    <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                                                    <p className="text-sm text-pink-500">Uploading...</p>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className="text-3xl mb-2">🖼️</span>
+                                                    <p className="text-sm font-medium text-gray-600">Click to upload banner</p>
+                                                    <p className="text-xs text-gray-400 mt-1">Recommended: 1200×400px</p>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                                </div>
+
+                                {/* Shop Name */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Shop / Business Name *</label>
+                                    <input
+                                        type="text"
+                                        value={form.shopName}
+                                        onChange={e => setForm(f => ({ ...f, shopName: e.target.value }))}
+                                        placeholder="e.g. Riya Fashion Store"
+                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition"
+                                    />
+                                </div>
+
+                                {/* Tagline */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Catchy Tagline *</label>
+                                    <input
+                                        type="text"
+                                        value={form.tagline}
+                                        onChange={e => setForm(f => ({ ...f, tagline: e.target.value }))}
+                                        placeholder="e.g. 50% off on all ethnic wear!"
+                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition"
+                                    />
+                                </div>
+
+                                {/* Description */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description <span className="text-gray-400 font-normal">(optional)</span></label>
+                                    <textarea
+                                        value={form.description}
+                                        onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                                        placeholder="Brief description of your offer..."
+                                        rows={3}
+                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition resize-none"
+                                    />
+                                </div>
+
+                                {/* Duration & Pricing */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Duration & Pricing</label>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {DURATIONS.map(d => (
+                                            <button
+                                                key={d}
+                                                onClick={() => setForm(f => ({ ...f, durationDays: d, requestedPrice: DURATION_PRICES[d].toString() }))}
+                                                className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${form.durationDays === d
+                                                    ? 'bg-pink-500 border-pink-500 text-white shadow-md'
+                                                    : 'border-gray-200 text-gray-600 hover:border-pink-300'
+                                                    }`}
+                                            >
+                                                {d}d
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 bg-pink-50 rounded-xl p-3 flex justify-between items-center border border-pink-100">
+                                        <span className="text-sm font-medium text-pink-700">Total Amount:</span>
+                                        <span className="text-xl font-bold text-pink-600">₹{form.requestedPrice}</span>
+                                    </div>
+                                </div>
+
+                                {/* CTA */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Button Text</label>
+                                        <input
+                                            type="text"
+                                            value={form.ctaText}
+                                            onChange={e => setForm(f => ({ ...f, ctaText: e.target.value }))}
+                                            placeholder="Visit Shop"
+                                            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 transition"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex justify-between">
+                                            Link <span className="text-gray-400 font-normal">(opt.)</span>
+                                            {form.ctaLink && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.open(ensureAbsoluteUrl(form.ctaLink), '_blank')}
+                                                    className="text-[10px] text-pink-500 font-bold hover:underline"
+                                                >
+                                                    Test Link ↗
+                                                </button>
+                                            )}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={form.ctaLink}
+                                            onChange={e => setForm(f => ({ ...f, ctaLink: e.target.value }))}
+                                            placeholder="https://..."
+                                            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 transition"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Badge */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Badge Text</label>
+                                        <input
+                                            type="text"
+                                            value={form.badge}
+                                            onChange={e => setForm(f => ({ ...f, badge: e.target.value }))}
+                                            placeholder="FEATURED"
+                                            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 transition"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Badge Color</label>
+                                        <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-pink-400 transition">
+                                            <input
+                                                type="color"
+                                                value={form.badgeColor}
+                                                onChange={e => setForm(f => ({ ...f, badgeColor: e.target.value }))}
+                                                className="w-8 h-8 rounded cursor-pointer border-0"
+                                            />
+                                            <span className="text-sm text-gray-600">{form.badgeColor}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Additional note */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Any additional note? <span className="text-gray-400 font-normal">(opt.)</span></label>
+                                    <textarea
+                                        value={form.paymentNote}
+                                        onChange={e => setForm(f => ({ ...f, paymentNote: e.target.value }))}
+                                        placeholder="Special requirements, preferred schedule, etc."
+                                        rows={2}
+                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 transition resize-none"
+                                    />
+                                </div>
+
+                                {/* Simplified Step: Direct Payment */}
+                                <div className="border-t border-dashed border-gray-200 pt-4 mt-2">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-base font-bold text-gray-800">💳 Pay Now (Instant Review)</h3>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={form.payNow}
+                                                onChange={() => setForm(f => ({ ...f, payNow: !f.payNow }))}
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                        </label>
+                                    </div>
+
+                                    {form.payNow && (
+                                        <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                            {/* Bank Info */}
+                                            {(() => {
+                                                const info = getAdminPaymentInfo();
+                                                return (
+                                                    <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 space-y-2">
+                                                        <div className="flex justify-between items-center bg-white/50 rounded-lg px-3 py-1.5">
+                                                            <span className="text-[10px] text-gray-500 uppercase font-bold">UPI ID</span>
+                                                            <span className="text-xs font-bold text-blue-800">{info.upi}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-white/50 rounded-lg px-3 py-1.5">
+                                                            <span className="text-[10px] text-gray-500 uppercase font-bold">Bank Info</span>
+                                                            <span className="text-xs font-bold text-blue-800">{info.bank} ({info.ifsc})</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Method</label>
+                                                    <select
+                                                        value={form.paymentMethod}
+                                                        onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none"
+                                                    >
+                                                        <option value="UPI">UPI</option>
+                                                        <option value="Bank Transfer">Bank</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Reference ID *</label>
+                                                    <input
+                                                        type="text"
+                                                        value={form.paymentReference}
+                                                        onChange={e => setForm(f => ({ ...f, paymentReference: e.target.value }))}
+                                                        placeholder="UTR / Ref No"
+                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-600 mb-1">Transaction Proof (Screenshot)</label>
+                                                {form.paymentScreenshotUrl ? (
+                                                    <div className="relative rounded-lg overflow-hidden h-20 border border-green-200">
+                                                        <img src={form.paymentScreenshotUrl} alt="Proof" className="w-full h-full object-cover" />
+                                                        <button
+                                                            onClick={() => setForm(f => ({ ...f, paymentScreenshotUrl: '' }))}
+                                                            className="absolute top-1 right-1 bg-white rounded-full p-1 text-red-500 shadow-sm"
+                                                        >✕</button>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        onClick={() => {
+                                                            const input = document.createElement('input');
+                                                            input.type = 'file';
+                                                            input.accept = 'image/*';
+                                                            input.onchange = async (e: any) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    setPaymentUploading(true);
+                                                                    try {
+                                                                        const result = await uploadImage(file);
+                                                                        setForm(f => ({ ...f, paymentScreenshotUrl: result.url }));
+                                                                        showToast('Screenshot uploaded!', 'success');
+                                                                    } catch {
+                                                                        showToast('Upload failed', 'error');
+                                                                    } finally {
+                                                                        setPaymentUploading(false);
+                                                                    }
+                                                                }
+                                                            };
+                                                            input.click();
+                                                        }}
+                                                        className="h-20 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-green-50 transition"
+                                                    >
+                                                        {paymentUploading ? (
+                                                            <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                                                        ) : (
+                                                            <div className="text-center">
+                                                                <span className="text-xl">📸</span>
+                                                                <p className="text-[10px] text-gray-500 font-medium">Click to upload screenshot</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!form.payNow && (
+                                        <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 flex gap-2">
+                                            <span className="text-amber-500 text-lg">💡</span>
+                                            <p className="text-xs text-amber-700 leading-tight">
+                                                Choosing "Pay Later" means an admin will manually verify your request and set a price before you can pay. <b>Paying now speeds up approval!</b>
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Buttons */}
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        onClick={() => setShowForm(false)}
+                                        className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSubmit}
+                                        disabled={submitting || uploadingImage}
+                                        className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50"
+                                    >
+                                        {submitting ? 'Submitting...' : '🚀 Submit Request'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Ad Requests List */}
+            {!showForm && (
+                <div className="px-4 mt-2 space-y-4">
+                    {adRequests.length === 0 ? (
+                        <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 mt-4">
+                            <div className="text-5xl mb-4">📢</div>
+                            <h3 className="text-lg font-bold text-gray-800 mb-2">No Ad Requests Yet</h3>
+                            <p className="text-sm text-gray-500 mb-6">Reach thousands of local customers by advertising on our home page carousel!</p>
+                            <button
+                                onClick={() => {
+                                    if (availability && availability.slotsAvailable <= 0) {
+                                        showToast('Sorry, all ad slots are currently occupied. Please check back later!', 'error');
+                                        return;
+                                    }
+                                    setShowForm(true);
+                                }}
+                                className={`${availability && availability.slotsAvailable <= 0 ? 'bg-gray-400' : 'bg-gradient-to-r from-pink-500 to-rose-500'} text-white px-6 py-3 rounded-xl font-bold shadow-md hover:shadow-lg transition`}
+                            >
+                                Create Your First Ad
+                            </button>
+                        </div>
+                    ) : (
+                        adRequests.map((req, i) => {
+                            const cfg = STATUS_CONFIG[req.status] || STATUS_CONFIG['Pending'];
+                            return (
+                                <motion.div
+                                    key={req._id}
+                                    id={`request-${req._id}`}
+                                    initial={{ opacity: 0, y: 15 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+                                >
+                                    {/* Image */}
+                                    <div className="relative h-40">
+                                        <img src={req.imageUrl} alt={req.shopName} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                        {/* Badge */}
+                                        <div
+                                            className="absolute top-3 left-3 px-2 py-1 rounded-full text-white text-xs font-bold"
+                                            style={{ backgroundColor: req.badgeColor || '#FF4B6E' }}
+                                        >
+                                            {req.badge || 'FEATURED'}
+                                        </div>
+                                        {/* Status badge */}
+                                        <div
+                                            className="absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-bold"
+                                            style={{ backgroundColor: cfg.bg, color: cfg.color }}
+                                        >
+                                            {cfg.icon} {cfg.label}
+                                        </div>
+                                        {/* Shop name overlay */}
+                                        <div className="absolute bottom-3 left-3">
+                                            <p className="text-white font-bold text-base">{req.shopName}</p>
+                                            <p className="text-white/80 text-xs">{req.tagline}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Details */}
+                                    <div className="p-4">
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-xs">
+                                                📅 {req.durationDays} days
+                                            </span>
+                                            {req.adPrice > 0 && (
+                                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs font-semibold">
+                                                    💰 ₹{req.adPrice}
+                                                </span>
+                                            )}
+                                            {req.expiresAt && (
+                                                <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-lg text-xs">
+                                                    ⏰ Expires {new Date(req.expiresAt).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Admin note */}
+                                        {req.adminNote && (
+                                            <div className={`rounded-xl p-3 mb-3 text-xs ${req.status === 'Rejected' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
+                                                <span className="font-semibold">Admin note:</span> {req.adminNote}
+                                            </div>
+                                        )}
+
+                                        <p className="text-xs text-gray-400 mb-3">
+                                            Submitted {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        </p>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex gap-2">
+                                            {/* Pay Now — shown when Approved */}
+                                            {req.status === 'Approved' && (
+                                                <div className="flex gap-2 flex-1">
+                                                    <button
+                                                        onClick={() => { setSelectedRequest(req); setShowPaymentModal(true); }}
+                                                        className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white py-2.5 rounded-xl text-sm font-bold shadow hover:shadow-lg transition active:scale-95"
+                                                    >
+                                                        💳 Pay ₹{req.adPrice}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => window.open(ensureAbsoluteUrl(req.ctaLink), '_blank')}
+                                                        className="px-4 border-2 border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition"
+                                                        title="Check Link"
+                                                    >
+                                                        ↗
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Cancel — for Pending or Rejected */}
+                                            {['Pending', 'Rejected'].includes(req.status) && (
+                                                <button
+                                                    onClick={() => setShowCancelConfirm(req._id)}
+                                                    className="flex-1 border-2 border-red-200 text-red-500 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-50 transition"
+                                                >
+                                                    Cancel Request
+                                                </button>
+                                            )}
+
+                                            {/* Payment status for PaymentPending/Live */}
+                                            {req.status === 'PaymentPending' && (
+                                                <div className="flex-1 bg-purple-50 text-purple-700 py-2.5 rounded-xl text-sm font-semibold text-center">
+                                                    ⏳ Verifying Payment...
+                                                </div>
+                                            )}
+                                            {req.status === 'Live' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.open(ensureAbsoluteUrl(req.ctaLink), '_blank')}
+                                                    className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-bold text-center shadow-sm hover:shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                                                >
+                                                    🎉 View Live Ad <span className="text-[10px]">↗</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
+            {/* Payment Modal */}
+            <AnimatePresence>
+                {showPaymentModal && selectedRequest && (
+                    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                        <motion.div
+                            initial={{ opacity: 0, y: 100 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 100 }}
+                            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] overflow-y-auto"
+                        >
+                            <div className="p-5">
+                                <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4 sm:hidden" />
+                                <h2 className="text-xl font-bold text-gray-900 mb-1">Complete Payment</h2>
+                                <p className="text-sm text-gray-500 mb-4">For: <span className="font-semibold">{selectedRequest.shopName}</span></p>
+
+                                {/* Amount */}
+                                <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-4 text-white text-center mb-5">
+                                    <p className="text-sm opacity-90">Total Amount to Pay</p>
+                                    <p className="text-4xl font-bold mt-1">₹{selectedRequest.adPrice}</p>
+                                    <p className="text-xs opacity-80 mt-1">For {selectedRequest.durationDays} days ad placement</p>
+                                </div>
+
+                                {/* Payment Details */}
+                                {(() => {
+                                    const info = getAdminPaymentInfo();
+                                    return (
+                                        <div className="bg-blue-50 rounded-2xl p-4 mb-5 border border-blue-100">
+                                            <p className="text-sm font-bold text-blue-800 mb-3">📲 Payment Details</p>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
+                                                    <span className="text-xs text-gray-500">UPI ID</span>
+                                                    <span className="text-sm font-bold text-gray-800">{info.upi}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
+                                                    <span className="text-xs text-gray-500">Account Name</span>
+                                                    <span className="text-sm font-semibold text-gray-800">{info.accountName}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
+                                                    <span className="text-xs text-gray-500">Account No.</span>
+                                                    <span className="text-sm font-semibold text-gray-800">{info.accountNumber}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
+                                                    <span className="text-xs text-gray-500">Bank / IFSC</span>
+                                                    <span className="text-sm font-semibold text-gray-800">{info.bank} / {info.ifsc}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Payment Form */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Payment Method</label>
+                                        <select
+                                            value={paymentForm.paymentMethod}
+                                            onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+                                        >
+                                            <option value="UPI">UPI</option>
+                                            <option value="Bank Transfer">Bank Transfer</option>
+                                            <option value="Cash">Cash (contact admin)</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                            Transaction ID / UTR Number *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={paymentForm.paymentReference}
+                                            onChange={e => setPaymentForm(f => ({ ...f, paymentReference: e.target.value }))}
+                                            placeholder="e.g. 412345678901"
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                            Payment Screenshot <span className="text-gray-400 font-normal">(optional but recommended)</span>
+                                        </label>
+                                        {paymentForm.paymentScreenshotUrl ? (
+                                            <div className="relative rounded-xl overflow-hidden h-28 border border-green-200">
+                                                <img src={paymentForm.paymentScreenshotUrl} alt="Payment proof" className="w-full h-full object-cover" />
+                                                <button
+                                                    onClick={() => setPaymentForm(f => ({ ...f, paymentScreenshotUrl: '' }))}
+                                                    className="absolute top-2 right-2 bg-white rounded-full p-1 text-red-500 shadow"
+                                                >✕</button>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                onClick={() => {
+                                                    const input = document.createElement('input');
+                                                    input.type = 'file';
+                                                    input.accept = 'image/*';
+                                                    input.onchange = async (e: any) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            await handlePaymentScreenshotUpload({ target: { files: [file] } } as any);
+                                                        }
+                                                    };
+                                                    input.click();
+                                                }}
+                                                className="h-28 border-2 border-dashed border-green-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-green-50 transition"
+                                            >
+                                                {paymentUploading ? (
+                                                    <div className="text-center">
+                                                        <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                                                        <p className="text-xs text-green-500">Uploading...</p>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-2xl mb-1">📸</span>
+                                                        <p className="text-xs text-gray-500">Tap to upload screenshot</p>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Note <span className="text-gray-400 font-normal">(optional)</span></label>
+                                        <input
+                                            type="text"
+                                            value={paymentForm.paymentNote}
+                                            onChange={e => setPaymentForm(f => ({ ...f, paymentNote: e.target.value }))}
+                                            placeholder="Any note to admin..."
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 mt-6">
+                                    <button
+                                        onClick={() => { setShowPaymentModal(false); setSelectedRequest(null); }}
+                                        className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSubmitPayment}
+                                        disabled={submitting}
+                                        className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50"
+                                    >
+                                        {submitting ? 'Submitting...' : '✅ Submit Proof'}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Cancel Confirm */}
+            <AnimatePresence>
+                {showCancelConfirm && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl"
+                        >
+                            <div className="text-4xl mb-3">🗑️</div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Cancel Request?</h3>
+                            <p className="text-sm text-gray-500 mb-6">This will permanently remove this ad request.</p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowCancelConfirm(null)}
+                                    className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+                                >
+                                    Keep It
+                                </button>
+                                <button
+                                    onClick={() => handleCancel(showCancelConfirm)}
+                                    className="flex-1 bg-red-500 text-white rounded-xl py-3 text-sm font-bold hover:bg-red-600 transition"
+                                >
+                                    Yes, Cancel
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
