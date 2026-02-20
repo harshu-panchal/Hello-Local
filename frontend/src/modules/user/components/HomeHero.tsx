@@ -334,9 +334,6 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
           {/* Search Bar */}
           <div className="flex items-center gap-3 w-full md:max-w-xl md:mx-auto">
 
-            <Link to="/" className="flex-shrink-0 md:hidden">
-              <img src="/logo.png?v=2" alt="Logo" className="w-9 h-9 object-contain rounded-lg shadow-sm" />
-            </Link>
             <div
               onClick={() => navigate('/search')}
               className="flex-1 rounded-xl shadow-lg px-3 py-2 md:px-3 md:py-1.5 flex items-center gap-2 cursor-pointer hover:shadow-xl transition-all duration-300 mb-2 md:mb-1.5 bg-white"
