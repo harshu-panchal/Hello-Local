@@ -400,6 +400,8 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
         filtered = products.filter((p) =>
           ['snacks', 'atta-rice', 'dairy-breakfast', 'masala-oil', 'biscuits-bakery', 'cold-drinks', 'fruits-veg'].includes(p.categoryId)
         );
+      } else if (activeTab === 'dairy') {
+        filtered = products.filter((p) => p.categoryId === 'dairy-breakfast' || p.categoryId === 'dairy');
       } else {
         filtered = products.filter((p) => p.categoryId === activeTab);
       }
@@ -433,9 +435,10 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
       className="relative"
       style={{
         background: `linear-gradient(to bottom, ${theme.primary[3]}, ${theme.primary[3]}, ${theme.secondary[1]}, ${theme.secondary[2]})`,
-        marginTop: '0px', // No gap for seamless blend
+        marginTop: '0px',
         paddingTop: '12px',
         paddingBottom: '16px',
+        transition: 'background 0.3s ease-out',
       }}
     >
       {/* White Zip/Scalloped Divider at Top - Upward-pointing semicircles */}
@@ -481,40 +484,54 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
         </svg>
       </div>
 
-      {/* LOWEST PRICES EVER Banner */}
+      {/* LOWEST PRICES EVER Banner - Eye-catching design */}
       <div className="px-4 relative z-10" style={{ marginTop: '30px', marginBottom: '12px' }} data-section="lowest-prices">
-        <div className="flex items-center justify-center gap-2 mb-1">
-          {/* Left horizontal line */}
-          <div className="flex-1 h-px bg-neutral-300"></div>
-
-          <h2
-            className="font-black text-center whitespace-nowrap"
+        <div className="flex flex-col items-center justify-center gap-0">
+          {/* Accent bar above text */}
+          <div
+            className="h-1 rounded-full mb-2"
             style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '28px',
-              color: '#000000',
-              opacity: fontLoaded ? 1 : 0,
-              transition: 'opacity 0.2s ease-in',
-              textShadow:
-                '-1.5px -1.5px 0 white, 1.5px -1.5px 0 white, -1.5px 1.5px 0 white, 1.5px 1.5px 0 white, ' +
-                '-1.5px 0px 0 white, 1.5px 0px 0 white, 0px -1.5px 0 white, 0px 1.5px 0 white, ' +
-                '-1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white, ' +
-                '3px 3px 4px rgba(0, 0, 0, 0.5), ' +
-                '2px 2px 3px rgba(0, 0, 0, 0.6), ' +
-                '1px 1px 2px rgba(0, 0, 0, 0.7), ' +
-                '0px 2px 1px rgba(0, 0, 0, 0.4)',
-              letterSpacing: '0.8px',
-              fontWeight: 900,
-              lineHeight: '1.1',
-              transform: 'perspective(500px) rotateX(2deg) rotateY(-1deg)',
-              transformStyle: 'preserve-3d',
-            } as React.CSSProperties}
+              width: '80px',
+              background: `linear-gradient(90deg, transparent, ${theme.accentColor}, transparent)`,
+            }}
+          />
+          <div
+            className="relative inline-block px-8 py-2.5 rounded-full"
+            style={{
+              background: `linear-gradient(135deg, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.14) 100%)`,
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08)`,
+            }}
           >
-            LOWEST PRICES EVER
-          </h2>
-
-          {/* Right horizontal line */}
-          <div className="flex-1 h-px bg-neutral-300"></div>
+            <h2
+              className="font-black text-center whitespace-nowrap tracking-wider uppercase"
+              style={{
+                fontFamily: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
+                fontSize: 'clamp(24px, 6vw, 32px)',
+                color: '#ffffff',
+                opacity: fontLoaded ? 1 : 0,
+                transition: 'opacity 0.2s ease-in',
+                textShadow:
+                  `0 1px 0 rgba(0,0,0,0.2), ` +
+                  `0 2px 4px rgba(0,0,0,0.3), ` +
+                  `0 4px 8px rgba(0,0,0,0.25), ` +
+                  `0 0 0 2px rgba(0,0,0,0.15), ` +
+                  `0 0 20px rgba(255,255,255,0.2)`,
+                fontWeight: 900,
+                lineHeight: '1.15',
+                letterSpacing: '0.15em',
+              } as React.CSSProperties}
+            >
+              LOWEST PRICES EVER
+            </h2>
+          </div>
+          {/* Accent bar below text */}
+          <div
+            className="h-1 rounded-full mt-2"
+            style={{
+              width: '80px',
+              background: `linear-gradient(90deg, transparent, ${theme.accentColor}, transparent)`,
+            }}
+          />
         </div>
       </div>
 

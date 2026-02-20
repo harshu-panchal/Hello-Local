@@ -57,6 +57,8 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
   const housefullRef = useRef<HTMLDivElement>(null);
   const saleRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLDivElement>(null);
+  const lightningLeftRef = useRef<SVGSVGElement>(null);
+  const lightningRightRef = useRef<SVGSVGElement>(null);
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
   const priceContainerRef = useRef<HTMLDivElement>(null);
   const productNameRef = useRef<HTMLDivElement>(null);
@@ -386,46 +388,131 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
     };
   }, [hasData]);
 
-  // HOUSEFULL SALE animation - SIMPLIFIED and DEFERRED for faster load
+  // HOUSEFULL SALE animation - EYE-CATCHING entrance + continuous effects
   useLayoutEffect(() => {
     if (!hasData) return;
     const housefullContainer = housefullRef.current;
     const saleText = saleRef.current;
     const dateText = dateRef.current;
+    const lightningLeft = lightningLeftRef.current;
+    const lightningRight = lightningRightRef.current;
     if (!housefullContainer) return;
 
-    // Defer animation start to prioritize content rendering
     const timeoutId = setTimeout(() => {
-    const letters = housefullContainer.querySelectorAll(".housefull-letter");
+      const letters = housefullContainer.querySelectorAll(".housefull-letter");
 
-      // Simplified animation - single entrance animation instead of loop
-      gsap.set([housefullContainer, saleText, dateText], {
-        scale: 0.8,
+      // ENTRANCE: Letters drop in with bounce + rotation
+      gsap.set(letters, {
+        y: -40,
         opacity: 0,
+        scale: 0.3,
+        rotationX: -90,
+        transformOrigin: "center bottom",
       });
+      gsap.set([saleText, dateText], { opacity: 0, y: 20 });
+      gsap.set([lightningLeft, lightningRight], { scale: 0, opacity: 0 });
 
-      gsap.to([housefullContainer, saleText, dateText], {
-        scale: 1,
-          opacity: 1,
-          duration: 0.5,
-          ease: "back.out(1.7)",
-      });
-
-      // Simplified letter animation - only run once
+      // Staggered letter drop - each letter bounces in
       gsap.to(letters, {
-        y: -10,
-        duration: 0.15,
-        stagger: 0.04,
-          ease: "power2.out",
-        yoyo: true,
-        repeat: 1,
+        y: 0,
+        opacity: 1,
+        scale: 1,
+        rotationX: 0,
+        duration: 0.6,
+        stagger: 0.05,
+        ease: "back.out(1.4)",
+        delay: 0.1,
       });
-    }, 150); // Start animation 150ms after render
+
+      // Lightning bolts zip in from sides
+      gsap.to([lightningLeft, lightningRight], {
+        scale: 1,
+        opacity: 1,
+        duration: 0.4,
+        ease: "back.out(2)",
+        delay: 0.2,
+      });
+
+      // SALE + date fade up
+      gsap.to([saleText, dateText], {
+        opacity: 1,
+        y: 0,
+        duration: 0.5,
+        ease: "power2.out",
+        delay: 0.5,
+      });
+
+      // CONTINUOUS: Subtle pulse on main text (every 2.5s)
+      const pulseTl = gsap.timeline({ repeat: -1, repeatDelay: 1.5 });
+      pulseTl
+        .to(housefullContainer, {
+          scale: 1.03,
+          duration: 0.4,
+          ease: "power2.inOut",
+        })
+        .to(housefullContainer, {
+          scale: 1,
+          duration: 0.4,
+          ease: "power2.inOut",
+        });
+
+      // CONTINUOUS: Lightning bolt flash (every 2s)
+      const flashTl = gsap.timeline({ repeat: -1, repeatDelay: 1.2 });
+      flashTl
+        .to([lightningLeft, lightningRight], {
+          scale: 1.15,
+          filter: "brightness(1.4)",
+          duration: 0.15,
+          ease: "power2.out",
+        })
+        .to([lightningLeft, lightningRight], {
+          scale: 1,
+          filter: "brightness(1)",
+          duration: 0.25,
+          ease: "power2.inOut",
+        });
+
+      // CONTINUOUS: SALE text shimmer pulse
+      const salePulseTl = gsap.timeline({ repeat: -1, repeatDelay: 2 });
+      salePulseTl
+        .to(saleText, {
+          scale: 1.05,
+          textShadow: "0 0 12px rgba(255,255,255,0.9), 0 2px 4px rgba(0,0,0,0.2)",
+          duration: 0.35,
+          ease: "power2.out",
+        })
+        .to(saleText, {
+          scale: 1,
+          textShadow: "0 1px 0 rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.15)",
+          duration: 0.4,
+          ease: "power2.inOut",
+        });
+
+      // Store timelines for cleanup
+      (housefullContainer as any).__promoAnimations = {
+        pulseTl,
+        flashTl,
+        salePulseTl,
+      };
+    }, 150);
 
     return () => {
       clearTimeout(timeoutId);
-      const letters = housefullContainer.querySelectorAll(".housefull-letter");
-      gsap.killTweensOf([housefullContainer, saleText, dateText, letters]);
+      const letters = housefullContainer?.querySelectorAll(".housefull-letter");
+      const stored = (housefullContainer as any)?.__promoAnimations;
+      if (stored) {
+        stored.pulseTl?.kill();
+        stored.flashTl?.kill();
+        stored.salePulseTl?.kill();
+      }
+      gsap.killTweensOf([
+        housefullContainer,
+        saleText,
+        dateText,
+        letters,
+        lightningLeft,
+        lightningRight,
+      ].filter(Boolean));
     };
   }, [hasData]);
 
@@ -560,6 +647,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
         paddingTop: "12px",
         paddingBottom: "0px",
         marginTop: 0,
+        transition: 'background 0.3s ease-out',
       }}>
       {/* HOUSEFULL SALE Banner */}
       <div
@@ -628,10 +716,11 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
           ))}
         </div>
 
-        <div className="relative z-10">
+        <div className="relative z-10" style={{ perspective: "400px" }}>
           <div className="flex items-center justify-center gap-3 mb-0">
             {/* Left Lightning Bolt */}
             <svg
+              ref={lightningLeftRef}
               width="28"
               height="36"
               viewBox="0 0 24 30"
@@ -646,22 +735,19 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
               />
             </svg>
 
-            {/* HOUSEFULL Text */}
+            {/* HOUSEFULL Text - Professional styling */}
             <h1
               ref={housefullRef}
-              className="text-3xl font-black text-white"
+              className="text-3xl md:text-4xl font-bold tracking-tight text-white"
               style={
                 {
-                  fontFamily: '"Poppins", sans-serif',
-                  letterSpacing: "1.5px",
-                  lineHeight: "1.1",
+                  fontFamily: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
+                  letterSpacing: "0.05em",
+                  lineHeight: "1.15",
                   textShadow:
-                    `-2px -2px 0 ${theme.accentColor}, 2px -2px 0 ${theme.accentColor}, -2px 2px 0 ${theme.accentColor}, 2px 2px 0 ${theme.accentColor}, ` +
-                    `-2px 0px 0 ${theme.accentColor}, 2px 0px 0 ${theme.accentColor}, 0px -2px 0 ${theme.accentColor}, 0px 2px 0 ${theme.accentColor}, ` +
-                    `-1px -1px 0 ${theme.accentColor}, 1px -1px 0 ${theme.accentColor}, -1px 1px 0 ${theme.accentColor}, 1px 1px 0 ${theme.accentColor}, ` +
-                    "0px 2px 0px rgba(0, 0, 0, 0.8), 0px 4px 0px rgba(0, 0, 0, 0.6), " +
-                    "0px 6px 0px rgba(0, 0, 0, 0.4), 0px 8px 8px rgba(0, 0, 0, 0.3), " +
-                    "2px 2px 2px rgba(0, 0, 0, 0.5)",
+                    `0 1px 0 rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.2), ` +
+                    `0 4px 8px rgba(0, 0, 0, 0.12), 0 0 1px ${theme.accentColor}`,
+                  fontWeight: 700,
                 } as React.CSSProperties
               }>
               {headingText.split("").map((letter, index) => (
@@ -673,6 +759,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
 
             {/* Right Lightning Bolt */}
             <svg
+              ref={lightningRightRef}
               width="28"
               height="36"
               viewBox="0 0 24 30"
@@ -689,24 +776,19 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
             </svg>
           </div>
 
-          {/* SALE Text */}
+          {/* SALE Text - Professional styling */}
           <div
             className="flex justify-center mb-0.5"
             style={{ marginTop: "-3px" }}>
             <h2
               ref={saleRef}
-              className="text-xl font-black text-white"
+              className="text-lg md:text-xl font-semibold text-white tracking-widest uppercase"
               style={
                 {
-                  fontFamily: '"Poppins", sans-serif',
-                  letterSpacing: "1.5px",
+                  fontFamily: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif',
+                  letterSpacing: "0.25em",
                   textShadow:
-                    `-1.5px -1.5px 0 ${theme.accentColor}, 1.5px -1.5px 0 ${theme.accentColor}, -1.5px 1.5px 0 ${theme.accentColor}, 1.5px 1.5px 0 ${theme.accentColor}, ` +
-                    `-1.5px 0px 0 ${theme.accentColor}, 1.5px 0px 0 ${theme.accentColor}, 0px -1.5px 0 ${theme.accentColor}, 0px 1.5px 0 ${theme.accentColor}, ` +
-                    `-1px -1px 0 ${theme.accentColor}, 1px -1px 0 ${theme.accentColor}, -1px 1px 0 ${theme.accentColor}, 1px 1px 0 ${theme.accentColor}, ` +
-                    "0px 2px 0px rgba(0, 0, 0, 0.8), 0px 4px 0px rgba(0, 0, 0, 0.6), " +
-                    "0px 6px 0px rgba(0, 0, 0, 0.4), 0px 8px 8px rgba(0, 0, 0, 0.3), " +
-                    "2px 2px 2px rgba(0, 0, 0, 0.5)",
+                    `0 1px 0 rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.15)`,
                 } as React.CSSProperties
               }>
               {saleTextValue}
@@ -731,10 +813,11 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
           {/* Crazy Deals Section - Left */}
           <div className="flex-shrink-0 w-[100px] promo-card">
             <div
-              className="h-full rounded-lg p-1 flex flex-col items-center justify-between relative overflow-hidden"
+              className="h-full rounded-xl p-1 flex flex-col items-center justify-between relative overflow-hidden border border-white/30 shadow-lg"
               style={{
                 background: `radial-gradient(circle at center, rgba(255, 255, 255, 0.15), transparent 60%), linear-gradient(to bottom, ${theme.primary[0]}, ${theme.primary[1]}, ${theme.primary[2]})`,
                 minHeight: "110px",
+                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
               }}>
               {/* CRAZY DEALS - Two lines, bigger */}
               <div className="text-center mb-1.5" style={{ marginTop: "4px" }}>
@@ -859,10 +942,11 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                 <div key={card.id} className="promo-card">
                   <Link
                     to={card.slug || card.categoryId ? `/category/${card.slug || card.categoryId}` : "#"}
-                    className="group rounded-lg transition-all duration-300 hover:shadow-md active:scale-[0.98] h-full flex flex-col overflow-hidden relative"
+                    className="group rounded-xl transition-all duration-300 hover:shadow-lg active:scale-[0.98] h-full flex flex-col overflow-hidden relative border border-neutral-200/80"
                     style={{
                       minHeight: "90px",
-                      background: "rgba(255, 247, 237, 0.9)", // Very light orange
+                      background: "rgba(255, 247, 237, 0.95)",
+                      boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06)",
                     }}>
                     {/* Green Discount Banner - Only around text, centered at top */}
                     <div

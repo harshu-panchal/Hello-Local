@@ -47,7 +47,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             label: c.name,
             icon: getIconByName(c.iconName)
           }));
-          setTabs([ALL_TAB, ...mapped]);
+          const uniqueTabs = mapped.filter((tab) => tab.id !== ALL_TAB.id);
+          setTabs([ALL_TAB, ...uniqueTabs]);
         }
       } catch (error) {
         console.error('Failed to fetch header categories', error);
@@ -115,6 +116,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     switch (activeTab) {
       case 'wedding':
         return ['gift packs', 'dry fruits', 'sweets', 'decorative items', 'wedding cards', 'return gifts'];
+      case 'dairy':
+        return ['milk', 'curd', 'cheese', 'butter', 'paneer', 'cream', 'yogurt'];
       case 'winter':
         return ['woolen clothes', 'caps', 'gloves', 'blankets', 'heater', 'winter wear'];
       case 'electronics':
@@ -280,6 +283,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         background: heroGradient,
         paddingBottom: 0,
         marginBottom: 0,
+        transition: 'background 0.3s ease-out',
       }}
     >
       {/* Top section with delivery info and buttons - NOT sticky */}
@@ -302,8 +306,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 </div>
               )}
             </div>
-            {/* Right: Logo */}
-            <div className="flex-shrink-0 mt-0">
+            {/* Right: Logo - hidden on desktop, visible on mobile */}
+            <div className="flex-shrink-0 mt-0 md:hidden">
               <img
                 src="/logo.png?v=2"
                 alt="Hello Local"

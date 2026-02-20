@@ -54,6 +54,15 @@ export const themes: Record<string, Theme> = {
     saleText: 'SALE',
     headerTextColor: '#831843',
   },
+  dairy: {
+    primary: ['rgb(224, 242, 254)', 'rgb(240, 249, 255)', 'rgb(254, 252, 232)', 'rgb(255, 255, 255)'],
+    secondary: ['rgb(255, 255, 255)', 'rgb(254, 252, 232)', 'rgb(240, 249, 255)'],
+    textColor: '#0c4a6e',
+    accentColor: '#0284c7',
+    bannerText: 'DAIRY',
+    saleText: 'SALE',
+    headerTextColor: '#0c4a6e',
+  },
   grocery: {
     primary: ['rgb(187, 247, 208)', 'rgb(209, 250, 229)', 'rgb(220, 252, 231)', 'rgb(236, 253, 245)'],
     secondary: ['rgb(236, 253, 245)', 'rgb(220, 252, 231)', 'rgb(209, 250, 229)'],
@@ -138,5 +147,5 @@ export const themes: Record<string, Theme> = {
 };
 
 export const getTheme = (tabId: string): Theme => {
-  return themes[tabId] || themes.all;
+  return themes[tabId] || (tabId ? themes[tabId.toLowerCase()] : undefined) || themes.all;
 };

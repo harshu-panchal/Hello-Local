@@ -23,6 +23,7 @@ export default function Home() {
   const setActiveTab = setActiveCategory;
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollHandledRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
   const SCROLL_POSITION_KEY = 'home-scroll-position';
 
   // State for dynamic data
@@ -55,14 +56,14 @@ export default function Home() {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
+      const isTabSwitch = !isInitialLoadRef.current;
+      if (!isTabSwitch) {
         startRouteLoading();
-        setLoading(true);
-        setError(null);
-        // Pass the activeTab as slug (if it's not "all")
-        // This ensures backend filters sections based on the category
+      }
+      setLoading(true);
+      setError(null);
+      try {
         const slug = activeTab === "all" ? undefined : activeTab;
-
         const response = await getHomeContent(
           slug,
           location?.latitude,
@@ -70,7 +71,6 @@ export default function Home() {
         );
         if (response.success && response.data) {
           setHomeData(response.data);
-
           if (response.data.bestsellers) {
             setProducts(response.data.bestsellers);
           }
@@ -82,7 +82,10 @@ export default function Home() {
         setError("Network error. Please check your connection.");
       } finally {
         setLoading(false);
-        stopRouteLoading();
+        if (!isTabSwitch) {
+          stopRouteLoading();
+          isInitialLoadRef.current = false;
+        }
       }
     };
 
