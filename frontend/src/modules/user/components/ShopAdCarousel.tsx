@@ -1,414 +1,242 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { getActiveShopAds, ShopAd } from "../../../services/api/admin/adminShopAdService";
+
+const FALLBACK_ADS: ShopAd[] = [
+    {
+        _id: "dummy-1",
+        shopName: "Gourmet Garden",
+        tagline: "Fresh Organic Produce",
+        description: "100% chemical-free vegetables directly from local farms.",
+        imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1000",
+        badge: "FRESH",
+        badgeColor: "#10b981",
+        ctaText: "Shop Now",
+        ctaLink: "/products?category=Vegetables",
+        order: 1,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    },
+    {
+        _id: "dummy-2",
+        shopName: "Kitchen Masters",
+        tagline: "Modern Cookware Essentials",
+        description: "Upgrade your kitchen with our premium non-stick collection.",
+        imageUrl: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80&w=1000",
+        badge: "PREMIUM",
+        badgeColor: "#f59e0b",
+        ctaText: "View Collection",
+        ctaLink: "/products?category=Kitchen",
+        order: 2,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    }
+];
 
 export default function ShopAdCarousel() {
     const [ads, setAds] = useState<ShopAd[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [isTransitioning, setIsTransitioning] = useState(false);
+    const [direction, setDirection] = useState(0);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
-    const touchStartX = useRef<number>(0);
-    const touchEndX = useRef<number>(0);
 
-    useEffect(() => {
-        const fetchAds = async () => {
-            try {
-                const response = await getActiveShopAds();
-                if (response.success && response.data.length > 0) {
-                    setAds(response.data);
-                }
-            } catch (err) {
-                console.error("Failed to fetch shop ads:", err);
-            } finally {
-                setLoading(false);
+    const fetchAds = useCallback(async () => {
+        try {
+            const response = await getActiveShopAds();
+            if (response.success && response.data.length > 0) {
+                setAds(response.data);
+            } else {
+                setAds(FALLBACK_ADS);
             }
-        };
-        fetchAds();
+        } catch (err) {
+            console.error("Failed to fetch shop ads:", err);
+            setAds(FALLBACK_ADS);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    const goToSlide = useCallback((index: number) => {
-        if (isTransitioning || ads.length === 0) return;
-        setIsTransitioning(true);
-        setCurrentIndex(index);
-        setTimeout(() => setIsTransitioning(false), 500);
-        // reset auto-play inline
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        if (ads.length > 1) {
-            intervalRef.current = setInterval(() => {
-                setCurrentIndex(prev => (prev + 1) % ads.length);
-            }, 4000);
-        }
-    }, [isTransitioning, ads.length]);
+    useEffect(() => {
+        fetchAds();
+    }, [fetchAds]);
 
-    const nextSlide = useCallback(() => {
-        if (ads.length === 0) return;
-        goToSlide((currentIndex + 1) % ads.length);
-    }, [ads.length, currentIndex, goToSlide]);
-
-    const prevSlide = useCallback(() => {
-        if (ads.length === 0) return;
-        goToSlide((currentIndex - 1 + ads.length) % ads.length);
-    }, [ads.length, currentIndex, goToSlide]);
+    const paginate = useCallback((newDirection: number) => {
+        setDirection(newDirection);
+        setCurrentIndex((prevIndex) => (prevIndex + newDirection + ads.length) % ads.length);
+    }, [ads.length]);
 
     useEffect(() => {
         if (ads.length > 1) {
             intervalRef.current = setInterval(() => {
-                setCurrentIndex(prev => (prev + 1) % ads.length);
-            }, 4000);
+                paginate(1);
+            }, 6000);
         }
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [ads.length]);
+    }, [ads.length, paginate]);
 
-    const handleTouchStart = (e: React.TouchEvent) => {
-        touchStartX.current = e.targetTouches[0].clientX;
+    const handleNext = () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        paginate(1);
     };
 
-    const handleTouchMove = (e: React.TouchEvent) => {
-        touchEndX.current = e.targetTouches[0].clientX;
+    const handlePrev = () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        paginate(-1);
     };
 
-    const handleTouchEnd = () => {
-        const diff = touchStartX.current - touchEndX.current;
-        if (Math.abs(diff) > 50) {
-            if (diff > 0) nextSlide();
-            else prevSlide();
-        }
-    };
-
-    if (loading) {
+    if (loading && ads.length === 0) {
         return (
-            <div className="shop-ad-carousel-skeleton">
-                <div className="skeleton-shimmer" />
+            <div className="px-4 py-3">
+                <div className="h-44 md:h-56 w-full rounded-3xl bg-neutral-100 animate-pulse overflow-hidden relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+                </div>
             </div>
         );
     }
 
     if (ads.length === 0) return null;
 
+    const currentAd = ads[currentIndex];
+
     return (
-        <div className="shop-ad-carousel-wrapper">
-            <div
-                className="shop-ad-carousel-container"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-            >
-                {/* Slides */}
-                <div className="shop-ad-slides-track">
-                    {ads.map((ad, index) => (
-                        <div
-                            key={ad._id}
-                            className={`shop-ad-slide ${index === currentIndex ? "active" : index === (currentIndex - 1 + ads.length) % ads.length ? "prev" : "next"}`}
-                            style={{
-                                transform: index === currentIndex
-                                    ? "translateX(0) scale(1)"
-                                    : index === (currentIndex - 1 + ads.length) % ads.length
-                                        ? "translateX(-100%) scale(0.95)"
-                                        : "translateX(100%) scale(0.95)",
-                                opacity: index === currentIndex ? 1 : 0,
-                                transition: "all 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-                                position: index === currentIndex ? "relative" : "absolute",
-                                top: 0, left: 0, right: 0,
-                                zIndex: index === currentIndex ? 2 : 1,
-                            }}
-                        >
-                            <div
-                                className="shop-ad-card"
-                                style={{
-                                    backgroundImage: `url(${ad.imageUrl})`,
-                                    backgroundSize: "cover",
-                                    backgroundPosition: "center",
-                                }}
-                            >
-                                {/* Gradient overlay */}
-                                <div className="shop-ad-gradient" />
+        <div className="relative group px-4 py-3 select-none">
+            <div className="relative h-44 md:h-60 w-full rounded-[2.5rem] overflow-hidden shadow-2xl shadow-rose-500/10 border border-white/10 bg-neutral-900">
+                <AnimatePresence initial={false} custom={direction}>
+                    <motion.div
+                        key={currentIndex}
+                        custom={direction}
+                        initial={{ opacity: 0, x: direction > 0 ? 300 : -300 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: direction > 0 ? -300 : 300 }}
+                        transition={{
+                            x: { type: "spring", stiffness: 300, damping: 30 },
+                            opacity: { duration: 0.2 }
+                        }}
+                        className="absolute inset-0"
+                    >
+                        {/* Background Image with optimized loading */}
+                        <div className="absolute inset-0">
+                            <img
+                                src={currentAd.imageUrl}
+                                alt=""
+                                className="w-full h-full object-cover scale-105"
+                            />
+                            {/* Sophisticated Gradient Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-black/80 via-black/40 to-transparent" />
+                        </div>
 
-                                {/* Badge */}
-                                {ad.badge && (
-                                    <div
-                                        className="shop-ad-badge"
-                                        style={{ backgroundColor: ad.badgeColor || "#FF4B6E" }}
-                                    >
-                                        {ad.badge}
-                                    </div>
-                                )}
-
-                                {/* Content */}
-                                <div className="shop-ad-content">
-                                    <h3 className="shop-ad-title">{ad.shopName}</h3>
-                                    <p className="shop-ad-tagline">{ad.tagline}</p>
-                                    {ad.description && (
-                                        <p className="shop-ad-description">{ad.description}</p>
-                                    )}
-                                    {ad.ctaText && (
-                                        <a
-                                            href={ad.ctaLink || "#"}
-                                            className="shop-ad-cta"
-                                            onClick={(e) => { if (!ad.ctaLink) e.preventDefault(); }}
+                        {/* Content Area */}
+                        <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-10">
+                            <div className="max-w-[70%] space-y-2">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.1 }}
+                                >
+                                    {currentAd.badge && (
+                                        <span
+                                            className="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase text-white shadow-lg"
+                                            style={{ backgroundColor: currentAd.badgeColor || '#e11d48' }}
                                         >
-                                            {ad.ctaText}
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px", flexShrink: 0 }}>
-                                                <path d="M5 12h14M12 5l7 7-7 7" />
-                                            </svg>
-                                        </a>
+                                            {currentAd.badge}
+                                        </span>
                                     )}
-                                </div>
+                                </motion.div>
+
+                                <motion.h3
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.2 }}
+                                    className="text-2xl md:text-3xl font-black text-white leading-tight"
+                                >
+                                    {currentAd.shopName}
+                                </motion.h3>
+
+                                <motion.p
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                    className="text-white/80 text-sm md:text-base font-medium line-clamp-1"
+                                >
+                                    {currentAd.tagline}
+                                </motion.p>
+
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="pt-2"
+                                >
+                                    <a
+                                        href={currentAd.ctaLink || "#"}
+                                        className="inline-flex items-center gap-2 bg-white text-rose-600 px-6 py-2.5 rounded-2xl text-xs font-bold hover:bg-rose-50 transition-all hover:scale-105 active:scale-95 shadow-xl"
+                                        onClick={(e) => { if (!currentAd.ctaLink) e.preventDefault(); }}
+                                    >
+                                        {currentAd.ctaText || "Visit Shop"}
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M5 12h14M12 5l7 7-7 7" />
+                                        </svg>
+                                    </a>
+                                </motion.div>
                             </div>
                         </div>
-                    ))}
-                </div>
+                    </motion.div>
+                </AnimatePresence>
 
-                {/* Navigation arrows (only if multiple ads) */}
+                {/* Glassmorphism Navigation Controls */}
                 {ads.length > 1 && (
                     <>
-                        <button
-                            className="shop-ad-nav-btn shop-ad-nav-prev"
-                            onClick={prevSlide}
-                            aria-label="Previous ad"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M15 18l-6-6 6-6" />
-                            </svg>
-                        </button>
-                        <button
-                            className="shop-ad-nav-btn shop-ad-nav-next"
-                            onClick={nextSlide}
-                            aria-label="Next ad"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M9 18l6-6-6-6" />
-                            </svg>
-                        </button>
-                    </>
-                )}
-
-                {/* Dot indicators */}
-                {ads.length > 1 && (
-                    <div className="shop-ad-dots">
-                        {ads.map((_, index) => (
+                        <div className="absolute top-1/2 -translate-y-1/2 left-4 z-20">
                             <button
-                                key={index}
-                                className={`shop-ad-dot ${index === currentIndex ? "active" : ""}`}
-                                onClick={() => goToSlide(index)}
-                                aria-label={`Go to slide ${index + 1}`}
-                            />
-                        ))}
-                    </div>
+                                onClick={handlePrev}
+                                className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-90"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M15 18l-6-6 6-6" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="absolute top-1/2 -translate-y-1/2 right-4 z-20">
+                            <button
+                                onClick={handleNext}
+                                className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-90"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 18l6-6-6-6" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Pagination Dots */}
+                        <div className="absolute bottom-6 right-8 flex gap-2 z-20">
+                            {ads.map((_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => {
+                                        if (intervalRef.current) clearInterval(intervalRef.current);
+                                        setDirection(i > currentIndex ? 1 : -1);
+                                        setCurrentIndex(i);
+                                    }}
+                                    className={`h-1.5 transition-all duration-300 rounded-full ${i === currentIndex
+                                        ? "bg-white w-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                                        : "bg-white/40 w-1.5 hover:bg-white/60"
+                                        }`}
+                                />
+                            ))}
+                        </div>
+                    </>
                 )}
             </div>
 
-            {/* Ad counter badge */}
-            {ads.length > 1 && (
-                <div className="shop-ad-counter">
-                    {currentIndex + 1} / {ads.length}
-                </div>
-            )}
-
             <style>{`
-        .shop-ad-carousel-wrapper {
-          position: relative;
-          padding: 12px 16px 4px;
-          background: transparent;
-        }
-
-        .shop-ad-carousel-skeleton {
-          margin: 12px 16px;
-          height: 160px;
-          border-radius: 20px;
-          overflow: hidden;
-          background: linear-gradient(135deg, #f0f0f0, #e8e8e8);
-        }
-
-        .skeleton-shimmer {
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
-          animation: shimmer 1.5s infinite;
-        }
-
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-
-        .shop-ad-carousel-container {
-          position: relative;
-          width: 100%;
-          border-radius: 20px;
-          overflow: hidden;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(255,75,110,0.12);
-        }
-
-        .shop-ad-slides-track {
-          position: relative;
-          width: 100%;
-          min-height: 160px;
-        }
-
-        .shop-ad-slide {
-          width: 100%;
-        }
-
-        .shop-ad-card {
-          position: relative;
-          width: 100%;
-          min-height: 160px;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-end;
-          padding: 20px;
-          border-radius: 20px;
-          overflow: hidden;
-        }
-
-        .shop-ad-gradient {
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(
-            135deg,
-            rgba(0,0,0,0.1) 0%,
-            rgba(0,0,0,0.35) 50%,
-            rgba(0,0,0,0.72) 100%
-          );
-          border-radius: 20px;
-        }
-
-        .shop-ad-badge {
-          position: absolute;
-          top: 14px;
-          left: 14px;
-          padding: 4px 11px;
-          border-radius: 50px;
-          font-size: 10px;
-          font-weight: 700;
-          color: #fff;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          z-index: 3;
-        }
-
-        .shop-ad-content {
-          position: relative;
-          z-index: 3;
-        }
-
-        .shop-ad-title {
-          font-size: 22px;
-          font-weight: 800;
-          color: #fff;
-          margin: 0 0 3px;
-          line-height: 1.1;
-          letter-spacing: -0.02em;
-          text-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        }
-
-        .shop-ad-tagline {
-          font-size: 13px;
-          color: rgba(255,255,255,0.88);
-          margin: 0 0 10px;
-          font-weight: 400;
-          text-shadow: 0 1px 4px rgba(0,0,0,0.25);
-        }
-
-        .shop-ad-description {
-          font-size: 11px;
-          color: rgba(255,255,255,0.72);
-          margin: 0 0 10px;
-        }
-
-        .shop-ad-cta {
-          display: inline-flex;
-          align-items: center;
-          padding: 8px 18px;
-          background: rgba(255,255,255,0.95);
-          color: #1a1a2e;
-          border-radius: 50px;
-          font-size: 12px;
-          font-weight: 700;
-          text-decoration: none;
-          letter-spacing: 0.01em;
-          transition: all 0.2s ease;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-          border: none;
-          cursor: pointer;
-          backdrop-filter: blur(8px);
-        }
-
-        .shop-ad-cta:hover {
-          background: #fff;
-          transform: scale(1.04);
-          box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-        }
-
-        .shop-ad-nav-btn {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.9);
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 10;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-          transition: all 0.2s ease;
-          color: #1a1a2e;
-          backdrop-filter: blur(4px);
-        }
-
-        .shop-ad-nav-btn:hover {
-          background: #fff;
-          transform: translateY(-50%) scale(1.08);
-        }
-
-        .shop-ad-nav-prev { left: 10px; }
-        .shop-ad-nav-next { right: 10px; }
-
-        .shop-ad-dots {
-          position: absolute;
-          bottom: 14px;
-          right: 16px;
-          display: flex;
-          gap: 5px;
-          z-index: 10;
-        }
-
-        .shop-ad-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          border: none;
-          cursor: pointer;
-          background: rgba(255,255,255,0.5);
-          transition: all 0.3s ease;
-          padding: 0;
-        }
-
-        .shop-ad-dot.active {
-          background: #fff;
-          width: 18px;
-          border-radius: 10px;
-        }
-
-        .shop-ad-counter {
-          position: absolute;
-          bottom: 18px;
-          left: 30px;
-          font-size: 11px;
-          color: rgba(255,255,255,0.85);
-          font-weight: 600;
-          z-index: 10;
-          letter-spacing: 0.03em;
-          pointer-events: none;
-        }
-      `}</style>
+                @keyframes shimmer {
+                    100% { transform: translateX(100%); }
+                }
+            `}</style>
         </div>
     );
 }

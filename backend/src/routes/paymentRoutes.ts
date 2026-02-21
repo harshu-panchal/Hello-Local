@@ -6,37 +6,42 @@ import Order from '../models/Order';
 
 const router = Router();
 
+import SellerAdRequest from '../models/SellerAdRequest';
+
 /**
  * Create Razorpay order for payment
  */
-router.post('/create-order', authenticate, requireUserType('Customer'), async (req: Request, res: Response) => {
+router.post('/create-order', authenticate, async (req: Request, res: Response) => {
     try {
-        const { orderId } = req.body;
+        const { orderId, type = 'Order' } = req.body;
 
         if (!orderId) {
             return res.status(400).json({
                 success: false,
-                message: 'Order ID is required',
+                message: 'ID is required',
             });
         }
 
-        const order = await Order.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Order not found',
-            });
+        let amount = 0;
+        let userId = '';
+
+        if (type === 'Order') {
+            const order = await Order.findById(orderId);
+            if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+            if (order.customer.toString() !== req.user!.userId) {
+                return res.status(403).json({ success: false, message: 'Unauthorized access to order' });
+            }
+            amount = order.total;
+        } else if (type === 'AdRequest') {
+            const adReq = await SellerAdRequest.findById(orderId);
+            if (!adReq) return res.status(404).json({ success: false, message: 'Ad Request not found' });
+            if (adReq.sellerId.toString() !== req.user!.userId) {
+                return res.status(403).json({ success: false, message: 'Unauthorized access to ad request' });
+            }
+            amount = adReq.adPrice || adReq.requestedPrice || 0;
         }
 
-        // Verify order belongs to customer
-        if (order.customer.toString() !== req.user!.userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Unauthorized access to order',
-            });
-        }
-
-        const result = await createRazorpayOrder(orderId, order.total);
+        const result = await createRazorpayOrder(orderId, amount);
 
         if (!result.success) {
             return res.status(400).json(result);
@@ -55,9 +60,9 @@ router.post('/create-order', authenticate, requireUserType('Customer'), async (r
 /**
  * Verify payment after Razorpay checkout
  */
-router.post('/verify', authenticate, requireUserType('Customer'), async (req: Request, res: Response) => {
+router.post('/verify', authenticate, async (req: Request, res: Response) => {
     try {
-        const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+        const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature, type = 'Order' } = req.body;
 
         if (!orderId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
             return res.status(400).json({
@@ -66,27 +71,12 @@ router.post('/verify', authenticate, requireUserType('Customer'), async (req: Re
             });
         }
 
-        const order = await Order.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Order not found',
-            });
-        }
-
-        // Verify order belongs to customer
-        if (order.customer.toString() !== req.user!.userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Unauthorized access to order',
-            });
-        }
-
         const result = await capturePayment(
             orderId,
             razorpayOrderId,
             razorpayPaymentId,
-            razorpaySignature
+            razorpaySignature,
+            type as any
         );
 
         if (!result.success) {

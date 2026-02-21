@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import Payment from '../models/Payment';
 import Order from '../models/Order';
 import mongoose from 'mongoose';
+import SellerAdRequest from '../models/SellerAdRequest';
 
 // Initialize Razorpay instance
 const getRazorpayInstance = () => {
@@ -89,13 +90,14 @@ export const verifyPaymentSignature = (
 };
 
 /**
- * Capture payment and update order
+ * Capture payment and update order or ad request
  */
 export const capturePayment = async (
-    orderId: string,
+    id: string,
     razorpayOrderId: string,
     razorpayPaymentId: string,
-    razorpaySignature: string
+    razorpaySignature: string,
+    type: 'Order' | 'AdRequest' = 'Order'
 ) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -112,59 +114,99 @@ export const capturePayment = async (
             throw new Error('Invalid payment signature');
         }
 
-        // Find order
-        const order = await Order.findById(orderId).session(session);
-        if (!order) {
-            throw new Error('Order not found');
-        }
+        let amount = 0;
+        let customerOrSellerId = '';
 
-        // Create payment record
-        const payment = new Payment({
-            order: orderId,
-            customer: order.customer,
-            paymentMethod: 'Online',
-            paymentGateway: 'Razorpay',
-            razorpayOrderId,
-            razorpayPaymentId,
-            razorpaySignature,
-            amount: order.total,
-            currency: 'INR',
-            status: 'Completed',
-            paidAt: new Date(),
-            gatewayResponse: {
-                success: true,
-                message: 'Payment captured successfully',
-            },
-        });
+        if (type === 'Order') {
+            const order = await Order.findById(id).session(session);
+            if (!order) throw new Error('Order not found');
+            amount = order.total;
+            customerOrSellerId = order.customer.toString();
 
-        await payment.save({ session });
+            // Create payment record
+            const payment = new Payment({
+                order: id,
+                customer: customerOrSellerId,
+                paymentMethod: 'Online',
+                paymentGateway: 'Razorpay',
+                razorpayOrderId,
+                razorpayPaymentId,
+                razorpaySignature,
+                amount,
+                currency: 'INR',
+                status: 'Completed',
+                paidAt: new Date(),
+                gatewayResponse: {
+                    success: true,
+                    message: 'Payment captured successfully',
+                },
+            });
+            await payment.save({ session });
 
-        // Update order
-        order.paymentStatus = 'Paid';
-        order.paymentId = razorpayPaymentId;
-        // Change order status from 'Pending' to 'Received' after successful payment
-        if (order.status === 'Pending') {
-            order.status = 'Received';
-        }
-        await order.save({ session });
+            // Update order
+            order.paymentStatus = 'Paid';
+            order.paymentId = razorpayPaymentId;
+            if (order.status === 'Pending') {
+                order.status = 'Received';
+            }
+            await order.save({ session });
 
-        await session.commitTransaction();
+            await session.commitTransaction();
 
-        // Create Pending Commissions (Outside transaction as it has its own logic/logging and failure shouldn't rollback payment)
-        try {
-            const { createPendingCommissions } = await import('./commissionService');
-            await createPendingCommissions(orderId);
-        } catch (commError) {
-            console.error("Failed to create pending commissions after payment:", commError);
-            // Don't fail the request, just log it.
+            // Create Pending Commissions
+            try {
+                const { createPendingCommissions } = await import('./commissionService');
+                await createPendingCommissions(id);
+            } catch (commError) {
+                console.error("Failed to create pending commissions after payment:", commError);
+            }
+
+        } else {
+            const adReq = await SellerAdRequest.findById(id).session(session);
+            if (!adReq) throw new Error('Ad Request not found');
+            amount = adReq.adPrice || adReq.requestedPrice || 0;
+            customerOrSellerId = adReq.sellerId.toString();
+
+            // Create payment record
+            const payment = new Payment({
+                adRequest: id,
+                seller: customerOrSellerId,
+                paymentMethod: 'Online',
+                paymentGateway: 'Razorpay',
+                razorpayOrderId,
+                razorpayPaymentId,
+                razorpaySignature,
+                amount,
+                currency: 'INR',
+                status: 'Completed',
+                paidAt: new Date(),
+                gatewayResponse: {
+                    success: true,
+                    message: 'Payment captured successfully',
+                },
+            });
+            await payment.save({ session });
+
+            // Update ad request
+            adReq.paymentStatus = 'Paid';
+            adReq.paymentReference = razorpayPaymentId;
+            adReq.paidAt = new Date();
+            // If it was already approved, maybe it can go to PaymentVerified or Live?
+            // Usually it goes to PaymentVerified for admin to finally check.
+            if (adReq.status === 'Approved' || adReq.status === 'Pending') {
+                adReq.status = 'PaymentVerified';
+            }
+            await adReq.save({ session });
+
+            await session.commitTransaction();
         }
 
         return {
             success: true,
             message: 'Payment captured successfully',
             data: {
-                paymentId: payment._id,
-                orderId: order._id,
+                razorpayPaymentId,
+                id,
             },
         };
     } catch (error: any) {

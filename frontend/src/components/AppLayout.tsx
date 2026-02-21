@@ -155,7 +155,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               }}
             >
               <Link to="/" className="flex items-center hover:opacity-90 transition-opacity">
-                <img src="/logo.png?v=2" alt="Hello Local" className="h-10 w-10 object-contain rounded-lg shadow-sm" />
+                <img src="/logo.png?v=4" alt="Hello Local" className="h-10 w-10 object-contain rounded-lg shadow-sm" />
               </Link>
 
               <div className="flex items-center gap-6 lg:gap-8">

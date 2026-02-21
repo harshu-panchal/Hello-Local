@@ -93,7 +93,7 @@ export default function DeliveryLogin() {
         <div className="px-6 py-4 text-center border-b border-rose-700" style={{ backgroundColor: '#ff4d8d' }}>
           <div className="mb-4">
             <img
-              src="/logo.png?v=2"
+              src="/logo.png?v=4"
               alt="Hello Local"
               className="h-20 w-auto mx-auto object-contain drop-shadow-md bg-white/20 p-2 rounded-xl"
             />

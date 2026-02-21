@@ -11,6 +11,7 @@ import {
     type SellerAdRequestPayload,
 } from '../../../services/api/sellerAdRequestService';
 import { useNavigate } from 'react-router-dom';
+import RazorpayCheckout from '../../../components/RazorpayCheckout';
 
 type AdRequest = {
     _id: string;
@@ -83,18 +84,21 @@ export default function SellerAdRequests() {
     const [showForm, setShowForm] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState<AdRequest | null>(null);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
     const [availability, setAvailability] = useState<{ activeAds: number, maxAds: number, slotsAvailable: number } | null>(null);
-
-    const [paymentForm, setPaymentForm] = useState({
-        paymentMethod: 'UPI',
-        paymentReference: '',
-        paymentScreenshotUrl: '',
-        paymentNote: '',
-    });
     const [paymentUploading, setPaymentUploading] = useState(false);
+    const [razorpayData, setRazorpayData] = useState<{ id: string, amount: number } | null>(null);
+    const [sellerDetails, setSellerDetails] = useState({ name: '', email: '', phone: '' });
+
+    useEffect(() => {
+        // Mock seller details for now, or fetch from auth context if available
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        setSellerDetails({
+            name: user.name || '',
+            email: user.email || '',
+            phone: user.phone || '9999999999'
+        });
+    }, []);
 
     const [form, setForm] = useState<FormState>({
         shopName: '',
@@ -182,7 +186,7 @@ export default function SellerAdRequests() {
         setPaymentUploading(true);
         try {
             const result = await uploadImage(file);
-            setPaymentForm(f => ({ ...f, paymentScreenshotUrl: result.url }));
+            setForm(f => ({ ...f, paymentScreenshotUrl: result.url }));
             showToast('Screenshot uploaded!', 'success');
         } catch {
             showToast('Upload failed', 'error');
@@ -201,21 +205,25 @@ export default function SellerAdRequests() {
             const payload: SellerAdRequestPayload = {
                 ...form,
                 requestedPrice: parseFloat(form.requestedPrice),
-                paymentMethod: form.payNow ? form.paymentMethod : undefined,
-                paymentReference: form.payNow ? form.paymentReference : undefined,
-                paymentScreenshotUrl: form.payNow ? form.paymentScreenshotUrl : undefined,
+                // We no longer send manual payment proof here
+                paymentMethod: undefined,
+                paymentReference: undefined,
+                paymentScreenshotUrl: undefined,
             };
             const res = await createSellerAdRequest(payload);
             if (res.success) {
-                showToast(form.payNow ? 'Ad and payment submitted! Admin will verify and make it LIVE.' : 'Ad request submitted! Admin will review it.', 'success');
-                setShowForm(false);
-                setForm({
-                    shopName: '', tagline: '', description: '', imageUrl: '',
-                    badge: 'FEATURED', badgeColor: '#FF4B6E', ctaText: 'Visit Shop',
-                    ctaLink: '', durationDays: 30, requestedPrice: '799', paymentNote: '',
-                    payNow: true, paymentMethod: 'UPI', paymentReference: '', paymentScreenshotUrl: '',
-                });
-                fetchRequests();
+                if (form.payNow) {
+                    // Trigger Razorpay
+                    setRazorpayData({
+                        id: res.data._id,
+                        amount: parseFloat(form.requestedPrice)
+                    });
+                } else {
+                    showToast('Ad request submitted! Admin will review it.', 'success');
+                    setShowForm(false);
+                    resetForm();
+                    fetchRequests();
+                }
             }
         } catch (err: any) {
             showToast(err?.response?.data?.message || 'Failed to submit request', 'error');
@@ -224,32 +232,32 @@ export default function SellerAdRequests() {
         }
     };
 
-    const handleSubmitPayment = async () => {
-        if (!selectedRequest) return;
-        if (!paymentForm.paymentReference && !paymentForm.paymentScreenshotUrl) {
-            showToast('Please provide a payment reference or screenshot', 'error');
-            return;
-        }
-        setSubmitting(true);
-        try {
-            const res = await submitPaymentProof(selectedRequest._id, paymentForm);
-            if (res.success) {
-                showToast('Payment proof submitted! Admin will verify.', 'success');
-                setShowPaymentModal(false);
-                setPaymentForm({
-                    paymentMethod: 'UPI',
-                    paymentReference: '',
-                    paymentScreenshotUrl: '',
-                    paymentNote: '',
-                });
-                fetchRequests();
-            }
-        } catch (err: any) {
-            showToast(err?.response?.data?.message || 'Failed to submit payment', 'error');
-        } finally {
-            setSubmitting(false);
+    const resetForm = () => {
+        setForm({
+            shopName: '', tagline: '', description: '', imageUrl: '',
+            badge: 'FEATURED', badgeColor: '#FF4B6E', ctaText: 'Visit Shop',
+            ctaLink: '', durationDays: 30, requestedPrice: '799', paymentNote: '',
+            payNow: true, paymentMethod: 'UPI', paymentReference: '', paymentScreenshotUrl: '',
+        });
+    };
+
+    const handlePaymentSuccess = (paymentId: string) => {
+        showToast('Payment successful! Your ad is now under final verification.', 'success');
+        setRazorpayData(null);
+        setShowForm(false);
+        resetForm();
+        fetchRequests();
+    };
+
+    const handlePaymentFailure = (error: string) => {
+        showToast(error, 'error');
+        setRazorpayData(null);
+        // If we were in the form, we keep it open but maybe show a message
+        if (!showForm) {
+            fetchRequests();
         }
     };
+
 
     const handleCancel = async (id: string) => {
         try {
@@ -262,15 +270,6 @@ export default function SellerAdRequests() {
         }
     };
 
-    const getAdminPaymentInfo = () => {
-        return {
-            upi: 'hellolocal@upi',
-            accountName: 'Hello Local Admin',
-            accountNumber: 'XXXX XXXX XXXX',
-            bank: 'State Bank of India',
-            ifsc: 'SBIN0001234',
-        };
-    };
 
     if (loading) {
         return (
@@ -540,7 +539,10 @@ export default function SellerAdRequests() {
                                 {/* Simplified Step: Direct Payment */}
                                 <div className="border-t border-dashed border-gray-200 pt-4 mt-2">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-base font-bold text-gray-800">💳 Pay Now (Instant Review)</h3>
+                                        <div className="flex flex-col">
+                                            <h3 className="text-base font-bold text-gray-800">💳 Pay Now (Instant Review)</h3>
+                                            <p className="text-[10px] text-gray-500">Secure payment via Razorpay</p>
+                                        </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
                                                 type="checkbox"
@@ -551,98 +553,6 @@ export default function SellerAdRequests() {
                                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                                         </label>
                                     </div>
-
-                                    {form.payNow && (
-                                        <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
-                                            {/* Bank Info */}
-                                            {(() => {
-                                                const info = getAdminPaymentInfo();
-                                                return (
-                                                    <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 space-y-2">
-                                                        <div className="flex justify-between items-center bg-white/50 rounded-lg px-3 py-1.5">
-                                                            <span className="text-[10px] text-gray-500 uppercase font-bold">UPI ID</span>
-                                                            <span className="text-xs font-bold text-blue-800">{info.upi}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center bg-white/50 rounded-lg px-3 py-1.5">
-                                                            <span className="text-[10px] text-gray-500 uppercase font-bold">Bank Info</span>
-                                                            <span className="text-xs font-bold text-blue-800">{info.bank} ({info.ifsc})</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Method</label>
-                                                    <select
-                                                        value={form.paymentMethod}
-                                                        onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}
-                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none"
-                                                    >
-                                                        <option value="UPI">UPI</option>
-                                                        <option value="Bank Transfer">Bank</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-gray-600 mb-1">Reference ID *</label>
-                                                    <input
-                                                        type="text"
-                                                        value={form.paymentReference}
-                                                        onChange={e => setForm(f => ({ ...f, paymentReference: e.target.value }))}
-                                                        placeholder="UTR / Ref No"
-                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-600 mb-1">Transaction Proof (Screenshot)</label>
-                                                {form.paymentScreenshotUrl ? (
-                                                    <div className="relative rounded-lg overflow-hidden h-20 border border-green-200">
-                                                        <img src={form.paymentScreenshotUrl} alt="Proof" className="w-full h-full object-cover" />
-                                                        <button
-                                                            onClick={() => setForm(f => ({ ...f, paymentScreenshotUrl: '' }))}
-                                                            className="absolute top-1 right-1 bg-white rounded-full p-1 text-red-500 shadow-sm"
-                                                        >✕</button>
-                                                    </div>
-                                                ) : (
-                                                    <div
-                                                        onClick={() => {
-                                                            const input = document.createElement('input');
-                                                            input.type = 'file';
-                                                            input.accept = 'image/*';
-                                                            input.onchange = async (e: any) => {
-                                                                const file = e.target.files?.[0];
-                                                                if (file) {
-                                                                    setPaymentUploading(true);
-                                                                    try {
-                                                                        const result = await uploadImage(file);
-                                                                        setForm(f => ({ ...f, paymentScreenshotUrl: result.url }));
-                                                                        showToast('Screenshot uploaded!', 'success');
-                                                                    } catch {
-                                                                        showToast('Upload failed', 'error');
-                                                                    } finally {
-                                                                        setPaymentUploading(false);
-                                                                    }
-                                                                }
-                                                            };
-                                                            input.click();
-                                                        }}
-                                                        className="h-20 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-green-50 transition"
-                                                    >
-                                                        {paymentUploading ? (
-                                                            <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                                                        ) : (
-                                                            <div className="text-center">
-                                                                <span className="text-xl">📸</span>
-                                                                <p className="text-[10px] text-gray-500 font-medium">Click to upload screenshot</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
 
                                     {!form.payNow && (
                                         <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 flex gap-2">
@@ -665,9 +575,9 @@ export default function SellerAdRequests() {
                                     <button
                                         onClick={handleSubmit}
                                         disabled={submitting || uploadingImage}
-                                        className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50"
+                                        className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        {submitting ? 'Submitting...' : '🚀 Submit Request'}
+                                        {submitting ? 'Submitting...' : form.payNow ? '💳 Pay & Submit Ad' : '🚀 Submit Request'}
                                     </button>
                                 </div>
                             </div>
@@ -769,7 +679,12 @@ export default function SellerAdRequests() {
                                             {req.status === 'Approved' && (
                                                 <div className="flex gap-2 flex-1">
                                                     <button
-                                                        onClick={() => { setSelectedRequest(req); setShowPaymentModal(true); }}
+                                                        onClick={() => {
+                                                            setRazorpayData({
+                                                                id: req._id,
+                                                                amount: req.adPrice
+                                                            });
+                                                        }}
                                                         className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white py-2.5 rounded-xl text-sm font-bold shadow hover:shadow-lg transition active:scale-95"
                                                     >
                                                         💳 Pay ₹{req.adPrice}
@@ -819,159 +734,6 @@ export default function SellerAdRequests() {
                 </div>
             )}
 
-            {/* Payment Modal */}
-            <AnimatePresence>
-                {showPaymentModal && selectedRequest && (
-                    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                        <motion.div
-                            initial={{ opacity: 0, y: 100 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 100 }}
-                            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] overflow-y-auto"
-                        >
-                            <div className="p-5">
-                                <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4 sm:hidden" />
-                                <h2 className="text-xl font-bold text-gray-900 mb-1">Complete Payment</h2>
-                                <p className="text-sm text-gray-500 mb-4">For: <span className="font-semibold">{selectedRequest.shopName}</span></p>
-
-                                {/* Amount */}
-                                <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-4 text-white text-center mb-5">
-                                    <p className="text-sm opacity-90">Total Amount to Pay</p>
-                                    <p className="text-4xl font-bold mt-1">₹{selectedRequest.adPrice}</p>
-                                    <p className="text-xs opacity-80 mt-1">For {selectedRequest.durationDays} days ad placement</p>
-                                </div>
-
-                                {/* Payment Details */}
-                                {(() => {
-                                    const info = getAdminPaymentInfo();
-                                    return (
-                                        <div className="bg-blue-50 rounded-2xl p-4 mb-5 border border-blue-100">
-                                            <p className="text-sm font-bold text-blue-800 mb-3">📲 Payment Details</p>
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
-                                                    <span className="text-xs text-gray-500">UPI ID</span>
-                                                    <span className="text-sm font-bold text-gray-800">{info.upi}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
-                                                    <span className="text-xs text-gray-500">Account Name</span>
-                                                    <span className="text-sm font-semibold text-gray-800">{info.accountName}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
-                                                    <span className="text-xs text-gray-500">Account No.</span>
-                                                    <span className="text-sm font-semibold text-gray-800">{info.accountNumber}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center bg-white rounded-xl p-3">
-                                                    <span className="text-xs text-gray-500">Bank / IFSC</span>
-                                                    <span className="text-sm font-semibold text-gray-800">{info.bank} / {info.ifsc}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-
-                                {/* Payment Form */}
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Payment Method</label>
-                                        <select
-                                            value={paymentForm.paymentMethod}
-                                            onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}
-                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-                                        >
-                                            <option value="UPI">UPI</option>
-                                            <option value="Bank Transfer">Bank Transfer</option>
-                                            <option value="Cash">Cash (contact admin)</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                            Transaction ID / UTR Number *
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={paymentForm.paymentReference}
-                                            onChange={e => setPaymentForm(f => ({ ...f, paymentReference: e.target.value }))}
-                                            placeholder="e.g. 412345678901"
-                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                            Payment Screenshot <span className="text-gray-400 font-normal">(optional but recommended)</span>
-                                        </label>
-                                        {paymentForm.paymentScreenshotUrl ? (
-                                            <div className="relative rounded-xl overflow-hidden h-28 border border-green-200">
-                                                <img src={paymentForm.paymentScreenshotUrl} alt="Payment proof" className="w-full h-full object-cover" />
-                                                <button
-                                                    onClick={() => setPaymentForm(f => ({ ...f, paymentScreenshotUrl: '' }))}
-                                                    className="absolute top-2 right-2 bg-white rounded-full p-1 text-red-500 shadow"
-                                                >✕</button>
-                                            </div>
-                                        ) : (
-                                            <div
-                                                onClick={() => {
-                                                    const input = document.createElement('input');
-                                                    input.type = 'file';
-                                                    input.accept = 'image/*';
-                                                    input.onchange = async (e: any) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            await handlePaymentScreenshotUpload({ target: { files: [file] } } as any);
-                                                        }
-                                                    };
-                                                    input.click();
-                                                }}
-                                                className="h-28 border-2 border-dashed border-green-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-green-50 transition"
-                                            >
-                                                {paymentUploading ? (
-                                                    <div className="text-center">
-                                                        <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                                                        <p className="text-xs text-green-500">Uploading...</p>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <span className="text-2xl mb-1">📸</span>
-                                                        <p className="text-xs text-gray-500">Tap to upload screenshot</p>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Note <span className="text-gray-400 font-normal">(optional)</span></label>
-                                        <input
-                                            type="text"
-                                            value={paymentForm.paymentNote}
-                                            onChange={e => setPaymentForm(f => ({ ...f, paymentNote: e.target.value }))}
-                                            placeholder="Any note to admin..."
-                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-3 mt-6">
-                                    <button
-                                        onClick={() => { setShowPaymentModal(false); setSelectedRequest(null); }}
-                                        className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleSubmitPayment}
-                                        disabled={submitting}
-                                        className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50"
-                                    >
-                                        {submitting ? 'Submitting...' : '✅ Submit Proof'}
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
 
             {/* Cancel Confirm */}
             <AnimatePresence>
@@ -1004,6 +766,17 @@ export default function SellerAdRequests() {
                     </div>
                 )}
             </AnimatePresence>
+            {/* Razorpay Integration */}
+            {razorpayData && (
+                <RazorpayCheckout
+                    orderId={razorpayData.id}
+                    amount={razorpayData.amount}
+                    onSuccess={handlePaymentSuccess}
+                    onFailure={handlePaymentFailure}
+                    customerDetails={sellerDetails}
+                    type="AdRequest"
+                />
+            )}
         </div>
     );
 }

@@ -309,7 +309,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             {/* Right: Logo - hidden on desktop, visible on mobile */}
             <div className="flex-shrink-0 mt-0 md:hidden">
               <img
-                src="/logo.png?v=2"
+                src="/logo.png?v=4"
                 alt="Hello Local"
                 className="w-14 h-14 md:w-20 md:h-20 object-contain drop-shadow-md rounded-xl"
               />

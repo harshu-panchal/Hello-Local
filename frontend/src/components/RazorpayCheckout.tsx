@@ -11,6 +11,7 @@ interface RazorpayCheckoutProps {
         email: string;
         phone: string;
     };
+    type?: 'Order' | 'AdRequest';
 }
 
 declare global {
@@ -25,6 +26,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
     onSuccess,
     onFailure,
     customerDetails,
+    type = 'Order',
 }) => {
     useEffect(() => {
         // Load Razorpay script if not already loaded
@@ -48,7 +50,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                 }
 
                 // Create Razorpay order
-                const orderResponse = await createRazorpayOrder(orderId);
+                const orderResponse = await createRazorpayOrder(orderId, type);
 
                 if (!orderResponse.success) {
                     onFailure(orderResponse.message || 'Failed to create payment order');
@@ -63,7 +65,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                     amount: amount * 100, // Amount in paise
                     currency: 'INR',
                     name: 'Hello Local',
-                    description: `Order #${orderId}`,
+                    description: `${type === 'AdRequest' ? 'Ad Request' : 'Order'} #${orderId}`,
                     order_id: razorpayOrderId,
                     prefill: {
                         name: customerDetails.name,
@@ -71,7 +73,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                         contact: customerDetails.phone,
                     },
                     theme: {
-                        color: '#3B82F6',
+                        color: type === 'AdRequest' ? '#FF4B6E' : '#3B82F6', // Pick pink for ads, blue for orders
                     },
                     handler: async function (response: any) {
                         try {
@@ -81,6 +83,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                                 razorpayOrderId: response.razorpay_order_id,
                                 razorpayPaymentId: response.razorpay_payment_id,
                                 razorpaySignature: response.razorpay_signature,
+                                type
                             });
 
                             if (verificationResponse.success) {
@@ -109,7 +112,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
         };
 
         initiatePayment();
-    }, [orderId, amount, customerDetails, onSuccess, onFailure]);
+    }, [orderId, amount, customerDetails, onSuccess, onFailure, type]);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

@@ -87,7 +87,7 @@ export default function Login() {
           {/* Logo */}
           <div className="mb-2">
             <img
-              src="/logo.png?v=2"
+              src="/logo.png?v=4"
               alt="Hello Local"
               className="h-24 w-auto object-contain drop-shadow-lg"
             />
