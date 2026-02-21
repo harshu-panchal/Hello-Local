@@ -118,9 +118,41 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
                     <h3 className="text-lg font-semibold mb-2">Initiating Payment...</h3>
-                    <p className="text-gray-600">Please wait while we redirect you to the payment gateway</p>
+                    <p className="text-sm text-gray-600 mb-6">Please wait while we redirect you to the payment gateway</p>
+
+                    <div className="pt-4 border-t border-gray-100 italic">
+                        <p className="text-[10px] text-gray-400 mb-3 text-center">Testing mode: Razorpay might not be enabled</p>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    console.log("Mocking success for testing...");
+                                    const mockPaymentId = "mock_payment_" + Date.now();
+
+                                    // Hit the backend to mark as paid
+                                    const verificationResponse = await verifyPayment({
+                                        orderId,
+                                        razorpayOrderId: "mock_order_id",
+                                        razorpayPaymentId: mockPaymentId,
+                                        razorpaySignature: "mock_signature",
+                                        type
+                                    });
+
+                                    if (verificationResponse.success) {
+                                        onSuccess(mockPaymentId);
+                                    } else {
+                                        onFailure(verificationResponse.message || "Mock verification failed");
+                                    }
+                                } catch (err: any) {
+                                    onFailure(err.message || "Mock payment failed");
+                                }
+                            }}
+                            className="w-full py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition"
+                        >
+                            Proceed with Mock Payment (Testing)
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

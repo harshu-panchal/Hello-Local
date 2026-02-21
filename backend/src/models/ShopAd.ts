@@ -18,6 +18,8 @@ export interface IShopAd extends Document {
     };
     requestedBy?: string; // seller/shopkeeper name or email who requested this ad
     approvedAt?: Date;
+    startDate?: Date;
+    endDate?: Date;
     expiresAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -76,6 +78,12 @@ const ShopAdSchema = new Schema<IShopAd>(
             type: String,
         },
         approvedAt: {
+            type: Date,
+        },
+        startDate: {
+            type: Date,
+        },
+        endDate: {
             type: Date,
         },
         expiresAt: {

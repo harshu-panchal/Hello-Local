@@ -33,6 +33,7 @@ type AdRequest = {
     paymentScreenshotUrl?: string;
     adminNote?: string;
     expiresAt?: string;
+    startDate?: string;
     createdAt: string;
 };
 
@@ -52,17 +53,12 @@ type FormState = {
     paymentMethod: string;
     paymentReference: string;
     paymentScreenshotUrl: string;
+    startDate: string;
 };
 
-const DURATIONS = [7, 14, 30, 60, 90];
+const DURATIONS = [1, 2, 3, 5, 7, 10, 15, 30];
 
-const DURATION_PRICES: Record<number, number> = {
-    7: 299,
-    14: 499,
-    30: 799,
-    60: 1299,
-    90: 1799,
-};
+const getPriceForDuration = (days: number) => days * 500;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
     Pending: { label: 'Under Review', color: '#f59e0b', bg: '#fef3c7', icon: '🕐' },
@@ -85,7 +81,7 @@ export default function SellerAdRequests() {
     const [submitting, setSubmitting] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
-    const [availability, setAvailability] = useState<{ activeAds: number, maxAds: number, slotsAvailable: number } | null>(null);
+    const [availability, setAvailability] = useState<{ activeAds: number, maxAds: number, slotsAvailable: number, slotsAvailableInRange?: number } | null>(null);
     const [paymentUploading, setPaymentUploading] = useState(false);
     const [razorpayData, setRazorpayData] = useState<{ id: string, amount: number } | null>(null);
     const [sellerDetails, setSellerDetails] = useState({ name: '', email: '', phone: '' });
@@ -116,6 +112,7 @@ export default function SellerAdRequests() {
         paymentMethod: 'UPI',
         paymentReference: '',
         paymentScreenshotUrl: '',
+        startDate: new Date().toISOString().split('T')[0],
     });
 
     const ensureAbsoluteUrl = (url?: string) => {
@@ -129,7 +126,6 @@ export default function SellerAdRequests() {
         fetchRequests();
         fetchAvailability();
     }, []);
-
     useEffect(() => {
         const requestId = new URLSearchParams(window.location.search).get('requestId');
         if (requestId && adRequests.length > 0) {
@@ -144,9 +140,15 @@ export default function SellerAdRequests() {
         }
     }, [adRequests]);
 
-    const fetchAvailability = async () => {
+    useEffect(() => {
+        if (form.startDate) {
+            fetchAvailability(form.startDate, form.durationDays);
+        }
+    }, [form.startDate, form.durationDays]);
+
+    const fetchAvailability = async (date?: string, duration?: number) => {
         try {
-            const res = await getAdAvailability();
+            const res = await getAdAvailability(date, duration);
             if (res.success) setAvailability(res.data);
         } catch (err) {
             console.error('Failed to load availability:', err);
@@ -213,7 +215,7 @@ export default function SellerAdRequests() {
             const res = await createSellerAdRequest(payload);
             if (res.success) {
                 if (form.payNow) {
-                    // Trigger Razorpay
+                    // Trigger Razorpay Modal (Now has mock bypass for testing)
                     setRazorpayData({
                         id: res.data._id,
                         amount: parseFloat(form.requestedPrice)
@@ -236,8 +238,9 @@ export default function SellerAdRequests() {
         setForm({
             shopName: '', tagline: '', description: '', imageUrl: '',
             badge: 'FEATURED', badgeColor: '#FF4B6E', ctaText: 'Visit Shop',
-            ctaLink: '', durationDays: 30, requestedPrice: '799', paymentNote: '',
+            ctaLink: '', durationDays: 1, requestedPrice: '500', paymentNote: '',
             payNow: true, paymentMethod: 'UPI', paymentReference: '', paymentScreenshotUrl: '',
+            startDate: new Date().toISOString().split('T')[0],
         });
     };
 
@@ -285,6 +288,7 @@ export default function SellerAdRequests() {
     const pendingCount = adRequests.filter(r => r.status === 'Pending').length;
     const liveCount = adRequests.filter(r => r.status === 'Live').length;
     const approvedCount = adRequests.filter(r => r.status === 'Approved').length;
+    const slotsAvailableForRange = availability?.slotsAvailableInRange ?? availability?.slotsAvailable ?? 0;
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -331,6 +335,25 @@ export default function SellerAdRequests() {
                     </div>
                 </div>
             </div>
+
+            {/* Slots Full Banner */}
+            {availability && availability.slotsAvailable <= 0 && !showForm && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="mx-4 mt-4 bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm"
+                >
+                    <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-rose-900 text-sm">Ad Slots Full</h3>
+                        <p className="text-rose-700 text-xs leading-relaxed">
+                            All ad slots are currently full. Please try again later when a slot becomes available.
+                        </p>
+                    </div>
+                </motion.div>
+            )}
 
             {/* Stats Row */}
             {!showForm && (
@@ -440,27 +463,68 @@ export default function SellerAdRequests() {
                                     />
                                 </div>
 
-                                {/* Duration & Pricing */}
+                                {/* Ad Date Selection */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Duration & Pricing</label>
-                                    <div className="grid grid-cols-5 gap-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex justify-between">
+                                        Select Ad Date *
+                                        {availability && (
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${slotsAvailableForRange > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {slotsAvailableForRange} SLOTS FREE IN RANGE
+                                            </span>
+                                        )}
+                                    </label>
+                                    <input
+                                        type="date"
+                                        min={new Date().toISOString().split('T')[0]}
+                                        value={form.startDate}
+                                        onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition"
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1">
+                                        ℹ️ Your ad will run for 24 hours on the selected date.
+                                    </p>
+                                </div>
+
+                                {/* Ad Duration Selection */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Duration (Days) *</label>
+                                    <div className="flex flex-wrap gap-2">
                                         {DURATIONS.map(d => (
                                             <button
                                                 key={d}
-                                                onClick={() => setForm(f => ({ ...f, durationDays: d, requestedPrice: DURATION_PRICES[d].toString() }))}
-                                                className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${form.durationDays === d
-                                                    ? 'bg-pink-500 border-pink-500 text-white shadow-md'
-                                                    : 'border-gray-200 text-gray-600 hover:border-pink-300'
-                                                    }`}
+                                                type="button"
+                                                onClick={() => setForm(f => ({ ...f, durationDays: d, requestedPrice: getPriceForDuration(d).toString() }))}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition ${form.durationDays === d ? 'bg-pink-500 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                             >
-                                                {d}d
+                                                {d} {d === 1 ? 'Day' : 'Days'}
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="mt-3 bg-pink-50 rounded-xl p-3 flex justify-between items-center border border-pink-100">
-                                        <span className="text-sm font-medium text-pink-700">Total Amount:</span>
-                                        <span className="text-xl font-bold text-pink-600">₹{form.requestedPrice}</span>
+                                </div>
+
+                                {/* Pricing Display */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Pricing Summary</label>
+                                    <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl p-4 border border-pink-100 relative overflow-hidden">
+                                        <div className="flex justify-between items-center relative z-10">
+                                            <div>
+                                                <p className="text-[10px] text-pink-600 font-bold uppercase tracking-wider mb-1">
+                                                    {form.durationDays} {form.durationDays === 1 ? 'Day' : 'Days'} Slot
+                                                </p>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-black text-gray-900">₹{getPriceForDuration(form.durationDays)}</span>
+                                                    <span className="text-xs text-gray-400">(@ ₹500/day)</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] text-gray-400 font-medium">Valid until</p>
+                                                <p className="text-xs font-bold text-gray-700">
+                                                    {new Date(new Date(form.startDate).getTime() + form.durationDays * 86400000).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
+                                    <input type="hidden" value={getPriceForDuration(form.durationDays)} />
                                 </div>
 
                                 {/* CTA */}
@@ -574,10 +638,10 @@ export default function SellerAdRequests() {
                                     </button>
                                     <button
                                         onClick={handleSubmit}
-                                        disabled={submitting || uploadingImage}
+                                        disabled={submitting || uploadingImage || slotsAvailableForRange <= 0}
                                         className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        {submitting ? 'Submitting...' : form.payNow ? '💳 Pay & Submit Ad' : '🚀 Submit Request'}
+                                        {submitting ? 'Submitting...' : slotsAvailableForRange <= 0 ? 'Dates Full' : form.payNow ? '💳 Pay & Submit Ad' : '🚀 Submit Request'}
                                     </button>
                                 </div>
                             </div>
@@ -647,17 +711,15 @@ export default function SellerAdRequests() {
                                     {/* Details */}
                                     <div className="p-4">
                                         <div className="flex flex-wrap gap-2 mb-3">
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold">
+                                                📅 {req.startDate ? new Date(req.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Asap'}
+                                            </span>
                                             <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-xs">
-                                                📅 {req.durationDays} days
+                                                🕒 {req.durationDays} {req.durationDays === 1 ? 'Day' : 'Days'}
                                             </span>
                                             {req.adPrice > 0 && (
                                                 <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs font-semibold">
-                                                    💰 ₹{req.adPrice}
-                                                </span>
-                                            )}
-                                            {req.expiresAt && (
-                                                <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-lg text-xs">
-                                                    ⏰ Expires {new Date(req.expiresAt).toLocaleDateString()}
+                                                    ₹{req.adPrice}
                                                 </span>
                                             )}
                                         </div>

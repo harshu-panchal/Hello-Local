@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useRef, useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FloatingCartPill from './FloatingCartPill';
+import AdPopupWidget from '../modules/user/components/AdPopupWidget';
 import { useLocation as useLocationContext } from '../hooks/useLocation';
 import LocationPermissionRequest from './LocationPermissionRequest';
 import { useThemeContext } from '../context/ThemeContext';
@@ -131,6 +132,67 @@ export default function AppLayout({ children }: AppLayoutProps) {
       setPrevCategoriesActive(false);
     }
   }, [isCategoriesActive, prevCategoriesActive]);
+
+  // Hide bottom nav on scroll down, show on scroll up
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const isScrollTicking = useRef(false);
+
+  useEffect(() => {
+    const SCROLL_DELTA = 8;
+    const HIDE_AFTER = 70;
+
+    const getCurrentScrollY = () => {
+      const mainElement = mainRef.current;
+      if (mainElement && mainElement.scrollTop > 0) {
+        return mainElement.scrollTop;
+      }
+      return window.scrollY || document.documentElement.scrollTop || 0;
+    };
+
+    const updateVisibility = () => {
+      const currentScrollY = getCurrentScrollY();
+      const diff = currentScrollY - lastScrollY.current;
+
+      if (Math.abs(diff) >= SCROLL_DELTA) {
+        if (diff > 0 && currentScrollY > HIDE_AFTER) {
+          setIsNavVisible(false);
+        } else {
+          setIsNavVisible(true);
+        }
+        lastScrollY.current = currentScrollY;
+      }
+
+      isScrollTicking.current = false;
+    };
+
+    const handleScroll = () => {
+      if (isScrollTicking.current) return;
+      isScrollTicking.current = true;
+      requestAnimationFrame(updateVisibility);
+    };
+
+    const mainElement = mainRef.current;
+    lastScrollY.current = getCurrentScrollY();
+
+    if (mainElement) {
+      mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      if (mainElement) {
+        mainElement.removeEventListener('scroll', handleScroll);
+      }
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Also reset nav visibility when location changes
+  useEffect(() => {
+    setIsNavVisible(true);
+    lastScrollY.current = 0;
+  }, [location.pathname]);
 
   const isProductDetailPage = location.pathname.startsWith('/product/');
   const isSearchPage = location.pathname === '/search';
@@ -271,18 +333,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Sticky Header - Show on search page and other non-home pages, excluding account page */}
           {(showHeader || isSearchPage) && (
             <header className="sticky top-0 z-50 bg-white shadow-sm md:shadow-md md:top-[60px]">
-              {/* Delivery info line */}
-              <div
-                className="px-4 md:px-6 lg:px-8 py-1.5 text-xs text-center border-b"
-                style={{
-                  backgroundColor: currentTheme.primary[3],
-                  color: currentTheme.accentColor,
-                  borderColor: currentTheme.primary[2]
-                }}
-              >
-                Delivering in 10–15 mins
-              </div>
-
               {/* Location line - only show if user has provided location */}
               {userLocation && (userLocation.address || userLocation.city) && (
                 <div className="px-4 md:px-6 lg:px-8 py-2 flex items-center justify-between text-sm">
@@ -342,6 +392,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Floating Cart Pill */}
           <FloatingCartPill />
+          <AdPopupWidget />
 
           {/* Location Permission Request Modal - Mandatory for all users */}
           {showLocationRequest && (
@@ -366,7 +417,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Fixed Bottom Navigation - Mobile Only, Hidden on checkout pages */}
           {showFooter && (
-            <nav
+            <motion.nav
+              initial={{ y: 0 }}
+              animate={{ y: isNavVisible ? 0 : 100 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
               className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200/10 shadow-[0_-2px_4px_rgba(0,0,0,0.05)] z-50 md:hidden"
             >
               <div className="flex justify-around items-center h-16">
@@ -610,11 +664,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </Link>
                 </motion.div>
               </div>
-            </nav>
+            </motion.nav>
           )}
         </div>
       </div>
     </div>
   );
 }
+
 

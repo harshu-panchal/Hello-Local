@@ -16,6 +16,7 @@ export interface SellerAdRequestPayload {
     paymentMethod?: string;
     paymentReference?: string;
     paymentScreenshotUrl?: string;
+    startDate?: string;
 }
 
 export interface PaymentProofPayload {
@@ -50,8 +51,11 @@ export const cancelAdRequest = async (id: string) => {
     return res.data;
 };
 
-export const getAdAvailability = async () => {
-    const res = await api.get("/seller/ad-requests/availability");
+export const getAdAvailability = async (date?: string, duration?: number) => {
+    const params: any = {};
+    if (date) params.date = date;
+    if (duration) params.duration = duration;
+    const res = await api.get("/seller/ad-requests/availability", { params });
     return res.data;
 };
 

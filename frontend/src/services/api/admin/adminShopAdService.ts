@@ -5,6 +5,7 @@ export interface ShopAd {
     shopName: string;
     tagline: string;
     description?: string;
+    startDate?: string;
     imageUrl: string;
     badge?: string;
     badgeColor?: string;
@@ -23,6 +24,11 @@ export interface ShopAd {
     createdAt: string;
     updatedAt: string;
 }
+
+let activeShopAdsCache: { success: boolean; data: ShopAd[] } | null = null;
+let activeShopAdsCacheTime = 0;
+let activeShopAdsInFlight: Promise<{ success: boolean; data: ShopAd[] }> | null = null;
+const ACTIVE_SHOP_ADS_CACHE_TTL_MS = 30 * 1000;
 
 /**
  * Get all shop ads (admin)
@@ -76,6 +82,26 @@ export const toggleShopAdStatus = async (id: string) => {
  * Get active shop ads for public carousel
  */
 export const getActiveShopAds = async (): Promise<{ success: boolean; data: ShopAd[] }> => {
-    const response = await api.get("/shop-ads/active");
-    return response.data;
+    const now = Date.now();
+
+    if (activeShopAdsCache && now - activeShopAdsCacheTime < ACTIVE_SHOP_ADS_CACHE_TTL_MS) {
+        return activeShopAdsCache;
+    }
+
+    if (activeShopAdsInFlight) {
+        return activeShopAdsInFlight;
+    }
+
+    activeShopAdsInFlight = api
+        .get("/shop-ads/active")
+        .then((response) => {
+            activeShopAdsCache = response.data;
+            activeShopAdsCacheTime = Date.now();
+            return response.data;
+        })
+        .finally(() => {
+            activeShopAdsInFlight = null;
+        });
+
+    return activeShopAdsInFlight;
 };

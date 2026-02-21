@@ -54,17 +54,36 @@ export const approveAdRequest = asyncHandler(async (req: Request, res: Response)
         return res.status(400).json({ success: false, message: "Only pending requests can be approved." });
     }
 
-    // Check active ad limit
-    const activeCount = await ShopAd.countDocuments({ isActive: true });
-    if (activeCount >= MAX_ACTIVE_ADS) {
-        return res.status(400).json({
-            success: false,
-            message: `Maximum of ${MAX_ACTIVE_ADS} active ads allowed. Please deactivate an existing ad first.`,
+    // Check slot availability for EVERY day in the requested range
+    const checkStartDate = new Date(request.startDate || new Date());
+    checkStartDate.setHours(0, 0, 0, 0);
+    const duration = request.durationDays || 1;
+    const checkEndDate = new Date(checkStartDate);
+    checkEndDate.setDate(checkEndDate.getDate() + duration);
+
+    for (let i = 0; i < duration; i++) {
+        const checkDay = new Date(checkStartDate);
+        checkDay.setDate(checkDay.getDate() + i);
+
+        const nextDay = new Date(checkDay);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        const bookedCount = await SellerAdRequest.countDocuments({
+            _id: { $ne: request._id },
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+            startDate: { $lt: nextDay },
+            endDate: { $gt: checkDay }
         });
+
+        if (bookedCount >= MAX_ACTIVE_ADS) {
+            return res.status(400).json({
+                success: false,
+                message: `Slots are already full for ${checkDay.toDateString()}. Cannot approve this range.`,
+            });
+        }
     }
 
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + request.durationDays);
+    const expiresAt = checkEndDate;
 
     // Create the live ShopAd
     const shopAd = await ShopAd.create({
@@ -84,8 +103,10 @@ export const approveAdRequest = asyncHandler(async (req: Request, res: Response)
             email: request.sellerEmail,
         },
         approvedAt: new Date(),
+        startDate: checkStartDate,
+        endDate: checkEndDate,
         expiresAt,
-        order: activeCount, // append at end
+        order: 0,
     });
 
     // Update request to Live directly
@@ -168,17 +189,36 @@ export const verifyPaymentAndActivate = asyncHandler(async (req: Request, res: R
         return res.status(400).json({ success: false, message: "Request is not awaiting payment verification." });
     }
 
-    // Enforce 10 ad limit before making live
-    const activeCount = await ShopAd.countDocuments({ isActive: true });
-    if (activeCount >= MAX_ACTIVE_ADS) {
-        return res.status(400).json({
-            success: false,
-            message: `Cannot activate: maximum ${MAX_ACTIVE_ADS} active ads already reached. Deactivate one first.`,
+    // Check slot availability for EVERY day in the range
+    const checkStartDate = new Date(request.startDate || new Date());
+    checkStartDate.setHours(0, 0, 0, 0);
+    const duration = request.durationDays || 1;
+    const checkEndDate = new Date(checkStartDate);
+    checkEndDate.setDate(checkEndDate.getDate() + duration);
+
+    for (let i = 0; i < duration; i++) {
+        const checkDay = new Date(checkStartDate);
+        checkDay.setDate(checkDay.getDate() + i);
+
+        const nextDay = new Date(checkDay);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        const bookedCount = await SellerAdRequest.countDocuments({
+            _id: { $ne: request._id },
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+            startDate: { $lt: nextDay },
+            endDate: { $gt: checkDay }
         });
+
+        if (bookedCount >= MAX_ACTIVE_ADS) {
+            return res.status(400).json({
+                success: false,
+                message: `Slots became full for ${checkDay.toDateString()} while waiting for payment. Cannot activate.`,
+            });
+        }
     }
 
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + request.durationDays);
+    const expiresAt = checkEndDate;
 
     // Create the live ShopAd
     const shopAd = await ShopAd.create({
@@ -198,8 +238,10 @@ export const verifyPaymentAndActivate = asyncHandler(async (req: Request, res: R
             email: request.sellerEmail,
         },
         approvedAt: new Date(),
+        startDate: checkStartDate,
+        endDate: checkEndDate,
         expiresAt,
-        order: activeCount, // append at end
+        order: 0,
     });
 
     // Update request
@@ -234,7 +276,7 @@ export const verifyPaymentAndActivate = asyncHandler(async (req: Request, res: R
 /**
  * Admin: Get ad request count stats
  */
-export const getAdRequestStats = asyncHandler(async (req: Request, res: Response) => {
+export const getAdRequestStats = asyncHandler(async (_req: Request, res: Response) => {
     const [pending, approved, paymentPending, live, rejected, activeAds] = await Promise.all([
         SellerAdRequest.countDocuments({ status: "Pending" }),
         SellerAdRequest.countDocuments({ status: "Approved" }),
@@ -244,8 +286,36 @@ export const getAdRequestStats = asyncHandler(async (req: Request, res: Response
         ShopAd.countDocuments({ isActive: true }),
     ]);
 
+    // Calculate daily occupancy for the next 14 days
+    const dailyAvailability = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 14; i++) {
+        const dayStart = new Date(today);
+        dayStart.setDate(dayStart.getDate() + i);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        const slotsBooked = await SellerAdRequest.countDocuments({
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+            startDate: { $lt: dayEnd },
+            endDate: { $gt: dayStart }
+        });
+
+        dailyAvailability.push({
+            date: dayStart.toISOString(),
+            slotsBooked,
+            available: Math.max(0, MAX_ACTIVE_ADS - slotsBooked)
+        });
+    }
+
     return res.status(200).json({
         success: true,
-        data: { pending, approved, paymentPending, live, rejected, activeAds, maxAds: MAX_ACTIVE_ADS },
+        data: {
+            pending, approved, paymentPending, live, rejected, activeAds,
+            maxAds: MAX_ACTIVE_ADS,
+            dailyAvailability
+        },
     });
 });

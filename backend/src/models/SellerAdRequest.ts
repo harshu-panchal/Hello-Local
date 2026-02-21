@@ -49,6 +49,8 @@ export interface ISellerAdRequest extends Document {
     shopAdId?: mongoose.Types.ObjectId;
 
     // Expiry (set when approved + paid)
+    startDate?: Date;
+    endDate?: Date;
     expiresAt?: Date;
 
     createdAt: Date;
@@ -104,6 +106,8 @@ const SellerAdRequestSchema = new Schema<ISellerAdRequest>(
         rejectedAt: { type: Date },
 
         shopAdId: { type: Schema.Types.ObjectId, ref: "ShopAd" },
+        startDate: { type: Date },
+        endDate: { type: Date },
         expiresAt: { type: Date },
     },
     { timestamps: true }

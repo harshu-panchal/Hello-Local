@@ -1130,9 +1130,6 @@ export default function Checkout() {
                 />
               </svg>
             </div>
-            <span className="text-xs font-semibold text-neutral-900">
-              Delivery in {appConfig.estimatedDeliveryTime}
-            </span>
           </div>
 
           <p className="text-[10px] text-neutral-600 mb-2.5">

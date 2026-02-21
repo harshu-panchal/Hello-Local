@@ -232,7 +232,7 @@ export default function AdminShopAds() {
             <div style={styles.statsRow}>
                 {[
                     { label: "Total Ads", value: ads.length, icon: "📢", color: "#8B5CF6" },
-                    { label: "Active Ads", value: ads.filter(a => a.isActive).length, icon: "✅", color: "#10B981" },
+                    { label: "Active Ads", value: `${ads.filter(a => a.isActive).length}/10`, icon: "✅", color: ads.filter(a => a.isActive).length >= 10 ? "#EF4444" : "#10B981" },
                     { label: "Inactive Ads", value: ads.filter(a => !a.isActive).length, icon: "⏸", color: "#F59E0B" },
                     {
                         label: "Expiring Soon",
@@ -270,21 +270,41 @@ export default function AdminShopAds() {
             {activeTab === "requests" && (
                 <div>
                     {requestStats && (
-                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as any, marginBottom: 16 }}>
-                            {[
-                                { label: "Pending", value: requestStats.pending, color: "#f59e0b" },
-                                { label: "Approved", value: requestStats.approved, color: "#3b82f6" },
-                                { label: "Awaiting Payment", value: requestStats.paymentPending, color: "#8b5cf6" },
-                                { label: "Live", value: requestStats.live, color: "#10b981" },
-                                { label: "Rejected", value: requestStats.rejected, color: "#ef4444" },
-                                { label: `Active Ads (Max ${requestStats.maxAds})`, value: `${requestStats.activeAds}/${requestStats.maxAds}`, color: requestStats.activeAds >= requestStats.maxAds ? "#ef4444" : "#6366f1" },
-                            ].map((s: any) => (
-                                <div key={s.label} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 18px", minWidth: 110, textAlign: "center" as any, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-                                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
-                                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{s.label}</div>
+                        <>
+                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as any, marginBottom: 16 }}>
+                                {[
+                                    { label: "Pending", value: requestStats.pending, color: "#f59e0b" },
+                                    { label: "Approved", value: requestStats.approved, color: "#3b82f6" },
+                                    { label: "Awaiting Payment", value: requestStats.paymentPending, color: "#8b5cf6" },
+                                    { label: "Live", value: requestStats.live, color: "#10b981" },
+                                    { label: "Rejected", value: requestStats.rejected, color: "#ef4444" },
+                                    { label: `Active Ads (Max ${requestStats.maxAds})`, value: `${requestStats.activeAds}/${requestStats.maxAds}`, color: requestStats.activeAds >= requestStats.maxAds ? "#ef4444" : "#6366f1" },
+                                ].map((s: any) => (
+                                    <div key={s.label} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 18px", minWidth: 110, textAlign: "center" as any, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                                        <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{s.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Weekly Schedule Overview */}
+                            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+                                <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#111", display: "flex", alignItems: "center", gap: 6 }}>
+                                    📅 Next 7 Days Booking Status
+                                </h4>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8 }}>
+                                    {requestStats?.dailyAvailability?.slice(0, 7).map((day: any) => (
+                                        <div key={day.date} style={{ border: "1px solid #f3f4f6", borderRadius: 10, padding: "8px 4px", textAlign: "center" as any, background: day.slotsBooked >= 10 ? "#fff1f2" : "#f9fafb" }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af" }}>{new Date(day.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}</div>
+                                            <div style={{ fontSize: 14, fontWeight: 800, color: day.slotsBooked >= 10 ? "#e11d48" : "#111", margin: "2px 0" }}>{day.slotsBooked}/10</div>
+                                            <div style={{ height: 4, background: "#e5e7eb", borderRadius: 2, overflow: "hidden", margin: "4px 8px 0" }}>
+                                                <div style={{ width: `${(day.slotsBooked / 10) * 100}%`, height: "100%", background: day.slotsBooked >= 10 ? "#e11d48" : "#ec4899" }} />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        </>
                     )}
                     {requestStats?.activeAds >= requestStats?.maxAds && (
                         <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 12, padding: "12px 16px", marginBottom: 16, color: "#dc2626", fontSize: 13 }}>
@@ -318,13 +338,10 @@ export default function AdminShopAds() {
                                                 {req.adPrice > 0 && <span style={{ background: "#d1fae5", color: "#065f46", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700 }}>₹{req.adPrice}</span>}
                                             </div>
                                             <p style={{ color: "#6b7280", fontSize: 13, margin: "4px 0" }}>{req.tagline}</p>
-                                            <div style={{ display: "flex", gap: 14, fontSize: 12, color: "#6b7280", flexWrap: "wrap" as any, marginTop: 4 }}>
-                                                <span>👤 {req.sellerName}</span>
-                                                <span>📧 {req.sellerEmail}</span>
-                                                {req.sellerPhone && <span>📱 {req.sellerPhone}</span>}
-                                                <span>📅 {req.durationDays} days</span>
-                                                <span>🕐 {new Date(req.createdAt).toLocaleDateString("en-IN")}</span>
-                                            </div>
+                                            <span style={{ background: "#fdf2f8", color: "#db2777", fontWeight: 700, padding: "2px 8px", borderRadius: 12 }}>📅 Scheduled: {req.startDate ? new Date(req.startDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }) : 'ASAP'}</span>
+                                            <span style={{ background: "#f3f4f6", color: "#4b5563", fontWeight: 600, padding: "2px 8px", borderRadius: 12 }}>🕒 24 Hours</span>
+                                            <span>👤 {req.sellerName}</span>
+                                            <span>🕐 Sent {new Date(req.createdAt).toLocaleDateString("en-IN")}</span>
                                             {req.adminNote && <div style={{ marginTop: 6, background: "#f3f4f6", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>📝 {req.adminNote}</div>}
                                             {req.status === "PaymentPending" && (
                                                 <div style={{ marginTop: 8, background: "#faf5ff", border: "1px solid #d8b4fe", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
@@ -366,7 +383,10 @@ export default function AdminShopAds() {
                         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: 20 }}>
                             <div style={{ background: "#fff", borderRadius: 20, padding: 28, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
                                 <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>✅ Approve Ad Request</h3>
-                                <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>For: <strong>{approveModal.shopName}</strong> — {approveModal.durationDays} days</p>
+                                <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>
+                                    Shop: <strong>{approveModal.shopName}</strong><br />
+                                    Scheduled: <strong>{approveModal.startDate ? new Date(approveModal.startDate).toLocaleDateString("en-IN") : 'Today'}</strong> (24h)
+                                </p>
                                 <div style={{ marginBottom: 16 }}>
                                     <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ad Price (₹) *</label>
                                     <input type="number" value={approvePrice} onChange={e => setApprovePrice(e.target.value)} placeholder="e.g. 799" style={{ width: "100%", padding: "10px 14px", border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" as any }} />
@@ -451,7 +471,8 @@ export default function AdminShopAds() {
                                             { icon: "👤", label: "Seller", value: detailsModal.sellerName },
                                             { icon: "📧", label: "Email", value: detailsModal.sellerEmail },
                                             { icon: "📱", label: "Phone", value: detailsModal.sellerPhone || "—" },
-                                            { icon: "📅", label: "Duration", value: `${detailsModal.durationDays} days` },
+                                            { icon: "📅", label: "Scheduled Date", value: detailsModal.startDate ? new Date(detailsModal.startDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }) : "ASAP" },
+                                            { icon: "🕒", label: "Duration", value: `24 Hours` },
                                             { icon: "💰", label: "Requested Price", value: detailsModal.requestedPrice ? `₹${detailsModal.requestedPrice}` : "Not specified" },
                                             { icon: "💎", label: "Admin Set Price", value: detailsModal.adPrice > 0 ? `₹${detailsModal.adPrice}` : "Not set yet" },
                                             { icon: "🕐", label: "Submitted", value: new Date(detailsModal.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) },
@@ -799,6 +820,15 @@ export default function AdminShopAds() {
                                                     </div>
                                                 </div>
                                                 <div style={styles.formRow}>
+                                                    <div style={{ ...styles.formGroup, flex: 1 }}>
+                                                        <label style={styles.label}>Start Date (Scheduled)</label>
+                                                        <input
+                                                            type="date"
+                                                            style={styles.input}
+                                                            value={form.startDate || ""}
+                                                            onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
+                                                        />
+                                                    </div>
                                                     <div style={{ ...styles.formGroup, flex: 1 }}>
                                                         <label style={styles.label}>Display Order</label>
                                                         <input

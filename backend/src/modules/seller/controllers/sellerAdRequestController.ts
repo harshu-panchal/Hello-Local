@@ -3,6 +3,9 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import SellerAdRequest from "../../../models/SellerAdRequest";
 import Notification from "../../../models/Notification";
 import Seller from "../../../models/Seller";
+import ShopAd from "../../../models/ShopAd";
+
+const MAX_ACTIVE_ADS = 10;
 
 /**
  * Seller: Submit a new ad request
@@ -17,7 +20,8 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
         shopName, tagline, description, imageUrl, badge, badgeColor,
         ctaText, ctaLink, durationDays, requestedPrice,
         sellerPhone, paymentNote,
-        paymentMethod, paymentReference, paymentScreenshotUrl
+        paymentMethod, paymentReference, paymentScreenshotUrl,
+        startDate // User selected start date
     } = req.body;
 
     if (!shopName || !tagline || !imageUrl || !durationDays) {
@@ -25,6 +29,50 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
             success: false,
             message: "Shop name, tagline, image, and duration are required.",
         });
+    }
+
+    if (!startDate) {
+        return res.status(400).json({ success: false, message: "Start date is required." });
+    }
+
+    const duration = parseInt(durationDays) || 1;
+    const expectedPrice = duration * 500;
+
+    // Validate price
+    if (requestedPrice && parseFloat(requestedPrice) !== expectedPrice) {
+        return res.status(400).json({
+            success: false,
+            message: `Invalid price for ${duration} days. Expected ₹${expectedPrice}.`,
+        });
+    }
+
+    const requestedStartDate = new Date(startDate);
+    requestedStartDate.setHours(0, 0, 0, 0); // Normalize to start of day
+
+    const requestedEndDate = new Date(requestedStartDate);
+    requestedEndDate.setDate(requestedEndDate.getDate() + duration); // Multi-day duration
+
+    // Check availability for EVERY day in the range
+    for (let i = 0; i < duration; i++) {
+        const checkDay = new Date(requestedStartDate);
+        checkDay.setDate(checkDay.getDate() + i);
+
+        const nextDay = new Date(checkDay);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        // Count ads active on this specific day
+        const bookedCount = await SellerAdRequest.countDocuments({
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+            startDate: { $lt: nextDay },
+            endDate: { $gt: checkDay }
+        });
+
+        if (bookedCount >= MAX_ACTIVE_ADS) {
+            return res.status(400).json({
+                success: false,
+                message: `Slots are full for ${checkDay.toDateString()}. Please choose other dates.`,
+            });
+        }
     }
 
     // Fetch seller details from DB
@@ -50,16 +98,18 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
         badgeColor: badgeColor || "#FF4B6E",
         ctaText: ctaText || "Visit Shop",
         ctaLink,
-        durationDays: parseInt(durationDays) || 30,
-        requestedPrice: requestedPrice ? parseFloat(requestedPrice) : undefined,
-        // If payment is provided, we set the adPrice to the requestedPrice or a default based on duration
-        adPrice: requestedPrice ? parseFloat(requestedPrice) : 0,
+        durationDays: duration,
+        requestedPrice: expectedPrice,
+        adPrice: expectedPrice,
         paymentNote,
         status,
         paymentStatus: "Unpaid",
         paymentMethod: paymentMethod || "UPI",
         paymentReference,
         paymentScreenshotUrl,
+        startDate: requestedStartDate,
+        endDate: requestedEndDate,
+        expiresAt: requestedEndDate, // Consistency
     });
 
     // Notify admin
@@ -67,8 +117,8 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
         recipientType: "Admin",
         title: hasPayment ? "💳 New Ad & Payment Submitted" : "📢 New Ad Request from Seller",
         message: hasPayment
-            ? `${adRequest.sellerName} submitted an ad for "${shopName}" with payment proof. Please verify & go live.`
-            : `${adRequest.sellerName} has requested a shop ad for "${shopName}" (${durationDays} days).`,
+            ? `${adRequest.sellerName} submitted an ad for "${shopName}" (${duration} days) with payment proof.`
+            : `${adRequest.sellerName} has requested a shop ad for "${shopName}" (${duration} days).`,
         type: hasPayment ? "Payment" : "Info",
         link: `/admin/shop-ads?tab=requests&requestId=${adRequest._id}`,
         actionLabel: hasPayment ? "Verify & Go Live" : "Review Request",
@@ -191,16 +241,46 @@ export const cancelAdRequest = asyncHandler(async (req: Request, res: Response) 
 /**
  * Seller: Get public stats about ad availability
  */
-export const getPublicAdStats = asyncHandler(async (_req: Request, res: Response) => {
-    const activeAds = await SellerAdRequest.countDocuments({ status: "Live" });
-    const maxAds = 10; // This should ideally come from a config
+export const getPublicAdStats = asyncHandler(async (req: Request, res: Response) => {
+    const { date, duration = 1 } = req.query;
+    const checkDate = date ? new Date(date as string) : new Date();
+    checkDate.setHours(0, 0, 0, 0);
+
+    const dur = parseInt(duration as string) || 1;
+    let maxSlotsBooked = 0;
+    const dailyStats = [];
+
+    for (let i = 0; i < dur; i++) {
+        const dayStart = new Date(checkDate);
+        dayStart.setDate(dayStart.getDate() + i);
+
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+
+        const bookedCount = await SellerAdRequest.countDocuments({
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+            startDate: { $lt: dayEnd },
+            endDate: { $gt: dayStart }
+        });
+
+        if (bookedCount > maxSlotsBooked) maxSlotsBooked = bookedCount;
+
+        dailyStats.push({
+            date: dayStart.toISOString(),
+            slotsBooked: bookedCount,
+            slotsAvailable: Math.max(0, MAX_ACTIVE_ADS - bookedCount)
+        });
+    }
 
     return res.status(200).json({
         success: true,
         data: {
-            activeAds,
-            maxAds,
-            slotsAvailable: Math.max(0, maxAds - activeAds),
+            maxAds: MAX_ACTIVE_ADS,
+            slotsBookedInRange: maxSlotsBooked,
+            slotsAvailableInRange: Math.max(0, MAX_ACTIVE_ADS - maxSlotsBooked),
+            dailyStats,
+            selectedDate: checkDate.toISOString(),
+            duration: dur
         },
     });
 });
