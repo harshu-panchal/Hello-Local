@@ -64,13 +64,13 @@ export const themes: Record<string, Theme> = {
     headerTextColor: '#0c4a6e',
   },
   grocery: {
-    primary: ['rgb(187, 247, 208)', 'rgb(209, 250, 229)', 'rgb(220, 252, 231)', 'rgb(236, 253, 245)'],
-    secondary: ['rgb(236, 253, 245)', 'rgb(220, 252, 231)', 'rgb(209, 250, 229)'],
-    textColor: '#14532d',
-    accentColor: '#166534',
+    primary: ['#fefce8', '#fef9c3', '#fef3c7', '#fffbeb'],
+    secondary: ['#fffbeb', '#fef3c7', '#fef9c3'],
+    textColor: '#854d0e',
+    accentColor: '#b45309',
     bannerText: 'GROCERY',
     saleText: 'SALE',
-    headerTextColor: '#14532d',
+    headerTextColor: '#854d0e',
   },
   fashion: {
     primary: ['rgb(196, 181, 253)', 'rgb(205, 192, 255)', 'rgb(221, 214, 254)', 'rgb(237, 233, 254)'],

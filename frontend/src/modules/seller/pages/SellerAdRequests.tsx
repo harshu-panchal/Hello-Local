@@ -81,7 +81,16 @@ export default function SellerAdRequests() {
     const [submitting, setSubmitting] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
-    const [availability, setAvailability] = useState<{ activeAds: number, maxAds: number, slotsAvailable: number, slotsAvailableInRange?: number } | null>(null);
+    const [availability, setAvailability] = useState<{
+        activeAds: number,
+        maxAds: number,
+        slotsAvailable: number,
+        slotsAvailableInRange?: number,
+        dailyStats?: Array<{
+            date: string;
+            slotsAvailable: number;
+        }>;
+    } | null>(null);
     const [paymentUploading, setPaymentUploading] = useState(false);
     const [razorpayData, setRazorpayData] = useState<{ id: string, amount: number } | null>(null);
     const [sellerDetails, setSellerDetails] = useState({ name: '', email: '', phone: '' });
@@ -105,8 +114,8 @@ export default function SellerAdRequests() {
         badgeColor: '#FF4B6E',
         ctaText: 'Visit Shop',
         ctaLink: '',
-        durationDays: 30,
-        requestedPrice: '799',
+        durationDays: 1,
+        requestedPrice: '500',
         paymentNote: '',
         payNow: true,
         paymentMethod: 'UPI',
@@ -288,7 +297,7 @@ export default function SellerAdRequests() {
     const pendingCount = adRequests.filter(r => r.status === 'Pending').length;
     const liveCount = adRequests.filter(r => r.status === 'Live').length;
     const approvedCount = adRequests.filter(r => r.status === 'Approved').length;
-    const slotsAvailableForRange = availability?.slotsAvailableInRange ?? availability?.slotsAvailable ?? 0;
+    const slotsAvailableForRange = availability?.slotsAvailableInRange ?? availability?.slotsAvailable ?? (loading ? 10 : 0);
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -319,16 +328,13 @@ export default function SellerAdRequests() {
                                     </div>
                                 )}
                                 <button
-                                    onClick={() => {
-                                        if (availability && availability.slotsAvailable <= 0) {
-                                            showToast('Sorry, all ad slots are currently occupied. Please check back later!', 'error');
-                                            return;
-                                        }
-                                        setShowForm(true);
-                                    }}
-                                    className={`${availability && availability.slotsAvailable <= 0 ? 'bg-gray-400' : 'bg-gradient-to-r from-pink-500 to-rose-500'} text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all active:scale-95`}
+                                    onClick={() => setShowForm(true)}
+                                    className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2"
                                 >
-                                    + Request Ad
+                                    <span>+ Request Ad</span>
+                                    {availability && availability.slotsAvailable <= 0 && (
+                                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-[9px] font-black uppercase">Advance</span>
+                                    )}
                                 </button>
                             </div>
                         )}
@@ -336,20 +342,52 @@ export default function SellerAdRequests() {
                 </div>
             </div>
 
-            {/* Slots Full Banner */}
+            {/* Weekly Availability Strip (Advance Booking) */}
+            {availability && (
+                <div className="mx-4 mt-2 bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex justify-between items-center">
+                        📅 Weekly Slot Availability
+                        <span className="text-[9px] lowercase font-normal italic">Select a date in the form to book</span>
+                    </h3>
+                    <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar">
+                        {availability.dailyStats?.slice(0, 7).map((day: any) => (
+                            <div
+                                key={day.date}
+                                onClick={() => {
+                                    setForm(f => ({ ...f, startDate: day.date.split('T')[0] }));
+                                    setShowForm(true);
+                                }}
+                                className={`flex-shrink-0 min-w-[65px] h-20 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 ${day.slotsAvailable > 0 ? 'bg-white border-gray-100 hover:border-pink-200' : 'bg-rose-50 border-rose-100 opacity-80'}`}
+                            >
+                                <span className={`text-[9px] font-bold ${day.slotsAvailable > 0 ? 'text-gray-400' : 'text-rose-400'}`}>
+                                    {new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                </span>
+                                <span className={`text-base font-black my-0.5 ${day.slotsAvailable > 0 ? 'text-gray-800' : 'text-rose-600'}`}>
+                                    {day.slotsAvailable}
+                                </span>
+                                <span className={`text-[8px] font-bold uppercase ${day.slotsAvailable > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+                                    {day.slotsAvailable > 0 ? 'Free' : 'Full'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Slots Full Banner (Updated to mention Advance Booking) */}
             {availability && availability.slotsAvailable <= 0 && !showForm && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="mx-4 mt-4 bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm"
                 >
-                    <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
-                        ⚠️
+                    <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-red-500">
+                        📅
                     </div>
                     <div>
-                        <h3 className="font-bold text-rose-900 text-sm">Ad Slots Full</h3>
+                        <h3 className="font-bold text-rose-900 text-sm">Today's Slots Full</h3>
                         <p className="text-rose-700 text-xs leading-relaxed">
-                            All ad slots are currently full. Please try again later when a slot becomes available.
+                            No slots available for today, but you can <span className="font-bold underline">book in advance</span> for future dates!
                         </p>
                     </div>
                 </motion.div>
@@ -478,11 +516,37 @@ export default function SellerAdRequests() {
                                         min={new Date().toISOString().split('T')[0]}
                                         value={form.startDate}
                                         onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
-                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition"
+                                        className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition ${slotsAvailableForRange <= 0 ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                                     />
-                                    <p className="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1">
-                                        ℹ️ Your ad will run for 24 hours on the selected date.
-                                    </p>
+
+                                    {availability && slotsAvailableForRange <= 0 && (
+                                        <div className="mt-2 p-2.5 bg-rose-50 border border-rose-100 rounded-xl">
+                                            <p className="text-[11px] text-rose-700 font-bold mb-1">⚠️ Selected date is FULL</p>
+                                            <p className="text-[10px] text-rose-600 leading-tight">
+                                                All 10 slots are booked for this period. Try picking a later date or contact admin for premium placement.
+                                            </p>
+                                            {availability.dailyStats?.find((d: any) => d.slotsAvailable > 0) && (
+                                                <button
+                                                    onClick={() => {
+                                                        const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0);
+                                                        if (next) setForm(f => ({ ...f, startDate: next.date.split('T')[0] }));
+                                                    }}
+                                                    className="mt-2 text-[10px] bg-white border border-rose-200 text-rose-600 px-2 py-1 rounded-lg font-bold hover:bg-rose-100 transition"
+                                                >
+                                                    ✨ Shift to Next Available: {(() => {
+                                                        const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0);
+                                                        return next ? new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+                                                    })()}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {!slotsAvailableForRange && (
+                                        <p className="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1">
+                                            ℹ️ Your ad will run for {form.durationDays} day(s) from the selected date.
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Ad Duration Selection */}
@@ -659,16 +723,13 @@ export default function SellerAdRequests() {
                             <h3 className="text-lg font-bold text-gray-800 mb-2">No Ad Requests Yet</h3>
                             <p className="text-sm text-gray-500 mb-6">Reach thousands of local customers by advertising on our home page carousel!</p>
                             <button
-                                onClick={() => {
-                                    if (availability && availability.slotsAvailable <= 0) {
-                                        showToast('Sorry, all ad slots are currently occupied. Please check back later!', 'error');
-                                        return;
-                                    }
-                                    setShowForm(true);
-                                }}
-                                className={`${availability && availability.slotsAvailable <= 0 ? 'bg-gray-400' : 'bg-gradient-to-r from-pink-500 to-rose-500'} text-white px-6 py-3 rounded-xl font-bold shadow-md hover:shadow-lg transition`}
+                                onClick={() => setShowForm(true)}
+                                className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 mx-auto"
                             >
-                                Create Your First Ad
+                                <span>Create Your First Ad</span>
+                                {availability && availability.slotsAvailable <= 0 && (
+                                    <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] uppercase">Advance</span>
+                                )}
                             </button>
                         </div>
                     ) : (

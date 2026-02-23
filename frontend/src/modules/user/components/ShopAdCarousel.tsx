@@ -155,6 +155,11 @@ const FALLBACK_ADS: ShopAd[] = [
     }
 ];
 
+const swipeConfidenceThreshold = 10000;
+const swipePower = (offset: number, velocity: number) => {
+    return Math.abs(offset) * velocity;
+};
+
 export default function ShopAdCarousel() {
     const [ads, setAds] = useState<ShopAd[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -224,7 +229,7 @@ export default function ShopAdCarousel() {
 
     return (
         <div className="relative group px-4 py-3 select-none">
-            <div className="relative h-44 md:h-60 w-full rounded-[2.5rem] overflow-hidden shadow-2xl shadow-rose-500/10 border border-white/10 bg-neutral-900">
+            <div className="relative h-44 md:h-60 w-full rounded-3xl overflow-hidden shadow-2xl shadow-rose-500/10 bg-rose-50">
                 <AnimatePresence initial={false} custom={direction}>
                     <motion.div
                         key={currentIndex}
@@ -232,12 +237,41 @@ export default function ShopAdCarousel() {
                         initial={{ opacity: 0, x: direction > 0 ? 300 : -300 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: direction > 0 ? -300 : 300 }}
+                        drag="x"
+                        dragConstraints={{ left: 0, right: 0 }}
+                        dragElastic={1}
+                        onDragEnd={(e, { offset, velocity }) => {
+                            const swipe = swipePower(offset.x, velocity.x);
+                            if (swipe < -swipeConfidenceThreshold) {
+                                handleNext();
+                            } else if (swipe > swipeConfidenceThreshold) {
+                                handlePrev();
+                            }
+                        }}
                         transition={{
                             x: { type: "spring", stiffness: 300, damping: 30 },
                             opacity: { duration: 0.2 }
                         }}
                         className="absolute inset-0"
                     >
+                        {/* Dynamic Light Pink Animated Background Overlay */}
+                        <motion.div
+                            animate={{
+                                opacity: [0.1, 0.25, 0.1],
+                                scale: [1, 1.1, 1],
+                            }}
+                            transition={{
+                                duration: 8,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                            className="absolute inset-0 z-0"
+                            style={{
+                                background: 'radial-gradient(circle at 50% 50%, rgba(251, 207, 232, 0.4) 0%, transparent 70%)',
+                                filter: 'blur(40px)'
+                            }}
+                        />
+
                         {/* Background Image with optimized loading */}
                         <div className="absolute inset-0">
                             <img
@@ -245,13 +279,13 @@ export default function ShopAdCarousel() {
                                 alt=""
                                 className="w-full h-full object-cover scale-105"
                             />
-                            {/* Sophisticated Gradient Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-black/80 via-black/40 to-transparent" />
+                            {/* Sophisticated Gradient Overlay - Made lighter to allow pink glow and light background */}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-black/40 via-transparent to-transparent z-0" />
                         </div>
 
                         {/* Content Area */}
                         <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-10">
-                            <div className="max-w-[70%] space-y-2">
+                            <div className="max-w-[85%] space-y-2">
                                 <motion.div
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -307,48 +341,24 @@ export default function ShopAdCarousel() {
                     </motion.div>
                 </AnimatePresence>
 
-                {/* Glassmorphism Navigation Controls */}
+                {/* Pagination Dots - Centered and more refined */}
                 {ads.length > 1 && (
-                    <>
-                        <div className="absolute top-1/2 -translate-y-1/2 left-4 z-20">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                        {ads.map((_, i) => (
                             <button
-                                onClick={handlePrev}
-                                className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-90"
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M15 18l-6-6 6-6" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="absolute top-1/2 -translate-y-1/2 right-4 z-20">
-                            <button
-                                onClick={handleNext}
-                                className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-90"
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Pagination Dots */}
-                        <div className="absolute bottom-6 right-8 flex gap-2 z-20">
-                            {ads.map((_, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => {
-                                        if (intervalRef.current) clearInterval(intervalRef.current);
-                                        setDirection(i > currentIndex ? 1 : -1);
-                                        setCurrentIndex(i);
-                                    }}
-                                    className={`h-1.5 transition-all duration-300 rounded-full ${i === currentIndex
-                                        ? "bg-white w-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]"
-                                        : "bg-white/40 w-1.5 hover:bg-white/60"
-                                        }`}
-                                />
-                            ))}
-                        </div>
-                    </>
+                                key={i}
+                                onClick={() => {
+                                    if (intervalRef.current) clearInterval(intervalRef.current);
+                                    setDirection(i > currentIndex ? 1 : -1);
+                                    setCurrentIndex(i);
+                                }}
+                                className={`h-1.5 transition-all duration-300 rounded-full ${i === currentIndex
+                                    ? "bg-white w-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                                    : "bg-white/40 w-1.5 hover:bg-white/60"
+                                    }`}
+                            />
+                        ))}
+                    </div>
                 )}
             </div>
 

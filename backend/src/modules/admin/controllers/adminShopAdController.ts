@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import ShopAd from "../../../models/ShopAd";
+import SellerAdRequest from "../../../models/SellerAdRequest";
 
 const MAX_ACTIVE_ADS = 10;
 
@@ -101,11 +102,19 @@ export const createShopAd = asyncHandler(async (req: Request, res: Response) => 
             const dayEnd = new Date(dayStart);
             dayEnd.setDate(dayEnd.getDate() + 1);
 
-            const activeOnThisDay = await ShopAd.countDocuments({
+            const liveAdsCount = await ShopAd.countDocuments({
                 isActive: true,
                 startDate: { $lt: dayEnd },
                 endDate: { $gt: dayStart }
             });
+
+            const reservedSlotsCount = await SellerAdRequest.countDocuments({
+                status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
+                startDate: { $lt: dayEnd },
+                endDate: { $gt: dayStart }
+            });
+
+            const activeOnThisDay = liveAdsCount + reservedSlotsCount;
 
             if (activeOnThisDay >= MAX_ACTIVE_ADS) {
                 return res.status(400).json({
@@ -167,12 +176,20 @@ export const updateShopAd = asyncHandler(async (req: Request, res: Response) => 
             const dayEnd = new Date(dayStart);
             dayEnd.setDate(dayEnd.getDate() + 1);
 
-            const activeOnThisDay = await ShopAd.countDocuments({
+            const liveAdsCount = await ShopAd.countDocuments({
                 _id: { $ne: id },
                 isActive: true,
                 startDate: { $lt: dayEnd },
                 endDate: { $gt: dayStart }
             });
+
+            const reservedSlotsCount = await SellerAdRequest.countDocuments({
+                status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
+                startDate: { $lt: dayEnd },
+                endDate: { $gt: dayStart }
+            });
+
+            const activeOnThisDay = liveAdsCount + reservedSlotsCount;
 
             if (activeOnThisDay >= MAX_ACTIVE_ADS) {
                 return res.status(400).json({
@@ -233,12 +250,20 @@ export const toggleShopAdStatus = asyncHandler(async (req: Request, res: Respons
             const dayEnd = new Date(dayStart);
             dayEnd.setDate(dayEnd.getDate() + 1);
 
-            const activeOnThisDay = await ShopAd.countDocuments({
+            const liveAdsCount = await ShopAd.countDocuments({
                 _id: { $ne: id },
                 isActive: true,
                 startDate: { $lt: dayEnd },
                 endDate: { $gt: dayStart }
             });
+
+            const reservedSlotsCount = await SellerAdRequest.countDocuments({
+                status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
+                startDate: { $lt: dayEnd },
+                endDate: { $gt: dayStart }
+            });
+
+            const activeOnThisDay = liveAdsCount + reservedSlotsCount;
 
             if (activeOnThisDay >= MAX_ACTIVE_ADS) {
                 return res.status(400).json({

@@ -23,6 +23,63 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showLocationRequest, setShowLocationRequest] = useState(false);
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
   const { currentTheme } = useThemeContext();
+  const [isListening, setIsListening] = useState(false);
+
+  // Voice Search Logic
+  const startVoiceSearch = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in your browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIsListening(false);
+      if (transcript) {
+        handleSearchChange(transcript);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCameraClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        sessionStorage.setItem('visualSearchImage', reader.result as string);
+        navigate(`/search?visual=true`);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -357,21 +414,42 @@ export default function AppLayout({ children }: AppLayoutProps) {
               {/* Search bar - Hidden on Order Again page */}
               {showSearchBar && (
                 <div className="px-4 md:px-6 lg:px-8 pb-3 flex items-center gap-3">
-
-                  <div className="relative flex-1 max-w-2xl md:mx-auto">
+                  <div className="relative flex-1 max-w-2xl md:mx-auto group">
                     <input
                       type="text"
-                      value={searchQuery}
+                      value={isListening ? "Listening..." : searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
                       placeholder="Search for products..."
-                      className="w-full px-4 py-2.5 pl-10 bg-neutral-50 border border-neutral-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent md:py-3"
+                      className={`w-full px-4 py-2.5 pl-10 pr-12 bg-neutral-50 border border-neutral-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent md:py-3 transition-all ${isListening ? 'ring-2 ring-rose-500 border-transparent text-rose-600 font-bold' : ''}`}
                     />
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">🔍</span>
+                    <button
+                      onClick={startVoiceSearch}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isListening
+                        ? 'bg-rose-500 text-white shadow-lg animate-pulse'
+                        : 'text-neutral-500 hover:bg-neutral-100'
+                        }`}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               )}
             </header>
           )}
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+          />
 
           {/* Scrollable Main Content */}
           <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide pb-24 md:pb-8">
@@ -424,27 +502,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
               className="fixed bottom-3 left-0 right-0 z-50 md:hidden"
             >
               <div className="relative mx-3">
-                <Link
-                  to="/categories"
-                  className="absolute left-1/2 -translate-x-1/2 -top-7 z-20 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.28)] border-2 border-white/15"
+                <button
+                  onClick={handleCameraClick}
+                  className="absolute left-1/2 -translate-x-1/2 -top-7 z-20 w-12 h-12 rounded-full text-black flex items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.28)] border-2 border-white/15 active:scale-95 transition-all"
                   style={{
                     background: `linear-gradient(135deg, ${currentTheme.primary[0]}, ${currentTheme.primary[1]})`
                   }}
-                  aria-label="Categories"
+                  aria-label="Camera Search"
                 >
-                  <motion.svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    animate={{ rotate: categoriesRotation }}
-                    transition={{ duration: 0.4, ease: "easeInOut" }}
-                  >
-                    <path d="M12 5V19" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M5 12H19" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  </motion.svg>
-                </Link>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M9 5l-1.5 2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-3.5L15 5H9z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="18" cy="9" r="1.2" fill="currentColor" />
+                  </svg>
+                </button>
 
                 <div
                   className="h-16 rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.32)] border border-white/10 px-2.5 flex items-end pb-2"
@@ -457,39 +528,39 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </div>
 
                   <Link to="/" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className={isActive('/') ? 'text-white' : 'text-white/75'}>
-                      <path d="M3 11L12 4L21 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M6 10V20H18V10" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/') ? 'text-black' : 'text-black/70'}>
+                      <path d="M3 11L12 4L21 11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M6 10V20H18V10" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
                     </svg>
-                    <span className={`text-[10px] mt-0.5 ${isActive('/') ? 'text-white font-semibold' : 'text-white/75 font-medium'}`}>Home</span>
+                    <span className={`text-[11px] mt-1 ${isActive('/') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Home</span>
                   </Link>
 
                   <Link to="/order-again" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className={isActive('/order-again') ? 'text-white' : 'text-white/75'}>
-                      <path d="M6 8H18L17 19H7L6 8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                      <path d="M9 8V6C9 4.9 9.9 4 11 4H13C14.1 4 15 4.9 15 6V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/order-again') ? 'text-black' : 'text-black/70'}>
+                      <path d="M6 8H18L17 19H7L6 8Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+                      <path d="M9 8V6C9 4.9 9.9 4 11 4H13C14.1 4 15 4.9 15 6V8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                     </svg>
-                    <span className={`text-[10px] mt-0.5 ${isActive('/order-again') ? 'text-white font-semibold' : 'text-white/75 font-medium'}`}>Order</span>
+                    <span className={`text-[11px] mt-1 ${isActive('/order-again') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Order</span>
                   </Link>
 
                   <div className="w-12" />
 
                   <Link to="/categories" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className={isCategoriesActive ? 'text-white' : 'text-white/75'}>
-                      <circle cx="7" cy="7" r="2" stroke="currentColor" strokeWidth="2" />
-                      <circle cx="17" cy="7" r="2" stroke="currentColor" strokeWidth="2" />
-                      <circle cx="7" cy="17" r="2" stroke="currentColor" strokeWidth="2" />
-                      <circle cx="17" cy="17" r="2" stroke="currentColor" strokeWidth="2" />
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isCategoriesActive ? 'text-black' : 'text-black/70'}>
+                      <circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="2.2" />
+                      <circle cx="17" cy="7" r="2.2" stroke="currentColor" strokeWidth="2.2" />
+                      <circle cx="7" cy="17" r="2.2" stroke="currentColor" strokeWidth="2.2" />
+                      <circle cx="17" cy="17" r="2.2" stroke="currentColor" strokeWidth="2.2" />
                     </svg>
-                    <span className={`text-[10px] mt-0.5 ${isCategoriesActive ? 'text-white font-semibold' : 'text-white/75 font-medium'}`}>Categories</span>
+                    <span className={`text-[11px] mt-1 ${isCategoriesActive ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Categories</span>
                   </Link>
 
                   <Link to="/account" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className={isActive('/account') ? 'text-white' : 'text-white/75'}>
-                      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="2" />
-                      <path d="M5 20C5 16.7 8 14.5 12 14.5C16 14.5 19 16.7 19 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/account') ? 'text-black' : 'text-black/70'}>
+                      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2.2" />
+                      <path d="M5 20C5 16.7 8 14.5 12 14.5C16 14.5 19 16.7 19 20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                     </svg>
-                    <span className={`text-[10px] mt-0.5 ${isActive('/account') ? 'text-white font-semibold' : 'text-white/75 font-medium'}`}>Profile</span>
+                    <span className={`text-[11px] mt-1 ${isActive('/account') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Profile</span>
                   </Link>
                 </div>
               </div>
@@ -497,7 +568,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 

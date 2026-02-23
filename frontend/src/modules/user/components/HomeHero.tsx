@@ -67,6 +67,47 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [scrollProgress, setScrollProgress] = useState(0);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
+  const [isListening, setIsListening] = useState(false);
+
+  // Voice Search Logic
+  const startVoiceSearch = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in your browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIsListening(false);
+      if (transcript) {
+        navigate(`/search?q=${encodeURIComponent(transcript)}`);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
   // Format location display text - only show if user has provided location
   const locationDisplayText = useMemo(() => {
     if (userLocation?.address) {
@@ -287,29 +328,43 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     >
       {/* Top section with delivery info and buttons - NOT sticky */}
       <div>
-        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-2 md:pt-3 pb-1">
-          <div className="flex items-start justify-between mb-2 md:mb-2 rounded-2xl border border-white/45 px-3 py-2">
+        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-3 md:pt-4 pb-1">
+          <div className="relative flex items-center justify-between mb-2 md:mb-3 rounded-[24px] border border-white/40 px-4 py-3 bg-white/10 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.06)] overflow-hidden group">
+            {/* Subtle background glow */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/20 rounded-full blur-3xl pointer-events-none" />
+
             {/* Left: Text content */}
-            <div className="flex-1 pr-2">
-              {/* Service name - small, dark */}
-              <div className="text-neutral-900 font-semibold text-[10px] md:text-xs mb-0.5 leading-tight tracking-[0.01em]">Hello Local Quick Commerce</div>
-              {/* Location with dropdown indicator - only show if location is provided */}
+            <div className="flex-1 pr-3 relative z-10">
+              {/* Service name with premium status badge */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 shadow-sm border border-white scale-[0.85] origin-left">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+                  <span className="text-[9px] font-black text-neutral-800 uppercase tracking-tighter">LIVE</span>
+                </div>
+                <div className="text-neutral-950 font-extrabold text-[12px] md:text-base leading-none tracking-tight">
+                  Hello Local <span className="font-medium text-neutral-800/80">Quick Commerce</span>
+                </div>
+              </div>
+
+              {/* Location selector with enhanced visual feedback */}
               {locationDisplayText && (
-                <div className="text-neutral-800/95 text-[10px] md:text-xs flex items-center gap-1 leading-tight">
-                  <span className="line-clamp-1" title={locationDisplayText}>{locationDisplayText}</span>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-neutral-900 text-[11px] md:text-sm flex items-center gap-1 font-bold bg-white/30 backdrop-blur-sm px-2 py-1 rounded-lg border border-white/20 hover:bg-white/40 transition-all cursor-pointer shadow-sm">
+                    <span className="line-clamp-1 max-w-[180px] md:max-w-md">{locationDisplayText}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-neutral-700">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
                 </div>
               )}
             </div>
-            {/* Right: Logo - hidden on desktop, visible on mobile */}
-            <div className="flex-shrink-0 mt-0 md:hidden">
-              <div className="rounded-xl p-1.5">
+
+            <div className="flex-shrink-0 relative z-10 md:hidden">
+              <div className="p-0.5 rounded-2xl transform group-active:scale-95 transition-transform duration-200">
                 <img
                   src="/logo.png?v=4"
                   alt="Hello Local"
-                  className="w-12 h-12 md:w-20 md:h-20 object-contain rounded-lg"
+                  className="w-11 h-11 object-contain"
                 />
               </div>
             </div>
@@ -352,105 +407,131 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 </svg>
               </div>
               <div className="flex-1 relative h-4 md:h-4 overflow-hidden">
-                {searchSuggestions.map((suggestion, index) => {
-                  const isActive = index === currentSearchIndex;
-                  const prevIndex = (currentSearchIndex - 1 + searchSuggestions.length) % searchSuggestions.length;
-                  const isPrev = index === prevIndex;
-
-                  return (
-                    <div
-                      key={suggestion}
-                      className={`absolute inset-0 flex items-center transition-all duration-500 ${isActive
-                        ? 'translate-y-0 opacity-100'
-                        : isPrev
-                          ? '-translate-y-full opacity-0'
-                          : 'translate-y-full opacity-0'
-                        }`}
-                    >
-                      <span className={`text-xs md:text-xs font-medium`} style={{ color: scrollProgress > 0.5 ? '#9ca3af' : '#6b7280' }}>
-                        Search &apos;{suggestion}&apos;
+                {isListening ? (
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="text-xs md:text-xs font-bold text-rose-500 animate-pulse flex items-center gap-2">
+                      <span className="flex gap-1">
+                        <span className="w-1 h-1 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="w-1 h-1 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-1 h-1 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                       </span>
-                    </div>
-                  );
-                })}
+                      Listening...
+                    </span>
+                  </div>
+                ) : (
+                  searchSuggestions.map((suggestion, index) => {
+                    const isActive = index === currentSearchIndex;
+                    const prevIndex = (currentSearchIndex - 1 + searchSuggestions.length) % searchSuggestions.length;
+                    const isPrev = index === prevIndex;
+
+                    return (
+                      <div
+                        key={suggestion}
+                        className={`absolute inset-0 flex items-center transition-all duration-500 ${isActive
+                          ? 'translate-y-0 opacity-100'
+                          : isPrev
+                            ? '-translate-y-full opacity-0'
+                            : 'translate-y-full opacity-0'
+                          }`}
+                      >
+                        <span className={`text-xs md:text-xs font-medium`} style={{ color: scrollProgress > 0.5 ? '#9ca3af' : '#6b7280' }}>
+                          Search &apos;{suggestion}&apos;
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-              <div className="w-7 h-7 md:w-6 md:h-6 rounded-full bg-neutral-100/95 border border-neutral-200/70 flex items-center justify-center flex-shrink-0">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[13px] md:h-[13px]">
-                  <path d="M12 1C13.1 1 14 1.9 14 3C14 4.1 13.1 5 12 5C10.9 5 10 4.1 10 3C10 1.9 10.9 1 12 1Z" fill={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} />
-                  <path d="M19 10V17C19 18.1 18.1 19 17 19H7C5.9 19 5 18.1 5 17V10" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-                  <path d="M8 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-                  <path d="M16 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-                </svg>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={startVoiceSearch}
+                  className={`w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${isListening
+                    ? 'bg-rose-500 border-rose-600 shadow-[0_0_15px_rgba(244,63,94,0.5)] scale-110'
+                    : 'bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm'
+                    }`}
+                >
+                  <svg
+                    width={isListening ? "14" : "15"}
+                    height={isListening ? "14" : "15"}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={isListening ? 'text-white' : 'text-neutral-600'}
+                  >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Category Tabs */}
-        <div className="border-b border-neutral-400/40 w-full" style={{ paddingBottom: 0 }}>
-          <div
-            ref={tabsContainerRef}
-            className="relative flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide -mx-4 md:mx-0 px-4 md:px-6 lg:px-8 md:justify-center scroll-smooth"
-            style={{ paddingBottom: '12px' }}
-            data-padding-bottom="md:8px"
-          >
-            {/* Sliding Indicator */}
-            {indicatorStyle.width > 0 && (
-              <div
-                className="absolute bottom-0 h-1 bg-neutral-900 rounded-t-md transition-all duration-300 ease-out pointer-events-none"
-                style={{
-                  left: `${indicatorStyle.left}px`,
-                  width: `${indicatorStyle.width}px`,
-                  transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  zIndex: 0,
+      {/* Category Tabs */}
+      <div className="border-b border-neutral-400/40 w-full" style={{ paddingBottom: 0 }}>
+        <div
+          ref={tabsContainerRef}
+          className="relative flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide -mx-4 md:mx-0 px-4 md:px-6 lg:px-8 md:justify-center scroll-smooth"
+          style={{ paddingBottom: '12px' }}
+          data-padding-bottom="md:8px"
+        >
+          {/* Sliding Indicator */}
+          {indicatorStyle.width > 0 && (
+            <div
+              className="absolute bottom-0 h-1 bg-neutral-900 rounded-t-md transition-all duration-300 ease-out pointer-events-none"
+              style={{
+                left: `${indicatorStyle.left}px`,
+                width: `${indicatorStyle.width}px`,
+                transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                zIndex: 0,
+              }}
+            />
+          )}
+
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const tabColor = isActive
+              ? 'text-neutral-900'
+              : scrollProgress > 0.5
+                ? 'text-neutral-600'
+                : 'text-neutral-800';
+
+            return (
+              <button
+                key={tab.id}
+                ref={(el) => {
+                  if (el) {
+                    tabRefs.current.set(tab.id, el);
+                  } else {
+                    tabRefs.current.delete(tab.id);
+                  }
                 }}
-              />
-            )}
-
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const tabColor = isActive
-                ? 'text-neutral-900'
-                : scrollProgress > 0.5
-                  ? 'text-neutral-600'
-                  : 'text-neutral-800';
-
-              return (
-                <button
-                  key={tab.id}
-                  ref={(el) => {
-                    if (el) {
-                      tabRefs.current.set(tab.id, el);
-                    } else {
-                      tabRefs.current.delete(tab.id);
-                    }
-                  }}
-                  onClick={() => handleTabClick(tab.id)}
-                  className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${tabColor} z-10`}
+                onClick={() => handleTabClick(tab.id)}
+                className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${tabColor} z-10`}
+                style={{
+                  transition: 'color 0.3s ease-out',
+                }}
+                type="button"
+              >
+                <div className={`mb-0.5 md:hidden w-5 h-5 flex items-center justify-center ${tabColor}`} style={{
+                  transition: 'color 0.3s ease-out, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                }}>
+                  {tab.icon}
+                </div>
+                <span
+                  className={`text-[10px] md:text-xs md:whitespace-nowrap ${isActive ? 'font-semibold' : 'font-medium'}`}
                   style={{
-                    transition: 'color 0.3s ease-out',
+                    transition: 'font-weight 0.3s ease-out',
                   }}
-                  type="button"
                 >
-                  <div className={`mb-0.5 md:hidden w-5 h-5 flex items-center justify-center ${tabColor}`} style={{
-                    transition: 'color 0.3s ease-out, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                  }}>
-                    {tab.icon}
-                  </div>
-                  <span
-                    className={`text-[10px] md:text-xs md:whitespace-nowrap ${isActive ? 'font-semibold' : 'font-medium'}`}
-                    style={{
-                      transition: 'font-weight 0.3s ease-out',
-                    }}
-                  >
-                    {tab.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

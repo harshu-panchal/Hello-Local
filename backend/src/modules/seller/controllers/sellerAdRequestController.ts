@@ -60,12 +60,33 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
         const nextDay = new Date(checkDay);
         nextDay.setDate(nextDay.getDate() + 1);
 
-        // Count ads active on this specific day
-        const bookedCount = await SellerAdRequest.countDocuments({
-            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+        // Count 1: Live ads (from ShopAd model)
+        const liveAdsCount = await ShopAd.countDocuments({
+            isActive: true,
+            $or: [
+                {
+                    startDate: { $lt: nextDay },
+                    endDate: { $gt: checkDay }
+                },
+                {
+                    startDate: { $exists: false },
+                    $or: [
+                        { expiresAt: { $exists: false } },
+                        { expiresAt: null },
+                        { expiresAt: { $gt: checkDay } }
+                    ]
+                }
+            ]
+        });
+
+        // Count 2: Reserved slots (from SellerAdRequest model, not yet Live but confirmed)
+        const reservedSlotsCount = await SellerAdRequest.countDocuments({
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
             startDate: { $lt: nextDay },
             endDate: { $gt: checkDay }
         });
+
+        const bookedCount = liveAdsCount + reservedSlotsCount;
 
         if (bookedCount >= MAX_ACTIVE_ADS) {
             return res.status(400).json({
@@ -257,11 +278,35 @@ export const getPublicAdStats = asyncHandler(async (req: Request, res: Response)
         const dayEnd = new Date(dayStart);
         dayEnd.setDate(dayEnd.getDate() + 1);
 
-        const bookedCount = await SellerAdRequest.countDocuments({
-            status: { $in: ["Approved", "PaymentPending", "PaymentVerified", "Live"] },
+        // Count 1: Live ads (from ShopAd model)
+        const liveAdsCount = await ShopAd.countDocuments({
+            isActive: true,
+            $or: [
+                // Option A: Ad has explicit range that overlaps this day
+                {
+                    startDate: { $lt: dayEnd },
+                    endDate: { $gt: dayStart }
+                },
+                // Option B: Ad has no explicit start date but is still active/not expired
+                {
+                    startDate: { $exists: false },
+                    $or: [
+                        { expiresAt: { $exists: false } },
+                        { expiresAt: null },
+                        { expiresAt: { $gt: dayStart } }
+                    ]
+                }
+            ]
+        });
+
+        // Count 2: Reserved slots (from SellerAdRequest model, not yet Live but confirmed)
+        const reservedSlotsCount = await SellerAdRequest.countDocuments({
+            status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
             startDate: { $lt: dayEnd },
             endDate: { $gt: dayStart }
         });
+
+        const bookedCount = liveAdsCount + reservedSlotsCount;
 
         if (bookedCount > maxSlotsBooked) maxSlotsBooked = bookedCount;
 

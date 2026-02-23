@@ -387,6 +387,20 @@ export default function AdminShopAds() {
                                     Shop: <strong>{approveModal.shopName}</strong><br />
                                     Scheduled: <strong>{approveModal.startDate ? new Date(approveModal.startDate).toLocaleDateString("en-IN") : 'Today'}</strong> (24h)
                                 </p>
+
+                                {(() => {
+                                    const scheduledDate = approveModal.startDate ? new Date(approveModal.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+                                    const dayInfo = requestStats?.dailyAvailability?.find((d: any) => d.date.startsWith(scheduledDate));
+                                    if (dayInfo && dayInfo.slotsBooked >= 10) {
+                                        return (
+                                            <div style={{ background: "#fff1f2", border: "1px solid #fca5a5", borderRadius: 12, padding: "12px", marginBottom: 16, color: "#dc2626", fontSize: 12 }}>
+                                                ⚠️ <strong>Slot Warning:</strong> This date is already FULL ({dayInfo.slotsBooked}/10 booked). Approving this will exceed the recommended limit.
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
                                 <div style={{ marginBottom: 16 }}>
                                     <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ad Price (₹) *</label>
                                     <input type="number" value={approvePrice} onChange={e => setApprovePrice(e.target.value)} placeholder="e.g. 799" style={{ width: "100%", padding: "10px 14px", border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" as any }} />
