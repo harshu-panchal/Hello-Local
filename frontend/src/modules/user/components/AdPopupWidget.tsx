@@ -13,7 +13,7 @@ type PopupAd = ShopAd & {
 
 const SESSION_KEY = "ad-popup-widget-closed";
 const SHOW_DELAY_MS = 4000;
-const ROTATION_MS = 12000;
+const ROTATION_MS = 60000;
 
 function parseDate(input?: string): number | null {
   if (!input) return null;
@@ -22,8 +22,10 @@ function parseDate(input?: string): number | null {
 }
 
 function isAdLive(ad: PopupAd, nowMs: number): boolean {
-  if (typeof ad.status === "string" && ad.status.toLowerCase() !== "approved") {
-    return false;
+  if (typeof ad.status === "string") {
+    const normalizedStatus = ad.status.toLowerCase();
+    const allowedStatuses = new Set(["approved", "live", "active", "paymentverified"]);
+    if (!allowedStatuses.has(normalizedStatus)) return false;
   }
 
   if (ad.isActive === false) return false;
@@ -74,9 +76,11 @@ export default function AdPopupWidget() {
       try {
         const response = await getActiveShopAds();
         const now = Date.now();
-        const liveAds = (response?.data || []).filter((ad) => isAdLive(ad as PopupAd, now));
+        const apiAds = response?.data || [];
+        const liveAds = apiAds.filter((ad) => isAdLive(ad as PopupAd, now));
+        const adsToShow = liveAds.length > 0 ? liveAds : apiAds;
         if (mounted) {
-          setAds(liveAds);
+          setAds(adsToShow);
           setIndex(0);
         }
       } catch (err) {

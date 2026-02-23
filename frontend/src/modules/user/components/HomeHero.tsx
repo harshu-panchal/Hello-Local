@@ -287,17 +287,17 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     >
       {/* Top section with delivery info and buttons - NOT sticky */}
       <div>
-        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-2 md:pt-3 pb-0">
-          <div className="flex items-start justify-between mb-2 md:mb-2">
+        <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-2 md:pt-3 pb-1">
+          <div className="flex items-start justify-between mb-2 md:mb-2 rounded-2xl border border-white/45 px-3 py-2">
             {/* Left: Text content */}
             <div className="flex-1 pr-2">
               {/* Service name - small, dark */}
-              <div className="text-neutral-800 font-medium text-[10px] md:text-xs mb-0 leading-tight">Hello Local Quick Commerce</div>
+              <div className="text-neutral-900 font-semibold text-[10px] md:text-xs mb-0.5 leading-tight tracking-[0.01em]">Hello Local Quick Commerce</div>
               {/* Location with dropdown indicator - only show if location is provided */}
               {locationDisplayText && (
-                <div className="text-neutral-700 text-[10px] md:text-xs flex items-center gap-0.5 leading-tight">
+                <div className="text-neutral-800/95 text-[10px] md:text-xs flex items-center gap-1 leading-tight">
                   <span className="line-clamp-1" title={locationDisplayText}>{locationDisplayText}</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                     <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
@@ -305,11 +305,13 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             </div>
             {/* Right: Logo - hidden on desktop, visible on mobile */}
             <div className="flex-shrink-0 mt-0 md:hidden">
-              <img
-                src="/logo.png?v=4"
-                alt="Hello Local"
-                className="w-14 h-14 md:w-20 md:h-20 object-contain drop-shadow-md rounded-xl"
-              />
+              <div className="rounded-xl p-1.5">
+                <img
+                  src="/logo.png?v=4"
+                  alt="Hello Local"
+                  className="w-12 h-12 md:w-20 md:h-20 object-contain rounded-lg"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -337,16 +339,18 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
 
             <div
               onClick={() => navigate('/search')}
-              className="flex-1 rounded-xl shadow-lg px-3 py-2 md:px-3 md:py-1.5 flex items-center gap-2 cursor-pointer hover:shadow-xl transition-all duration-300 mb-2 md:mb-1.5 bg-white"
+              className="flex-1 rounded-2xl px-3 py-2 md:px-3.5 md:py-2 flex items-center gap-2 cursor-pointer transition-all duration-300 mb-2 md:mb-1.5 border shadow-[0_8px_20px_rgba(15,23,42,0.14)]"
               style={{
-                backgroundColor: scrollProgress > 0.1 ? `rgba(249, 250, 251, ${scrollProgress})` : 'white',
-                border: scrollProgress > 0.1 ? `1px solid rgba(229, 231, 235, ${scrollProgress})` : 'none',
+                backgroundColor: scrollProgress > 0.1 ? `rgba(255, 255, 255, ${0.92 + scrollProgress * 0.08})` : 'rgba(255, 255, 255, 0.96)',
+                borderColor: scrollProgress > 0.3 ? `rgba(229, 231, 235, ${0.5 + scrollProgress * 0.4})` : 'rgba(255,255,255,0.58)',
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 md:w-4 md:h-4">
-                <circle cx="11" cy="11" r="8" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" />
-                <path d="m21 21-4.35-4.35" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-              </svg>
+              <div className="w-7 h-7 md:w-6 md:h-6 rounded-full bg-neutral-100/95 border border-neutral-200/70 flex items-center justify-center flex-shrink-0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[13px] md:h-[13px]">
+                  <circle cx="11" cy="11" r="8" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" />
+                  <path d="m21 21-4.35-4.35" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </div>
               <div className="flex-1 relative h-4 md:h-4 overflow-hidden">
                 {searchSuggestions.map((suggestion, index) => {
                   const isActive = index === currentSearchIndex;
@@ -363,20 +367,22 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                           : 'translate-y-full opacity-0'
                         }`}
                     >
-                      <span className={`text-xs md:text-xs`} style={{ color: scrollProgress > 0.5 ? '#9ca3af' : '#6b7280' }}>
+                      <span className={`text-xs md:text-xs font-medium`} style={{ color: scrollProgress > 0.5 ? '#9ca3af' : '#6b7280' }}>
                         Search &apos;{suggestion}&apos;
                       </span>
                     </div>
                   );
                 })}
               </div>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 md:w-4 md:h-4">
-                <path d="M12 1C13.1 1 14 1.9 14 3C14 4.1 13.1 5 12 5C10.9 5 10 4.1 10 3C10 1.9 10.9 1 12 1Z" fill={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} />
-                <path d="M19 10V17C19 18.1 18.1 19 17 19H7C5.9 19 5 18.1 5 17V10" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-                <path d="M8 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-                <path d="M16 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
-              </svg>
+              <div className="w-7 h-7 md:w-6 md:h-6 rounded-full bg-neutral-100/95 border border-neutral-200/70 flex items-center justify-center flex-shrink-0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[13px] md:h-[13px]">
+                  <path d="M12 1C13.1 1 14 1.9 14 3C14 4.1 13.1 5 12 5C10.9 5 10 4.1 10 3C10 1.9 10.9 1 12 1Z" fill={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} />
+                  <path d="M19 10V17C19 18.1 18.1 19 17 19H7C5.9 19 5 18.1 5 17V10" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
+                  <path d="M8 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
+                  <path d="M16 11V17" stroke={scrollProgress > 0.5 ? "#9ca3af" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
