@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireUserType } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { Request, Response } from 'express';
 import { createRazorpayOrder, capturePayment, handleWebhook } from '../services/paymentService';
 import Order from '../models/Order';
@@ -23,7 +23,6 @@ router.post('/create-order', authenticate, async (req: Request, res: Response) =
         }
 
         let amount = 0;
-        let userId = '';
 
         if (type === 'Order') {
             const order = await Order.findById(orderId);

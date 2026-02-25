@@ -32,6 +32,7 @@ export const getAllShopAds = asyncHandler(async (req: Request, res: Response) =>
  * Get all ACTIVE shop ads (public endpoint for carousel)
  */
 export const getActiveShopAds = asyncHandler(async (req: Request, res: Response) => {
+    void req;
     const now = new Date();
     const ads = await ShopAd.find({
         isActive: true,

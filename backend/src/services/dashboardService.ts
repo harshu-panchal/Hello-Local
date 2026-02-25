@@ -114,6 +114,7 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
       lowStockProducts: 0,
       totalRevenue: 0,
       avgCompletedOrderValue: 0,
+      pendingAdRequests: 0,
     };
   }
 };

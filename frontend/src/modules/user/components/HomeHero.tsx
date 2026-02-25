@@ -47,7 +47,14 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             icon: getIconByName(c.iconName)
           }));
           const uniqueTabs = mapped.filter((tab) => tab.id !== ALL_TAB.id);
-          setTabs([ALL_TAB, ...uniqueTabs]);
+          const combined = [ALL_TAB, ...uniqueTabs];
+          const seen = new Set<string>();
+          const deduped = combined.filter((t) => {
+            if (seen.has(t.id)) return false;
+            seen.add(t.id);
+            return true;
+          });
+          setTabs(deduped);
         }
       } catch (error) {
         console.error('Failed to fetch header categories', error);
