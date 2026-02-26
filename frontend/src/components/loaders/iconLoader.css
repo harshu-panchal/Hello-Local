@@ -6,7 +6,6 @@
   height: 100vh;
   /* Support for modern mobile browsers with dynamic viewport height */
   height: 100dvh;
-  background-color: #ffffff;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -14,6 +13,28 @@
   /* Prevent any touch interactions while loading */
   touch-action: none;
   pointer-events: all;
+  overflow: hidden;
+}
+
+.global-loader-overlay::before,
+.global-loader-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.global-loader-overlay::before {
+  background: linear-gradient(180deg, var(--loader-color-1, #FFCCCC) 0%, var(--loader-color-2, #FFCCFF) 50%, var(--loader-color-1, #FFCCCC) 100%);
+  background-size: 100% 200%;
+  animation: moveDownGradient 4s linear infinite;
+}
+
+.global-loader-overlay::after {
+  background: linear-gradient(0deg, color-mix(in srgb, var(--loader-color-2, #FFCCFF) 80%, transparent) 0%, color-mix(in srgb, var(--loader-color-1, #FFCCCC) 0%, transparent) 50%, color-mix(in srgb, var(--loader-color-2, #FFCCFF) 80%, transparent) 100%);
+  background-size: 100% 200%;
+  animation: moveUpGradient 4s linear infinite;
+  mix-blend-mode: multiply;
 }
 
 /* Mobile optimizations for centered content */
@@ -39,7 +60,29 @@
   align-items: center;
 }
 
+@keyframes moveDownGradient {
+  0% {
+    background-position: 0% 0%;
+  }
+
+  100% {
+    background-position: 0% 200%;
+  }
+}
+
+@keyframes moveUpGradient {
+  0% {
+    background-position: 0% 200%;
+  }
+
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
 .loader-lottie {
   width: 100%;
   height: 100%;
+  position: relative;
+  z-index: 1;
 }

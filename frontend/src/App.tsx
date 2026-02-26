@@ -159,9 +159,9 @@ function App() {
     <ErrorBoundary>
       <LoadingProvider>
         <AxiosLoadingInterceptor>
-          <IconLoader />
           <AuthProvider>
             <ThemeProvider>
+              <IconLoader />
               <LocationProvider>
                 <ToastProvider>
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Lottie from 'lottie-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLoading } from '../../context/LoadingContext';
+import { useThemeContext } from '../../context/ThemeContext';
 import './iconLoader.css';
 
 interface IconLoaderProps {
@@ -12,6 +13,15 @@ const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false }) => {
   const { isRouteLoading } = useLoading();
   const show = isRouteLoading || forceShow;
   const [animationData, setAnimationData] = useState<any>(null);
+
+  let currentTheme;
+  try {
+    const themeContext = useThemeContext();
+    currentTheme = themeContext?.currentTheme;
+  } catch (error) {
+    // Fallback if the hook is somehow used outside the ThemeProvider
+    // Defaulting to "all" theme colors implicitly by leaving variables unset.
+  }
 
   useEffect(() => {
     if (show && !animationData) {
@@ -27,6 +37,10 @@ const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false }) => {
       {show && (
         <motion.div
           className="global-loader-overlay"
+          style={{
+            '--loader-color-1': currentTheme?.primary?.[0] || '#FFCCCC',
+            '--loader-color-2': currentTheme?.primary?.[1] || '#FFCCFF',
+          } as React.CSSProperties}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

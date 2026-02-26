@@ -26,6 +26,53 @@ export default function Home() {
   const isInitialLoadRef = useRef(true);
   const SCROLL_POSITION_KEY = 'home-scroll-position';
 
+  const [activeTabName, setActiveTabName] = useState('All');
+
+  const handleTabChange = (tabId: string, tabName?: string) => {
+    setActiveTab(tabId);
+    if (tabName) setActiveTabName(tabName);
+  };
+
+  const isFoodCategory = activeTab === 'food' || activeTab === 'dark' || activeTabName.toLowerCase() === 'food' || activeTabName.toLowerCase().includes('food') || activeTab?.toLowerCase().includes('food');
+
+  const [dietPreference, setDietPreference] = useState<'all' | 'veg' | 'non-veg'>('all');
+
+  const isProductMatchDiet = (product: any, diet: string) => {
+    if (diet === 'all') return true;
+
+    const productDietStr = (
+      (product?.tags || []).join(' ') + ' ' +
+      (product?.productName || '') + ' ' +
+      (product?.name || '') + ' ' +
+      (product?.description || '') + ' ' +
+      (product?.category?.name || '') + ' ' +
+      (product?.category?.slug || '') + ' ' +
+      (product?.categoryId || '')
+    ).toLowerCase();
+
+    // Keywords determining non-veg
+    const hasNonVeg = productDietStr.includes('non-veg') ||
+      productDietStr.includes('non veg') ||
+      productDietStr.includes('chicken') ||
+      productDietStr.includes('mutton') ||
+      productDietStr.includes('fish') ||
+      productDietStr.includes('egg') ||
+      productDietStr.includes('meat');
+
+    if (diet === 'non-veg') {
+      return hasNonVeg;
+    }
+    if (diet === 'veg') {
+      return !hasNonVeg;
+    }
+    return true;
+  };
+
+  // Reset diet preference when switching tabs
+  useEffect(() => {
+    setDietPreference('all');
+  }, [activeTab]);
+
   // State for dynamic data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -228,10 +275,30 @@ export default function Home() {
     );
   };
 
-  const filteredProducts = useMemo(
-    () => getFilteredProducts(activeTab),
-    [activeTab, products]
-  );
+  const filteredProducts = useMemo(() => {
+    const defaultFiltered = getFilteredProducts(activeTab);
+    return defaultFiltered.filter(p => isProductMatchDiet(p, dietPreference));
+  }, [activeTab, products, dietPreference]);
+
+  const filteredHomeSections = useMemo(() => {
+    if (!homeData.homeSections) return [];
+    if (dietPreference === 'all') return homeData.homeSections;
+
+    return homeData.homeSections.map((section: any) => {
+      if (section.displayType === "products" && section.data) {
+        return {
+          ...section,
+          data: section.data.filter((p: any) => isProductMatchDiet(p, dietPreference))
+        };
+      }
+      return section;
+    });
+  }, [homeData.homeSections, dietPreference]);
+
+  const filteredLowestPrices = useMemo(() => {
+    if (!homeData.lowestPrices) return [];
+    return homeData.lowestPrices.filter((p: any) => isProductMatchDiet(p, dietPreference));
+  }, [homeData.lowestPrices, dietPreference]);
 
   if (loading && !products.length) {
     return <PageLoader />; // Let the global IconLoader handle the initial loading state
@@ -260,21 +327,56 @@ export default function Home() {
   return (
     <div className="bg-white min-h-screen pb-20 md:pb-0" ref={contentRef}>
       {/* Hero Header with Gradient and Tabs */}
-      <HomeHero activeTab={activeTab} onTabChange={setActiveTab} />
+      <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Empty space since toggle was moved */}
 
       {/* Shop Ad Carousel - Sponsored Shop Ads */}
       <ShopAdCarousel />
 
       {/* LOWEST PRICES EVER Section */}
-      <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />
+      <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
+
+      {/* Veg / Non-veg Filter Toggle - Only for food section */}
+      {isFoodCategory && (
+        <div className={`flex justify-center items-center px-4 pt-6 pb-2 relative z-10 transition-colors duration-500 ${!isFoodCategory ? 'bg-neutral-50' : ''}`} style={{ backgroundColor: isFoodCategory ? '#FFCCCC' : undefined }}>
+          <div className="bg-white rounded-full p-[6px] shadow-sm border border-neutral-200/80 flex items-center gap-1 w-[90%] md:w-auto overflow-hidden">
+            <button
+              onClick={() => setDietPreference('all')}
+              className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-extrabold transition-all duration-300 transform whitespace-nowrap ${dietPreference === 'all' ? 'bg-neutral-800 text-white shadow-md scale-100' : 'text-neutral-600 hover:bg-neutral-100 scale-95'}`}
+            >
+              All Items
+            </button>
+            <button
+              onClick={() => setDietPreference('veg')}
+              className={`flex-1 md:flex-none px-3 md:px-5 py-2 rounded-full flex justify-center items-center gap-2 text-xs md:text-sm font-bold transition-all duration-300 transform ${dietPreference === 'veg' ? 'bg-green-100/90 text-green-800 border border-green-300 shadow-sm scale-105' : 'text-neutral-600 hover:bg-green-50/50 hover:text-green-700 border border-transparent scale-95'}`}
+            >
+              <div className={`w-4 h-4 border ${dietPreference === 'veg' ? 'border-green-700' : 'border-green-600'} rounded-sm flex items-center justify-center bg-white p-[2px] transition-colors`}>
+                <div className={`w-2 h-2 rounded-full ${dietPreference === 'veg' ? 'bg-green-700' : 'bg-green-600'}`}></div>
+              </div>
+              <span className={dietPreference === "veg" ? "text-green-800" : "text-neutral-700"}>Veg</span>
+            </button>
+            <button
+              onClick={() => setDietPreference('non-veg')}
+              className={`flex-1 md:flex-none px-3 md:px-5 py-2 rounded-full flex justify-center items-center gap-2 text-xs md:text-sm font-bold transition-all duration-300 transform ${dietPreference === 'non-veg' ? 'bg-red-100/90 text-red-800 border border-red-300 shadow-sm scale-105' : 'text-neutral-600 hover:bg-red-50/50 hover:text-red-700 border border-transparent scale-95'}`}
+            >
+              <div className={`w-4 h-4 border ${dietPreference === 'non-veg' ? 'border-red-700' : 'border-red-600'} rounded-sm flex items-center justify-center bg-white p-[2px] transition-colors`}>
+                <div className={`w-0 h-0 border-l-[4px] border-r-[4px] border-b-[6px] border-l-transparent border-r-transparent border-b-${dietPreference === 'non-veg' ? 'red-700' : 'red-600'} mt-[1px]`}></div>
+              </div>
+              <span className={dietPreference === "non-veg" ? "text-red-800" : "text-neutral-700"}>Non-Veg</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div
-        className="bg-neutral-50 -mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4">
+        className={`${!isFoodCategory ? 'bg-neutral-50' : ''} -mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 transition-colors duration-500`}
+        style={{ backgroundColor: isFoodCategory ? '#FFCCCC' : undefined }}>
         {/* Dynamic Home Sections - Render sections created by admin */}
-        {homeData.homeSections && homeData.homeSections.length > 0 && (
+        {filteredHomeSections && filteredHomeSections.length > 0 && (
           <>
-            {homeData.homeSections.map((section: any) => {
+            {filteredHomeSections.map((section: any) => {
               const columnCount = Number(section.columns) || 4;
 
               if (section.displayType === "products" && section.data && section.data.length > 0) {

@@ -215,9 +215,9 @@ export default function ShopAdCarousel() {
 
     if (loading && ads.length === 0) {
         return (
-            <div className="px-4 py-3">
-                <div className="h-44 md:h-56 w-full rounded-3xl bg-neutral-100 animate-pulse overflow-hidden relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+            <div className="w-full">
+                <div className="h-[220px] md:h-[360px] w-full bg-neutral-200 animate-pulse overflow-hidden relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
                 </div>
             </div>
         );
@@ -228,8 +228,8 @@ export default function ShopAdCarousel() {
     const currentAd = ads[currentIndex];
 
     return (
-        <div className="relative group px-4 py-3 select-none">
-            <div className="relative h-44 md:h-60 w-full rounded-3xl overflow-hidden shadow-2xl shadow-rose-500/10 bg-rose-50">
+        <div className="relative group w-full select-none">
+            <div className="relative h-[220px] md:h-[360px] w-full overflow-hidden bg-neutral-900">
                 <AnimatePresence initial={false} custom={direction}>
                     <motion.div
                         key={currentIndex}
@@ -279,12 +279,12 @@ export default function ShopAdCarousel() {
                                 alt=""
                                 className="w-full h-full object-cover scale-105"
                             />
-                            {/* Sophisticated Gradient Overlay - Made lighter to allow pink glow and light background */}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-black/40 via-transparent to-transparent z-0" />
+                            {/* Sophisticated Gradient Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/10 z-0" />
                         </div>
 
                         {/* Content Area */}
-                        <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-10">
+                        <div className="absolute inset-0 flex flex-col justify-end p-5 md:p-12 z-10">
                             <div className="max-w-[85%] space-y-2">
                                 <motion.div
                                     initial={{ opacity: 0, y: 10 }}
@@ -305,7 +305,7 @@ export default function ShopAdCarousel() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.2 }}
-                                    className="text-2xl md:text-3xl font-black text-white leading-tight"
+                                    className="text-2xl md:text-5xl font-black text-white leading-tight drop-shadow-md"
                                 >
                                     {currentAd.shopName}
                                 </motion.h3>
@@ -314,7 +314,7 @@ export default function ShopAdCarousel() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.3 }}
-                                    className="text-white/80 text-sm md:text-base font-medium line-clamp-1"
+                                    className="text-white/90 text-sm md:text-lg font-medium line-clamp-1 md:line-clamp-2 drop-shadow"
                                 >
                                     {currentAd.tagline}
                                 </motion.p>
@@ -323,15 +323,15 @@ export default function ShopAdCarousel() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.4 }}
-                                    className="pt-2"
+                                    className="pt-3 md:pt-5"
                                 >
                                     <a
                                         href={currentAd.ctaLink || "#"}
-                                        className="inline-flex items-center gap-2 bg-white text-rose-600 px-6 py-2.5 rounded-2xl text-xs font-bold hover:bg-rose-50 transition-all hover:scale-105 active:scale-95 shadow-xl"
+                                        className="inline-flex items-center gap-2 md:gap-3 bg-white text-neutral-900 px-6 py-2.5 md:px-8 md:py-3.5 rounded-full text-[11px] md:text-sm font-black uppercase tracking-wider hover:bg-neutral-100 transition-all hover:scale-[1.02] active:scale-95 shadow-xl"
                                         onClick={(e) => { if (!currentAd.ctaLink) e.preventDefault(); }}
                                     >
                                         {currentAd.ctaText || "Visit Shop"}
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M5 12h14M12 5l7 7-7 7" />
                                         </svg>
                                     </a>
@@ -343,7 +343,7 @@ export default function ShopAdCarousel() {
 
                 {/* Pagination Dots - Centered and more refined */}
                 {ads.length > 1 && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                    <div className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20">
                         {ads.map((_, i) => (
                             <button
                                 key={i}

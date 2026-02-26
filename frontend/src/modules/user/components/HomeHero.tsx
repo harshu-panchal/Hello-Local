@@ -13,7 +13,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 interface HomeHeroProps {
   activeTab?: string;
-  onTabChange?: (tabId: string) => void;
+  onTabChange?: (tabId: string, tabName?: string) => void;
 }
 
 interface Tab {
@@ -41,11 +41,21 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       try {
         const cats = await getHeaderCategoriesPublic();
         if (cats && cats.length > 0) {
-          const mapped = cats.map(c => ({
-            id: c.slug,
-            label: c.name,
-            icon: getIconByName(c.iconName)
-          }));
+          const mapped = cats
+            .filter(c => {
+              const nameLow = c.name?.toLowerCase() || '';
+              const slugLow = c.slug?.toLowerCase() || '';
+              return !nameLow.includes('fast food') &&
+                !slugLow.includes('fast-food') &&
+                !nameLow.includes('non veg') &&
+                !nameLow.includes('non-veg') &&
+                !slugLow.includes('non-veg');
+            })
+            .map(c => ({
+              id: c.slug,
+              label: c.name,
+              icon: getIconByName(c.iconName)
+            }));
           const uniqueTabs = mapped.filter((tab) => tab.id !== ALL_TAB.id);
           const combined = [ALL_TAB, ...uniqueTabs];
           const seen = new Set<string>();
@@ -55,6 +65,12 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             return true;
           });
           setTabs(deduped);
+          
+          // Let the parent know the actual label of the current tab on load
+          const active = deduped.find(t => t.id === activeTab);
+          if (active && onTabChange) {
+            onTabChange(activeTab, active.label);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch header categories', error);
@@ -310,8 +326,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     };
   }, [activeTab]);
 
-  const handleTabClick = (tabId: string) => {
-    onTabChange?.(tabId);
+  const handleTabClick = (tabId: string, tabName: string) => {
+    onTabChange?.(tabId, tabName);
     // Don't scroll - keep page at current position
   };
 
@@ -515,7 +531,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     tabRefs.current.delete(tab.id);
                   }
                 }}
-                onClick={() => handleTabClick(tab.id)}
+                onClick={() => handleTabClick(tab.id, tab.label)}
                 className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${tabColor} z-10`}
                 style={{
                   transition: 'color 0.3s ease-out',
