@@ -517,12 +517,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
             >
               <div className="relative mx-3">
                 <button
-                  onClick={handleCameraClick}
+                  onClick={() => navigate('/local-setu')}
                   className="absolute left-1/2 -translate-x-1/2 -top-7 z-20 w-12 h-12 rounded-full text-black flex items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.28)] border-2 border-white/15 active:scale-95 transition-all"
                   style={{
                     background: `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`
                   }}
-                  aria-label="Camera Search"
+                  aria-label="Local Setu Services"
                 >
                   <div className="flex flex-col items-center justify-center -mt-1 leading-tight text-black drop-shadow-sm">
                     <span className="text-[10px] font-medium tracking-wide lowercase">local</span>

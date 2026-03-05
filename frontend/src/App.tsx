@@ -43,6 +43,7 @@ const FAQ = lazy(() => import("./modules/user/FAQ"));
 const Wishlist = lazy(() => import("./modules/user/Wishlist"));
 const Addresses = lazy(() => import("./modules/user/Addresses"));
 const AddressBook = lazy(() => import("./modules/user/AddressBook"));
+const LocalSetu = lazy(() => import("./modules/user/LocalSetu"));
 const SpiritualStore = lazy(() => import("./modules/user/SpiritualStore"));
 const PharmaStore = lazy(() => import("./modules/user/PharmaStore"));
 const EGiftStore = lazy(() => import("./modules/user/EGiftStore"));
@@ -382,6 +383,7 @@ function App() {
                                     <Route path="/categories" element={<Categories />} />
                                     <Route path="/category/:id" element={<Category />} />
                                     <Route path="/address-book" element={<AddressBook />} />
+                                    <Route path="/local-setu" element={<LocalSetu />} />
                                     <Route path="/checkout" element={<Checkout />} />
                                     <Route path="/checkout/address" element={<CheckoutAddress />} />
                                     <Route path="/product/:id" element={<ProductDetail />} />
