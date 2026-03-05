@@ -16,25 +16,24 @@
   overflow: hidden;
 }
 
-.global-loader-overlay::before,
-.global-loader-overlay::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
+.global-loader-overlay {
+  background: linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233);
+  background-size: 200% 200%;
+  animation: gradientShimmer 3s ease infinite;
 }
 
-.global-loader-overlay::before {
-  background: linear-gradient(180deg, var(--loader-color-1, #FFCCCC) 0%, var(--loader-color-2, #FFCCFF) 50%, var(--loader-color-1, #FFCCCC) 100%);
-  background-size: 100% 200%;
-  animation: moveDownGradient 4s linear infinite;
-}
+@keyframes gradientShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
 
-.global-loader-overlay::after {
-  background: linear-gradient(0deg, color-mix(in srgb, var(--loader-color-2, #FFCCFF) 80%, transparent) 0%, color-mix(in srgb, var(--loader-color-1, #FFCCCC) 0%, transparent) 50%, color-mix(in srgb, var(--loader-color-2, #FFCCFF) 80%, transparent) 100%);
-  background-size: 100% 200%;
-  animation: moveUpGradient 4s linear infinite;
-  mix-blend-mode: multiply;
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 /* Mobile optimizations for centered content */
@@ -58,26 +57,6 @@
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-@keyframes moveDownGradient {
-  0% {
-    background-position: 0% 0%;
-  }
-
-  100% {
-    background-position: 0% 200%;
-  }
-}
-
-@keyframes moveUpGradient {
-  0% {
-    background-position: 0% 200%;
-  }
-
-  100% {
-    background-position: 0% 0%;
-  }
 }
 
 .loader-lottie {

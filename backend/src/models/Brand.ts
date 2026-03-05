@@ -25,8 +25,8 @@ const BrandSchema = new Schema<IBrand>(
   }
 );
 
-// Index for faster queries
-BrandSchema.index({ name: 1 });
+// BrandSchema automatically creates an index for 'name' because of unique: true
+
 
 const Brand = (mongoose.models.Brand as mongoose.Model<IBrand>) || mongoose.model<IBrand>("Brand", BrandSchema);
 

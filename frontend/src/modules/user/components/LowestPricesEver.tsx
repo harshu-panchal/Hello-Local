@@ -434,7 +434,7 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
     <div
       className="relative"
       style={{
-        background: `linear-gradient(to bottom, ${theme.primary[3]}, ${theme.primary[3]}, ${theme.secondary[1]}, ${theme.secondary[2]})`,
+        background: `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`,
         marginTop: '0px',
         paddingTop: '12px',
         paddingBottom: '16px',
@@ -508,16 +508,11 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
               fontWeight: 900,
               lineHeight: '1.15',
               letterSpacing: '0.14em',
-              backgroundImage: `linear-gradient(90deg, #ffffff 0%, ${theme.accentColor} 48%, #ffffff 100%)`,
-              backgroundSize: '200% 100%',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              color: 'transparent',
-              WebkitTextFillColor: 'transparent',
-              textShadow: '0 2px 10px rgba(0,0,0,0.12)',
+              color: '#000000',
+              textShadow: '0 2px 4px rgba(255,255,255,0.3)',
             }}
           >
-            LOWEST PRICES EVER
+            BEST SELLER
           </motion.h2>
 
           <motion.div

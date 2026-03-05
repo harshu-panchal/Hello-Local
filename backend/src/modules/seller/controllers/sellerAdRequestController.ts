@@ -267,7 +267,7 @@ export const getPublicAdStats = asyncHandler(async (req: Request, res: Response)
     const checkDate = date ? new Date(date as string) : new Date();
     checkDate.setHours(0, 0, 0, 0);
 
-    const dur = parseInt(duration as string) || 1;
+    const dur = parseInt(duration as string) || 30; // Default to 30 days if not specified for stats
     let maxSlotsBooked = 0;
     const dailyStats = [];
 

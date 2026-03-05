@@ -67,6 +67,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     PaymentPending: { label: 'Payment Under Review', color: '#8b5cf6', bg: '#ede9fe', icon: '💳' },
     PaymentVerified: { label: 'Payment Verified', color: '#10b981', bg: '#d1fae5', icon: '✔️' },
     Live: { label: '🔴 LIVE on Website', color: '#059669', bg: '#d1fae5', icon: '🟢' },
+    Scheduled: { label: 'Scheduled for Future', color: '#ec4899', bg: '#fdf2f8', icon: '📅' },
     Expired: { label: 'Expired', color: '#6b7280', bg: '#f3f4f6', icon: '⏰' },
 };
 
@@ -90,10 +91,13 @@ export default function SellerAdRequests() {
             date: string;
             slotsAvailable: number;
         }>;
+        selectedDate?: string;
+        duration?: number;
     } | null>(null);
     const [paymentUploading, setPaymentUploading] = useState(false);
     const [razorpayData, setRazorpayData] = useState<{ id: string, amount: number } | null>(null);
     const [sellerDetails, setSellerDetails] = useState({ name: '', email: '', phone: '' });
+    const [isCheckingSlots, setIsCheckingSlots] = useState(false);
 
     useEffect(() => {
         // Mock seller details for now, or fetch from auth context if available
@@ -156,11 +160,15 @@ export default function SellerAdRequests() {
     }, [form.startDate, form.durationDays]);
 
     const fetchAvailability = async (date?: string, duration?: number) => {
+        setIsCheckingSlots(true);
         try {
+            // If duration is not provided, we just want general stats (30 days)
             const res = await getAdAvailability(date, duration);
             if (res.success) setAvailability(res.data);
         } catch (err) {
             console.error('Failed to load availability:', err);
+        } finally {
+            setIsCheckingSlots(false);
         }
     };
 
@@ -297,7 +305,10 @@ export default function SellerAdRequests() {
     const pendingCount = adRequests.filter(r => r.status === 'Pending').length;
     const liveCount = adRequests.filter(r => r.status === 'Live').length;
     const approvedCount = adRequests.filter(r => r.status === 'Approved').length;
-    const slotsAvailableForRange = availability?.slotsAvailableInRange ?? availability?.slotsAvailable ?? (loading ? 10 : 0);
+
+    // Check if availability stats actually match the currently selected date in form
+    const availabilityStale = availability?.selectedDate && form.startDate && availability.selectedDate.split('T')[0] !== form.startDate;
+    const slotsAvailableForRange = availabilityStale ? 0 : (availability?.slotsAvailableInRange ?? availability?.slotsAvailable ?? (loading ? 10 : 0));
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -379,16 +390,37 @@ export default function SellerAdRequests() {
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="mx-4 mt-4 bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm"
+                    className="mx-4 mt-4 bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-2xl p-5 flex items-start gap-4 shadow-sm"
                 >
-                    <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-red-500">
+                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
                         📅
                     </div>
-                    <div>
-                        <h3 className="font-bold text-rose-900 text-sm">Today's Slots Full</h3>
-                        <p className="text-rose-700 text-xs leading-relaxed">
-                            No slots available for today, but you can <span className="font-bold underline">book in advance</span> for future dates!
+                    <div className="flex-1">
+                        <h3 className="font-bold text-rose-900 text-sm">Today's Slots are Full</h3>
+                        <p className="text-rose-700 text-xs leading-relaxed mb-4">
+                            All 10 advertising slots are currently booked. However, you can secure your spot by <b>scheduling for a future date</b>.
                         </p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => {
+                                    const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0);
+                                    if (next) {
+                                        setForm(f => ({ ...f, startDate: next.date.split('T')[0] }));
+                                        showToast(`Date set to ${new Date(next.date).toLocaleDateString()}`, 'success');
+                                    }
+                                    setShowForm(true);
+                                }}
+                                className="bg-rose-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-all flex items-center gap-2"
+                            >
+                                📅 Book for First Available Date
+                            </button>
+                            <button
+                                onClick={() => setShowForm(true)}
+                                className="bg-white text-rose-600 border border-rose-200 px-4 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                            >
+                                Choose Custom Date
+                            </button>
+                        </div>
                     </div>
                 </motion.div>
             )}
@@ -422,8 +454,12 @@ export default function SellerAdRequests() {
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
                             {/* Form Header */}
                             <div className="bg-gradient-to-r from-pink-500 to-rose-500 text-white p-4">
-                                <h2 className="font-bold text-lg">Create Your Ad Request</h2>
-                                <p className="text-xs text-pink-100 mt-0.5">Fill in your shop details — admin will review and contact you with pricing</p>
+                                <h2 className="font-bold text-lg">{slotsAvailableForRange > 0 ? "📢 New Immediate Ad Request" : "📅 Schedule Future Ad"}</h2>
+                                <p className="text-xs text-pink-100 mt-0.5">
+                                    {slotsAvailableForRange > 0
+                                        ? "Request a slot for today. Once approved by Admin, your ad will go LIVE instantly."
+                                        : "Today is full! Schedule your ad for a future date. Admin will review and confirm your slot."}
+                                </p>
                             </div>
 
                             <div className="p-4 space-y-4">
@@ -520,21 +556,26 @@ export default function SellerAdRequests() {
                                     />
 
                                     {availability && slotsAvailableForRange <= 0 && (
-                                        <div className="mt-2 p-2.5 bg-rose-50 border border-rose-100 rounded-xl">
-                                            <p className="text-[11px] text-rose-700 font-bold mb-1">⚠️ Selected date is FULL</p>
-                                            <p className="text-[10px] text-rose-600 leading-tight">
-                                                All 10 slots are booked for this period. Try picking a later date or contact admin for premium placement.
+                                        <div className="mt-3 p-3 bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-xl shadow-sm">
+                                            <p className="text-[12px] text-rose-800 font-bold mb-1 flex items-center gap-1.5">
+                                                <span className="text-lg">⚠️</span> SELECTED DATE IS FULL
                                             </p>
-                                            {availability.dailyStats?.find((d: any) => d.slotsAvailable > 0) && (
+                                            <p className="text-[11px] text-rose-700 leading-relaxed">
+                                                All 10 slots are already booked for this period. To proceed, please pick a later date.
+                                            </p>
+                                            {availability.dailyStats?.find((d: any) => d.slotsAvailable > 0 && new Date(d.date) > new Date(form.startDate)) && (
                                                 <button
                                                     onClick={() => {
-                                                        const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0);
-                                                        if (next) setForm(f => ({ ...f, startDate: next.date.split('T')[0] }));
+                                                        const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0 && new Date(d.date) > new Date(form.startDate));
+                                                        if (next) {
+                                                            setForm(f => ({ ...f, startDate: next.date.split('T')[0] }));
+                                                            showToast("Shifted to next available date", "success");
+                                                        }
                                                     }}
-                                                    className="mt-2 text-[10px] bg-white border border-rose-200 text-rose-600 px-2 py-1 rounded-lg font-bold hover:bg-rose-100 transition"
+                                                    className="mt-3 w-full text-[11px] bg-white border border-pink-200 text-pink-600 px-3 py-2 rounded-xl font-bold hover:bg-pink-50 transition shadow-sm active:scale-95 flex items-center justify-center gap-2"
                                                 >
-                                                    ✨ Shift to Next Available: {(() => {
-                                                        const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0);
+                                                    ✨ Use Next Available: {(() => {
+                                                        const next = availability.dailyStats?.find((d: any) => d.slotsAvailable > 0 && new Date(d.date) > new Date(form.startDate));
                                                         return next ? new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
                                                     })()}
                                                 </button>
@@ -700,13 +741,31 @@ export default function SellerAdRequests() {
                                     >
                                         Cancel
                                     </button>
-                                    <button
-                                        onClick={handleSubmit}
-                                        disabled={submitting || uploadingImage || slotsAvailableForRange <= 0}
-                                        className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
-                                    >
-                                        {submitting ? 'Submitting...' : slotsAvailableForRange <= 0 ? 'Dates Full' : form.payNow ? '💳 Pay & Submit Ad' : '🚀 Submit Request'}
-                                    </button>
+                                    {slotsAvailableForRange <= 0 ? (
+                                        <button
+                                            onClick={() => {
+                                                const next = availability?.dailyStats?.find((d: any) => d.slotsAvailable > 0);
+                                                if (next) {
+                                                    setForm(f => ({ ...f, startDate: next.date.split('T')[0] }));
+                                                    showToast(`Date shifted to ${new Date(next.date).toLocaleDateString()}`, 'success');
+                                                } else {
+                                                    showToast('No available slots found in this range. Please pick a different month or contact admin.', 'error');
+                                                }
+                                            }}
+                                            disabled={submitting || uploadingImage || isCheckingSlots}
+                                            className="flex-[2] bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isCheckingSlots ? <span className="animate-spin text-lg block">⏳</span> : "📅 Schedule for Next Available"}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleSubmit}
+                                            disabled={submitting || uploadingImage || isCheckingSlots}
+                                            className="flex-[2] bg-gradient-to-r from-pink-600 to-rose-600 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                        >
+                                            {submitting ? 'Submitting...' : isCheckingSlots ? 'Checking Slots...' : form.payNow ? '💳 Pay & Post Now' : '🚀 Request Immediate Ad'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

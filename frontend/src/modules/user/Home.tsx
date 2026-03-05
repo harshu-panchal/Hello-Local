@@ -324,6 +324,64 @@ export default function Home() {
     );
   }
 
+  const unlimitedFashionSection = filteredHomeSections?.find((s: any) => s.title?.toLowerCase() === 'unlimited fashion');
+  const otherHomeSections = filteredHomeSections?.filter((s: any) => s.title?.toLowerCase() !== 'unlimited fashion');
+
+  const renderHomeSection = (section: any) => {
+    const columnCount = Number(section.columns) || 4;
+
+    if (section.displayType === "products" && section.data && section.data.length > 0) {
+      // Strict column mapping as requested - applies to ALL screen sizes including mobile
+      const gridClasses: Record<number, string> = {
+        2: "grid-cols-2",
+        3: "grid-cols-3",
+        4: "grid-cols-4",
+        6: "grid-cols-6",
+        8: "grid-cols-8"
+      };
+      const gridClass = gridClasses[columnCount] || "grid-cols-4";
+
+      // Use compact mode for 4 or more columns to fit content on mobile
+      const isCompact = columnCount >= 4;
+      const gapClass = columnCount >= 4 ? "gap-2" : "gap-3 md:gap-4";
+
+      return (
+        <div key={section.id || section._id || section.title} className="mt-6 mb-6 md:mt-8 md:mb-8">
+          {section.title && (
+            <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
+              {section.title}
+            </h2>
+          )}
+          <div className="px-4 md:px-6 lg:px-8">
+            <div className={`grid ${gridClass} ${gapClass}`}>
+              {section.data.map((product: any) => (
+                <ProductCard
+                  key={product.id || product._id}
+                  product={product}
+                  categoryStyle={true}
+                  showBadge={true}
+                  showPackBadge={false}
+                  showStockInfo={false}
+                  compact={isCompact}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <CategoryTileSection
+        key={section.id || section._id || section.title}
+        title={section.title}
+        tiles={section.data || []}
+        columns={columnCount as 2 | 3 | 4 | 6 | 8}
+        showProductCount={false}
+      />
+    );
+  };
+
   return (
     <div className="bg-white min-h-screen pb-20 md:pb-0" ref={contentRef}>
       {/* Hero Header with Gradient and Tabs */}
@@ -336,6 +394,13 @@ export default function Home() {
 
       {/* LOWEST PRICES EVER Section */}
       <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
+
+      {/* Unlimited Fashion Section */}
+      {unlimitedFashionSection && (
+        <div className="bg-white">
+          {renderHomeSection(unlimitedFashionSection)}
+        </div>
+      )}
 
       {/* Veg / Non-veg Filter Toggle - Only for food section */}
       {isFoodCategory && (
@@ -376,59 +441,7 @@ export default function Home() {
         {/* Dynamic Home Sections - Render sections created by admin */}
         {filteredHomeSections && filteredHomeSections.length > 0 && (
           <>
-            {filteredHomeSections.map((section: any) => {
-              const columnCount = Number(section.columns) || 4;
-
-              if (section.displayType === "products" && section.data && section.data.length > 0) {
-                // Strict column mapping as requested - applies to ALL screen sizes including mobile
-                const gridClass = {
-                  2: "grid-cols-2",
-                  3: "grid-cols-3",
-                  4: "grid-cols-4",
-                  6: "grid-cols-6",
-                  8: "grid-cols-8"
-                }[columnCount] || "grid-cols-4";
-
-                // Use compact mode for 4 or more columns to fit content on mobile
-                const isCompact = columnCount >= 4;
-                const gapClass = columnCount >= 4 ? "gap-2" : "gap-3 md:gap-4";
-
-                return (
-                  <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
-                    {section.title && (
-                      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
-                        {section.title}
-                      </h2>
-                    )}
-                    <div className="px-4 md:px-6 lg:px-8">
-                      <div className={`grid ${gridClass} ${gapClass}`}>
-                        {section.data.map((product: any) => (
-                          <ProductCard
-                            key={product.id || product._id}
-                            product={product}
-                            categoryStyle={true}
-                            showBadge={true}
-                            showPackBadge={false}
-                            showStockInfo={false}
-                            compact={isCompact}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <CategoryTileSection
-                  key={section.id}
-                  title={section.title}
-                  tiles={section.data || []}
-                  columns={columnCount as 2 | 3 | 4 | 6 | 8}
-                  showProductCount={false}
-                />
-              );
-            })}
+            {otherHomeSections.map(renderHomeSection)}
           </>
         )}
 

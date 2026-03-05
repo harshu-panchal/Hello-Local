@@ -369,10 +369,7 @@ ProductSchema.pre("save", function (next) {
 
 // Indexes for faster queries
 ProductSchema.index({ seller: 1, status: 1 });
-ProductSchema.index({ category: 1 });
-ProductSchema.index({ subcategory: 1 });
 ProductSchema.index({ brand: 1 });
-ProductSchema.index({ status: 1 });
 ProductSchema.index({ publish: 1 });
 // Compound indexes for common queries
 ProductSchema.index({ status: 1, publish: 1 }); // For getProducts

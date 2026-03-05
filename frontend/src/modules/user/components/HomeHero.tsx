@@ -65,7 +65,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             return true;
           });
           setTabs(deduped);
-          
+
           // Let the parent know the actual label of the current tab on load
           const active = deduped.find(t => t.id === activeTab);
           if (active && onTabChange) {
@@ -92,7 +92,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
 
   const [isListening, setIsListening] = useState(false);
 
-  // Voice Search Logic
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const startVoiceSearch = (e: React.MouseEvent) => {
     e.stopPropagation();
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -129,6 +130,23 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     };
 
     recognition.start();
+  };
+
+  const handleCameraClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        sessionStorage.setItem('visualSearchImage', reader.result as string);
+        navigate(`/search?visual=true`);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Format location display text - only show if user has provided location
@@ -332,7 +350,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   };
 
   const theme = getTheme(activeTab || 'all');
-  const heroGradient = `linear-gradient(to bottom right, ${theme.primary[0]}, ${theme.primary[1]}, ${theme.primary[2]})`;
+  const heroGradient = `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`;
 
   // Helper to convert RGB to RGBA
   const rgbToRgba = (rgb: string, alpha: number) => {
@@ -349,6 +367,14 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         transition: 'background 0.3s ease-out',
       }}
     >
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+      />
       {/* Top section with delivery info and buttons - NOT sticky */}
       <div>
         <div ref={topSectionRef} className="px-4 md:px-6 lg:px-8 pt-3 md:pt-4 pb-1">
@@ -401,13 +427,11 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         className="sticky top-0 z-50"
         style={{
           ...(scrollProgress >= 0.1 && {
-            background: `linear-gradient(to bottom right,
-              ${rgbToRgba(theme.primary[0], 1 - scrollProgress)},
-              ${rgbToRgba(theme.primary[1], 1 - scrollProgress)},
-              ${rgbToRgba(theme.primary[2], 1 - scrollProgress)}),
-              rgba(255, 255, 255, ${scrollProgress})`,
+            background: scrollProgress > 0.05
+              ? `linear-gradient(135deg, rgba(255,138,61,${1 - scrollProgress}), rgba(255,46,122,${1 - scrollProgress}), rgba(255,194,51,${1 - scrollProgress})), rgba(255,255,255,${scrollProgress})`
+              : 'transparent',
             boxShadow: `0 4px 6px -1px rgba(0, 0, 0, ${scrollProgress * 0.1})`,
-            transition: 'background 0.1s ease-out, box-shadow 0.1s ease-out',
+            transition: 'background 0.15s ease-out, box-shadow 0.15s ease-out',
           }),
         }}
       >
@@ -484,6 +508,17 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                     <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  onClick={handleCameraClick}
+                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 md:hidden text-neutral-600"
+                  aria-label="Camera Search"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2.5" />
+                    <path d="M9 5l-1.5 2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-3.5L15 5H9z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="18" cy="9" r="1.2" fill="currentColor" />
                   </svg>
                 </button>
               </div>

@@ -44,27 +44,27 @@ export interface IOrder extends Document {
 
   // Order Status
   status:
-    | "Received"
-    | "Accepted"
-    | "Pending"
-    | "Processed"
-    | "Shipped"
-    | "Picked up"
-    | "On the way"
-    | "Out for Delivery"
-    | "Delivered"
-    | "Cancelled"
-    | "Rejected"
-    | "Returned";
+  | "Received"
+  | "Accepted"
+  | "Pending"
+  | "Processed"
+  | "Shipped"
+  | "Picked up"
+  | "On the way"
+  | "Out for Delivery"
+  | "Delivered"
+  | "Cancelled"
+  | "Rejected"
+  | "Returned";
 
   // Delivery Assignment
   deliveryBoy?: mongoose.Types.ObjectId;
   deliveryBoyStatus?:
-    | "Assigned"
-    | "Picked Up"
-    | "In Transit"
-    | "Delivered"
-    | "Failed";
+  | "Assigned"
+  | "Picked Up"
+  | "In Transit"
+  | "Delivered"
+  | "Failed";
   assignedAt?: Date;
 
   // Tracking
@@ -385,7 +385,7 @@ OrderSchema.index({ customer: 1, orderDate: -1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ orderDate: -1 });
 OrderSchema.index({ deliveryBoy: 1 });
-OrderSchema.index({ orderNumber: 1 });
+
 
 const Order =
   (mongoose.models.Order as mongoose.Model<IOrder>) ||

@@ -423,19 +423,33 @@ export default function AppLayout({ children }: AppLayoutProps) {
                       className={`w-full px-4 py-2.5 pl-10 pr-12 bg-neutral-50 border border-neutral-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent md:py-3 transition-all ${isListening ? 'ring-2 ring-rose-500 border-transparent text-rose-600 font-bold' : ''}`}
                     />
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">🔍</span>
-                    <button
-                      onClick={startVoiceSearch}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isListening
-                        ? 'bg-rose-500 text-white shadow-lg animate-pulse'
-                        : 'text-neutral-500 hover:bg-neutral-100'
-                        }`}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor" />
-                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        onClick={startVoiceSearch}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isListening
+                          ? 'bg-rose-500 text-white shadow-lg animate-pulse'
+                          : 'text-neutral-500 hover:bg-neutral-100'
+                          }`}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor" />
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+
+                      <button
+                        onClick={handleCameraClick}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:bg-neutral-100 transition-all md:hidden"
+                        aria-label="Camera Search"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2.5" />
+                          <path d="M9 5l-1.5 2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-3.5L15 5H9z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <circle cx="18" cy="9" r="1.2" fill="currentColor" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -506,21 +520,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   onClick={handleCameraClick}
                   className="absolute left-1/2 -translate-x-1/2 -top-7 z-20 w-12 h-12 rounded-full text-black flex items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.28)] border-2 border-white/15 active:scale-95 transition-all"
                   style={{
-                    background: `linear-gradient(135deg, ${currentTheme.primary[0]}, ${currentTheme.primary[1]})`
+                    background: `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`
                   }}
                   aria-label="Camera Search"
                 >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M9 5l-1.5 2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-3.5L15 5H9z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="18" cy="9" r="1.2" fill="currentColor" />
-                  </svg>
+                  <div className="flex flex-col items-center justify-center -mt-1 leading-tight text-black drop-shadow-sm">
+                    <span className="text-[10px] font-medium tracking-wide lowercase">local</span>
+                    <span className="text-[14px] font-black tracking-widest uppercase mt-[1px]">SETU</span>
+                  </div>
                 </button>
 
                 <div
                   className="h-16 rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.32)] border border-white/10 px-2.5 flex items-end pb-2"
                   style={{
-                    background: `linear-gradient(to right, ${currentTheme.primary[0]}, ${currentTheme.primary[1]})`
+                    background: `linear-gradient(to right, #FF8A3D, #FF2E7A, #FFC233)`
                   }}
                 >
                   <div className="absolute left-1/2 -translate-x-1/2 -top-px w-16 h-8 bg-transparent overflow-hidden pointer-events-none">
