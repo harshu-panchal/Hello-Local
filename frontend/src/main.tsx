@@ -35,20 +35,52 @@ function SplashWrapper() {
         height: '100vh',
         background: 'linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 99999,
-        animation: 'fadeOut 0.5s ease-in-out 2s forwards'
+        animation: 'fadeOut 0.5s ease-in-out 2s forwards',
+        padding: '20px',
+        boxSizing: 'border-box'
       }}>
-        <img
-          src="/splash.png"
-          alt="Hello Local Splash"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain'
-          }}
-        />
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '15px'
+        }}>
+          <img
+            src="/logo.png"
+            alt="Hello Local Logo"
+            style={{
+              width: '120px',
+              height: '120px',
+              objectFit: 'contain',
+              marginBottom: '10px'
+            }}
+          />
+          <div style={{
+            color: '#FFFFFF',
+            fontSize: '32px',
+            fontWeight: '700',
+            fontFamily: "'Poppins', sans-serif",
+            textAlign: 'center',
+            textShadow: '0px 2px 4px rgba(0,0,0,0.1)'
+          }}>
+            Hello Local
+          </div>
+          <div style={{
+            color: '#FFFFFF',
+            fontSize: '16px',
+            fontWeight: '400',
+            fontFamily: "'Poppins', sans-serif",
+            textAlign: 'center',
+            opacity: 0.9
+          }}>
+            India's Own Hyperlocal Marketplace
+          </div>
+        </div>
       </div>
     );
   }
