@@ -6,6 +6,8 @@ import AdPopupAutoWidget from '../modules/user/components/AdPopupAutoWidget';
 import { useLocation as useLocationContext } from '../hooks/useLocation';
 import LocationPermissionRequest from './LocationPermissionRequest';
 import { useThemeContext } from '../context/ThemeContext';
+import { getCategoryGradient } from '../utils/themes';
+import { getLenis } from '../utils/smoothScroll';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -22,7 +24,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { isLocationEnabled, isLocationLoading, location: userLocation } = useLocationContext();
   const [showLocationRequest, setShowLocationRequest] = useState(false);
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
-  const { currentTheme } = useThemeContext();
+  const { currentTheme, activeCategory } = useThemeContext();
   const [isListening, setIsListening] = useState(false);
 
   // Voice Search Logic
@@ -232,16 +234,28 @@ export default function AppLayout({ children }: AppLayoutProps) {
     const mainElement = mainRef.current;
     lastScrollY.current = getCurrentScrollY();
 
+    const lenis = getLenis();
+
+    if (lenis) {
+      lenis.on('scroll', handleScroll);
+    } else {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
     if (mainElement) {
       mainElement.addEventListener('scroll', handleScroll, { passive: true });
     }
-    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
+      if (lenis) {
+        lenis.off('scroll', handleScroll);
+      } else {
+        window.removeEventListener('scroll', handleScroll);
+      }
+
       if (mainElement) {
         mainElement.removeEventListener('scroll', handleScroll);
       }
-      window.removeEventListener('scroll', handleScroll);
     };
   }, []);
 
@@ -520,7 +534,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   onClick={() => navigate('/local-setu')}
                   className="absolute left-1/2 -translate-x-1/2 -top-7 z-20 w-12 h-12 rounded-full text-black flex items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.28)] border-2 border-white/15 active:scale-95 transition-all"
                   style={{
-                    background: `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`
+                    background: getCategoryGradient(activeCategory)
                   }}
                   aria-label="Local Setu Services"
                 >
@@ -533,7 +547,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <div
                   className="h-16 rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.32)] border border-white/10 px-2.5 flex items-end pb-2"
                   style={{
-                    background: `linear-gradient(to right, #FF8A3D, #FF2E7A, #FFC233)`
+                    background: getCategoryGradient(activeCategory)
                   }}
                 >
                   <div className="absolute left-1/2 -translate-x-1/2 -top-px w-16 h-8 bg-transparent overflow-hidden pointer-events-none">

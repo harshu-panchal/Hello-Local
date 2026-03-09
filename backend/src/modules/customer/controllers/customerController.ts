@@ -18,7 +18,7 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   const customer = await Customer.findById(userId);
 
   if (!customer) {
-    return res.status(404).json({
+    return res.status(401).json({
       success: false,
       message: "Customer not found",
     });
@@ -69,7 +69,7 @@ export const updateProfile = asyncHandler(
     const customer = await Customer.findById(userId);
 
     if (!customer) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
         message: "Customer not found",
       });
@@ -155,7 +155,7 @@ export const updateLocation = asyncHandler(
     const customer = await Customer.findById(userId);
 
     if (!customer) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
         message: "Customer not found",
       });
@@ -206,7 +206,7 @@ export const getLocation = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (!customer) {
-    return res.status(404).json({
+    return res.status(401).json({
       success: false,
       message: "Customer not found",
     });

@@ -2,7 +2,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useLayoutEffect, useRef, useState, useEffect, useMemo } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { getTheme } from '../../../utils/themes';
+import { getTheme, getCategoryGradient } from '../../../utils/themes';
+import { getLenis } from '../../../utils/smoothScroll';
 import { useLocation } from '../../../hooks/useLocation';
 import { getCategories } from '../../../services/api/customerProductService';
 import { Category } from '../../../types/domain';
@@ -270,10 +271,22 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       }
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    const lenis = getLenis();
+    if (lenis) {
+      lenis.on('scroll', handleScroll);
+    } else {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
     handleScroll(); // Check initial state
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      if (lenis) {
+        lenis.off('scroll', handleScroll);
+      } else {
+        window.removeEventListener('scroll', handleScroll);
+      }
+    };
   }, []);
 
   // Update sliding indicator position when activeTab changes and scroll to active tab
@@ -350,11 +363,36 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   };
 
   const theme = getTheme(activeTab || 'all');
-  const heroGradient = `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`;
+  const activeTabDetails = tabs.find(t => t.id === activeTab);
+  const heroGradient = getCategoryGradient(activeTab || 'all', activeTabDetails?.label);
 
-  // Helper to convert RGB to RGBA
-  const rgbToRgba = (rgb: string, alpha: number) => {
-    return rgb.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+  // Helper to convert hex to RGB
+  const hexToRgb = (hex: string) => {
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) {
+      r = parseInt(hex.substring(1, 3), 16);
+      g = parseInt(hex.substring(3, 5), 16);
+      b = parseInt(hex.substring(5, 7), 16);
+    }
+    return `${r}, ${g}, ${b}`;
+  };
+
+  const getStickyBackground = () => {
+    if (scrollProgress <= 0.05) return 'transparent';
+    const bgOpacity = 1 - scrollProgress;
+
+    // If it's the default gradient
+    if (heroGradient.includes('linear-gradient')) {
+      return `linear-gradient(135deg, rgba(255,138,61,${bgOpacity}), rgba(255,46,122,${bgOpacity}), rgba(255,194,51,${bgOpacity})), rgba(255,255,255,${scrollProgress})`;
+    }
+
+    // Otherwise it's a hex code
+    const rgb = hexToRgb(heroGradient);
+    return `linear-gradient(rgba(${rgb}, ${bgOpacity}), rgba(${rgb}, ${bgOpacity})), rgba(255,255,255,${scrollProgress})`;
   };
 
   return (
@@ -427,9 +465,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         className="sticky top-0 z-50"
         style={{
           ...(scrollProgress >= 0.1 && {
-            background: scrollProgress > 0.05
-              ? `linear-gradient(135deg, rgba(255,138,61,${1 - scrollProgress}), rgba(255,46,122,${1 - scrollProgress}), rgba(255,194,51,${1 - scrollProgress})), rgba(255,255,255,${scrollProgress})`
-              : 'transparent',
+            background: getStickyBackground(),
             boxShadow: `0 4px 6px -1px rgba(0, 0, 0, ${scrollProgress * 0.1})`,
             transition: 'background 0.15s ease-out, box-shadow 0.15s ease-out',
           }),

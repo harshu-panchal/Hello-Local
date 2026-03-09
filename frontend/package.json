@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
+    "@studio-freight/lenis": "^1.0.42",
     "apexcharts": "^5.3.6",
     "axios": "^1.13.2",
     "clsx": "^2.1.0",

@@ -2,8 +2,7 @@ import { useRef, useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getProducts } from '../../../services/api/customerProductService';
-
-import { getTheme } from '../../../utils/themes';
+import { getTheme, getCategoryGradient } from '../../../utils/themes';
 import { useCart } from '../../../context/CartContext';
 import { Product } from '../../../types/domain';
 import { useWishlist } from '../../../hooks/useWishlist';
@@ -434,7 +433,7 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
     <div
       className="relative"
       style={{
-        background: `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`,
+        background: getCategoryGradient(activeTab),
         marginTop: '0px',
         paddingTop: '12px',
         paddingBottom: '16px',

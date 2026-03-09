@@ -19,6 +19,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import RouteTransition from "./components/RouteTransition";
 import { useEffect } from "react";
 import { initializePushNotifications, setupForegroundNotificationHandler } from "./services/pushNotificationService";
+import { initSmoothScroll } from "./utils/smoothScroll";
 
 // Critical routes - load immediately (Home, Cart, Checkout)
 import Home from "./modules/user/Home";
@@ -147,6 +148,7 @@ const SellerAdRequests = lazy(() => import("./modules/seller/pages/SellerAdReque
 function App() {
   // Initialize push notifications on app load
   useEffect(() => {
+    initSmoothScroll();
     initializePushNotifications();
 
     // Setup foreground notification handler

@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import HomeHero from "./components/HomeHero";
-import ShopAdCarousel from "./components/ShopAdCarousel";
-import LowestPricesEver from "./components/LowestPricesEver";
-import CategoryTileSection from "./components/CategoryTileSection";
-import FeaturedThisWeek from "./components/FeaturedThisWeek";
-import ProductCard from "./components/ProductCard";
 import { getHomeContent } from "../../services/api/customerHomeService";
 import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryService";
 import { useLocation } from "../../hooks/useLocation";
 import { useLoading } from "../../context/LoadingContext";
 import PageLoader from "../../components/PageLoader";
+
+const ShopAdCarousel = React.lazy(() => import("./components/ShopAdCarousel"));
+const LowestPricesEver = React.lazy(() => import("./components/LowestPricesEver"));
+const CategoryTileSection = React.lazy(() => import("./components/CategoryTileSection"));
+const FeaturedThisWeek = React.lazy(() => import("./components/FeaturedThisWeek"));
+const ProductCard = React.lazy(() => import("./components/ProductCard"));
 
 import { useThemeContext } from "../../context/ThemeContext";
 
@@ -390,10 +391,14 @@ export default function Home() {
       {/* Empty space since toggle was moved */}
 
       {/* Shop Ad Carousel - Sponsored Shop Ads */}
-      <ShopAdCarousel />
+      <Suspense fallback={<div className="h-40 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
+        <ShopAdCarousel />
+      </Suspense>
 
       {/* LOWEST PRICES EVER Section */}
-      <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
+      <Suspense fallback={<div className="h-40 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
+        <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
+      </Suspense>
 
       {/* Unlimited Fashion Section */}
       {unlimitedFashionSection && (
@@ -455,14 +460,15 @@ export default function Home() {
             <div className="px-4 md:px-6 lg:px-8">
               <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
                 {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    categoryStyle={true}
-                    showBadge={true}
-                    showPackBadge={false}
-                    showStockInfo={true}
-                  />
+                  <Suspense fallback={<div className="h-40 bg-white border border-neutral-100 rounded-lg"></div>} key={product.id}>
+                    <ProductCard
+                      product={product}
+                      categoryStyle={true}
+                      showBadge={true}
+                      showPackBadge={false}
+                      showStockInfo={true}
+                    />
+                  </Suspense>
                 ))}
               </div>
             </div>
@@ -497,7 +503,9 @@ export default function Home() {
             </div>
 
             {/* Featured this week Section */}
-            <FeaturedThisWeek />
+            <Suspense fallback={<div className="h-60 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
+              <FeaturedThisWeek />
+            </Suspense>
 
             {/* Shop by Store Section */}
             <div className="mb-6 mt-6 md:mb-8 md:mt-8">
@@ -532,6 +540,7 @@ export default function Home() {
                               }
                               alt={tile.name}
                               className="w-full h-16 object-cover"
+                              loading="lazy"
                             />
                           ) : (
                             <div
