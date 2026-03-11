@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { getProfile, CustomerProfile } from '../../services/api/customerService';
+import { useAuth } from '../../context/AuthContext';
+import { useThemeContext } from '../../context/ThemeContext';
+import { getCategoryGradient } from '../../utils/themes';
 
 export default function Account() {
   const navigate = useNavigate();
@@ -11,6 +13,7 @@ export default function Account() {
   const [error, setError] = useState('');
   const [showGstModal, setShowGstModal] = useState(false);
   const [gstNumber, setGstNumber] = useState('');
+  const { activeCategory, currentTheme } = useThemeContext();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -61,7 +64,10 @@ export default function Account() {
   if (!user) {
     return (
       <div className="pb-24 md:pb-8 bg-white min-h-screen">
-        <div className="bg-gradient-to-b from-green-200 via-green-100 to-white pb-6 md:pb-8 pt-12 md:pt-16">
+        <div 
+          className="pb-6 md:pb-8 pt-12 md:pt-16"
+          style={{ background: getCategoryGradient(activeCategory) }}
+        >
           <div className="px-4 md:px-6 lg:px-8">
             <button onClick={() => navigate(-1)} className="mb-4 text-neutral-900" aria-label="Back">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -85,7 +91,8 @@ export default function Account() {
           <div className="max-w-md mx-auto space-y-3">
             <button
               onClick={() => navigate('/login')}
-              className="w-full py-3.5 rounded-lg font-semibold text-base bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-lg shadow-teal-500/20"
+              className="w-full py-3.5 rounded-lg font-semibold text-base text-white transition-all shadow-lg active:scale-95"
+              style={{ background: getCategoryGradient(activeCategory) }}
             >
               Login
             </button>
@@ -99,7 +106,7 @@ export default function Account() {
     return (
       <div className="pb-24 md:pb-8 bg-white min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: currentTheme.accentColor }}></div>
           <p className="text-neutral-600">Loading profile...</p>
         </div>
       </div>
@@ -111,7 +118,11 @@ export default function Account() {
       <div className="pb-24 md:pb-8 bg-white min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
-          <button onClick={() => navigate(-1)} className="px-4 py-2 bg-teal-600 text-white rounded">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="px-4 py-2 text-white rounded transition-all active:scale-95 shadow-md"
+            style={{ background: getCategoryGradient(activeCategory) }}
+          >
             Go Back
           </button>
         </div>
@@ -125,7 +136,10 @@ export default function Account() {
 
   return (
     <div className="pb-24 md:pb-8 bg-white min-h-screen">
-      <div className="bg-gradient-to-b from-green-200 via-green-100 to-white pb-6 md:pb-8 pt-12 md:pt-16">
+      <div 
+        className="pb-6 md:pb-8 pt-12 md:pt-16"
+        style={{ background: getCategoryGradient(activeCategory) }}
+      >
         <div className="px-4 md:px-6 lg:px-8">
           <button onClick={() => navigate(-1)} className="mb-4 text-neutral-900" aria-label="Back">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -226,8 +240,22 @@ export default function Account() {
                 <h3 className="text-xl font-bold text-neutral-900 mb-2">Add GST Details</h3>
                 <p className="text-[13px] text-neutral-500 mb-8 px-4">Identify your business to get a GST invoice on your business purchases.</p>
                 <form onSubmit={handleGstSubmit} className="space-y-4">
-                  <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="Enter GST Number" className="w-full rounded-xl border border-neutral-200 px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all" />
-                  <button type="submit" disabled={!gstNumber.trim()} className="w-full rounded-xl bg-teal-600 text-white font-bold py-4 hover:bg-teal-700 disabled:opacity-50 transition-colors shadow-lg shadow-teal-500/20 uppercase tracking-wider text-sm">Save Details</button>
+                  <input 
+                    type="text" 
+                    value={gstNumber} 
+                    onChange={(e) => setGstNumber(e.target.value)} 
+                    placeholder="Enter GST Number" 
+                    className="w-full rounded-xl border border-neutral-200 px-4 py-3.5 text-sm focus:outline-none transition-all" 
+                    style={{ borderColor: currentTheme.accentColor + '20' }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!gstNumber.trim()} 
+                    className="w-full rounded-xl text-black font-bold py-4 disabled:opacity-50 transition-all active:scale-95 shadow-lg uppercase tracking-wider text-sm"
+                    style={{ background: getCategoryGradient(activeCategory) }}
+                  >
+                    Save Details
+                  </button>
                 </form>
                 <p className="mt-6 text-[11px] text-neutral-400">By continuing, you agree to our <span className="underline">Terms & Conditions</span></p>
               </div>

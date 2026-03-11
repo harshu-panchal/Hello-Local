@@ -170,7 +170,8 @@ export default function ProductCard({
     isOperationPendingRef.current = true;
 
     try {
-      await updateQuantity(((product as any).id || product._id) as string, inCartQty - 1);
+      const vId = (cartItem?.product as any)?.variantId || (cartItem?.product as any)?.selectedVariant?._id || cartItem?.variant;
+      await updateQuantity(((product as any).id || product._id) as string, inCartQty - 1, vId);
     } finally {
       // Reset the flag after the operation truly completes
       isOperationPendingRef.current = false;
@@ -195,7 +196,8 @@ export default function ProductCard({
 
     try {
       if (inCartQty > 0) {
-        await updateQuantity(((product as any).id || product._id) as string, inCartQty + 1);
+        const vId = (cartItem?.product as any)?.variantId || (cartItem?.product as any)?.selectedVariant?._id || cartItem?.variant;
+        await updateQuantity(((product as any).id || product._id) as string, inCartQty + 1, vId);
       } else {
         await addToCart(product, addButtonRef.current);
       }
