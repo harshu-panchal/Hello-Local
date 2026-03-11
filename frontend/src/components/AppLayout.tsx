@@ -26,6 +26,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
   const { currentTheme, activeCategory } = useThemeContext();
   const [isListening, setIsListening] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Chat message state (for demo functionality)
+  const [messages, setMessages] = useState([
+    { id: 1, text: "Hello! How can I help you today?", isBot: true },
+  ]);
+  const [inputText, setInputText] = useState("");
 
   // Voice Search Logic
   const startVoiceSearch = () => {
@@ -463,6 +470,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           <circle cx="18" cy="9" r="1.2" fill="currentColor" />
                         </svg>
                       </button>
+                      <button
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:bg-neutral-100 transition-all"
+                        aria-label="Language Option"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                          <path d="M2.5 12h19M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" strokeWidth="2" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -593,6 +609,139 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </div>
             </motion.nav>
           )}
+
+          {/* Chatbot Floating Button & Window */}
+          <div className="fixed bottom-24 right-4 z-50 md:bottom-10 md:right-10 flex flex-col items-end gap-4">
+            {/* Chat Window */}
+            <AnimatePresence>
+              {isChatOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                  className="w-[320px] md:w-[380px] h-[450px] md:h-[500px] bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-hidden flex flex-col mb-2"
+                >
+                  {/* Header */}
+                  <div 
+                    className="p-4 flex items-center justify-between text-black shadow-sm"
+                    style={{ background: getCategoryGradient(activeCategory) }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm">Hello Local Helper</h3>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse border border-white/20" />
+                          <span className="text-[10px] font-medium opacity-80">Online & Ready</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setIsChatOpen(false)}
+                      className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Messages Area */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
+                    {messages.map((msg) => (
+                      <div key={msg.id} className={`flex ${msg.isBot ? 'justify-start' : 'justify-end'}`}>
+                        <div 
+                          className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
+                            msg.isBot 
+                              ? 'bg-white border border-neutral-100 text-neutral-800 rounded-tl-none' 
+                              : 'bg-neutral-900 text-white rounded-tr-none'
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Input Area */}
+                  <div className="p-4 bg-white border-t border-neutral-100">
+                    <form 
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!inputText.trim()) return;
+                        const newMsg = { id: Date.now(), text: inputText, isBot: false };
+                        setMessages([...messages, newMsg]);
+                        setInputText("");
+                        // Simple bot response simulation
+                        setTimeout(() => {
+                          setMessages(prev => [...prev, { 
+                            id: Date.now() + 1, 
+                            text: `Thanks for your message: "${newMsg.text}". An agent will be with you shortly!`, 
+                            isBot: true 
+                          }]);
+                        }, 1000);
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <input
+                        type="text"
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder="Type a message..."
+                        className="flex-1 px-4 py-2 bg-neutral-100 border-none rounded-full text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      />
+                      <button 
+                        type="submit"
+                        className="p-2.5 rounded-full text-white shadow-md active:scale-90 transition-all"
+                        style={{ background: getCategoryGradient(activeCategory) }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5">
+                          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                        </svg>
+                      </button>
+                    </form>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Toggle Button */}
+            <button
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="w-12 h-12 md:w-14 md:h-14 rounded-full text-black flex items-center justify-center shadow-xl hover:shadow-2xl transition-all active:scale-95 group border-2 border-white/20"
+              style={{ background: getCategoryGradient(activeCategory) }}
+              aria-label="Chatbot"
+            >
+              <AnimatePresence mode="wait">
+                {isChatOpen ? (
+                  <motion.svg 
+                    key="close"
+                    initial={{ opacity: 0, rotate: -90 }}
+                    animate={{ opacity: 1, rotate: 0 }}
+                    exit={{ opacity: 0, rotate: 90 }}
+                    width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </motion.svg>
+                ) : (
+                  <motion.svg 
+                    key="chat"
+                    initial={{ opacity: 0, rotate: 90 }}
+                    animate={{ opacity: 1, rotate: 0 }}
+                    exit={{ opacity: 0, rotate: -90 }}
+                    className="group-hover:rotate-12 transition-transform md:w-7 md:h-7"
+                    width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </motion.svg>
+                )}
+              </AnimatePresence>
+            </button>
+          </div>
         </div>
       </div>
     </div >

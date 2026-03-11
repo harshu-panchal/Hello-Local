@@ -546,7 +546,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                <button
+        <button
                   onClick={handleCameraClick}
                   className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 md:hidden text-neutral-600"
                   aria-label="Camera Search"
@@ -555,6 +555,15 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2.5" />
                     <path d="M9 5l-1.5 2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-3.5L15 5H9z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                     <circle cx="18" cy="9" r="1.2" fill="currentColor" />
+                  </svg>
+                </button>
+                <button
+                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 text-neutral-600"
+                  aria-label="Language Option"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                    <path d="M2.5 12h19M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" strokeWidth="2" />
                   </svg>
                 </button>
               </div>
