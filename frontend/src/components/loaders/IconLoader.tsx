@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import Lottie from 'lottie-react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLoading } from '../../context/LoadingContext';
 import { useThemeContext } from '../../context/ThemeContext';
@@ -12,7 +11,6 @@ interface IconLoaderProps {
 const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false }) => {
   const { isRouteLoading } = useLoading();
   const show = isRouteLoading || forceShow;
-  const [animationData, setAnimationData] = useState<any>(null);
 
   let currentTheme;
   try {
@@ -23,14 +21,7 @@ const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false }) => {
     // Defaulting to "all" theme colors implicitly by leaving variables unset.
   }
 
-  useEffect(() => {
-    if (show && !animationData) {
-      fetch('/animations/loading.json')
-        .then(res => res.json())
-        .then(data => setAnimationData(data))
-        .catch(err => console.error('Failed to load animation:', err));
-    }
-  }, [show, animationData]);
+  const accentColor = currentTheme?.primary?.[0] || '#16a34a';
 
   return (
     <AnimatePresence>
@@ -38,25 +29,19 @@ const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false }) => {
         <motion.div
           className="global-loader-overlay"
           style={{
-            '--loader-color-1': currentTheme?.primary?.[0] || '#FFCCCC',
-            '--loader-color-2': currentTheme?.primary?.[1] || '#FFCCFF',
+            '--loader-accent': accentColor,
           } as React.CSSProperties}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.2 }}
+          role="status"
+          aria-label="Loading"
         >
           <div className="loader-container">
-            <div className="lottie-wrapper">
-              {animationData ? (
-                <Lottie
-                  animationData={animationData}
-                  loop={true}
-                  className="loader-lottie"
-                />
-              ) : (
-                <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
-              )}
+            <div className="simple-loader-card">
+              <div className="simple-spinner" />
+              <span className="loader-text">Loading</span>
             </div>
           </div>
         </motion.div>

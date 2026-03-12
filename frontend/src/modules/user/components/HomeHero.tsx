@@ -92,8 +92,17 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
   const [isListening, setIsListening] = useState(false);
+  const languageOptions = [
+    { code: 'en', label: 'English' },
+    { code: 'hi', label: 'Hindi' },
+    { code: 'es', label: 'Spanish' },
+  ];
+  const [selectedLanguageCode, setSelectedLanguageCode] = useState('en');
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
+  const languageButtonRef = useRef<HTMLButtonElement>(null);
 
   const startVoiceSearch = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -149,6 +158,46 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       reader.readAsDataURL(file);
     }
   };
+
+  const selectedLanguage = languageOptions.find((l) => l.code === selectedLanguageCode) || languageOptions[0];
+
+  const toggleLanguageMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsLanguageMenuOpen((prev) => !prev);
+  };
+
+  const handleLanguageSelect = (code: string) => {
+    setSelectedLanguageCode(code);
+    setIsLanguageMenuOpen(false);
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('hl-language');
+    if (saved && languageOptions.some((l) => l.code === saved)) {
+      setSelectedLanguageCode(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('hl-language', selectedLanguageCode);
+  }, [selectedLanguageCode]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isLanguageMenuOpen &&
+        languageMenuRef.current &&
+        languageButtonRef.current &&
+        !languageMenuRef.current.contains(event.target as Node) &&
+        !languageButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsLanguageMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isLanguageMenuOpen]);
 
   // Format location display text - only show if user has provided location
   const locationDisplayText = useMemo(() => {
@@ -525,7 +574,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   })
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 flex-shrink-0 relative">
                 <button
                   onClick={startVoiceSearch}
                   className={`w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${isListening
@@ -546,9 +595,9 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     <path d="M12 19v4M8 23h8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-        <button
+                <button
                   onClick={handleCameraClick}
-                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 md:hidden text-neutral-600"
+                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 text-neutral-600"
                   aria-label="Camera Search"
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -558,14 +607,47 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   </svg>
                 </button>
                 <button
-                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 text-neutral-600"
+                  ref={languageButtonRef}
+                  onClick={toggleLanguageMenu}
+                  className={`w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 text-neutral-600 relative ${isLanguageMenuOpen ? 'ring-2 ring-neutral-200' : ''}`}
                   aria-label="Language Option"
+                  aria-haspopup="menu"
+                  aria-expanded={isLanguageMenuOpen}
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
                     <path d="M2.5 12h19M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" strokeWidth="2" />
                   </svg>
+                  <span className="absolute -bottom-2 right-0 text-[10px] font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-full px-1 leading-none shadow-sm">
+                    {selectedLanguage.code.toUpperCase()}
+                  </span>
                 </button>
+
+                {isLanguageMenuOpen && (
+                  <div
+                    ref={languageMenuRef}
+                    className="absolute right-0 top-[115%] w-40 bg-white border border-neutral-200 rounded-xl shadow-lg py-2 z-50"
+                    role="menu"
+                  >
+                    {languageOptions.map((lang) => {
+                      const isActive = lang.code === selectedLanguageCode;
+                      return (
+                        <button
+                          key={lang.code}
+                          role="menuitem"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLanguageSelect(lang.code);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-neutral-50 ${isActive ? 'text-neutral-900 font-semibold bg-neutral-50' : 'text-neutral-700'}`}
+                        >
+                          <span>{lang.label}</span>
+                          <span className="text-[11px] font-bold text-neutral-500">{lang.code.toUpperCase()}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
