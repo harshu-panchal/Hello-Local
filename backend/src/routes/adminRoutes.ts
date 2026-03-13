@@ -77,6 +77,9 @@ import * as promoStripController from "../modules/admin/controllers/adminPromoSt
 // Shop Ad Controllers
 import * as shopAdController from "../modules/admin/controllers/adminShopAdController";
 
+// Contact Controllers
+import * as contactController from "../modules/website/controllers/contactController";
+
 const router = Router();
 
 // All routes require admin authentication
@@ -365,5 +368,9 @@ router.put("/shop-ads/:id", shopAdController.updateShopAd);
 router.delete("/shop-ads/:id", shopAdController.deleteShopAd);
 router.patch("/shop-ads/:id/toggle", shopAdController.toggleShopAdStatus);
 router.put("/shop-ads/reorder", shopAdController.reorderShopAds);
+
+// ==================== Contact Inquiry Routes ====================
+router.get("/contact-inquiries", contactController.getContactInquiries);
+router.post("/contact-inquiries/reply", contactController.replyToContactInquiry);
 
 export default router;

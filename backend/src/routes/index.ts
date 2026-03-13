@@ -38,6 +38,9 @@ import adminWithdrawalRoutes from "./adminWithdrawalRoutes";
 import { getActiveShopAds } from "../modules/admin/controllers/adminShopAdController";
 import * as sellerAdRequestController from "../modules/seller/controllers/sellerAdRequestController";
 import * as adminAdRequestController from "../modules/admin/controllers/adminAdRequestController";
+import websiteRoutes from "../modules/website/routes/websiteRoutes";
+import { submitContactForm } from "../modules/website/controllers/contactController";
+
 
 import {
   createOrder,
@@ -60,6 +63,12 @@ router.get("/health", (_req, res) => {
 
 // Public route for shop ads carousel (no auth required)
 router.get("/shop-ads/active", getActiveShopAds);
+
+// Website routes
+router.use("/website", websiteRoutes);
+router.post("/contact", submitContactForm);
+
+
 
 // Authentication routes
 router.use("/auth/admin", adminAuthRoutes);
