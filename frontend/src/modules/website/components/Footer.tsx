@@ -1,4 +1,48 @@
+import React, { useState } from 'react';
+import api from '../../../services/api/config';
+import { useToast } from '../../../context/ToastContext';
+import { motion, AnimatePresence } from 'framer-motion';
+
 const Footer = () => {
+    const { showToast } = useToast();
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        message: ''
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            const response = await api.post('/contact', formData);
+            if (response.data.success) {
+                showToast('Message sent successfully!', 'success');
+                setFormData({ name: '', email: '', message: '' });
+            }
+        } catch (error: any) {
+            console.error('Error sending message:', error);
+            showToast(error.response?.data?.message || 'Failed to send message', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            [e.target.name]: e.target.value
+        }));
+    };
+
+    const socialLinks: Record<string, string> = {
+        instagram: 'https://www.instagram.com/hellolocal.in?igsh=eWp2cW9qMzd1N29p',
+        twitter: '#',
+        linkedin: '#',
+        github: '#'
+    };
+
     return (
       <footer className="bg-neutral-900 text-white pt-24 pb-12 overflow-hidden relative">
         {/* Background Gradient Blob */}
@@ -27,7 +71,9 @@ const Footer = () => {
                 {['instagram', 'twitter', 'linkedin', 'github'].map((social) => (
                   <a 
                     key={social} 
-                    href="#" 
+                    href={socialLinks[social]} 
+                    target={socialLinks[social] !== '#' ? '_blank' : undefined}
+                    rel={socialLinks[social] !== '#' ? 'noopener noreferrer' : undefined}
                     className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:gradient-bg transition-all group"
                   >
                      <img src={`https://cdn-icons-png.flaticon.com/512/2111/2111${social === 'instagram' ? '463' : social === 'twitter' ? '470' : social === 'linkedin' ? '476' : '432'}.png`} alt={social} className="w-5 h-5 invert opacity-60 group-hover:opacity-100 transition-opacity" />
@@ -58,25 +104,64 @@ const Footer = () => {
               </ul>
             </div>
   
-            {/* Contact Info */}
+            {/* Reach Us / Contact Form */}
             <div>
               <h4 className="text-xl font-bold mb-8">Reach Us</h4>
-              <ul className="space-y-4 text-neutral-400">
-                <li className="flex items-center gap-3">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                    support@hellolocal.com
-                </li>
-                <li className="flex items-center gap-3">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                    +1 (234) 567-890
+              <ul className="space-y-6 text-neutral-400">
+                <li>
+                    <a href="mailto:Hellolocal.in@gmail.com" className="flex items-center gap-3 hover:text-white transition-colors group">
+                        <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-[#ff3d8d]/10 transition-colors">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#ff3d8d]"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        </div>
+                        Hellolocal.in@gmail.com
+                    </a>
                 </li>
               </ul>
+
+              <div className="mt-8">
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Your Name"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all"
+                    required
+                  />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Your Email"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all"
+                    required
+                  />
+                  <textarea
+                    name="message"
+                    value={formData.message}
+                    onChange={handleChange}
+                    placeholder="Message"
+                    rows={3}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all resize-none"
+                    required
+                  ></textarea>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full btn-gradient py-3 rounded-lg font-bold text-sm shadow-lg shadow-[#ff3d8d]/20 hover:shadow-[#ff3d8d]/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Sending...' : 'Send Message'}
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
   
           {/* Bottom Bar */}
           <div className="pt-12 border-t border-white/10 flex flex-col md:row gap-6 justify-between items-center text-neutral-500 font-medium">
-            <p>© 2026 Hello Local. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Hello Local. All rights reserved.</p>
             <div className="flex gap-8">
                 <a href="#" className="hover:text-white transition-colors">Terms</a>
                 <a href="#" className="hover:text-white transition-colors">Privacy</a>
@@ -89,4 +174,4 @@ const Footer = () => {
   };
   
   export default Footer;
-  
+
