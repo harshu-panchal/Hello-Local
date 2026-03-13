@@ -144,6 +144,7 @@ const AdminPayments = lazy(() => import("./modules/admin/pages/AdminPayments"));
 const AdminWallet = lazy(() => import("./modules/admin/pages/AdminWallet"));
 const AdminBillingSettings = lazy(() => import("./modules/admin/pages/AdminBillingSettings"));
 const SellerAdRequests = lazy(() => import("./modules/seller/pages/SellerAdRequests"));
+const WebsiteHome = lazy(() => import("./modules/website/pages/WebsiteHome"));
 
 function App() {
   // Initialize push notifications on app load
@@ -365,6 +366,15 @@ function App() {
                             }
                           />
 
+                          <Route
+                            path="/"
+                            element={
+                              <Suspense fallback={<IconLoader forceShow />}>
+                                <WebsiteHome />
+                              </Suspense>
+                            }
+                          />
+
                           {/* Main App Routes */}
                           <Route
                             path="/*"
@@ -372,7 +382,7 @@ function App() {
                               <AppLayout>
                                 <Suspense fallback={<IconLoader forceShow />}>
                                   <Routes>
-                                    <Route path="/" element={<Home />} />
+                                    <Route path="/user" element={<Home />} />
                                     <Route path="/user/home" element={<Home />} />
                                     <Route path="/search" element={<Search />} />
                                     <Route path="/orders" element={<Orders />} />
