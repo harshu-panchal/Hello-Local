@@ -102,16 +102,21 @@ export const submitContactForm = async (req: Request, res: Response) => {
     });
 
     const mailOptions = {
-      from: `"${name}" <${email}>`,
-      to: 'Hellolocal.in@gmail.com',
+      from: process.env.EMAIL_USER,
+      to: process.env.DEFAULT_ADMIN_EMAIL || 'Hellolocal.in@gmail.com',
+      replyTo: email,
       subject: 'New Contact Message – HelloLocal',
       text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
     };
 
     try {
       if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        await transporter.sendMail(mailOptions);
-        console.log('Contact email sent successfully to admin');
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Contact email sent successfully to admin:', {
+          to: mailOptions.to,
+          subject: mailOptions.subject,
+          messageId: info.messageId,
+        });
       } else {
         console.warn('Email credentials missing, skipping email send.');
       }
