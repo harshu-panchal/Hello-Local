@@ -44,7 +44,7 @@ export const replyToContactInquiry = async (req: Request, res: Response) => {
   }
 };
 
-export const getContactInquiries = async (req: Request, res: Response) => {
+export const getContactInquiries = async (_req: Request, res: Response) => {
 
   try {
     const inquiries = await Contact.find().sort({ createdAt: -1 });
