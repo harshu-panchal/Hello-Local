@@ -41,6 +41,7 @@ export function initializeFirebaseAdmin() {
     } catch (error: any) {
         console.error('❌ Failed to initialize Firebase Admin SDK:', error.message);
         console.log('⚠️  Push notifications will not work until Firebase is properly configured');
+        // Do not throw, just log the error
     }
 }
 

@@ -167,7 +167,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Reset scroll position when navigating to any page (smooth, no flash)
   // BUT skip for Home page if there's a saved scroll position to restore
   useEffect(() => {
-    const isHomePage = location.pathname === '/' || location.pathname === '/user/home';
+    const isHomePage = location.pathname === '/' || location.pathname === '/user' || location.pathname === '/user/home';
 
     // Home page handles its own scroll restoration and reset logic
     if (isHomePage) {
@@ -294,24 +294,24 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 borderBottom: `1px solid ${currentTheme.primary[0]}`
               }}
             >
-              <Link to="/" className="flex items-center hover:opacity-90 transition-opacity">
+              <Link to="/user" className="flex items-center hover:opacity-90 transition-opacity">
                 <img src="/logo.png?v=4" alt="Hello Local" className="h-10 w-10 object-contain rounded-lg shadow-sm" />
               </Link>
 
               <div className="flex items-center gap-6 lg:gap-8">
                 {/* Home */}
                 <Link
-                  to="/"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isActive('/')
+                  to="/user"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${(isActive('/user/home') || isActive('/user'))
                     ? 'bg-white shadow-md font-semibold'
                     : 'hover:bg-white/20'
                     }`}
                   style={{
-                    color: isActive('/') ? currentTheme.accentColor : currentTheme.headerTextColor
+                    color: (isActive('/user/home') || isActive('/user')) ? currentTheme.accentColor : currentTheme.headerTextColor
                   }}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    {isActive('/') ? (
+                    {(isActive('/user/home') || isActive('/user')) ? (
                       <>
                         <path d="M2 12L12 4L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" />
                         <rect x="4" y="12" width="16" height="8" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
@@ -570,12 +570,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     <div className="w-16 h-16 -mt-9 rounded-full bg-white/95" />
                   </div>
 
-                  <Link to="/" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/') ? 'text-black' : 'text-black/70'}>
+                  <Link to="/user" className="flex-1 flex flex-col items-center justify-end">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={(isActive('/user') || isActive('/user/home')) ? 'text-black' : 'text-black/70'}>
                       <path d="M3 11L12 4L21 11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                       <path d="M6 10V20H18V10" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
                     </svg>
-                    <span className={`text-[11px] mt-1 ${isActive('/') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Home</span>
+                    <span className={`text-[11px] mt-1 ${(isActive('/user') || isActive('/user/home')) ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Home</span>
                   </Link>
 
                   <Link to="/order-again" className="flex-1 flex flex-col items-center justify-end">

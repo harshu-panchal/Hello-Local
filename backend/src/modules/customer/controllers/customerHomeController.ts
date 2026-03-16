@@ -205,7 +205,9 @@ async function fetchSectionData(
     if (displayType === "categories") {
       // If categories are specified, fetch those specific categories
       if (categories && categories.length > 0) {
-        const categoryIds = categories.map((cat: any) => cat._id || cat);
+        const categoryIds = categories
+          .map((cat: any) => cat ? (cat._id || cat) : null)
+          .filter((id: any) => id);
 
         const fetchedCategories = await Category.find({
           _id: { $in: categoryIds },
@@ -311,7 +313,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
         return {
           id: card._id.toString(),
-          categoryId: categoryId.toString(),
+          categoryId: categoryId ? categoryId.toString() : "",
           name: card.name,
           productImages: productImages.slice(0, 4),
           productCount: categoryProducts.length,
@@ -611,7 +613,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         endDate: { $gte: now },
       })
         .populate("categoryCards.categoryId", "name slug image")
-        .populate("featuredProducts", "productName mainImage mainImageUrl galleryImageUrls galleryImages price mrp compareAtPrice discount rating reviewsCount seller variations")
+        .populate("featuredProducts", "productName mainImage galleryImages price compareAtPrice discount rating reviewsCount seller variations")
         .sort({ order: 1 })
         .lean();
 
@@ -619,12 +621,14 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
       // If we have promoStrip, add availability flag to featured products
       if (promoStrip && (promoStrip as any).featuredProducts) {
-        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.map((p: any) => {
-          const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-            ? nearbySellerIds.some(id => id.toString() === p.seller.toString())
-            : false;
-          return { ...p, isAvailable };
-        });
+        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts
+          .filter((p: any) => p !== null) // Filter out null products
+          .map((p: any) => {
+            const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
+              ? nearbySellerIds.some(id => id && id.toString() === p.seller.toString())
+              : false;
+            return { ...p, isAvailable };
+          });
       }
 
       // Cache for 3 minutes (PromoStrip data doesn't change frequently)
