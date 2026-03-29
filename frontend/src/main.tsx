@@ -33,7 +33,7 @@ function SplashWrapper() {
         left: 0,
         width: '100vw',
         height: '100vh',
-        background: 'linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)',
+        background: 'linear-gradient(135deg, rgba(255,138,61,0.70), rgba(255,46,122,0.70), rgba(255,194,51,0.70))',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

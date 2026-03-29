@@ -39,9 +39,16 @@ const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false }) => {
           aria-label="Loading"
         >
           <div className="loader-container">
-            <div className="simple-loader-card">
-              <div className="simple-spinner" />
-              <span className="loader-text">Loading</span>
+            <div className="video-loader-card">
+              <video
+                className="loader-video"
+                src="/assets/hello loader.MOV"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+              />
             </div>
           </div>
         </motion.div>

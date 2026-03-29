@@ -627,10 +627,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     style={{ background: getCategoryGradient(activeCategory) }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                        </svg>
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center border border-white/30">
+                        <img src="/chatbot-icon.png" alt="Bot" className="w-full h-full object-cover scale-[1.3] mix-blend-screen" />
                       </div>
                       <div>
                         <h3 className="font-bold text-sm">Hello Local Helper</h3>
@@ -712,32 +710,33 @@ export default function AppLayout({ children }: AppLayoutProps) {
             {/* Toggle Button */}
             <button
               onClick={() => setIsChatOpen(!isChatOpen)}
-              className="w-12 h-12 md:w-14 md:h-14 rounded-full text-black flex items-center justify-center shadow-xl hover:shadow-2xl transition-all active:scale-95 group border-2 border-white/20"
-              style={{ background: getCategoryGradient(activeCategory) }}
+              className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center shadow-xl hover:shadow-2xl transition-all active:scale-95 group overflow-hidden"
               aria-label="Chatbot"
             >
               <AnimatePresence mode="wait">
                 {isChatOpen ? (
-                  <motion.svg 
+                  <motion.div 
                     key="close"
                     initial={{ opacity: 0, rotate: -90 }}
                     animate={{ opacity: 1, rotate: 0 }}
                     exit={{ opacity: 0, rotate: 90 }}
-                    width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                    className="w-full h-full flex items-center justify-center bg-white/20 backdrop-blur-md"
+                    style={{ background: getCategoryGradient(activeCategory) }}
                   >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </motion.svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </motion.div>
                 ) : (
-                  <motion.svg 
+                  <motion.div 
                     key="chat"
-                    initial={{ opacity: 0, rotate: 90 }}
-                    animate={{ opacity: 1, rotate: 0 }}
-                    exit={{ opacity: 0, rotate: -90 }}
-                    className="group-hover:rotate-12 transition-transform md:w-7 md:h-7"
-                    width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="w-full h-full"
                   >
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </motion.svg>
+                    <img src="/chatbot-icon.png" alt="Chat" className="w-full h-full object-cover scale-[1.4] transition-transform group-hover:scale-[1.5] mix-blend-screen" />
+                  </motion.div>
                 )}
               </AnimatePresence>
             </button>

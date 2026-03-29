@@ -677,7 +677,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
 
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            const tabColor = isActive
+            const iconColor = 'text-neutral-900';
+            const labelColor = isActive
               ? 'text-neutral-900'
               : scrollProgress > 0.5
                 ? 'text-neutral-600'
@@ -694,20 +695,20 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   }
                 }}
                 onClick={() => handleTabClick(tab.id, tab.label)}
-                className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${tabColor} z-10`}
+                className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${labelColor} z-10`}
                 style={{
                   transition: 'color 0.3s ease-out',
                 }}
                 type="button"
               >
-                <div className={`mb-0.5 md:hidden w-5 h-5 flex items-center justify-center ${tabColor}`} style={{
+                <div className={`mb-0.5 md:hidden w-5 h-5 flex items-center justify-center ${iconColor}`} style={{
                   transition: 'color 0.3s ease-out, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   transform: isActive ? 'scale(1.1)' : 'scale(1)',
                 }}>
                   {tab.icon}
                 </div>
                 <span
-                  className={`text-[10px] md:text-xs md:whitespace-nowrap ${isActive ? 'font-semibold' : 'font-medium'}`}
+                  className={`text-[10px] md:text-xs md:whitespace-nowrap ${labelColor} ${isActive ? 'font-semibold' : 'font-medium'}`}
                   style={{
                     transition: 'font-weight 0.3s ease-out',
                   }}
