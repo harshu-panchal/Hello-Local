@@ -1,5 +1,6 @@
 import express, { Application, Request, Response } from "express";
 import { createServer } from "http";
+import dns from "dns";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db";
@@ -14,6 +15,8 @@ import { initializeFirebaseAdmin } from "./services/firebaseAdmin";
 
 // Load environment variables
 dotenv.config();
+
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 
 const app: Application = express();
 const httpServer = createServer(app);
@@ -135,4 +138,3 @@ startServer().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
