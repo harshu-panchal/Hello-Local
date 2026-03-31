@@ -14,6 +14,22 @@ class Cache {
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default
 
   /**
+   * Check if a key exists and is not expired.
+   * Useful when you intentionally cache `null` values.
+   */
+  has(key: string): boolean {
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+
+    if (Date.now() >= entry.expiresAt) {
+      this.cache.delete(key);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Get cached data
    */
   get<T>(key: string): T | null {
