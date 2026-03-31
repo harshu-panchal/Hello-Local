@@ -178,10 +178,10 @@ router.use("/admin/withdrawals", authenticate, requireUserType("Admin"), adminWi
 // Seller ad request routes (protected, seller only)
 router.post("/seller/ad-requests", authenticate, requireUserType("Seller"), sellerAdRequestController.createAdRequest);
 router.get("/seller/ad-requests", authenticate, requireUserType("Seller"), sellerAdRequestController.getMyAdRequests);
+router.get("/seller/ad-requests/availability", authenticate, requireUserType("Seller"), sellerAdRequestController.getPublicAdStats);
 router.get("/seller/ad-requests/:id", authenticate, requireUserType("Seller"), sellerAdRequestController.getMyAdRequestById);
 router.post("/seller/ad-requests/:id/payment", authenticate, requireUserType("Seller"), sellerAdRequestController.submitPaymentProof);
 router.delete("/seller/ad-requests/:id", authenticate, requireUserType("Seller"), sellerAdRequestController.cancelAdRequest);
-router.get("/seller/ad-requests/availability", authenticate, requireUserType("Seller"), sellerAdRequestController.getPublicAdStats);
 
 
 // Admin ad request management routes

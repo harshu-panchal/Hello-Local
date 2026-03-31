@@ -601,10 +601,11 @@ export const getHomeContent = async (req: Request, res: Response) => {
     const currentHeaderCategorySlug = (headerCategorySlug as string) || "all";
     const promoStripCacheKey = `promoStrip-${currentHeaderCategorySlug.toLowerCase()}`;
 
-    // Try to get from cache first
+    // Try to get from cache first (supports cached `null`)
+    const hasPromoStripCache = cache.has(promoStripCacheKey);
     let promoStrip = cache.get(promoStripCacheKey) as any;
 
-    if (!promoStrip) {
+    if (!hasPromoStripCache) {
       const now = new Date();
       const promoStripDoc = await PromoStrip.findOne({
         headerCategorySlug: currentHeaderCategorySlug.toLowerCase(),
