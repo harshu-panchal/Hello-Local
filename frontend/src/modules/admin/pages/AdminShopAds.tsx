@@ -412,7 +412,7 @@ export default function AdminShopAds() {
                                 </div>
                                 <div style={{ display: "flex", gap: 12 }}>
                                     <button onClick={() => setApproveModal(null)} style={{ flex: 1, padding: "11px 0", border: "2px solid #e5e7eb", borderRadius: 10, fontWeight: 600, cursor: "pointer", background: "transparent" }}>Cancel</button>
-                                    <button onClick={async () => { if (!approvePrice || parseFloat(approvePrice) <= 0) { showToast("Please set a valid price", "error"); return; } try { await adminApproveAdRequest(approveModal._id, parseFloat(approvePrice), approveNote); showToast("✅ Ad is now LIVE! Seller notified.", "success"); setApproveModal(null); fetchAdRequests(); fetchAds(); } catch (e: any) { showToast(e?.response?.data?.message || "Failed", "error"); } }} style={{ flex: 1, padding: "11px 0", background: "linear-gradient(135deg,#10b981,#059669)", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>🚀 Approve & Make Live</button>
+                                    <button onClick={async () => { if (!approvePrice || parseFloat(approvePrice) <= 0) { showToast("Please set a valid price", "error"); return; } try { await adminApproveAdRequest(approveModal._id, parseFloat(approvePrice), approveNote); showToast("✅ Request approved. Waiting for seller payment.", "success"); setApproveModal(null); fetchAdRequests(); } catch (e: any) { showToast(e?.response?.data?.message || "Failed", "error"); } }} style={{ flex: 1, padding: "11px 0", background: "linear-gradient(135deg,#10b981,#059669)", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>✅ Approve (Pay Now)</button>
                                 </div>
                             </div>
                         </div>
@@ -561,7 +561,7 @@ export default function AdminShopAds() {
                                             <button
                                                 onClick={() => { setDetailsModal(null); setApproveModal(detailsModal); setApprovePrice(""); setApproveNote(""); }}
                                                 style={{ padding: "10px 20px", background: "#10b981", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-                                            >🚀 Approve & Make Live</button>
+                                            >✅ Approve (Pay Now)</button>
                                         </>
                                     )}
 

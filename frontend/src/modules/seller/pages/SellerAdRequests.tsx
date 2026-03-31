@@ -261,12 +261,24 @@ export default function SellerAdRequests() {
         });
     };
 
-    const handlePaymentSuccess = (paymentId: string) => {
-        showToast('Payment successful! Your ad is now under final verification.', 'success');
-        setRazorpayData(null);
-        setShowForm(false);
-        resetForm();
-        fetchRequests();
+    const handlePaymentSuccess = async (paymentId: string) => {
+        try {
+            if (razorpayData?.id) {
+                await submitPaymentProof(razorpayData.id, {
+                    paymentMethod: "Razorpay",
+                    paymentReference: paymentId,
+                    paymentNote: "Paid via Razorpay",
+                });
+            }
+            showToast('Payment successful! Your payment proof is submitted for verification.', 'success');
+        } catch (err: any) {
+            showToast(err?.response?.data?.message || 'Payment succeeded but proof submission failed', 'error');
+        } finally {
+            setRazorpayData(null);
+            setShowForm(false);
+            resetForm();
+            fetchRequests();
+        }
     };
 
     const handlePaymentFailure = (error: string) => {
