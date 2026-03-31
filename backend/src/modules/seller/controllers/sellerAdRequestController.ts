@@ -4,6 +4,7 @@ import SellerAdRequest from "../../../models/SellerAdRequest";
 import Notification from "../../../models/Notification";
 import Seller from "../../../models/Seller";
 import ShopAd from "../../../models/ShopAd";
+import { findNextAvailableWindow, toDayStart } from "../../../utils/shopAdCapacity";
 
 const MAX_ACTIVE_ADS = 10;
 
@@ -47,54 +48,11 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
     }
 
     const requestedStartDate = new Date(startDate);
-    requestedStartDate.setHours(0, 0, 0, 0); // Normalize to start of day
-
-    const requestedEndDate = new Date(requestedStartDate);
-    requestedEndDate.setDate(requestedEndDate.getDate() + duration); // Multi-day duration
-
-    // Check availability for EVERY day in the range
-    for (let i = 0; i < duration; i++) {
-        const checkDay = new Date(requestedStartDate);
-        checkDay.setDate(checkDay.getDate() + i);
-
-        const nextDay = new Date(checkDay);
-        nextDay.setDate(nextDay.getDate() + 1);
-
-        // Count 1: Live ads (from ShopAd model)
-        const liveAdsCount = await ShopAd.countDocuments({
-            isActive: true,
-            $or: [
-                {
-                    startDate: { $lt: nextDay },
-                    endDate: { $gt: checkDay }
-                },
-                {
-                    startDate: { $exists: false },
-                    $or: [
-                        { expiresAt: { $exists: false } },
-                        { expiresAt: null },
-                        { expiresAt: { $gt: checkDay } }
-                    ]
-                }
-            ]
-        });
-
-        // Count 2: Reserved slots (from SellerAdRequest model, not yet Live but confirmed)
-        const reservedSlotsCount = await SellerAdRequest.countDocuments({
-            status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
-            startDate: { $lt: nextDay },
-            endDate: { $gt: checkDay }
-        });
-
-        const bookedCount = liveAdsCount + reservedSlotsCount;
-
-        if (bookedCount >= MAX_ACTIVE_ADS) {
-            return res.status(400).json({
-                success: false,
-                message: `Slots are full for ${checkDay.toDateString()}. Please choose other dates.`,
-            });
-        }
-    }
+    const desiredStart = toDayStart(requestedStartDate);
+    const scheduled = await findNextAvailableWindow({
+        desiredStart,
+        durationDays: duration,
+    });
 
     // Fetch seller details from DB
     const seller = await Seller.findById(sellerId).select("sellerName email mobile storeName");
@@ -128,9 +86,9 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
         paymentMethod: paymentMethod || "UPI",
         paymentReference,
         paymentScreenshotUrl,
-        startDate: requestedStartDate,
-        endDate: requestedEndDate,
-        expiresAt: requestedEndDate, // Consistency
+        startDate: scheduled.startDate,
+        endDate: scheduled.endDate,
+        expiresAt: scheduled.endDate, // Consistency
     });
 
     // Notify admin
@@ -149,10 +107,18 @@ export const createAdRequest = asyncHandler(async (req: Request, res: Response) 
 
     return res.status(201).json({
         success: true,
-        message: hasPayment
-            ? "Ad and payment proof submitted successfully! Admin will verify and activate your ad."
-            : "Ad request submitted successfully! Admin will review and get back to you.",
+        message:
+            scheduled.startDate.getTime() !== desiredStart.getTime()
+                ? `Capacity was full on your selected date. Your ad has been queued to start on ${scheduled.startDate.toDateString()}.`
+                : hasPayment
+                    ? "Ad and payment proof submitted successfully! Admin will verify and activate your ad."
+                    : "Ad request submitted successfully! Admin will review and get back to you.",
         data: adRequest,
+        scheduledWindow: {
+            requestedStartDate: desiredStart,
+            startDate: scheduled.startDate,
+            endDate: scheduled.endDate,
+        },
     });
 });
 
@@ -329,4 +295,3 @@ export const getPublicAdStats = asyncHandler(async (req: Request, res: Response)
         },
     });
 });
-
