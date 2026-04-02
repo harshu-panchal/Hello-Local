@@ -8,6 +8,7 @@ import HomeSection from "../../../models/HomeSection";
 import BestsellerCard from "../../../models/BestsellerCard";
 import LowestPricesProduct from "../../../models/LowestPricesProduct";
 import PromoStrip from "../../../models/PromoStrip";
+import ShopAd from "../../../models/ShopAd";
 import mongoose from "mongoose";
 import { cache } from "../../../utils/cache";
 import { findSellersWithinRange } from "../../../utils/locationHelper";
@@ -20,8 +21,6 @@ async function fetchSectionData(
   try {
     const { categories, subCategories, displayType, limit } = section;
 
-    // If displayType is "subcategories", fetch subcategories
-    // If displayType is "subcategories", fetch subcategories
     // If displayType is "subcategories", fetch subcategories
     if (displayType === "subcategories") {
       let subcategoryQuery: any = {};
@@ -641,6 +640,39 @@ export const getHomeContent = async (req: Request, res: Response) => {
       }
     }
 
+    // 11. Fetch Active Shop Ads for Promo Banners
+    const activeShopAds = await ShopAd.find({
+      isActive: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() }
+    })
+      .sort({ order: 1 })
+      .lean();
+
+    const mappedAds = activeShopAds.map((ad: any) => ({
+      id: ad._id.toString(),
+      image: ad.imageUrl,
+      link: ad.ctaLink || "#",
+      badge: ad.badge,
+      badgeColor: ad.badgeColor,
+      title: ad.shopName,
+      description: ad.tagline
+    }));
+
+    // If no dynamic ads, use fallbacks
+    const promoBanners = mappedAds.length > 0 ? mappedAds : [
+      {
+        id: "promo-fallback-1",
+        image: "https://img.freepik.com/free-vector/horizontal-banner-template-grocery-sales_23-2149432421.jpg",
+        link: "/category/grocery",
+      },
+      {
+        id: "promo-fallback-2",
+        image: "https://img.freepik.com/free-vector/flat-supermarket-social-media-cover-template_23-2149363385.jpg",
+        link: "/category/snacks",
+      }
+    ];
+
     res.status(200).json({
       success: true,
       data: {
@@ -650,20 +682,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         // Dynamic sections created by admin
         homeSections: dynamicSections,
         shops,
-        promoBanners: [
-          {
-            id: 1,
-            image:
-              "https://img.freepik.com/free-vector/horizontal-banner-template-grocery-sales_23-2149432421.jpg",
-            link: "/category/grocery",
-          },
-          {
-            id: 2,
-            image:
-              "https://img.freepik.com/free-vector/flat-supermarket-social-media-cover-template_23-2149363385.jpg",
-            link: "/category/snacks",
-          },
-        ],
+        promoBanners,
         trending,
         cookingIdeas,
         promoCards: finalPromoCards, // Return dynamic or fallback cards
