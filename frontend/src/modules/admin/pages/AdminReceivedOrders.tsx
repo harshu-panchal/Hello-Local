@@ -204,7 +204,7 @@ export default function AdminReceivedOrders() {
       case 'Out For Delivery':
         return 'bg-orange-100 text-orange-800';
       case 'Delivered':
-        return 'bg-green-100 text-green-800';
+        return 'bg-rose-100 text-rose-900';
       case 'Cancelled':
         return 'bg-red-100 text-red-800';
       default:
@@ -215,7 +215,7 @@ export default function AdminReceivedOrders() {
   const getDeliveryBoyStatusColor = (status: string) => {
     switch (status) {
       case 'Assigned':
-        return 'bg-green-100 text-green-800';
+        return 'bg-rose-100 text-rose-900';
       case 'Not Assigned':
         return 'bg-red-100 text-red-800';
       default:
@@ -247,7 +247,7 @@ export default function AdminReceivedOrders() {
         {/* White Card Container */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
           {/* Green Banner */}
-          <div className="bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-2 sm:py-3">
             <h2 className="text-base sm:text-lg font-semibold">View Order List</h2>
           </div>
 
@@ -308,7 +308,7 @@ export default function AdminReceivedOrders() {
                     setSeller(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
                 >
                   <option>All Sellers</option>
                   <option>Seller 1</option>
@@ -328,7 +328,7 @@ export default function AdminReceivedOrders() {
                     setStatus(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
                 >
                   <option>Received</option>
                   <option>All Status</option>
@@ -349,7 +349,7 @@ export default function AdminReceivedOrders() {
                     setEntriesPerPage(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
                 >
                   <option>10</option>
                   <option>25</option>
@@ -363,7 +363,7 @@ export default function AdminReceivedOrders() {
                 <div className="relative">
                   <button
                     onClick={handleExport}
-                    className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
+                    className="flex items-center justify-center gap-2 bg-rose-700 hover:bg-rose-800 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
                   >
                     <svg
                       width="16"
@@ -413,7 +413,7 @@ export default function AdminReceivedOrders() {
                     setSearchQuery(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
                   placeholder="Search by Order ID, Customer, or Amount"
                 />
               </div>
@@ -662,7 +662,7 @@ export default function AdminReceivedOrders() {
                       <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">?{order.total?.toFixed(2) || '0.00'}</td>
                       <td className="px-4 sm:px-6 py-3">
                         <Link to={`/admin/orders/${order._id}`}>
-                          <button className="bg-teal-600 hover:bg-teal-700 text-white p-2 rounded transition-colors" aria-label="View order">
+                          <button className="bg-rose-700 hover:bg-rose-800 text-white p-2 rounded transition-colors" aria-label="View order">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                               <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                               <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -718,5 +718,6 @@ export default function AdminReceivedOrders() {
     </div>
   );
 }
+
 
 

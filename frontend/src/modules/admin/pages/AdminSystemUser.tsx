@@ -316,7 +316,7 @@ export default function AdminSystemUser() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
           {/* Left Panel: Add System User */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex flex-col">
-            <div className="bg-teal-600 text-white px-6 py-4 rounded-t-lg">
+            <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
               <h2 className="text-lg font-semibold">Add System User</h2>
             </div>
             
@@ -336,11 +336,11 @@ export default function AdminSystemUser() {
             
             {/* Success Message */}
             {successMessage && (
-              <div className="p-4 bg-green-50 border-l-4 border-green-500 text-green-700 flex items-center justify-between">
+              <div className="p-4 bg-rose-50 border-l-4 border-rose-600 text-rose-800 flex items-center justify-between">
                 <p className="text-sm">{successMessage}</p>
                 <button
                   onClick={() => setSuccessMessage('')}
-                  className="text-green-700 hover:text-green-900 ml-4 text-lg font-bold"
+                  className="text-rose-800 hover:text-rose-900 ml-4 text-lg font-bold"
                   type="button"
                 >
                   ×
@@ -360,7 +360,7 @@ export default function AdminSystemUser() {
                       value={formData.role}
                       onChange={handleInputChange}
                       disabled={loading}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600 bg-white"
                     >
                       <option value="">Select role</option>
                       {roles.map((role) => (
@@ -382,7 +382,7 @@ export default function AdminSystemUser() {
                       onChange={handleInputChange}
                       placeholder="Enter First Name"
                       disabled={loading}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                     />
                   </div>
 
@@ -397,7 +397,7 @@ export default function AdminSystemUser() {
                       onChange={handleInputChange}
                       placeholder="Enter Last Name"
                       disabled={loading}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                     />
                   </div>
 
@@ -413,7 +413,7 @@ export default function AdminSystemUser() {
                       placeholder="Enter 10-digit Mobile"
                       disabled={loading}
                       maxLength={10}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                     />
                   </div>
 
@@ -428,7 +428,7 @@ export default function AdminSystemUser() {
                       onChange={handleInputChange}
                       placeholder="Enter Email"
                       disabled={loading}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                     />
                   </div>
 
@@ -443,7 +443,7 @@ export default function AdminSystemUser() {
                       onChange={handleInputChange}
                       placeholder={editingId === null ? "Enter Password" : "Leave blank to keep current"}
                       disabled={loading}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                     />
                   </div>
 
@@ -458,7 +458,7 @@ export default function AdminSystemUser() {
                       onChange={handleInputChange}
                       placeholder={editingId === null ? "Enter Confirm Password" : "Leave blank to keep current"}
                       disabled={loading}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                     />
                   </div>
                 </div>
@@ -470,7 +470,7 @@ export default function AdminSystemUser() {
                     <button
                       onClick={handleAddSystemUser}
                       disabled={loading}
-                      className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded text-sm font-medium transition-colors"
+                      className="flex-1 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded text-sm font-medium transition-colors"
                     >
                       {loading ? 'Updating...' : 'Update System User'}
                     </button>
@@ -486,7 +486,7 @@ export default function AdminSystemUser() {
                   <button
                     onClick={handleAddSystemUser}
                     disabled={loading}
-                    className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded text-sm font-medium transition-colors"
+                    className="w-full bg-rose-700 hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded text-sm font-medium transition-colors"
                   >
                     {loading ? 'Adding...' : 'Add System User'}
                   </button>
@@ -497,7 +497,7 @@ export default function AdminSystemUser() {
 
           {/* Right Panel: View System User */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex flex-col">
-            <div className="bg-teal-600 text-white px-6 py-4 rounded-t-lg">
+            <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
               <h2 className="text-lg font-semibold">View System User</h2>
             </div>
             <div className="p-6 flex-1 flex flex-col">
@@ -512,7 +512,7 @@ export default function AdminSystemUser() {
                       setCurrentPage(1);
                     }}
                     disabled={loading}
-                    className="px-2 py-1 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    className="px-2 py-1 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -530,7 +530,7 @@ export default function AdminSystemUser() {
                   }}
                   placeholder="Search..."
                   disabled={loading}
-                  className="px-3 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="px-3 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                 />
               </div>
 
@@ -538,7 +538,7 @@ export default function AdminSystemUser() {
               {loading && (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-rose-700"></div>
                     <p className="mt-2 text-sm text-neutral-600">Loading...</p>
                   </div>
                 </div>
@@ -620,7 +620,7 @@ export default function AdminSystemUser() {
                                 <button
                                   onClick={() => handleEdit(user.id)}
                                   disabled={loading}
-                                  className="p-1.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+                                  className="p-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
                                   title="Edit"
                                 >
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -672,7 +672,7 @@ export default function AdminSystemUser() {
                         disabled={loading}
                         className={`px-3 py-1.5 border rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                           currentPage === page
-                            ? 'bg-teal-600 text-white border-teal-600'
+                            ? 'bg-rose-700 text-white border-rose-700'
                             : 'border-neutral-300 hover:bg-neutral-50'
                         }`}
                       >
@@ -699,11 +699,13 @@ export default function AdminSystemUser() {
       {/* Footer */}
       <div className="text-center text-sm text-neutral-500 py-4 px-6">
         Copyright © 2025. Developed By{' '}
-        <a href="#" className="text-teal-600 hover:text-teal-700">
+        <a href="#" className="text-rose-700 hover:text-rose-800">
           Hello Local - 10 Minute App
         </a>
       </div>
     </div>
   );
 }
+
+
 

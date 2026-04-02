@@ -434,7 +434,7 @@ export default function AdminCategory() {
       <div className="px-3 sm:px-4 md:px-6">
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
           {/* Green Banner */}
-          <div className="bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-2 sm:py-3">
             <h2 className="text-base sm:text-lg font-semibold">
               Category Management
             </h2>
@@ -446,7 +446,7 @@ export default function AdminCategory() {
               {/* Add Category Button */}
               <button
                 onClick={handleCreateCategory}
-                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors w-full sm:w-auto">
+                className="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors w-full sm:w-auto">
                 <svg
                   width="16"
                   height="16"
@@ -466,7 +466,7 @@ export default function AdminCategory() {
                   onClick={() => setViewMode("tree")}
                   className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
                     viewMode === "tree"
-                      ? "bg-teal-600 text-white"
+                      ? "bg-rose-700 text-white"
                       : "text-neutral-700 hover:bg-neutral-100"
                   }`}>
                   Tree View
@@ -475,7 +475,7 @@ export default function AdminCategory() {
                   onClick={() => setViewMode("list")}
                   className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
                     viewMode === "list"
-                      ? "bg-teal-600 text-white"
+                      ? "bg-rose-700 text-white"
                       : "text-neutral-700 hover:bg-neutral-100"
                   }`}>
                   List View
@@ -494,7 +494,7 @@ export default function AdminCategory() {
                       e.target.value as "All" | "Active" | "Inactive"
                     )
                   }
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-teal-500">
+                  className="px-3 py-2 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-500">
                   <option value="All">All Status</option>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
@@ -514,14 +514,14 @@ export default function AdminCategory() {
                     setListPage(1);
                   }}
                   placeholder="Search by name..."
-                  className="flex-1 px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="flex-1 px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-500"
                 />
               </div>
 
               {/* Export Button */}
               <button
                 onClick={handleExport}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors w-full sm:w-auto">
+                className="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors w-full sm:w-auto">
                 <svg
                   width="16"
                   height="16"

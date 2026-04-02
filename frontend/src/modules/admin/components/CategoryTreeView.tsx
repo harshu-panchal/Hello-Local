@@ -170,7 +170,7 @@ export default function CategoryTreeView({
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             category.status === "Active"
-                              ? "bg-green-100 text-green-800"
+                              ? "bg-rose-100 text-rose-900"
                               : "bg-red-100 text-red-800"
                           }`}>
                           {category.status}
@@ -236,7 +236,7 @@ export default function CategoryTreeView({
                         onClick={() => onAddSubcategory(category)}
                         className={`${
                           isSubcategory ? "px-2 py-1" : "px-3 py-1.5"
-                        } text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 rounded transition-colors`}
+                        } text-xs font-medium text-white bg-rose-700 hover:bg-rose-800 rounded transition-colors`}
                         title="Add Subcategory">
                         {isSubcategory ? (
                           <svg
@@ -275,7 +275,7 @@ export default function CategoryTreeView({
                         } text-xs font-medium rounded transition-colors ${
                           category.status === "Active"
                             ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                            : "bg-green-100 text-green-800 hover:bg-green-200"
+                            : "bg-rose-100 text-rose-900 hover:bg-rose-200"
                         }`}
                         title={
                           category.status === "Active"
@@ -378,3 +378,5 @@ export default function CategoryTreeView({
     </div>
   );
 }
+
+

@@ -53,7 +53,7 @@ export default function CategoryListView({
                   type="checkbox"
                   checked={allSelected}
                   onChange={onSelectAll}
-                  className="rounded border-neutral-300 text-teal-600 focus:ring-teal-500"
+                  className="rounded border-neutral-300 text-rose-700 focus:ring-rose-600"
                   ref={(input) => {
                     if (input) {
                       input.indeterminate = someSelected;
@@ -96,7 +96,7 @@ export default function CategoryListView({
                     type="checkbox"
                     checked={selectedIds.has(category._id)}
                     onChange={() => onSelect(category._id)}
-                    className="rounded border-neutral-300 text-teal-600 focus:ring-teal-500"
+                    className="rounded border-neutral-300 text-rose-700 focus:ring-rose-600"
                   />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
@@ -166,7 +166,7 @@ export default function CategoryListView({
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       category.status === "Active"
-                        ? "bg-green-100 text-green-800"
+                        ? "bg-rose-100 text-rose-900"
                         : "bg-red-100 text-red-800"
                     }`}>
                     {category.status}
@@ -246,7 +246,7 @@ export default function CategoryListView({
                       onClick={() => onPageChange(page)}
                       className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
                         currentPage === page
-                          ? "bg-teal-600 text-white"
+                          ? "bg-rose-700 text-white"
                           : "bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50"
                       }`}>
                       {page}
@@ -266,3 +266,4 @@ export default function CategoryListView({
     </div>
   );
 }
+

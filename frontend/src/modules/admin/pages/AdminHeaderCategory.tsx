@@ -204,7 +204,7 @@ export default function AdminHeaderCategory() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Left Panel - Add Header Category */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="bg-teal-600 text-white px-4 sm:px-6 py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-3">
             <h2 className="text-base sm:text-lg font-semibold">
               {editingId ? 'Edit Header Category' : 'Add Header Category'}
             </h2>
@@ -220,7 +220,7 @@ export default function AdminHeaderCategory() {
                 value={headerCategoryName}
                 onChange={(e) => setHeaderCategoryName(e.target.value)}
                 placeholder="Enter Category Name (e.g. Dairy, Books)"
-                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
               />
             </div>
 
@@ -235,7 +235,7 @@ export default function AdminHeaderCategory() {
                   placeholder="Auto-match or type..."
                   value={iconSearchTerm}
                   onChange={(e) => setIconSearchTerm(e.target.value)}
-                  className="px-2 py-1 text-xs border rounded border-neutral-300 w-32 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="px-2 py-1 text-xs border rounded border-neutral-300 w-32 focus:ring-1 focus:ring-rose-600 outline-none"
                 />
               </div>
 
@@ -252,11 +252,11 @@ export default function AdminHeaderCategory() {
                       className={`
                         cursor-pointer flex flex-col items-center justify-center gap-2 p-3 rounded-lg border transition-all
                         ${isSelected
-                          ? 'bg-teal-50 border-teal-500 ring-1 ring-teal-500 text-teal-700'
-                          : 'bg-white border-neutral-200 hover:border-teal-300 hover:shadow-sm text-neutral-600'}
+                          ? 'bg-rose-50 border-rose-600 ring-1 ring-rose-600 text-rose-800'
+                          : 'bg-white border-neutral-200 hover:border-rose-300 hover:shadow-sm text-neutral-600'}
                       `}
                     >
-                      <div className={`${isSelected ? 'text-teal-600' : 'text-neutral-500'}`}>
+                      <div className={`${isSelected ? 'text-rose-700' : 'text-neutral-500'}`}>
                         {option.svg}
                       </div>
                       <span className="text-[10px] font-medium text-center leading-tight truncate w-full">
@@ -313,7 +313,7 @@ export default function AdminHeaderCategory() {
                       title={displayColor}
                       className={`
                                 cursor-pointer flex flex-col items-center gap-1 p-2 rounded transition-all
-                                ${isSelected ? 'ring-2 ring-teal-500 bg-white shadow-sm' : 'hover:bg-neutral-200'}
+                                ${isSelected ? 'ring-2 ring-rose-600 bg-white shadow-sm' : 'hover:bg-neutral-200'}
                             `}
                     >
                       <div
@@ -337,7 +337,7 @@ export default function AdminHeaderCategory() {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600"
               >
                 <option value="">Select Category</option>
                 {productCategories.map((cat) => (
@@ -356,7 +356,7 @@ export default function AdminHeaderCategory() {
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value as any)}
-                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600"
               >
                 <option value="Published">Published</option>
                 <option value="Unpublished">Unpublished</option>
@@ -367,7 +367,7 @@ export default function AdminHeaderCategory() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleAddOrUpdate}
-                className="flex-1 bg-teal-600 text-white py-2 rounded text-sm font-medium hover:bg-teal-700 transition"
+                className="flex-1 bg-rose-700 text-white py-2 rounded text-sm font-medium hover:bg-rose-800 transition"
               >
                 {editingId ? 'Update Category' : 'Add Category'}
               </button>
@@ -394,7 +394,7 @@ export default function AdminHeaderCategory() {
                 placeholder="Search category..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-sm border border-neutral-300 rounded-full w-48 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="pl-8 pr-3 py-1.5 text-sm border border-neutral-300 rounded-full w-48 focus:outline-none focus:ring-1 focus:ring-rose-600"
               />
               <svg
                 className="w-4 h-4 text-neutral-400 absolute left-2.5 top-2"
@@ -431,7 +431,7 @@ export default function AdminHeaderCategory() {
                       </td>
                       <td className="px-4 py-3 text-sm text-neutral-600">
                         <div className="flex items-center gap-2">
-                          <div className="text-teal-600 w-5 h-5 flex items-center justify-center">
+                          <div className="text-rose-700 w-5 h-5 flex items-center justify-center">
                             {getIconByName(category.iconName)}
                           </div>
                           <span className="text-xs text-neutral-400 font-mono hidden xl:inline">
@@ -453,7 +453,7 @@ export default function AdminHeaderCategory() {
                           className={`
                             px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
                             ${category.status === 'Published'
-                              ? 'bg-green-100 text-green-800 border border-green-200'
+                              ? 'bg-rose-100 text-rose-900 border border-rose-200'
                               : 'bg-red-100 text-red-800 border border-red-200'}
                           `}
                         >
@@ -526,3 +526,5 @@ export default function AdminHeaderCategory() {
     </div>
   );
 }
+
+

@@ -355,7 +355,7 @@ export default function AdminStockManagement() {
         {/* Main Panel */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
           {/* Header */}
-          <div className="bg-teal-600 text-white px-6 py-4 rounded-t-lg">
+          <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
             <h2 className="text-lg font-semibold">View Stock Management</h2>
           </div>
 
@@ -373,7 +373,7 @@ export default function AdminStockManagement() {
                     setFilterCategory(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer">
+                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer">
                   <option value="All Category">All Category</option>
                   {categories.map((cat) => (
                     <option key={cat._id} value={cat._id}>
@@ -392,7 +392,7 @@ export default function AdminStockManagement() {
                     setFilterSeller(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer">
+                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer">
                   {sellers.map((seller) => (
                     <option key={seller} value={seller}>
                       {seller}
@@ -410,7 +410,7 @@ export default function AdminStockManagement() {
                     setFilterStatus(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer">
+                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer">
                   {STATUS_OPTIONS.map((status) => (
                     <option key={status} value={status}>
                       {status}
@@ -428,7 +428,7 @@ export default function AdminStockManagement() {
                     setFilterStock(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer">
+                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer">
                   {STOCK_OPTIONS.map((stock) => (
                     <option key={stock} value={stock}>
                       {stock}
@@ -448,7 +448,7 @@ export default function AdminStockManagement() {
                     setRowsPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer">
+                  className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer">
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
@@ -458,7 +458,7 @@ export default function AdminStockManagement() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleExport}
-                  className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors">
+                  className="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors">
                   Export
                   <svg
                     width="10"
@@ -478,7 +478,7 @@ export default function AdminStockManagement() {
                   </span>
                   <input
                     type="text"
-                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-teal-500 w-48"
+                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-rose-600 w-48"
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -605,7 +605,7 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle">{product.variation}</td>
                       <td className="p-4 align-middle">
                         {product.stock === "Unlimited" ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-900">
                             Unlimited
                           </span>
                         ) : (
@@ -615,7 +615,7 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${product.status === "Published"
-                            ? "bg-teal-100 text-teal-800"
+                            ? "bg-rose-100 text-rose-900"
                             : "bg-gray-100 text-gray-800"
                             }`}>
                           {product.status}
@@ -663,9 +663,9 @@ export default function AdminStockManagement() {
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className={`p-2 border border-teal-600 rounded ${currentPage === 1
+                className={`p-2 border border-rose-700 rounded ${currentPage === 1
                   ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-teal-600 hover:bg-teal-50"
+                  : "text-rose-700 hover:bg-rose-50"
                   }`}
                 aria-label="Previous page">
                 <svg
@@ -683,7 +683,7 @@ export default function AdminStockManagement() {
                   />
                 </svg>
               </button>
-              <button className="px-3 py-1.5 border border-teal-600 bg-teal-600 text-white rounded font-medium text-sm">
+              <button className="px-3 py-1.5 border border-rose-700 bg-rose-700 text-white rounded font-medium text-sm">
                 {currentPage}
               </button>
               <button
@@ -691,9 +691,9 @@ export default function AdminStockManagement() {
                   setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                 }
                 disabled={currentPage === totalPages}
-                className={`p-2 border border-teal-600 rounded ${currentPage === totalPages
+                className={`p-2 border border-rose-700 rounded ${currentPage === totalPages
                   ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-teal-600 hover:bg-teal-50"
+                  : "text-rose-700 hover:bg-rose-50"
                   }`}
                 aria-label="Next page">
                 <svg
@@ -726,4 +726,5 @@ export default function AdminStockManagement() {
     </div>
   );
 }
+
 

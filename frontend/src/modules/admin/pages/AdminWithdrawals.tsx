@@ -168,7 +168,7 @@ export default function AdminWithdrawals() {
                                     <p className="text-2xl font-bold text-gray-900">₹{withdrawal.amount?.toFixed(2)}</p>
                                     <span
                                         className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mt-2 ${withdrawal.status === 'Completed'
-                                            ? 'bg-green-100 text-green-700'
+                                            ? 'bg-rose-100 text-rose-800'
                                             : withdrawal.status === 'Approved'
                                                 ? 'bg-blue-100 text-blue-700'
                                                 : withdrawal.status === 'Rejected'
@@ -213,7 +213,7 @@ export default function AdminWithdrawals() {
                                     <button
                                         onClick={() => handleApprove(withdrawal._id || withdrawal.id)}
                                         disabled={isProcessing}
-                                        className="flex-1 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-50"
+                                        className="flex-1 bg-rose-700 text-white py-2 rounded-lg font-medium hover:bg-rose-800 transition disabled:opacity-50"
                                     >
                                         Approve
                                     </button>
@@ -294,3 +294,4 @@ export default function AdminWithdrawals() {
         </div>
     );
 }
+

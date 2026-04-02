@@ -233,8 +233,8 @@ export default function AdminWallet() {
           title="Current Platform Balance"
           value={`₹${stats?.currentAccountBalance?.toLocaleString("en-IN") || "0"}`}
           icon={WalletIcon}
-          color="text-green-600"
-          bg="bg-green-50"
+          color="text-rose-700"
+          bg="bg-rose-50"
         />
         <StatsCard
           title="Total Admin Earning"
@@ -356,7 +356,7 @@ export default function AdminWallet() {
                             <span
                               className={`px-2 py-1 rounded text-xs font-medium ${
                                 trx.type === "Credit"
-                                  ? "bg-green-100 text-green-700"
+                                  ? "bg-rose-100 text-rose-800"
                                   : "bg-red-100 text-red-700"
                               }`}>
                               {trx.type}
@@ -368,7 +368,7 @@ export default function AdminWallet() {
                           <td
                             className={`py-3 px-4 text-right font-medium ${
                               trx.type === "Credit"
-                                ? "text-green-600"
+                                ? "text-rose-700"
                                 : "text-red-600"
                             }`}>
                             {trx.type === "Credit" ? "+" : "-"}₹
@@ -421,13 +421,13 @@ export default function AdminWallet() {
                             <span
                               className={`px-2 py-1 rounded text-xs font-medium ${
                                 earning.status === "Paid"
-                                  ? "bg-green-100 text-green-700"
+                                  ? "bg-rose-100 text-rose-800"
                                   : "bg-yellow-100 text-yellow-700"
                               }`}>
                               {earning.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-right font-medium text-green-600">
+                          <td className="py-3 px-4 text-right font-medium text-rose-700">
                             ₹{earning.amount.toFixed(2)}
                           </td>
                         </tr>
@@ -499,3 +499,4 @@ function EmptyState({ message }: { message: string }) {
     </div>
   );
 }
+
