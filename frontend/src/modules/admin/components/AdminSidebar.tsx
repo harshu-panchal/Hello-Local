@@ -1107,11 +1107,25 @@ export default function AdminSidebar({ onClose }: AdminSidebarProps) {
 
       {/* Navigation Menu */}
       <nav
-        className="flex-1 py-4 overflow-y-auto admin-sidebar-nav"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+        className="flex-1 py-4 overflow-y-auto admin-sidebar-nav">
         <style>{`
           .admin-sidebar-nav::-webkit-scrollbar {
-            display: none;
+            width: 5px;
+          }
+          .admin-sidebar-nav::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .admin-sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+          }
+          .admin-sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+          }
+           /* For Firefox */
+          .admin-sidebar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
           }
         `}</style>
         {filteredSections.map((section, sectionIndex) => (
