@@ -341,71 +341,7 @@ const PromoCarousel = () => {
   );
 };
 
-// Tip selection component
-const TipSection = () => {
-  const [selectedTip, setSelectedTip] = useState<number | "other" | null>(null);
-  const [customTip, setCustomTip] = useState("");
-  const tips = [20, 30, 50];
 
-  return (
-    <motion.div
-      className="bg-white rounded-xl p-4 shadow-sm"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5 }}>
-      <p className="text-gray-700 text-sm mb-3">
-        Make their day by leaving a tip. 100% of the amount will go to them
-        after delivery
-      </p>
-      <div className="flex gap-3">
-        {tips.map((tip) => (
-          <motion.button
-            key={tip}
-            onClick={() => {
-              setSelectedTip(tip);
-              setCustomTip("");
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${selectedTip === tip
-              ? "border-green-600 bg-green-50 text-green-700"
-              : "border-gray-200 text-gray-700 hover:border-gray-300"
-              }`}
-            whileTap={{ scale: 0.95 }}>
-            ₹{tip}
-          </motion.button>
-        ))}
-        <motion.button
-          onClick={() => {
-            setSelectedTip("other");
-          }}
-          className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${selectedTip === "other"
-            ? "border-green-600 bg-green-50 text-green-700"
-            : "border-gray-200 text-gray-700 hover:border-gray-300"
-            }`}
-          whileTap={{ scale: 0.95 }}>
-          Other
-        </motion.button>
-      </div>
-
-      <AnimatePresence>
-        {selectedTip === "other" && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden">
-            <input
-              type="number"
-              placeholder="Enter custom amount"
-              value={customTip}
-              onChange={(e) => setCustomTip(e.target.value)}
-              className="mt-3 w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-};
 
 // Section item component
 const SectionItem = ({
@@ -471,8 +407,7 @@ export default function OrderDetail() {
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
-  const [selectedTip, setSelectedTip] = useState<number | "other" | null>(null);
-  const [customTip, setCustomTip] = useState("");
+
 
   // Real-time delivery tracking via WebSocket
   const {
@@ -961,26 +896,7 @@ export default function OrderDetail() {
 
       {/* Scrollable Content */}
       <div className="px-4 py-4 space-y-4 pb-24">
-        {/* Payment Pending */}
-        <motion.div
-          className="bg-white rounded-xl p-4 shadow-sm"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-gray-900">
-                Payment of ₹{order.totalAmount?.toFixed(0) || "0"} pending
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Pay now, or pay to the delivery partner using Cash/UPI
-              </p>
-            </div>
-            <Button className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6">
-              Pay now <ChevronRightIcon className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </motion.div>
+
 
         {/* Promo Carousel */}
         <PromoCarousel />
@@ -1005,8 +921,7 @@ export default function OrderDetail() {
           </motion.div>
         )}
 
-        {/* Tip Section */}
-        <TipSection />
+
 
         {/* Delivery Partner Safety */}
         <motion.button
