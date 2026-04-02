@@ -222,7 +222,7 @@ export default function SellerStockManagement() {
                             <select
                                 value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
-                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer"
+                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                             >
                                 <option value="All Category">All Category</option>
                                 {categories.map(cat => (
@@ -235,7 +235,7 @@ export default function SellerStockManagement() {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer"
+                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                             >
                                 <option value="All Products">All Products</option>
                                 <option value="Published">Published</option>
@@ -247,7 +247,7 @@ export default function SellerStockManagement() {
                             <select
                                 value={stockFilter}
                                 onChange={(e) => setStockFilter(e.target.value)}
-                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer"
+                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                             >
                                 <option value="All Products">All Products</option>
                                 <option value="In Stock">In Stock</option>
@@ -261,7 +261,7 @@ export default function SellerStockManagement() {
                             <select
                                 value={rowsPerPage}
                                 onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer"
+                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                             >
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
@@ -295,7 +295,7 @@ export default function SellerStockManagement() {
                                 link.click();
                                 document.body.removeChild(link);
                             }}
-                            className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
+                            className="bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -311,7 +311,7 @@ export default function SellerStockManagement() {
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">Search:</span>
                             <input
                                 type="text"
-                                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-teal-500 w-48"
+                                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-48"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder=""
@@ -405,7 +405,7 @@ export default function SellerStockManagement() {
                                         <div className="flex items-center gap-2">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${item.stock === 0
                                                 ? 'bg-red-50 text-red-600'
-                                                : 'bg-green-50 text-green-600'
+                                                : 'bg-pink-50 text-pink-700'
                                                 }`}>
                                                 {item.stock}
                                             </span>
@@ -417,7 +417,7 @@ export default function SellerStockManagement() {
                                                 type="number"
                                                 min="0"
                                                 defaultValue={item.stock}
-                                                className="w-20 px-2 py-1 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-teal-500 outline-none"
+                                                className="w-20 px-2 py-1 border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-pink-600 outline-none"
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') {
                                                         const val = parseInt((e.target as HTMLInputElement).value);
@@ -436,7 +436,7 @@ export default function SellerStockManagement() {
                                                         handleStockUpdate(item.productId, item.variationId, val);
                                                     }
                                                 }}
-                                                className="p-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors disabled:bg-neutral-300"
+                                                className="p-1.5 bg-pink-700 text-white rounded hover:bg-pink-800 transition-colors disabled:bg-neutral-300"
                                                 title="Update Stock"
                                             >
                                                 {updatingStock === item.variationId ? (
@@ -473,9 +473,9 @@ export default function SellerStockManagement() {
                         <button
                             onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                             disabled={currentPage === 1}
-                            className={`p-2 border border-teal-600 rounded ${currentPage === 1
+                            className={`p-2 border border-pink-700 rounded ${currentPage === 1
                                 ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                                : 'text-teal-600 hover:bg-teal-50'
+                                : 'text-pink-700 hover:bg-pink-50'
                                 }`}
                             aria-label="Previous page"
                         >
@@ -487,9 +487,9 @@ export default function SellerStockManagement() {
                             <button
                                 key={page}
                                 onClick={() => setCurrentPage(page)}
-                                className={`px-3 py-1.5 border border-teal-600 rounded font-medium text-sm ${currentPage === page
-                                    ? 'bg-teal-600 text-white'
-                                    : 'text-teal-600 hover:bg-teal-50'
+                                className={`px-3 py-1.5 border border-pink-700 rounded font-medium text-sm ${currentPage === page
+                                    ? 'bg-pink-700 text-white'
+                                    : 'text-pink-700 hover:bg-pink-50'
                                     }`}
                             >
                                 {page}
@@ -498,9 +498,9 @@ export default function SellerStockManagement() {
                         <button
                             onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                             disabled={currentPage === totalPages}
-                            className={`p-2 border border-teal-600 rounded ${currentPage === totalPages
+                            className={`p-2 border border-pink-700 rounded ${currentPage === totalPages
                                 ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                                : 'text-teal-600 hover:bg-teal-50'
+                                : 'text-pink-700 hover:bg-pink-50'
                                 }`}
                             aria-label="Next page"
                         >
@@ -514,3 +514,4 @@ export default function SellerStockManagement() {
         </div>
     );
 }
+

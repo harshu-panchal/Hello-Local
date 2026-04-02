@@ -607,15 +607,15 @@ export default function OrderChart({ title, data, maxValue, height = 400 }: Orde
           >
             <div className="font-bold mb-2 text-neutral-900 text-base">{data[hoveredIndex]?.date}</div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-teal-600"></div>
-              <span className="text-neutral-700 font-semibold">Orders: <span className="text-teal-600 font-bold">{data[hoveredIndex]?.value}</span></span>
+              <div className="w-3 h-3 rounded-full bg-pink-700"></div>
+              <span className="text-neutral-700 font-semibold">Orders: <span className="text-pink-700 font-bold">{data[hoveredIndex]?.value}</span></span>
             </div>
           </div>
         )}
 
         {/* Zoom Indicator */}
         {zoom > 1 && (
-          <div className="absolute top-2 right-2 bg-teal-600 text-white text-xs px-2 py-1 rounded-full font-medium">
+          <div className="absolute top-2 right-2 bg-pink-700 text-white text-xs px-2 py-1 rounded-full font-medium">
             {Math.round(zoom * 100)}%
           </div>
         )}
@@ -623,3 +623,4 @@ export default function OrderChart({ title, data, maxValue, height = 400 }: Orde
     </div>
   );
 }
+

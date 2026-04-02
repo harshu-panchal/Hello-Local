@@ -344,7 +344,7 @@ export default function SellerAdRequests() {
                             <div className="flex items-center gap-3">
                                 {availability && (
                                     <div className="hidden sm:flex flex-col items-end">
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${availability.slotsAvailable > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${availability.slotsAvailable > 0 ? 'bg-pink-100 text-pink-800' : 'bg-red-100 text-red-700'}`}>
                                             {availability.slotsAvailable} SLOTS VACANT
                                         </span>
                                         <span className="text-[9px] text-gray-400 font-medium uppercase mt-0.5">Limit: {availability.maxAds} Ads</span>
@@ -352,7 +352,7 @@ export default function SellerAdRequests() {
                                 )}
                                 <button
                                     onClick={() => setShowForm(true)}
-                                    className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2"
+                                    className="bg-gradient-to-r from-pink-500 to-pink-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2"
                                 >
                                     <span>+ Request Ad</span>
                                     {availability && availability.slotsAvailable <= 0 && (
@@ -380,15 +380,15 @@ export default function SellerAdRequests() {
                                     setForm(f => ({ ...f, startDate: day.date.split('T')[0] }));
                                     setShowForm(true);
                                 }}
-                                className={`flex-shrink-0 min-w-[65px] h-20 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 ${day.slotsAvailable > 0 ? 'bg-white border-gray-100 hover:border-pink-200' : 'bg-rose-50 border-rose-100 opacity-80'}`}
+                                className={`flex-shrink-0 min-w-[65px] h-20 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 ${day.slotsAvailable > 0 ? 'bg-white border-gray-100 hover:border-pink-200' : 'bg-pink-50 border-pink-100 opacity-80'}`}
                             >
                                 <span className={`text-[9px] font-bold ${day.slotsAvailable > 0 ? 'text-gray-400' : 'text-rose-400'}`}>
                                     {new Date(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                                 </span>
-                                <span className={`text-base font-black my-0.5 ${day.slotsAvailable > 0 ? 'text-gray-800' : 'text-rose-600'}`}>
+                                <span className={`text-base font-black my-0.5 ${day.slotsAvailable > 0 ? 'text-gray-800' : 'text-pink-600'}`}>
                                     {day.slotsAvailable}
                                 </span>
-                                <span className={`text-[8px] font-bold uppercase ${day.slotsAvailable > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+                                <span className={`text-[8px] font-bold uppercase ${day.slotsAvailable > 0 ? 'text-pink-600' : 'text-pink-500'}`}>
                                     {day.slotsAvailable > 0 ? 'Free' : 'Full'}
                                 </span>
                             </div>
@@ -402,14 +402,14 @@ export default function SellerAdRequests() {
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="mx-4 mt-4 bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-2xl p-5 flex items-start gap-4 shadow-sm"
+                    className="mx-4 mt-4 bg-gradient-to-br from-pink-50 to-pink-50 border border-pink-100 rounded-2xl p-5 flex items-start gap-4 shadow-sm"
                 >
                     <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
                         📅
                     </div>
                     <div className="flex-1">
-                        <h3 className="font-bold text-rose-900 text-sm">Today's Slots are Full</h3>
-                        <p className="text-rose-700 text-xs leading-relaxed mb-4">
+                        <h3 className="font-bold text-pink-900 text-sm">Today's Slots are Full</h3>
+                        <p className="text-pink-700 text-xs leading-relaxed mb-4">
                             All 10 advertising slots are currently booked. However, you can secure your spot by <b>scheduling for a future date</b>.
                         </p>
                         <div className="flex gap-2">
@@ -422,13 +422,13 @@ export default function SellerAdRequests() {
                                     }
                                     setShowForm(true);
                                 }}
-                                className="bg-rose-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-all flex items-center gap-2"
+                                className="bg-pink-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-all flex items-center gap-2"
                             >
                                 📅 Book for First Available Date
                             </button>
                             <button
                                 onClick={() => setShowForm(true)}
-                                className="bg-white text-rose-600 border border-rose-200 px-4 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                                className="bg-white text-pink-600 border border-pink-200 px-4 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
                             >
                                 Choose Custom Date
                             </button>
@@ -465,7 +465,7 @@ export default function SellerAdRequests() {
                     >
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
                             {/* Form Header */}
-                            <div className="bg-gradient-to-r from-pink-500 to-rose-500 text-white p-4">
+                            <div className="bg-gradient-to-r from-pink-500 to-pink-500 text-white p-4">
                                 <h2 className="font-bold text-lg">{slotsAvailableForRange > 0 ? "📢 New Immediate Ad Request" : "📅 Schedule Future Ad"}</h2>
                                 <p className="text-xs text-pink-100 mt-0.5">
                                     {slotsAvailableForRange > 0
@@ -554,7 +554,7 @@ export default function SellerAdRequests() {
                                     <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex justify-between">
                                         Select Ad Date *
                                         {availability && (
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${slotsAvailableForRange > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${slotsAvailableForRange > 0 ? 'bg-pink-100 text-pink-800' : 'bg-red-100 text-red-700'}`}>
                                                 {slotsAvailableForRange} SLOTS FREE IN RANGE
                                             </span>
                                         )}
@@ -568,11 +568,11 @@ export default function SellerAdRequests() {
                                     />
 
                                     {availability && slotsAvailableForRange <= 0 && (
-                                        <div className="mt-3 p-3 bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-xl shadow-sm">
-                                            <p className="text-[12px] text-rose-800 font-bold mb-1 flex items-center gap-1.5">
+                                        <div className="mt-3 p-3 bg-gradient-to-br from-pink-50 to-pink-50 border border-pink-100 rounded-xl shadow-sm">
+                                            <p className="text-[12px] text-pink-800 font-bold mb-1 flex items-center gap-1.5">
                                                 <span className="text-lg">⚠️</span> SELECTED DATE IS FULL
                                             </p>
-                                            <p className="text-[11px] text-rose-700 leading-relaxed">
+                                            <p className="text-[11px] text-pink-700 leading-relaxed">
                                                 All 10 slots are already booked for this period. To proceed, please pick a later date.
                                             </p>
                                             {availability.dailyStats?.find((d: any) => d.slotsAvailable > 0 && new Date(d.date) > new Date(form.startDate)) && (
@@ -622,7 +622,7 @@ export default function SellerAdRequests() {
                                 {/* Pricing Display */}
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Pricing Summary</label>
-                                    <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl p-4 border border-pink-100 relative overflow-hidden">
+                                    <div className="bg-gradient-to-br from-pink-50 to-pink-50 rounded-2xl p-4 border border-pink-100 relative overflow-hidden">
                                         <div className="flex justify-between items-center relative z-10">
                                             <div>
                                                 <p className="text-[10px] text-pink-600 font-bold uppercase tracking-wider mb-1">
@@ -731,7 +731,7 @@ export default function SellerAdRequests() {
                                                 checked={form.payNow}
                                                 onChange={() => setForm(f => ({ ...f, payNow: !f.payNow }))}
                                             />
-                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
                                         </label>
                                     </div>
 
@@ -773,7 +773,7 @@ export default function SellerAdRequests() {
                                         <button
                                             onClick={handleSubmit}
                                             disabled={submitting || uploadingImage || isCheckingSlots}
-                                            className="flex-[2] bg-gradient-to-r from-pink-600 to-rose-600 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                            className="flex-[2] bg-gradient-to-r from-pink-600 to-pink-600 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
                                             {submitting ? 'Submitting...' : isCheckingSlots ? 'Checking Slots...' : form.payNow ? '💳 Pay & Post Now' : '🚀 Request Immediate Ad'}
                                         </button>
@@ -795,7 +795,7 @@ export default function SellerAdRequests() {
                             <p className="text-sm text-gray-500 mb-6">Reach thousands of local customers by advertising on our home page carousel!</p>
                             <button
                                 onClick={() => setShowForm(true)}
-                                className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 mx-auto"
+                                className="bg-gradient-to-r from-pink-500 to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 mx-auto"
                             >
                                 <span>Create Your First Ad</span>
                                 {availability && availability.slotsAvailable <= 0 && (
@@ -850,7 +850,7 @@ export default function SellerAdRequests() {
                                                 🕒 {req.durationDays} {req.durationDays === 1 ? 'Day' : 'Days'}
                                             </span>
                                             {req.adPrice > 0 && (
-                                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs font-semibold">
+                                                <span className="bg-pink-100 text-pink-800 px-2 py-1 rounded-lg text-xs font-semibold">
                                                     ₹{req.adPrice}
                                                 </span>
                                             )}
@@ -879,7 +879,7 @@ export default function SellerAdRequests() {
                                                                 amount: req.adPrice
                                                             });
                                                         }}
-                                                        className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white py-2.5 rounded-xl text-sm font-bold shadow hover:shadow-lg transition active:scale-95"
+                                                        className="flex-1 bg-gradient-to-r from-pink-600 to-pink-500 text-white py-2.5 rounded-xl text-sm font-bold shadow hover:shadow-lg transition active:scale-95"
                                                     >
                                                         💳 Pay ₹{req.adPrice}
                                                     </button>
@@ -914,7 +914,7 @@ export default function SellerAdRequests() {
                                                 <button
                                                     type="button"
                                                     onClick={() => window.open(ensureAbsoluteUrl(req.ctaLink), '_blank')}
-                                                    className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-sm font-bold text-center shadow-sm hover:shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                                                    className="flex-1 bg-pink-600 text-white py-2.5 rounded-xl text-sm font-bold text-center shadow-sm hover:shadow-md transition active:scale-95 flex items-center justify-center gap-2"
                                                 >
                                                     🎉 View Live Ad <span className="text-[10px]">↗</span>
                                                 </button>
@@ -974,3 +974,4 @@ export default function SellerAdRequests() {
         </div>
     );
 }
+

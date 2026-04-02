@@ -127,7 +127,7 @@ export default function SellerOrders() {
       case 'On the way':
         return 'bg-purple-100 text-purple-800';
       case 'Delivered':
-        return 'bg-green-100 text-green-800';
+        return 'bg-pink-100 text-pink-800';
       case 'Cancelled':
         return 'bg-red-100 text-red-800';
       default:
@@ -593,5 +593,6 @@ export default function SellerOrders() {
     </div>
   );
 }
+
 
 
