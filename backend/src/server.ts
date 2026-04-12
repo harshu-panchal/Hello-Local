@@ -3,7 +3,7 @@ import { createServer } from "http";
 import dns from "dns";
 import cors from "cors";
 import dotenv from "dotenv";
-import connectDB from "./config/db.ts";
+import connectDB from "./config/db";
 import routes from "./routes";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
