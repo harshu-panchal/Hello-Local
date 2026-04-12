@@ -29,7 +29,8 @@
     "seed:sub-subcategories": "tsx src/scripts/seedSubSubcategories.ts",
     "add:products-from-paths": "tsx src/scripts/addProductsFromImagePaths.ts",
     "generate:delivery-otp": "tsx src/scripts/generateDeliveryOtpForCustomers.ts",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "pm2:reload": "npm run build && pm2 startOrReload ecosystem.config.cjs --env production"
   },
   "keywords": [
     "express",
