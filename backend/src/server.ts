@@ -12,7 +12,6 @@ import { seedHeaderCategories } from "./utils/seedHeaderCategories";
 import { initializeSocket } from "./socket/socketService";
 import { initializeFirebaseAdmin } from "./services/firebaseAdmin";
 
-
 // Load environment variables
 dotenv.config();
 
@@ -26,11 +25,16 @@ const allowedOrigins = [
   "https://www.hellolocal.com",
   "https://hellolocal.com",
   // Add more origins from environment variable if needed
-  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map(url => url.trim()) : [])
+  ...(process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
+    : []),
 ];
 
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) {
       return callback(null, true);
@@ -38,18 +42,26 @@ const corsOptions = {
 
     // In development, allow localhost
     if (process.env.NODE_ENV !== "production") {
-      if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+      if (
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:")
+      ) {
         return callback(null, true);
       }
     }
 
     // Normalize origin (remove trailing slash)
-    const normalizedOrigin = origin.replace(/\/$/, '');
+    const normalizedOrigin = origin.replace(/\/$/, "");
 
     // Check if origin is in allowed list (exact match or normalized)
-    const isAllowed = allowedOrigins.some(allowed => {
-      const normalizedAllowed = allowed.replace(/\/$/, '');
-      return origin === allowed || normalizedOrigin === normalizedAllowed || origin === normalizedAllowed || normalizedOrigin === allowed;
+    const isAllowed = allowedOrigins.some((allowed) => {
+      const normalizedAllowed = allowed.replace(/\/$/, "");
+      return (
+        origin === allowed ||
+        normalizedOrigin === normalizedAllowed ||
+        origin === normalizedAllowed ||
+        normalizedOrigin === allowed
+      );
     });
 
     if (isAllowed) {
@@ -61,7 +73,13 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
   exposedHeaders: ["Content-Length", "Content-Type"],
   maxAge: 86400,
 };
@@ -110,15 +128,19 @@ async function startServer() {
   initializeFirebaseAdmin();
 
   // Handle server errors gracefully (e.g., port already in use)
-  httpServer.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code === 'EADDRINUSE') {
+  httpServer.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
       console.error(`\n\x1b[31m✗ Port ${PORT} is already in use!\x1b[0m`);
-      console.error(`\x1b[33m  → Another instance of the server may be running.\x1b[0m`);
-      console.error(`\x1b[33m  → Run: taskkill /f /im node.exe (Windows) or killall node (Mac/Linux)\x1b[0m`);
+      console.error(
+        `\x1b[33m  → Another instance of the server may be running.\x1b[0m`,
+      );
+      console.error(
+        `\x1b[33m  → Run: taskkill /f /im node.exe (Windows) or killall node (Mac/Linux)\x1b[0m`,
+      );
       console.error(`\x1b[33m  → Or change PORT in .env file\x1b[0m\n`);
       process.exit(1);
     } else {
-      console.error('\n\x1b[31m✗ Server error:\x1b[0m', error);
+      console.error("\n\x1b[31m✗ Server error:\x1b[0m", error);
       process.exit(1);
     }
   });
@@ -127,7 +149,7 @@ async function startServer() {
     console.log("\n\x1b[32m✓\x1b[0m \x1b[1mHello Local Server Started\x1b[0m");
     console.log(`   \x1b[36mPort:\x1b[0m http://localhost:${PORT}`);
     console.log(
-      `   \x1b[36mEnvironment:\x1b[0m ${process.env.NODE_ENV || "development"}`
+      `   \x1b[36mEnvironment:\x1b[0m ${process.env.NODE_ENV || "development"}`,
     );
     console.log(`   \x1b[36mSocket.IO:\x1b[0m ✓ Ready for connections\n`);
   });
