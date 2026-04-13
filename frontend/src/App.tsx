@@ -369,7 +369,7 @@ function App() {
                           />
 
                           <Route
-                            path="/"
+                            path="/user"
                             element={
                               <Suspense fallback={<IconLoader forceShow />}>
                                 <WebsiteHome />
@@ -384,7 +384,7 @@ function App() {
                               <AppLayout>
                                 <Suspense fallback={<IconLoader forceShow />}>
                                   <Routes>
-                                    <Route path="/user" element={<Home />} />
+                                    <Route path="/" element={<Home />} />
                                     <Route path="/user/home" element={<Home />} />
                                     <Route path="/search" element={<Search />} />
                                     <Route path="/orders" element={<Orders />} />
