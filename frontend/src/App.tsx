@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy, startTransition } from "react";
 import { CartProvider } from "./context/CartContext";
 import { OrdersProvider } from "./context/OrdersContext";
@@ -250,7 +250,7 @@ function App() {
                                 <Suspense fallback={<IconLoader forceShow />}>
                                   <DeliveryLayout>
                                     <Routes>
-                                      <Route path="" element={<DeliveryDashboard />} />
+                                      <Route path="user" element={<DeliveryDashboard />} />
                                       <Route path="orders" element={<DeliveryOrders />} />
                                       <Route path="orders/:id" element={<DeliveryOrderDetail />} />
                                       <Route path="orders/pending" element={<DeliveryPendingOrders />} />
@@ -369,7 +369,7 @@ function App() {
                           />
 
                           <Route
-                            path="/user"
+                            path="/"
                             element={
                               <Suspense fallback={<IconLoader forceShow />}>
                                 <WebsiteHome />
@@ -379,45 +379,58 @@ function App() {
 
                           {/* Main App Routes */}
                           <Route
-                            path="/*"
+                            path="/user/*"
                             element={
                               <AppLayout>
                                 <Suspense fallback={<IconLoader forceShow />}>
                                   <Routes>
                                     <Route path="/" element={<Home />} />
-                                    <Route path="/user/home" element={<Home />} />
-                                    <Route path="/search" element={<Search />} />
-                                    <Route path="/orders" element={<Orders />} />
-                                    <Route path="/orders/:id" element={<OrderDetail />} />
-                                    <Route path="/order-again" element={<OrderAgain />} />
-                                    <Route path="/account" element={<Account />} />
-                                    <Route path="/about-us" element={<AboutUs />} />
-                                    <Route path="/faq" element={<FAQ />} />
-                                    <Route path="/wishlist" element={<Wishlist />} />
-                                    <Route path="/categories" element={<Categories />} />
-                                    <Route path="/category/:id" element={<Category />} />
-                                    <Route path="/address-book" element={<AddressBook />} />
-                                    <Route path="/local-setu" element={<LocalSetu />} />
-                                    <Route path="/checkout" element={<Checkout />} />
-                                    <Route path="/checkout/address" element={<CheckoutAddress />} />
-                                    <Route path="/product/:id" element={<ProductDetail />} />
-                                    <Route path="/invoice/:id" element={<Invoice />} />
-                                    <Route path="/cart" element={<Cart />} />
-                                    <Route path="/addresses" element={<Addresses />} />
-                                    <Route path="/store/:slug" element={<StorePage />} />
-                                    <Route path="/store/spiritual" element={<SpiritualStore />} />
-                                    <Route path="/store/pharma" element={<PharmaStore />} />
-                                    <Route path="/store/e-gifts" element={<EGiftStore />} />
-                                    <Route path="/store/pet" element={<PetStore />} />
-                                    <Route path="/store/sports" element={<SportsStore />} />
-                                    <Route path="/store/fashion-basics" element={<FashionStore />} />
-                                    <Route path="/store/toy" element={<ToyStore />} />
-                                    <Route path="/store/hobby" element={<HobbyStore />} />
+                                    <Route path="home" element={<Home />} />
+                                    <Route path="search" element={<Search />} />
+                                    <Route path="orders" element={<Orders />} />
+                                    <Route path="orders/:id" element={<OrderDetail />} />
+                                    <Route path="order-again" element={<OrderAgain />} />
+                                    <Route path="account" element={<Account />} />
+                                    <Route path="about-us" element={<AboutUs />} />
+                                    <Route path="faq" element={<FAQ />} />
+                                    <Route path="wishlist" element={<Wishlist />} />
+                                    <Route path="categories" element={<Categories />} />
+                                    <Route path="category/:id" element={<Category />} />
+                                    <Route path="address-book" element={<AddressBook />} />
+                                    <Route path="local-setu" element={<LocalSetu />} />
+                                    <Route path="checkout" element={<Checkout />} />
+                                    <Route path="checkout/address" element={<CheckoutAddress />} />
+                                    <Route path="product/:id" element={<ProductDetail />} />
+                                    <Route path="invoice/:id" element={<Invoice />} />
+                                    <Route path="cart" element={<Cart />} />
+                                    <Route path="addresses" element={<Addresses />} />
+                                    <Route path="store/:slug" element={<StorePage />} />
+                                    <Route path="store/spiritual" element={<SpiritualStore />} />
+                                    <Route path="store/pharma" element={<PharmaStore />} />
+                                    <Route path="store/e-gifts" element={<EGiftStore />} />
+                                    <Route path="store/pet" element={<PetStore />} />
+                                    <Route path="store/sports" element={<SportsStore />} />
+                                    <Route path="store/fashion-basics" element={<FashionStore />} />
+                                    <Route path="store/toy" element={<ToyStore />} />
+                                    <Route path="store/hobby" element={<HobbyStore />} />
                                   </Routes>
                                 </Suspense>
                               </AppLayout>
                             }
                           />
+
+                          {/* Redirects for legacy routes to the new /user namespace */}
+                          <Route path="/home" element={<Navigate to="/user/home" replace />} />
+                          <Route path="/search" element={<Navigate to="/user/search" replace />} />
+                          <Route path="/orders" element={<Navigate to="/user/orders" replace />} />
+                          <Route path="/order-again" element={<Navigate to="/user/order-again" replace />} />
+                          <Route path="/account" element={<Navigate to="/user/account" replace />} />
+                          <Route path="/wishlist" element={<Navigate to="/user/wishlist" replace />} />
+                          <Route path="/categories" element={<Navigate to="/user/categories" replace />} />
+                          <Route path="/cart" element={<Navigate to="/user/cart" replace />} />
+                          <Route path="/checkout" element={<Navigate to="/user/checkout" replace />} />
+                          <Route path="/local-setu" element={<Navigate to="/user/local-setu" replace />} />
+                          <Route path="/addresses" element={<Navigate to="/user/addresses" replace />} />
                         </Routes>
                       </BrowserRouter>
                     </OrdersProvider>

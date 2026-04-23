@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -30,7 +32,7 @@ const Navbar = () => {
     >
       <div className="container mx-auto px-6 flex justify-between items-center">
         {/* Logo */}
-        <div className="flex items-center gap-2 cursor-pointer">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
           <img src={logo} alt="Hello Local Logo" className="w-9 h-9 object-contain" />
           <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#ff6a5c] to-[#ff3d8d]">
             Hello Local
@@ -48,7 +50,10 @@ const Navbar = () => {
               {item.label}
             </a>
           ))}
-          <button className="btn-gradient px-5 py-2 rounded-full font-semibold text-sm">
+          <button 
+            onClick={() => navigate('/user')}
+            className="btn-gradient px-5 py-2 rounded-full font-semibold text-sm"
+          >
             Get the App
           </button>
         </div>
@@ -93,7 +98,10 @@ const Navbar = () => {
                   {item.label}
                 </a>
               ))}
-              <button className="btn-gradient px-6 py-3 rounded-xl font-semibold w-full mt-2">
+              <button 
+                onClick={() => navigate('/user')}
+                className="btn-gradient px-6 py-3 rounded-xl font-semibold w-full mt-2"
+              >
                 Get the App
               </button>
             </div>

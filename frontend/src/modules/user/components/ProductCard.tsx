@@ -131,7 +131,7 @@ export default function ProductCard({
   const { displayPrice, mrp, discount } = calculateProductPrice(product);
 
   const handleCardClick = () => {
-    navigate(`/product/${((product as any).id || product._id) as string}`);
+    navigate(`/user/product/${((product as any).id || product._id) as string}`);
   };
 
   const handleAdd = async (e: React.MouseEvent) => {

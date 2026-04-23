@@ -22,7 +22,7 @@ export default function Cart() {
         <div className="text-6xl md:text-8xl mb-4">🛒</div>
         <h2 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">Your cart is empty</h2>
         <p className="text-neutral-600 mb-6 md:mb-8 md:text-lg">Add some items to get started!</p>
-        <Link to="/">
+        <Link to="/user">
           <Button variant="default" size="lg" className="md:px-8 md:py-3 md:text-lg">
             Start Shopping
           </Button>

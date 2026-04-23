@@ -240,7 +240,7 @@ export default function Search() {
 
           {/* See all products - Placeholder or link to popular items */}
           <div className="px-4 md:px-6 lg:px-8 py-2 md:py-4">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 cursor-pointer" onClick={() => navigate('/category/all')}>
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 cursor-pointer" onClick={() => navigate('/user/category/all')}>
               <span className="text-sm md:text-base text-neutral-700 font-medium whitespace-nowrap">Browse all categories ▸</span>
             </div>
           </div>

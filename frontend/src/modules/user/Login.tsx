@@ -54,7 +54,7 @@ export default function Login() {
           refCode: response.data.user.refCode,
           status: response.data.user.status,
         });
-        navigate('/');
+        navigate('/user');
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
