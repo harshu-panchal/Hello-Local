@@ -225,9 +225,9 @@ export default function SellerSignUp() {
       </button>
 
       {/* Sign Up Card */}
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl">
         {/* Header Section */}
-        <div className="px-6 py-4 text-center border-b border-pink-700" style={{ backgroundColor: '#db2777' }}>
+        <div className="px-6 py-4 text-center border-b border-pink-700 rounded-t-2xl" style={{ backgroundColor: '#db2777' }}>
           <div className="mb-4">
             <img
               src="/logo.png?v=4"
@@ -240,12 +240,7 @@ export default function SellerSignUp() {
         </div>
 
         {/* Sign Up Form */}
-        <div className="p-6 space-y-4 seller-signup-form" style={{ maxHeight: '70vh', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <style>{`
-            .seller-signup-form::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
+        <div className="p-6 space-y-4">
           {!showOTP ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Required Fields Section */}
