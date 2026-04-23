@@ -393,10 +393,12 @@ function App() {
                                     <Route path="user/order-again" element={<OrderAgain />} />
                                     <Route path="user/account" element={<Account />} />
                                     <Route path="user/about-us" element={<AboutUs />} />
-                                    <Route path="user/faq" element={<FAQ />} />user
+                                    <Route path="user/faq" element={<FAQ />} />
                                     <Route path="user/wishlist" element={<Wishlist />} />
                                     <Route path="user/categories" element={<Categories />} />
                                     <Route path="user/category/:id" element={<Category />} />
+                                    <Route path="/category/:id" element={<Category />} />
+
                                     <Route path="user/address-book" element={<AddressBook />} />
                                     <Route path="user/local-setu" element={<LocalSetu />} />
                                     <Route path="user/checkout" element={<Checkout />} />
