@@ -97,7 +97,7 @@ app.set("io", io);
 // Routes
 app.get("/", (_req: Request, res: Response) => {
   res.json({
-    message: "Hello Local API Server is running!",
+    message: `Hello Local API Server is RELOADED at ${new Date().toISOString()}`,
     version: "1.0.0",
     socketIO: "Listening for WebSocket connections",
   });

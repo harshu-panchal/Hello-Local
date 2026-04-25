@@ -246,7 +246,7 @@ export default function DeliverySignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center px-4 py-8">
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
@@ -293,19 +293,7 @@ export default function DeliverySignUp() {
         </div>
 
         {/* Sign Up Form */}
-        <div
-          className="p-6 space-y-4 delivery-signup-form"
-          style={{
-            maxHeight: "70vh",
-            overflowY: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}>
-          <style>{`
-            .delivery-signup-form::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
+        <div className="p-6 space-y-4">
           {!showOTP ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Personal Information */}

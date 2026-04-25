@@ -17,12 +17,21 @@ declare global {
  */
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
   try {
+    const fullUrl = (req.originalUrl || req.url || req.path || '').toLowerCase();
+    const isPublicUpload = fullUrl.includes('upload/document') || 
+                          fullUrl.includes('upload/documents') ||
+                          fullUrl.includes('/document');
+
+    if (isPublicUpload) {
+      return next();
+    }
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({
+      res.status(418).json({
         success: false,
-        message: 'No token provided. Authorization header must be in format: Bearer <token>',
+        message: `No token provided. URL: ${fullUrl}. Authorization header must be in format: Bearer <token>`,
       });
       return;
     }
@@ -34,9 +43,9 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       req.user = decoded;
       next();
     } catch (error: any) {
-      res.status(401).json({
+      res.status(419).json({
         success: false,
-        message: error.message || 'Invalid or expired token',
+        message: `${error.message || 'Invalid or expired token'}`,
       });
       return;
     }
@@ -56,7 +65,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
 export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({
+      res.status(420).json({
         success: false,
         message: 'Authentication required',
       });
@@ -81,7 +90,7 @@ export const authorize = (...roles: string[]) => {
 export const requireUserType = (...userTypes: AuthUserType[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({
+      res.status(421).json({
         success: false,
         message: 'Authentication required',
       });

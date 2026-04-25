@@ -1,5 +1,12 @@
 import api, { setAuthToken, removeAuthToken } from '../config';
 
+const handleApiError = (error: any) => {
+  if (error.response && error.response.data && error.response.data.message) {
+    throw new Error(error.response.data.message);
+  }
+  throw new Error(error.message || 'An unexpected error occurred');
+};
+
 export interface SendOTPResponse {
   success: boolean;
   message: string;
@@ -61,24 +68,36 @@ export interface RegisterResponse {
  * Send OTP to seller mobile number
  */
 export const sendOTP = async (mobile: string): Promise<SendOTPResponse> => {
-  const response = await api.post<SendOTPResponse>('/auth/seller/send-otp', { mobile });
-  return response.data;
+  try {
+    const response = await api.post<SendOTPResponse>('/auth/seller/send-otp', { mobile });
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
 };
 
 /**
  * Verify OTP and login seller
  */
 export const verifyOTP = async (mobile: string, otp: string): Promise<VerifyOTPResponse> => {
-  const response = await api.post<VerifyOTPResponse>('/auth/seller/verify-otp', { mobile, otp });
-  return response.data;
+  try {
+    const response = await api.post<VerifyOTPResponse>('/auth/seller/verify-otp', { mobile, otp });
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
 };
 
 /**
  * Register new seller
  */
 export const register = async (data: RegisterData): Promise<RegisterResponse> => {
-  const response = await api.post<RegisterResponse>('/auth/seller/register', data);
-  return response.data;
+  try {
+    const response = await api.post<RegisterResponse>('/auth/seller/register', data);
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
 };
 
 /**

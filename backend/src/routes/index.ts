@@ -61,6 +61,9 @@ router.get("/health", (_req, res) => {
   });
 });
 
+// Upload routes (Public for documents, protected for images)
+router.use("/upload", uploadRoutes);
+
 // Public route for shop ads carousel (no auth required)
 router.get("/shop-ads/active", getActiveShopAds);
 
@@ -135,9 +138,6 @@ router.use("/sellers", sellerRoutes);
 
 // Admin routes (protected, admin only)
 router.use("/admin", adminRoutes);
-
-// Upload routes (protected)
-router.use("/upload", uploadRoutes);
 
 // Product routes (protected, seller only)
 router.use("/products", productRoutes);
