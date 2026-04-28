@@ -6,7 +6,7 @@ import {
   verifyOTP,
 } from "../../../services/api/auth/deliveryAuthService";
 import { uploadDocument } from "../../../services/api/uploadService";
-import { validateDocumentFile } from "../../../utils/imageUpload";
+import { validateDocumentFile, compressImage } from "../../../utils/imageUpload";
 import OTPInput from "../../../components/OTPInput";
 
 export default function DeliverySignUp() {
@@ -167,23 +167,35 @@ export default function DeliverySignUp() {
       if (drivingLicenseFile || nationalIdentityCardFile) {
         setUploadingDocs(true);
 
-        if (drivingLicenseFile) {
-          const drivingLicenseResult = await uploadDocument(
-            drivingLicenseFile,
-            "hellolocal/delivery/documents"
-          );
-          drivingLicenseUrl = drivingLicenseResult.secureUrl;
-        }
+        try {
+          const uploadPromises = [];
 
-        if (nationalIdentityCardFile) {
-          const nationalIdResult = await uploadDocument(
-            nationalIdentityCardFile,
-            "hellolocal/delivery/documents"
-          );
-          nationalIdentityCardUrl = nationalIdResult.secureUrl;
-        }
+          if (drivingLicenseFile) {
+            uploadPromises.push((async () => {
+              const compressed = await compressImage(drivingLicenseFile);
+              const result = await uploadDocument(
+                compressed,
+                "hellolocal/delivery/documents"
+              );
+              drivingLicenseUrl = result.secureUrl;
+            })());
+          }
 
-        setUploadingDocs(false);
+          if (nationalIdentityCardFile) {
+            uploadPromises.push((async () => {
+              const compressed = await compressImage(nationalIdentityCardFile);
+              const result = await uploadDocument(
+                compressed,
+                "hellolocal/delivery/documents"
+              );
+              nationalIdentityCardUrl = result.secureUrl;
+            })());
+          }
+
+          await Promise.all(uploadPromises);
+        } finally {
+          setUploadingDocs(false);
+        }
       }
 
       const response = await register({

@@ -4,6 +4,7 @@ import { uploadImage, uploadImages } from "../../../services/api/uploadService";
 import {
   validateImageFile,
   createImagePreview,
+  compressImage,
 } from "../../../utils/imageUpload";
 import {
   createProduct,
@@ -423,8 +424,9 @@ export default function SellerAddProduct() {
 
       // Upload main image if provided
       if (mainImageFile) {
+        const compressedMain = await compressImage(mainImageFile);
         const mainImageResult = await uploadImage(
-          mainImageFile,
+          compressedMain,
           "dhakadsnazzy/products"
         );
         mainImageUrl = mainImageResult.secureUrl;
@@ -436,8 +438,11 @@ export default function SellerAddProduct() {
 
       // Upload gallery images if provided
       if (galleryImageFiles.length > 0) {
+        const compressedGallery = await Promise.all(
+          galleryImageFiles.map((file) => compressImage(file))
+        );
         const galleryResults = await uploadImages(
-          galleryImageFiles,
+          compressedGallery,
           "dhakadsnazzy/products/gallery"
         );
         galleryImageUrls = galleryResults.map((result) => result.secureUrl);
