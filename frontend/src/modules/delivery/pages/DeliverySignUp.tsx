@@ -5,8 +5,6 @@ import {
   sendOTP,
   verifyOTP,
 } from "../../../services/api/auth/deliveryAuthService";
-import { uploadDocument } from "../../../services/api/uploadService";
-import { validateDocumentFile, compressImage } from "../../../utils/imageUpload";
 import OTPInput from "../../../components/OTPInput";
 
 export default function DeliverySignUp() {
@@ -20,8 +18,6 @@ export default function DeliverySignUp() {
     address: "",
     city: "",
     pincode: "",
-    drivingLicenseUrl: "",
-    nationalIdentityCardUrl: "",
     accountName: "",
     bankName: "",
     accountNumber: "",
@@ -29,13 +25,6 @@ export default function DeliverySignUp() {
     bonusType: "",
   });
 
-  // File state for UI
-  const [drivingLicenseFile, setDrivingLicenseFile] = useState<File | null>(
-    null
-  );
-  const [nationalIdentityCardFile, setNationalIdentityCardFile] =
-    useState<File | null>(null);
-  const [uploadingDocs, setUploadingDocs] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -111,24 +100,7 @@ export default function DeliverySignUp() {
     );
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, files } = e.target;
-    if (!files || !files[0]) return;
 
-    const file = files[0];
-    const validation = validateDocumentFile(file);
-    if (!validation.valid) {
-      setError(validation.error || "Invalid document file");
-      return;
-    }
-
-    if (name === "drivingLicense") {
-      setDrivingLicenseFile(file);
-    } else if (name === "nationalIdentityCard") {
-      setNationalIdentityCardFile(file);
-    }
-    setError("");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,44 +132,6 @@ export default function DeliverySignUp() {
     setError("");
 
     try {
-      // Upload documents if provided
-      let drivingLicenseUrl = formData.drivingLicenseUrl;
-      let nationalIdentityCardUrl = formData.nationalIdentityCardUrl;
-
-      if (drivingLicenseFile || nationalIdentityCardFile) {
-        setUploadingDocs(true);
-
-        try {
-          const uploadPromises = [];
-
-          if (drivingLicenseFile) {
-            uploadPromises.push((async () => {
-              const compressed = await compressImage(drivingLicenseFile);
-              const result = await uploadDocument(
-                compressed,
-                "hellolocal/delivery/documents"
-              );
-              drivingLicenseUrl = result.secureUrl;
-            })());
-          }
-
-          if (nationalIdentityCardFile) {
-            uploadPromises.push((async () => {
-              const compressed = await compressImage(nationalIdentityCardFile);
-              const result = await uploadDocument(
-                compressed,
-                "hellolocal/delivery/documents"
-              );
-              nationalIdentityCardUrl = result.secureUrl;
-            })());
-          }
-
-          await Promise.all(uploadPromises);
-        } finally {
-          setUploadingDocs(false);
-        }
-      }
-
       const response = await register({
         name: formData.name,
         mobile: formData.mobile,
@@ -207,8 +141,6 @@ export default function DeliverySignUp() {
         address: formData.address,
         city: formData.city,
         pincode: formData.pincode || undefined,
-        drivingLicense: drivingLicenseUrl || undefined,
-        nationalIdentityCard: nationalIdentityCardUrl || undefined,
         accountName: formData.accountName || undefined,
         bankName: formData.bankName || undefined,
         accountNumber: formData.accountNumber || undefined,
@@ -552,54 +484,7 @@ export default function DeliverySignUp() {
                 </div>
               </div>
 
-              {/* Documents Section */}
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="text-sm font-semibold text-neutral-700 border-b pb-2">
-                  Documents (Optional - Can be uploaded later)
-                </h3>
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Driving License
-                  </label>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      name="drivingLicense"
-                      onChange={handleFileChange}
-                      accept="image/*,.pdf"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                      disabled={loading || uploadingDocs}
-                    />
-                    {drivingLicenseFile && (
-                      <p className="text-xs text-neutral-600">
-                        {drivingLicenseFile.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    National Identity Card
-                  </label>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      name="nationalIdentityCard"
-                      onChange={handleFileChange}
-                      accept="image/*,.pdf"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                      disabled={loading || uploadingDocs}
-                    />
-                    {nationalIdentityCardFile && (
-                      <p className="text-xs text-neutral-600">
-                        {nationalIdentityCardFile.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
 
               {error && (
                 <div className="text-sm text-red-600 bg-red-50 p-2 rounded text-center">
@@ -609,16 +494,14 @@ export default function DeliverySignUp() {
 
               <button
                 type="submit"
-                disabled={loading || uploadingDocs}
-                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${!loading && !uploadingDocs
+                disabled={loading}
+                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${!loading
                   ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
                   : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
                   }`}>
-                {uploadingDocs
-                  ? "Uploading Documents..."
-                  : loading
-                    ? "Creating Account..."
-                    : "Sign Up"}
+                {loading
+                  ? "Creating Account..."
+                  : "Sign Up"}
               </button>
 
               {/* Login Link */}

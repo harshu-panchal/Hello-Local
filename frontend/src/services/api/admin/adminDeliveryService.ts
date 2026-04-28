@@ -11,8 +11,6 @@ export interface DeliveryBoy {
   address: string;
   city: string;
   pincode?: string;
-  drivingLicense?: string;
-  nationalIdentityCard?: string;
   bankAccountNumber: string;
   bankName: string;
   accountName: string;
@@ -43,8 +41,6 @@ export interface CreateDeliveryBoyData {
   address: string;
   city: string;
   pincode?: string;
-  drivingLicense?: string;
-  nationalIdentityCard?: string;
   bankAccountNumber: string;
   bankName: string;
   accountName: string;
@@ -64,8 +60,6 @@ export interface UpdateDeliveryBoyData {
   address?: string;
   city?: string;
   pincode?: string;
-  drivingLicense?: string;
-  nationalIdentityCard?: string;
   bankAccountNumber?: string;
   bankName?: string;
   accountName?: string;

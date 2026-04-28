@@ -37,8 +37,6 @@ export interface RegisterData {
   address: string;
   city: string;
   pincode?: string;
-  drivingLicense?: string;
-  nationalIdentityCard?: string;
   accountName?: string;
   bankName?: string;
   accountNumber?: string;
