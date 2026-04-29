@@ -390,6 +390,8 @@ function App() {
                                     <Route path="user/search" element={<Search />} />
                                     <Route path="user/orders" element={<Orders />} />
                                     <Route path="user/orders/:id" element={<OrderDetail />} />
+                                    <Route path="orders" element={<Orders />} />
+                                    <Route path="orders/:id" element={<OrderDetail />} />
                                     <Route path="user/order-again" element={<OrderAgain />} />
                                     <Route path="user/account" element={<Account />} />
                                     <Route path="user/about-us" element={<AboutUs />} />
@@ -403,6 +405,8 @@ function App() {
                                     <Route path="user/local-setu" element={<LocalSetu />} />
                                     <Route path="user/checkout" element={<Checkout />} />
                                     <Route path="user/checkout/address" element={<CheckoutAddress />} />
+                                    <Route path="checkout" element={<Checkout />} />
+                                    <Route path="checkout/address" element={<CheckoutAddress />} />
                                     <Route path="user/product/:id" element={<ProductDetail />} />
                                     <Route path="user/invoice/:id" element={<Invoice />} />
                                     <Route path="user/cart" element={<Cart />} />

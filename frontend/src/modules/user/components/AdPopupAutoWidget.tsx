@@ -54,7 +54,7 @@ export default function AdPopupAutoWidget() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibleDeadlineRef = useRef<number | null>(null);
 
-  const blockedRoutes = useMemo(() => ["/checkout", "/checkout/address", "/cart"], []);
+  const blockedRoutes = useMemo(() => ["/user/checkout", "/user/checkout/address", "/user/cart", "/checkout", "/checkout/address", "/cart", "/orders", "/user/orders"], []);
   const isBlockedRoute = blockedRoutes.some((path) => location.pathname.startsWith(path));
 
   const clearShowTimer = useCallback(() => {

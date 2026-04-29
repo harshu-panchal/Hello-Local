@@ -651,7 +651,7 @@ export default function OrderDetail() {
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">
             Order Not Found
           </h1>
-          <Link to="/orders">
+          <Link to="/user/orders">
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -770,7 +770,7 @@ export default function OrderDetail() {
         animate={{ opacity: 1 }}>
         {/* Navigation bar */}
         <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/orders">
+          <Link to="/user/orders">
             <motion.button
               className="w-10 h-10 flex items-center justify-center"
               whileTap={{ scale: 0.9 }}>
@@ -1076,7 +1076,7 @@ export default function OrderDetail() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.85 }}>
           {order?.invoiceEnabled ? (
-            <Link to={`/orders/${id}/invoice`} className="flex-1">
+            <Link to={`/user/orders/${id}/invoice`} className="flex-1">
               <Button className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white">
                 View Invoice
               </Button>
@@ -1091,7 +1091,7 @@ export default function OrderDetail() {
               </Button>
             </div>
           )}
-          <Link to="/orders" className="flex-1">
+          <Link to="/user/orders" className="flex-1">
             <Button variant="outline" className="w-full border-gray-300">
               All Orders
             </Button>

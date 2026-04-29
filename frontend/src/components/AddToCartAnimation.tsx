@@ -25,7 +25,7 @@ interface AddToCartAnimationProps {
 
   /**
    * Custom link destination
-   * Default: '/checkout'
+   * Default: '/user/checkout'
    */
   linkTo?: string;
 }
@@ -46,7 +46,7 @@ export default function AddToCartAnimation({
   bottomOffset = 96,
   pillClassName = '',
   hideOnPages = true,
-  linkTo = '/checkout',
+  linkTo = '/user/checkout',
 }: AddToCartAnimationProps) {
   const { cart, lastAddEvent } = useCart();
   const location = useLocation();
@@ -58,7 +58,7 @@ export default function AddToCartAnimation({
   const prevItemsRef = useRef(cart.items);
 
   // Hide pill on checkout pages, order pages, and account page (if enabled)
-  const isCheckoutPage = location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
+  const isCheckoutPage = location.pathname === '/user/checkout' || location.pathname.startsWith('/user/checkout/') || location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
   const isOrderPage = location.pathname.startsWith('/orders/');
   const isAccountPage = location.pathname === '/account';
   const shouldHidePill = hideOnPages && (isCheckoutPage || isOrderPage || isAccountPage);
@@ -231,7 +231,7 @@ export default function AddToCartAnimation({
       // Step 1: Scale up with glow
       tl.to(linkRef.current, {
         scale: 1.08,
-        boxShadow: '0 10px 25px rgba(22, 163, 74, 0.4)',
+        boxShadow: '0 10px 25px rgba(232, 75, 138, 0.4)',
         duration: 0.15,
         ease: 'power2.out',
         transformOrigin: 'center center',
@@ -240,7 +240,7 @@ export default function AddToCartAnimation({
         // Step 2: Bounce back
         .to(linkRef.current, {
           scale: 1.0,
-          boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)',
+          boxShadow: '0 4px 12px rgba(232, 75, 138, 0.3)',
           duration: 0.2,
           ease: 'power2.inOut',
         })
@@ -330,7 +330,8 @@ export default function AddToCartAnimation({
             <Link
               ref={linkRef}
               to={linkTo}
-              className={`bg-gradient-to-r from-green-700 via-green-600 to-green-700 text-white rounded-full shadow-xl shadow-green-900/30 px-3 py-2 flex items-center gap-2 hover:from-green-800 hover:via-green-700 hover:to-green-800 transition-all duration-300 pointer-events-auto border border-green-800/30 backdrop-blur-sm ${pillClassName}`}
+              className={`text-white rounded-full shadow-xl px-3 py-2 flex items-center gap-2 transition-all duration-300 pointer-events-auto border border-pink-700/30 backdrop-blur-sm ${pillClassName}`}
+              style={{ background: 'linear-gradient(to right, #D4543E, #E84B8A, #D4543E)', boxShadow: '0 10px 25px rgba(232, 75, 138, 0.35)' }}
             >
               {/* Left: Product thumbnails */}
               <div className="flex items-center -space-x-4">

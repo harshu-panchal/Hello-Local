@@ -103,6 +103,7 @@ app.get("/", (_req: Request, res: Response) => {
   });
 });
 
+
 // Debug middleware - log all incoming requests
 app.use((req: Request, _res: Response, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);

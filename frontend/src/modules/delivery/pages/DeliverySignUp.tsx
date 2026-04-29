@@ -5,7 +5,11 @@ import {
   sendOTP,
   verifyOTP,
 } from "../../../services/api/auth/deliveryAuthService";
+import { uploadDocument } from "../../../services/api/uploadService";
+import { validateDocumentFile } from "../../../utils/imageUpload";
+import api from "../../../services/api/config";
 import OTPInput from "../../../components/OTPInput";
+
 
 export default function DeliverySignUp() {
   const navigate = useNavigate();
@@ -30,6 +34,9 @@ export default function DeliverySignUp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isCityLoading, setIsCityLoading] = useState(false);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [drivingLicenseFile, setDrivingLicenseFile] = useState<File | null>(null);
+  const [nationalIdentityCardFile, setNationalIdentityCardFile] = useState<File | null>(null);
 
   const bonusTypes = [
     "Select Bonus Type",
@@ -132,6 +139,49 @@ export default function DeliverySignUp() {
     setError("");
 
     try {
+      // 1. Check if user already exists BEFORE uploading documents
+      const checkRes = await api.get(`/auth/delivery/check-existence?mobile=${formData.mobile}&email=${formData.email}`);
+      if (checkRes.data.success && checkRes.data.exists) {
+        setError(checkRes.data.message || "Account already exists with this mobile or email");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Upload documents if provided
+      let drivingLicenseUrl = (formData as any).drivingLicenseUrl;
+      let nationalIdentityCardUrl = (formData as any).nationalIdentityCardUrl;
+
+      if (drivingLicenseFile || nationalIdentityCardFile) {
+        setUploadingDocs(true);
+
+        try {
+          if (drivingLicenseFile) {
+            const drivingLicenseResult = await uploadDocument(
+              drivingLicenseFile,
+              "hellolocal/delivery/documents"
+            );
+            drivingLicenseUrl = drivingLicenseResult.secureUrl;
+          }
+
+          if (nationalIdentityCardFile) {
+            const nationalIdResult = await uploadDocument(
+              nationalIdentityCardFile,
+              "hellolocal/delivery/documents"
+            );
+            nationalIdentityCardUrl = nationalIdResult.secureUrl;
+          }
+        } catch (uploadErr: any) {
+          console.error("Document upload failed:", uploadErr);
+          setError(`Document upload failed: ${uploadErr.message || "Please try again or skip documents for now."}`);
+          setUploadingDocs(false);
+          setLoading(false);
+          return;
+        }
+
+        setUploadingDocs(false);
+      }
+
+      // 3. Register the user
       const response = await register({
         name: formData.name,
         mobile: formData.mobile,
@@ -165,13 +215,15 @@ export default function DeliverySignUp() {
         }
       }
     } catch (err: any) {
-      setError(
-        err.message || "Registration failed. Please try again."
-      );
+      console.error("Registration error:", err);
+      const errorMessage = err.response?.data?.message || err.message || "Registration failed. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
+      setUploadingDocs(false);
     }
   };
+
 
   const handleOTPComplete = async (otp: string) => {
     setLoading(true);

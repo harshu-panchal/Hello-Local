@@ -13,7 +13,7 @@ export default function Cart() {
   const totalAmount = cart.total + deliveryFee + platformFee;
 
   const handleCheckout = () => {
-    navigate('/checkout');
+    navigate('/user/checkout');
   };
 
   if (cart.items.length === 0) {

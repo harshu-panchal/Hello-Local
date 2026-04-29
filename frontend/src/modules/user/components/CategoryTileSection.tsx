@@ -86,9 +86,12 @@ export default function CategoryTileSection({
 
   return (
     <div className="mt-2 md:mt-3 mb-6 md:mb-8 overflow-visible">
-      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight leading-tight">
-        {title}
-      </h2>
+      <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
+        <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight capitalize relative">
+          {title}
+          <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#D4543E] to-[#E84B8A] rounded-full"></span>
+        </h2>
+      </div>
       <div className="px-4 md:px-6 lg:px-8 overflow-visible">
         <div className={`grid ${gridCols} ${gapClass} overflow-visible auto-rows-fr`}>
           {tiles.map((tile) => {

@@ -122,7 +122,7 @@ export default function Invoice() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-xl font-bold mb-4">Invoice Not Found</h1>
-          <Link to="/orders">
+          <Link to="/user/orders">
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -154,7 +154,7 @@ export default function Invoice() {
               <PrinterIcon className="w-4 h-4" />
               Print
             </Button>
-            <Link to={`/orders/${id}`}>
+            <Link to={`/user/orders/${id}`}>
               <Button className="flex items-center gap-2">View Order</Button>
             </Link>
           </div>

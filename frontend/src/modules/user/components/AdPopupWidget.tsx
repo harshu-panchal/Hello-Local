@@ -50,7 +50,7 @@ export default function AdPopupWidget() {
   const location = useLocation();
 
   const blockedRoutes = useMemo(
-    () => ["/checkout", "/checkout/address", "/cart"],
+    () => ["/user/checkout", "/user/checkout/address", "/user/cart", "/checkout", "/checkout/address", "/cart", "/orders", "/user/orders"],
     []
   );
   const isBlockedRoute = blockedRoutes.some((path) => location.pathname.startsWith(path));

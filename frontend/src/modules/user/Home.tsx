@@ -349,9 +349,12 @@ export default function Home() {
       return (
         <div key={section.id || section._id || section.title} className="mt-6 mb-6 md:mt-8 md:mb-8">
           {section.title && (
-            <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
-              {section.title}
-            </h2>
+            <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
+              <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight capitalize relative">
+                {section.title}
+                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#D4543E] to-[#E84B8A] rounded-full"></span>
+              </h2>
+            </div>
           )}
           <div className="px-4 md:px-6 lg:px-8">
             <div className={`grid ${gridClass} ${gapClass}`}>
@@ -509,9 +512,12 @@ export default function Home() {
 
             {/* Shop by Store Section */}
             <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-              <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight">
+            <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
+              <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight relative">
                 Shop by Store
+                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#D4543E] to-[#E84B8A] rounded-full"></span>
               </h2>
+            </div>
               <div className="px-4 md:px-6 lg:px-8">
                 <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
                   {(homeData.shops || []).map((tile: any) => {

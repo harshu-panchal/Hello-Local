@@ -123,7 +123,7 @@ export default function OrderAgain() {
               return (
                 <div
                   key={order.id}
-                  onClick={() => navigate(`/orders/${order.id}`)}
+                  onClick={() => navigate(`/user/orders/${order.id}`)}
                   className="bg-white rounded-lg border border-neutral-200 p-2 hover:shadow-sm transition-shadow cursor-pointer"
                 >
                   <div className="flex items-center justify-between gap-2">

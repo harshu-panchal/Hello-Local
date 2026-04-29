@@ -113,15 +113,24 @@ router.post(
     const isImage = (req as any).file.mimetype.startsWith("image/");
     const resourceType = isImage ? "image" : "raw";
 
-    const result = await uploadDocumentFromBuffer((req as any).file.buffer, {
-      folder,
-      resourceType,
-    });
+    try {
+      const result = await uploadDocumentFromBuffer((req as any).file.buffer, {
+        folder,
+        resourceType,
+      });
 
-    return res.status(200).json({
-      success: true,
-      data: result,
-    });
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (uploadErr: any) {
+      console.error("Document upload failed:", uploadErr);
+      return res.status(500).json({
+        success: false,
+        message: `Document upload failed: ${uploadErr.message}`,
+        error: process.env.NODE_ENV === "development" ? uploadErr : undefined,
+      });
+    }
   })
 );
 

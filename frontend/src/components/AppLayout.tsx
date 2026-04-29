@@ -274,8 +274,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const isProductDetailPage = location.pathname.startsWith('/product/');
   const isSearchPage = location.pathname === '/search';
-  const isCheckoutPage = location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
-  const isCartPage = location.pathname === '/cart';
+  const isCheckoutPage = location.pathname === '/user/checkout' || location.pathname.startsWith('/user/checkout/') || location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
+  const isCartPage = location.pathname === '/user/cart' || location.pathname === '/cart';
   const showHeader = isSearchPage && !isCheckoutPage && !isCartPage;
   const showSearchBar = isSearchPage && !isCheckoutPage && !isCartPage;
   const showFooter = !isCheckoutPage && !isProductDetailPage;

@@ -61,7 +61,7 @@ export default function Orders() {
           return (
             <Link
               key={order.id}
-              to={`/orders/${order.id}`}
+              to={`/user/orders/${order.id}`}
               className="block bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">

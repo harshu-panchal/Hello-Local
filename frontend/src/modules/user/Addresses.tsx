@@ -49,7 +49,7 @@ export default function Addresses() {
                     <h1 className="text-xl font-bold text-neutral-900">Saved Addresses</h1>
                 </div>
                 <Button
-                    onClick={() => navigate('/checkout/address')}
+                    onClick={() => navigate('/user/checkout/address')}
                     className="bg-green-600 text-white rounded-lg text-xs py-1.5 h-auto"
                 >
                     ADD NEW
@@ -111,7 +111,7 @@ export default function Addresses() {
                         <div className="text-6xl mb-4">📍</div>
                         <h2 className="text-lg font-bold text-neutral-900 mb-2">No saved addresses</h2>
                         <p className="text-sm mb-6">Add an address to start ordering</p>
-                        <Button onClick={() => navigate('/checkout/address')} className="bg-green-600 text-white rounded-full px-8">
+                        <Button onClick={() => navigate('/user/checkout/address')} className="bg-green-600 text-white rounded-full px-8">
                             Add New Address
                         </Button>
                     </div>
