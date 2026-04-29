@@ -952,7 +952,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                     <div
                       className="w-full flex justify-center"
                       style={{ paddingTop: "0", paddingBottom: "2px" }}>
-                      <div className="bg-green-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded tracking-tight text-center inline-block">
+                      <div className="bg-[#FF2E7A] text-white text-[9px] font-black px-1.5 py-0.5 rounded tracking-tight text-center inline-block">
                         {card.badge}
                       </div>
                     </div>

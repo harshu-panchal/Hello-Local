@@ -317,7 +317,7 @@ export default function Home() {
         <p className="text-gray-600 mb-6 max-w-xs">{error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-green-600 text-white rounded-full font-medium hover:bg-green-700 transition-colors"
+          className="px-6 py-2 bg-[#FF2E7A] text-white rounded-full font-medium hover:opacity-90 transition-opacity"
         >
           Try Refreshing
         </button>
@@ -352,7 +352,7 @@ export default function Home() {
             <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
               <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight capitalize relative">
                 {section.title}
-                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#D4543E] to-[#E84B8A] rounded-full"></span>
+                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] rounded-full"></span>
               </h2>
             </div>
           )}
@@ -422,12 +422,12 @@ export default function Home() {
             </button>
             <button
               onClick={() => setDietPreference('veg')}
-              className={`flex-1 md:flex-none px-3 md:px-5 py-2 rounded-full flex justify-center items-center gap-2 text-xs md:text-sm font-bold transition-all duration-300 transform ${dietPreference === 'veg' ? 'bg-green-100/90 text-green-800 border border-green-300 shadow-sm scale-105' : 'text-neutral-600 hover:bg-green-50/50 hover:text-green-700 border border-transparent scale-95'}`}
+              className={`flex-1 md:flex-none px-3 md:px-5 py-2 rounded-full flex justify-center items-center gap-2 text-xs md:text-sm font-bold transition-all duration-300 transform ${dietPreference === 'veg' ? 'bg-pink-100/90 text-pink-800 border border-pink-300 shadow-sm scale-105' : 'text-neutral-600 hover:bg-pink-50/50 hover:text-pink-700 border border-transparent scale-95'}`}
             >
-              <div className={`w-4 h-4 border ${dietPreference === 'veg' ? 'border-green-700' : 'border-green-600'} rounded-sm flex items-center justify-center bg-white p-[2px] transition-colors`}>
-                <div className={`w-2 h-2 rounded-full ${dietPreference === 'veg' ? 'bg-green-700' : 'bg-green-600'}`}></div>
+              <div className={`w-4 h-4 border ${dietPreference === 'veg' ? 'border-pink-700' : 'border-pink-600'} rounded-sm flex items-center justify-center bg-white p-[2px] transition-colors`}>
+                <div className={`w-2 h-2 rounded-full ${dietPreference === 'veg' ? 'bg-pink-700' : 'bg-pink-600'}`}></div>
               </div>
-              <span className={dietPreference === "veg" ? "text-green-800" : "text-neutral-700"}>Veg</span>
+              <span className={dietPreference === "veg" ? "text-pink-800" : "text-neutral-700"}>Veg</span>
             </button>
             <button
               onClick={() => setDietPreference('non-veg')}
@@ -515,7 +515,7 @@ export default function Home() {
             <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
               <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight relative">
                 Shop by Store
-                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#D4543E] to-[#E84B8A] rounded-full"></span>
+                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] rounded-full"></span>
               </h2>
             </div>
               <div className="px-4 md:px-6 lg:px-8">

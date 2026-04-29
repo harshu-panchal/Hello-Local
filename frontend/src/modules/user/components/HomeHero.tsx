@@ -474,7 +474,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               {/* Service name with premium status badge */}
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 shadow-sm border border-white scale-[0.85] origin-left">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF2E7A] animate-pulse shadow-[0_0_8px_rgba(255,46,122,0.8)]" />
                   <span className="text-[9px] font-black text-neutral-800 uppercase tracking-tighter">LIVE</span>
                 </div>
                 <div className="text-neutral-950 font-extrabold text-[12px] md:text-base leading-none tracking-tight">

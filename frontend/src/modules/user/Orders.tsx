@@ -4,7 +4,7 @@ import { useOrders } from '../../hooks/useOrders';
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'Delivered':
-      return 'bg-green-100 text-green-700';
+      return 'bg-pink-100 text-pink-700';
     case 'On the way':
       return 'bg-blue-100 text-blue-700';
     case 'Accepted':
@@ -41,7 +41,7 @@ export default function Orders() {
         <p className="text-neutral-600 mb-6 md:mb-8 md:text-lg">Start shopping to see your orders here!</p>
         <Link
           to="/user"
-          className="inline-block bg-green-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-lg font-semibold hover:bg-green-700 transition-colors md:text-lg"
+          className="inline-block bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] text-white px-6 md:px-8 py-3 md:py-4 rounded-lg font-semibold hover:opacity-90 transition-opacity md:text-lg"
         >
           Start Shopping
         </Link>

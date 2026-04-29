@@ -143,7 +143,7 @@ export default function CategoryPage() {
         <p className="text-gray-600 mb-6 max-w-xs">{error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-green-600 text-white rounded-full font-medium hover:bg-green-700 transition-colors"
+          className="px-6 py-2 bg-[#FF2E7A] text-white rounded-full font-medium hover:opacity-90 transition-colors"
         >
           Try Refreshing
         </button>
@@ -287,21 +287,21 @@ export default function CategoryPage() {
                   setSelectedSubcategory(subcat.id || subcat._id);
                 }}
                 className={`w-full flex flex-col items-center justify-center py-2 relative transition-all duration-200 group ${
-                  isSelected ? "bg-green-50" : "hover:bg-neutral-50"
+                  isSelected ? "bg-pink-50" : "hover:bg-neutral-50"
                 }`}
                 style={{
                   minHeight: "80px",
                 }}>
                 {/* Active Indicator - curved blob on left */}
                 {isSelected && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-green-600 rounded-r-full"></div>
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-[#FF2E7A] rounded-r-full"></div>
                 )}
 
                 {/* Image Container */}
                 <div
                   className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl mb-1.5 flex-shrink-0 overflow-hidden transition-all duration-200 shadow-sm ${
                     isSelected
-                      ? "ring-2 ring-green-600 ring-offset-2 bg-white"
+                      ? "ring-2 ring-[#FF2E7A] ring-offset-2 bg-white"
                       : "bg-neutral-50 border border-neutral-100 group-hover:shadow-md"
                   }`}>
                   {subcat.image ? (
@@ -328,7 +328,7 @@ export default function CategoryPage() {
                 <span
                   className={`text-[10px] text-center leading-tight px-1 transition-colors ${
                     isSelected
-                      ? "font-bold text-green-700"
+                      ? "font-bold text-pink-700"
                       : "text-neutral-500 group-hover:text-neutral-900"
                   }`}
                   style={{
@@ -547,7 +547,7 @@ export default function CategoryPage() {
                       placeholder="Search across filters..."
                       value={filterSearchQuery}
                       onChange={(e) => setFilterSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm text-neutral-700 placeholder:text-neutral-400"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2E7A] focus:border-transparent text-sm text-neutral-700 placeholder:text-neutral-400"
                     />
                   </div>
                 </div>
@@ -560,7 +560,7 @@ export default function CategoryPage() {
                       onClick={() => setSelectedFilterCategory("Type")}
                       className={`w-full px-3 py-3 text-left text-sm font-medium transition-colors ${
                         selectedFilterCategory === "Type"
-                          ? "bg-green-50 text-green-700"
+                          ? "bg-pink-50 text-pink-700"
                           : "text-neutral-600 hover:bg-neutral-100"
                       }`}>
                       Type
@@ -569,7 +569,7 @@ export default function CategoryPage() {
                       onClick={() => setSelectedFilterCategory("Properties")}
                       className={`w-full px-3 py-3 text-left text-sm font-medium transition-colors ${
                         selectedFilterCategory === "Properties"
-                          ? "bg-green-50 text-green-700"
+                          ? "bg-pink-50 text-pink-700"
                           : "text-neutral-600 hover:bg-neutral-100"
                       }`}>
                       Properties
@@ -597,7 +597,7 @@ export default function CategoryPage() {
                             </span>
                             <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 ml-2">
                               {isChecked ? (
-                                <div className="w-5 h-5 border-2 border-green-600 bg-green-600 rounded-sm flex items-center justify-center">
+                                <div className="w-5 h-5 border-2 border-[#FF2E7A] bg-[#FF2E7A] rounded-sm flex items-center justify-center">
                                   <svg
                                     className="w-3 h-3 text-white"
                                     fill="none"
@@ -626,14 +626,14 @@ export default function CategoryPage() {
                 <div className="px-5 py-4 border-t border-neutral-200 flex gap-3 bg-white">
                   <button
                     onClick={handleClearFilters}
-                    className="flex-1 px-4 py-2.5 border border-green-600 text-green-600 rounded-lg font-medium text-sm hover:bg-green-50 transition-colors bg-white">
+                    className="flex-1 px-4 py-2.5 border border-[#FF2E7A] text-[#FF2E7A] rounded-lg font-medium text-sm hover:bg-pink-50 transition-colors bg-white">
                     Clear Filter
                   </button>
                   <button
                     onClick={handleApplyFilters}
                     className={`flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
                       selectedFilters.length > 0
-                        ? "bg-green-600 text-white hover:bg-green-700"
+                        ? "bg-[#FF2E7A] text-white hover:opacity-90"
                         : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
                     }`}
                     disabled={selectedFilters.length === 0}>

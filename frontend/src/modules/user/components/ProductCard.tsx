@@ -248,7 +248,7 @@ export default function ProductCard({
           )}
 
           {categoryStyle && showBadge && discount > 0 && (
-            <div className="absolute top-2 left-2 z-10 bg-green-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded">
+            <div className="absolute top-2 left-2 z-10 bg-[#FF2E7A] text-white text-[10px] font-semibold px-2 py-0.5 rounded">
               {discount}% off
             </div>
           )}
@@ -377,7 +377,7 @@ export default function ProductCard({
 
               {/* 2. Rating & Time */}
               <div className="flex items-center gap-2 mb-1.5">
-                <div className="flex items-center bg-green-50 px-1 py-0.5 rounded text-green-700 font-bold text-[9px]">
+                <div className="flex items-center bg-pink-50 px-1 py-0.5 rounded text-[#FF2E7A] font-bold text-[9px]">
                   <span>{(product.rating || (product as any).rating) || 0}</span>
                   <svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
                     <path d="M12 1.75l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.26L12 1.75z" />
@@ -412,7 +412,7 @@ export default function ProductCard({
                   )}
                 </div>
                 {discount > 0 && (
-                  <span className="text-[9px] font-bold text-green-600">
+                  <span className="text-[9px] font-bold text-[#FF2E7A]">
                     {discount}% OFF
                   </span>
                 )}
@@ -442,14 +442,14 @@ export default function ProductCard({
               </div>
 
               {showStockInfo && (
-                <p className="text-xs text-green-600 mb-2 font-medium">
+                <p className="text-xs text-[#FF2E7A] mb-2 font-medium">
                   Fast delivery
                 </p>
               )}
 
               {showVegetarianIcon && (
                 <div className="flex items-center gap-1 mb-2">
-                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                  <div className="w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center">
                     <div className="w-2 h-2 bg-white rounded-full"></div>
                   </div>
                   <span className="text-xs text-neutral-600">Vegetarian</span>
@@ -486,7 +486,7 @@ export default function ProductCard({
                   onClick={handleAdd}
                   className={`w-full border h-8 text-xs font-semibold uppercase tracking-wide ${product.isAvailable === false || ((product.stock !== undefined && product.stock <= 0) || product.status === "Sold out")
                     ? 'border-neutral-300 text-neutral-400 bg-neutral-50 cursor-not-allowed'
-                    : 'border-green-600 text-green-600 hover:bg-green-50'
+                    : 'border-[#FF2E7A] text-[#FF2E7A] hover:bg-pink-50'
                     }`}
                 >
                   {product.isAvailable === false ? 'Out of Range' : ((product.stock !== undefined && product.stock <= 0) || product.status === "Sold out") ? 'Out of Stock' : 'Add'}
@@ -495,17 +495,17 @@ export default function ProductCard({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2 bg-white border border-green-600 rounded-full px-2 py-0.5 h-8">
+              <div className="flex items-center justify-center gap-2 bg-white border border-[#FF2E7A] rounded-full px-2 py-0.5 h-8">
                 <Button
                   variant="default"
                   size="icon"
                   onClick={handleDecrease}
-                  className="w-6 h-6 p-0 bg-transparent text-green-600 hover:bg-green-50 shadow-none"
+                  className="w-6 h-6 p-0 bg-transparent text-[#FF2E7A] hover:bg-pink-50 shadow-none"
                   aria-label="Decrease quantity"
                 >
                   −
                 </Button>
-                <span className="text-xs font-bold text-green-600 min-w-[1.5rem] text-center">
+                <span className="text-xs font-bold text-[#FF2E7A] min-w-[1.5rem] text-center">
                   {inCartQty}
                 </span>
                 <Button
@@ -513,7 +513,7 @@ export default function ProductCard({
                   size="icon"
                   disabled={product.isAvailable === false}
                   onClick={handleIncrease}
-                  className={`w-6 h-6 p-0 bg-transparent text-green-600 shadow-none ${product.isAvailable === false ? 'text-neutral-300 cursor-not-allowed' : 'hover:bg-green-50'
+                  className={`w-6 h-6 p-0 bg-transparent text-[#FF2E7A] shadow-none ${product.isAvailable === false ? 'text-neutral-300 cursor-not-allowed' : 'hover:bg-pink-50'
                     }`}
                   aria-label="Increase quantity"
                 >

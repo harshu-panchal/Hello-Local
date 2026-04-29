@@ -110,7 +110,7 @@ export default function Invoice() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF2E7A]"></div>
           <p className="text-sm text-neutral-500">Loading invoice...</p>
         </div>
       </div>
