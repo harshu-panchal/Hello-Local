@@ -251,7 +251,7 @@ export default function AdminNotification() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
           {/* Left Panel: Send Notification */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex flex-col">
-            <div className="bg-green-600 text-white px-6 py-4 rounded-t-lg">
+            <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
               <h2 className="text-lg font-semibold">Send Notification</h2>
             </div>
 
@@ -271,11 +271,11 @@ export default function AdminNotification() {
 
             {/* Success Message */}
             {successMessage && (
-              <div className="p-4 bg-green-50 border-l-4 border-green-500 text-green-700 flex items-center justify-between">
+              <div className="p-4 bg-rose-50 border-l-4 border-rose-600 text-rose-800 flex items-center justify-between">
                 <p className="text-sm">{successMessage}</p>
                 <button
                   onClick={() => setSuccessMessage('')}
-                  className="text-green-700 hover:text-green-900 ml-4 text-lg font-bold"
+                  className="text-rose-800 hover:text-rose-900 ml-4 text-lg font-bold"
                   type="button"
                 >
                   ×
@@ -294,7 +294,7 @@ export default function AdminNotification() {
                     value={formData.recipientType}
                     onChange={handleInputChange}
                     disabled={loading}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none bg-white"
                   >
                     <option value="All">All Users</option>
                     <option value="Admin">Admin</option>
@@ -316,7 +316,7 @@ export default function AdminNotification() {
                     required
                     disabled={loading}
                     placeholder="Enter Title"
-                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
                   />
                 </div>
 
@@ -332,7 +332,7 @@ export default function AdminNotification() {
                     disabled={loading}
                     placeholder="Enter Message"
                     rows={6}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none resize-none"
                   />
                 </div>
 
@@ -340,7 +340,7 @@ export default function AdminNotification() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded font-medium transition-colors"
+                    className="w-full bg-rose-700 hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded font-medium transition-colors"
                   >
                     {loading ? 'Sending...' : 'Send Notification'}
                   </button>
@@ -366,7 +366,7 @@ export default function AdminNotification() {
                     setCurrentPage(1);
                   }}
                   disabled={loading}
-                  className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-green-500 focus:outline-none cursor-pointer"
+                  className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer"
                 >
                   <option value="All">All</option>
                   <option value="Admin">Admin</option>
@@ -381,7 +381,7 @@ export default function AdminNotification() {
                     setCurrentPage(1);
                   }}
                   disabled={loading}
-                  className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-green-500 focus:outline-none cursor-pointer"
+                  className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer"
                 >
                   <option value={10}>10</option>
                   <option value={20}>20</option>
@@ -394,7 +394,7 @@ export default function AdminNotification() {
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">Search:</span>
                   <input
                     type="text"
-                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-green-500 w-48"
+                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-rose-600 w-48"
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -411,7 +411,7 @@ export default function AdminNotification() {
             {loading && (
               <div className="flex-1 flex items-center justify-center p-8">
                 <div className="text-center">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-rose-700"></div>
                   <p className="mt-2 text-sm text-neutral-600">Loading...</p>
                 </div>
               </div>
@@ -530,9 +530,9 @@ export default function AdminNotification() {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                     disabled={currentPage === 1 || loading}
-                    className={`p-2 border border-green-600 rounded ${currentPage === 1
+                    className={`p-2 border border-rose-700 rounded ${currentPage === 1
                       ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                      : 'text-green-600 hover:bg-green-50'
+                      : 'text-rose-700 hover:bg-rose-50'
                       }`}
                     aria-label="Previous page"
                   >
@@ -568,9 +568,9 @@ export default function AdminNotification() {
                         key={pageNum}
                         onClick={() => setCurrentPage(pageNum)}
                         disabled={loading}
-                        className={`px-3 py-1.5 border border-green-600 rounded font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${currentPage === pageNum
-                          ? 'bg-green-600 text-white'
-                          : 'text-green-600 hover:bg-green-50'
+                        className={`px-3 py-1.5 border border-rose-700 rounded font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed ${currentPage === pageNum
+                          ? 'bg-rose-700 text-white'
+                          : 'text-rose-700 hover:bg-rose-50'
                           }`}
                       >
                         {pageNum}
@@ -583,9 +583,9 @@ export default function AdminNotification() {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages || loading}
-                    className={`p-2 border border-green-600 rounded ${currentPage === totalPages
+                    className={`p-2 border border-rose-700 rounded ${currentPage === totalPages
                       ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                      : 'text-green-600 hover:bg-green-50'
+                      : 'text-rose-700 hover:bg-rose-50'
                       }`}
                     aria-label="Next page"
                   >
@@ -622,4 +622,6 @@ export default function AdminNotification() {
     </div>
   );
 }
+
+
 

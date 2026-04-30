@@ -128,8 +128,6 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     address,
     city,
     pincode,
-    drivingLicense,
-    nationalIdentityCard,
     accountName,
     bankName,
     accountNumber,
@@ -152,15 +150,22 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if delivery partner already exists
-  const existingDelivery = await Delivery.findOne({
-    $or: [{ mobile }, { email }],
-  });
+  console.log(`Registration attempt for: Mobile: ${mobile}, Email: ${email}`);
 
-  if (existingDelivery) {
+  // Check if delivery partner already exists
+  const existingByMobile = await Delivery.findOne({ mobile });
+  if (existingByMobile) {
     return res.status(409).json({
       success: false,
-      message: "Delivery partner already exists with this mobile or email",
+      message: "A delivery partner is already registered with this mobile number",
+    });
+  }
+
+  const existingByEmail = await Delivery.findOne({ email });
+  if (existingByEmail) {
+    return res.status(409).json({
+      success: false,
+      message: "A delivery partner is already registered with this email address",
     });
   }
 
@@ -174,8 +179,6 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     address,
     city,
     pincode,
-    drivingLicense,
-    nationalIdentityCard,
     accountName,
     bankName,
     accountNumber,
@@ -223,3 +226,44 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
     data: delivery,
   });
 });
+
+/**
+ * Check if delivery partner already exists
+ */
+export const checkExistence = asyncHandler(async (req: Request, res: Response) => {
+  const { mobile, email } = req.query;
+
+  if (!mobile && !email) {
+    return res.status(400).json({
+      success: false,
+      message: "Mobile or email is required",
+    });
+  }
+
+  const query: any = {};
+  if (mobile) query.mobile = mobile;
+  if (email) query.email = email;
+
+  const existingDelivery = await Delivery.findOne({
+    $or: Object.entries(query).map(([key, value]) => ({ [key]: value })),
+  });
+
+  if (existingDelivery) {
+    let conflictField = "mobile or email";
+    if (existingDelivery.mobile === mobile) conflictField = "mobile number";
+    else if (existingDelivery.email === email) conflictField = "email address";
+
+    return res.status(200).json({
+      success: true,
+      exists: true,
+      message: `A delivery partner is already registered with this ${conflictField}`,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    exists: false,
+  });
+});
+
+

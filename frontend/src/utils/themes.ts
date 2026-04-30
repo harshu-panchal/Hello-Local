@@ -169,3 +169,19 @@ export const getTheme = (tabId: string): Theme => {
 
   return themes.all;
 };
+
+export const getCategoryGradient = (tabId: string, tabName?: string): string => {
+  if (!tabId || tabId === "all") return "linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)";
+
+  const normalizedTab = tabId.toLowerCase();
+  const normalizedName = tabName ? tabName.toLowerCase() : "";
+
+  if (normalizedTab.includes("food") || normalizedName.includes("food") || normalizedTab === "dark") return "#FFCCCC";
+  if (normalizedTab.includes("wedding") || normalizedName.includes("wedding")) return "#FFFF99";
+  if (normalizedTab.includes("electronic") || normalizedName.includes("electronic")) return "#CCFFCC";
+  if (normalizedTab.includes("beaut") || normalizedName.includes("beaut")) return "#FFCCFF";
+  if (normalizedTab.includes("grocer") || normalizedName.includes("grocer")) return "#FFCC99";
+  if (normalizedTab.includes("fashion") || normalizedName.includes("fashion")) return "#99FFFF";
+
+  return "linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)";
+};

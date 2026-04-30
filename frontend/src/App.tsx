@@ -19,6 +19,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import RouteTransition from "./components/RouteTransition";
 import { useEffect } from "react";
 import { initializePushNotifications, setupForegroundNotificationHandler } from "./services/pushNotificationService";
+import { initSmoothScroll } from "./utils/smoothScroll";
 
 // Critical routes - load immediately (Home, Cart, Checkout)
 import Home from "./modules/user/Home";
@@ -107,6 +108,7 @@ const AdminManageSellerList = lazy(() => import("./modules/admin/pages/AdminMana
 const AdminCoupon = lazy(() => import("./modules/admin/pages/AdminCoupon"));
 const AdminNotification = lazy(() => import("./modules/admin/pages/AdminNotification"));
 const AdminSellerLocation = lazy(() => import("./modules/admin/pages/AdminSellerLocation"));
+const AdminContact = lazy(() => import("./modules/admin/pages/AdminContact"));
 
 const AdminManageDeliveryBoy = lazy(() => import("./modules/admin/pages/AdminManageDeliveryBoy"));
 const AdminFundTransfer = lazy(() => import("./modules/admin/pages/AdminFundTransfer"));
@@ -143,10 +145,12 @@ const AdminPayments = lazy(() => import("./modules/admin/pages/AdminPayments"));
 const AdminWallet = lazy(() => import("./modules/admin/pages/AdminWallet"));
 const AdminBillingSettings = lazy(() => import("./modules/admin/pages/AdminBillingSettings"));
 const SellerAdRequests = lazy(() => import("./modules/seller/pages/SellerAdRequests"));
+const WebsiteHome = lazy(() => import("./modules/website/pages/WebsiteHome"));
 
 function App() {
   // Initialize push notifications on app load
   useEffect(() => {
+    initSmoothScroll();
     initializePushNotifications();
 
     // Setup foreground notification handler
@@ -326,6 +330,7 @@ function App() {
                                       <Route path="coupon" element={<AdminCoupon />} />
                                       <Route path="return" element={<AdminReturnRequest />} />
                                       <Route path="notification" element={<AdminNotification />} />
+                                      <Route path="contact" element={<AdminContact />} />
                                       <Route path="orders" element={<AdminOrders />} />
                                       <Route path="customers" element={<AdminManageCustomer />} />
                                       <Route path="collect-cash" element={<AdminCashCollection />} />
@@ -363,6 +368,15 @@ function App() {
                             }
                           />
 
+                          <Route
+                            path="/landing"
+                            element={
+                              <Suspense fallback={<IconLoader forceShow />}>
+                                <WebsiteHome />
+                              </Suspense>
+                            }
+                          />
+
                           {/* Main App Routes */}
                           <Route
                             path="/*"
@@ -371,34 +385,41 @@ function App() {
                                 <Suspense fallback={<IconLoader forceShow />}>
                                   <Routes>
                                     <Route path="/" element={<Home />} />
+                                    <Route path="/user" element={<Home />} />
                                     <Route path="/user/home" element={<Home />} />
-                                    <Route path="/search" element={<Search />} />
-                                    <Route path="/orders" element={<Orders />} />
-                                    <Route path="/orders/:id" element={<OrderDetail />} />
-                                    <Route path="/order-again" element={<OrderAgain />} />
-                                    <Route path="/account" element={<Account />} />
-                                    <Route path="/about-us" element={<AboutUs />} />
-                                    <Route path="/faq" element={<FAQ />} />
-                                    <Route path="/wishlist" element={<Wishlist />} />
-                                    <Route path="/categories" element={<Categories />} />
+                                    <Route path="user/search" element={<Search />} />
+                                    <Route path="user/orders" element={<Orders />} />
+                                    <Route path="user/orders/:id" element={<OrderDetail />} />
+                                    <Route path="orders" element={<Orders />} />
+                                    <Route path="orders/:id" element={<OrderDetail />} />
+                                    <Route path="user/order-again" element={<OrderAgain />} />
+                                    <Route path="user/account" element={<Account />} />
+                                    <Route path="user/about-us" element={<AboutUs />} />
+                                    <Route path="user/faq" element={<FAQ />} />
+                                    <Route path="user/wishlist" element={<Wishlist />} />
+                                    <Route path="user/categories" element={<Categories />} />
+                                    <Route path="user/category/:id" element={<Category />} />
                                     <Route path="/category/:id" element={<Category />} />
-                                    <Route path="/address-book" element={<AddressBook />} />
-                                    <Route path="/local-setu" element={<LocalSetu />} />
-                                    <Route path="/checkout" element={<Checkout />} />
-                                    <Route path="/checkout/address" element={<CheckoutAddress />} />
-                                    <Route path="/product/:id" element={<ProductDetail />} />
-                                    <Route path="/invoice/:id" element={<Invoice />} />
-                                    <Route path="/cart" element={<Cart />} />
-                                    <Route path="/addresses" element={<Addresses />} />
-                                    <Route path="/store/:slug" element={<StorePage />} />
-                                    <Route path="/store/spiritual" element={<SpiritualStore />} />
-                                    <Route path="/store/pharma" element={<PharmaStore />} />
-                                    <Route path="/store/e-gifts" element={<EGiftStore />} />
-                                    <Route path="/store/pet" element={<PetStore />} />
-                                    <Route path="/store/sports" element={<SportsStore />} />
-                                    <Route path="/store/fashion-basics" element={<FashionStore />} />
-                                    <Route path="/store/toy" element={<ToyStore />} />
-                                    <Route path="/store/hobby" element={<HobbyStore />} />
+
+                                    <Route path="user/address-book" element={<AddressBook />} />
+                                    <Route path="user/local-setu" element={<LocalSetu />} />
+                                    <Route path="user/checkout" element={<Checkout />} />
+                                    <Route path="user/checkout/address" element={<CheckoutAddress />} />
+                                    <Route path="checkout" element={<Checkout />} />
+                                    <Route path="checkout/address" element={<CheckoutAddress />} />
+                                    <Route path="user/product/:id" element={<ProductDetail />} />
+                                    <Route path="user/invoice/:id" element={<Invoice />} />
+                                    <Route path="user/cart" element={<Cart />} />
+                                    <Route path="user/addresses" element={<Addresses />} />
+                                    <Route path="user/store/:slug" element={<StorePage />} />
+                                    <Route path="user/store/spiritual" element={<SpiritualStore />} />
+                                    <Route path="user/store/pharma" element={<PharmaStore />} />
+                                    <Route path="user/store/e-gifts" element={<EGiftStore />} />
+                                    <Route path="user/store/pet" element={<PetStore />} />
+                                    <Route path="user/store/sports" element={<SportsStore />} />
+                                    <Route path="user/store/fashion-basics" element={<FashionStore />} />
+                                    <Route path="user/store/toy" element={<ToyStore />} />
+                                    <Route path="user/store/hobby" element={<HobbyStore />} />
                                   </Routes>
                                 </Suspense>
                               </AppLayout>

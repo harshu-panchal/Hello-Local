@@ -72,7 +72,7 @@ Last updated: December 2025`);
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Policy Content Section */}
             <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-              <div className="bg-teal-600 px-4 sm:px-6 py-3">
+              <div className="bg-rose-700 px-4 sm:px-6 py-3">
                 <h2 className="text-white text-lg font-semibold">Policy Content</h2>
               </div>
               <div className="p-4 sm:p-6">
@@ -87,7 +87,7 @@ Last updated: December 2025`);
                     placeholder="Enter Customer App Policy content..."
                     rows={25}
                     required
-                    className="w-full px-4 py-3 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-y font-mono"
+                    className="w-full px-4 py-3 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600 resize-y font-mono"
                   />
                   <p className="mt-2 text-xs text-neutral-500">
                     You can format the policy content using plain text. Use line breaks and spacing to organize the content.
@@ -98,7 +98,7 @@ Last updated: December 2025`);
 
             {/* Preview Section */}
             <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-              <div className="bg-teal-600 px-4 sm:px-6 py-3">
+              <div className="bg-rose-700 px-4 sm:px-6 py-3">
                 <h2 className="text-white text-lg font-semibold">Preview</h2>
               </div>
               <div className="p-4 sm:p-6">
@@ -121,7 +121,7 @@ Last updated: December 2025`);
               </button>
               <button
                 type="submit"
-                className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-lg text-base font-medium transition-colors"
+                className="bg-rose-700 hover:bg-rose-800 text-white px-8 py-2.5 rounded-lg text-base font-medium transition-colors"
               >
                 Update Policy
               </button>
@@ -132,5 +132,6 @@ Last updated: December 2025`);
     </div>
   );
 }
+
 
 

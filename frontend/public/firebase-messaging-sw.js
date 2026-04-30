@@ -6,13 +6,13 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-comp
 // WARNING: Do not hardcode credentials here. 
 // For production, these should be injected during build or the worker should be initialized from the main thread.
 const firebaseConfig = {
-    apiKey: 'REPLACED_BY_BUILD_STEP',
-    authDomain: 'REPLACED_BY_BUILD_STEP',
-    projectId: 'REPLACED_BY_BUILD_STEP',
-    storageBucket: 'REPLACED_BY_BUILD_STEP',
-    messagingSenderId: 'REPLACED_BY_BUILD_STEP',
-    appId: 'REPLACED_BY_BUILD_STEP',
-    measurementId: 'REPLACED_BY_BUILD_STEP'
+    apiKey: "AIzaSyBxjHgqQqaZcpG_GDBoUM9hixG7tbitoZI",
+    authDomain: "hello-local-2e935.firebaseapp.com",
+    projectId: "hello-local-2e935",
+    storageBucket: "hello-local-2e935.firebasestorage.app",
+    messagingSenderId: "48136214665",
+    appId: "1:48136214665:web:6c3d9e6054336419760e58",
+    measurementId: "G-JT3J4YCR6P"
 };
 
 // Initialize Firebase in service worker

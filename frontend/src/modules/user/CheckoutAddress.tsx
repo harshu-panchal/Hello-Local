@@ -255,7 +255,7 @@ export default function CheckoutAddress() {
       // Show success feedback logic if needed or just navigate
       setTimeout(() => {
         setIsSaving(false);
-        navigate('/checkout', { replace: true });
+        navigate('/user/checkout', { replace: true });
       }, 500);
     } catch (error) {
       console.error('Error saving address:', error);
@@ -318,10 +318,10 @@ export default function CheckoutAddress() {
               value="myself"
               checked={orderingFor === 'myself'}
               onChange={(e) => setOrderingFor(e.target.value as 'myself' | 'someone-else')}
-              className="w-4 h-4 appearance-none border-2 border-neutral-300 rounded-full bg-white checked:bg-white checked:border-green-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-0"
+              className="w-4 h-4 appearance-none border-2 border-neutral-300 rounded-full bg-white checked:bg-white checked:border-[#FF2E7A] focus:ring-2 focus:ring-pink-500 focus:ring-offset-0"
               style={{
                 backgroundImage: orderingFor === 'myself'
-                  ? 'radial-gradient(circle, rgb(22, 163, 74) 35%, transparent 40%)'
+                  ? 'radial-gradient(circle, #FF2E7A 35%, transparent 40%)'
                   : 'none',
                 backgroundSize: '40%',
                 backgroundPosition: 'center',
@@ -337,10 +337,10 @@ export default function CheckoutAddress() {
               value="someone-else"
               checked={orderingFor === 'someone-else'}
               onChange={(e) => setOrderingFor(e.target.value as 'myself' | 'someone-else')}
-              className="w-4 h-4 appearance-none border-2 border-neutral-300 rounded-full bg-white checked:bg-white checked:border-green-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-0"
+              className="w-4 h-4 appearance-none border-2 border-neutral-300 rounded-full bg-white checked:bg-white checked:border-[#FF2E7A] focus:ring-2 focus:ring-pink-500 focus:ring-offset-0"
               style={{
                 backgroundImage: orderingFor === 'someone-else'
-                  ? 'radial-gradient(circle, rgb(22, 163, 74) 35%, transparent 40%)'
+                  ? 'radial-gradient(circle, #FF2E7A 35%, transparent 40%)'
                   : 'none',
                 backgroundSize: '40%',
                 backgroundPosition: 'center',
@@ -369,7 +369,7 @@ export default function CheckoutAddress() {
                 key={type.id}
                 onClick={() => setAddressType(type.id as typeof addressType)}
                 className={`px-3 py-1.5 rounded-lg border-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${addressType === type.id
-                  ? 'border-green-600 bg-green-50 text-green-700'
+                  ? 'border-[#FF2E7A] bg-pink-50 text-pink-700'
                   : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
                   }`}
               >
@@ -391,7 +391,7 @@ export default function CheckoutAddress() {
             type="text"
             value={address.name}
             onChange={(e) => handleInputChange('name', e.target.value)}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.name ? 'border-red-500' : 'border-neutral-200'
+            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-[#FF2E7A] transition-colors ${errors.name ? 'border-red-500' : 'border-neutral-200'
               }`}
             placeholder="Enter your name"
           />
@@ -526,7 +526,7 @@ export default function CheckoutAddress() {
             </div>
             <div className="flex justify-between text-xs text-neutral-700">
               <span>Delivery Charges</span>
-              <span className={`font-medium ${deliveryFee === 0 ? 'text-green-600' : ''}`}>
+              <span className={`font-medium ${deliveryFee === 0 ? 'text-[#FF2E7A]' : ''}`}>
                 {deliveryFee === 0 ? 'Free' : `₹${deliveryFee}`}
               </span>
             </div>
@@ -546,7 +546,7 @@ export default function CheckoutAddress() {
           onClick={handleSaveAddress}
           disabled={!isFormValid || isSaving}
           className={`w-full py-3 px-4 font-semibold text-sm transition-colors ${isFormValid && !isSaving
-            ? 'bg-green-600 text-white hover:bg-green-700'
+            ? 'bg-[#FF2E7A] text-white hover:opacity-90'
             : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
             }`}
         >

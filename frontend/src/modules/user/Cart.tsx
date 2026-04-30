@@ -13,7 +13,7 @@ export default function Cart() {
   const totalAmount = cart.total + deliveryFee + platformFee;
 
   const handleCheckout = () => {
-    navigate('/checkout');
+    navigate('/user/checkout');
   };
 
   if (cart.items.length === 0) {
@@ -22,7 +22,7 @@ export default function Cart() {
         <div className="text-6xl md:text-8xl mb-4">🛒</div>
         <h2 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">Your cart is empty</h2>
         <p className="text-neutral-600 mb-6 md:mb-8 md:text-lg">Add some items to get started!</p>
-        <Link to="/">
+        <Link to="/user">
           <Button variant="default" size="lg" className="md:px-8 md:py-3 md:text-lg">
             Start Shopping
           </Button>
@@ -96,7 +96,7 @@ export default function Cart() {
                       variant="outline"
                       size="icon"
                       onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.variant)}
-                      className="w-8 h-8 md:w-10 md:h-10 p-0 border-neutral-300 text-neutral-600 hover:border-green-600 hover:text-green-600 md:text-lg"
+                      className="w-8 h-8 md:w-10 md:h-10 p-0 border-neutral-300 text-neutral-600 hover:border-[#FF2E7A] hover:text-[#FF2E7A] md:text-lg"
                     >
                       −
                     </Button>
@@ -107,7 +107,7 @@ export default function Cart() {
                       variant="outline"
                       size="icon"
                       onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.variant)}
-                      className="w-8 h-8 md:w-10 md:h-10 p-0 border-neutral-300 text-neutral-600 hover:border-green-600 hover:text-green-600 md:text-lg"
+                      className="w-8 h-8 md:w-10 md:h-10 p-0 border-neutral-300 text-neutral-600 hover:border-[#FF2E7A] hover:text-[#FF2E7A] md:text-lg"
                     >
                       +
                     </Button>
@@ -148,12 +148,12 @@ export default function Cart() {
             </div>
             <div className="flex justify-between text-neutral-700 md:text-base">
               <span>Delivery Charges</span>
-              <span className={`font-medium ${deliveryFee === 0 ? 'text-green-600' : ''}`}>
+              <span className={`font-medium ${deliveryFee === 0 ? 'text-[#FF2E7A]' : ''}`}>
                 {deliveryFee === 0 ? 'Free' : `₹${deliveryFee.toLocaleString('en-IN')}`}
               </span>
             </div>
             {cart.total < appConfig.freeDeliveryThreshold && (
-              <div className="text-xs md:text-sm text-green-600 bg-green-50 px-2 py-1 rounded">
+              <div className="text-xs md:text-sm text-[#FF2E7A] bg-pink-50 px-2 py-1 rounded">
                 Add ₹{(appConfig.freeDeliveryThreshold - cart.total).toLocaleString('en-IN')} more for free delivery
               </div>
             )}

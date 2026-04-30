@@ -231,7 +231,7 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
       cy="40"
       r="36"
       fill="none"
-      stroke="#22c55e"
+      stroke="#FF2E7A"
       strokeWidth="4"
       initial={{ pathLength: 0, opacity: 0 }}
       animate={{ pathLength: 1, opacity: 1 }}
@@ -240,7 +240,7 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
     <motion.path
       d="M24 40 L35 51 L56 30"
       fill="none"
-      stroke="#22c55e"
+      stroke="#FF2E7A"
       strokeWidth="4"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -315,7 +315,7 @@ const PromoCarousel = () => {
               <p className="text-xs text-gray-600 mt-1">
                 {promos[currentSlide].subtext}
               </p>
-              <button className="text-green-700 font-medium text-sm mt-2 flex items-center gap-1">
+              <button className="text-[#FF2E7A] font-medium text-sm mt-2 flex items-center gap-1">
                 Apply now <ChevronRightIcon className="w-4 h-4" />
               </button>
             </div>
@@ -332,7 +332,7 @@ const PromoCarousel = () => {
           <button
             key={index}
             onClick={() => setCurrentSlide(index)}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentSlide ? "bg-green-600 w-4" : "bg-gray-300"
+            className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentSlide ? "bg-[#FF2E7A] w-4" : "bg-gray-300"
               }`}
           />
         ))}
@@ -341,71 +341,7 @@ const PromoCarousel = () => {
   );
 };
 
-// Tip selection component
-const TipSection = () => {
-  const [selectedTip, setSelectedTip] = useState<number | "other" | null>(null);
-  const [customTip, setCustomTip] = useState("");
-  const tips = [20, 30, 50];
 
-  return (
-    <motion.div
-      className="bg-white rounded-xl p-4 shadow-sm"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5 }}>
-      <p className="text-gray-700 text-sm mb-3">
-        Make their day by leaving a tip. 100% of the amount will go to them
-        after delivery
-      </p>
-      <div className="flex gap-3">
-        {tips.map((tip) => (
-          <motion.button
-            key={tip}
-            onClick={() => {
-              setSelectedTip(tip);
-              setCustomTip("");
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${selectedTip === tip
-              ? "border-green-600 bg-green-50 text-green-700"
-              : "border-gray-200 text-gray-700 hover:border-gray-300"
-              }`}
-            whileTap={{ scale: 0.95 }}>
-            ₹{tip}
-          </motion.button>
-        ))}
-        <motion.button
-          onClick={() => {
-            setSelectedTip("other");
-          }}
-          className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${selectedTip === "other"
-            ? "border-green-600 bg-green-50 text-green-700"
-            : "border-gray-200 text-gray-700 hover:border-gray-300"
-            }`}
-          whileTap={{ scale: 0.95 }}>
-          Other
-        </motion.button>
-      </div>
-
-      <AnimatePresence>
-        {selectedTip === "other" && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden">
-            <input
-              type="number"
-              placeholder="Enter custom amount"
-              value={customTip}
-              onChange={(e) => setCustomTip(e.target.value)}
-              className="mt-3 w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-};
 
 // Section item component
 const SectionItem = ({
@@ -471,8 +407,7 @@ export default function OrderDetail() {
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
-  const [selectedTip, setSelectedTip] = useState<number | "other" | null>(null);
-  const [customTip, setCustomTip] = useState("");
+
 
   // Real-time delivery tracking via WebSocket
   const {
@@ -702,7 +637,7 @@ export default function OrderDetail() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF2E7A]"></div>
           <p className="text-sm text-neutral-500">Loading order details...</p>
         </div>
       </div>
@@ -716,7 +651,7 @@ export default function OrderDetail() {
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">
             Order Not Found
           </h1>
-          <Link to="/orders">
+          <Link to="/user/orders">
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -731,22 +666,22 @@ export default function OrderDetail() {
     Received: {
       title: "Order received",
       subtitle: "Order will reach you shortly",
-      color: "bg-green-700",
+      color: "bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]",
     },
     Accepted: {
       title: "Preparing your order",
       subtitle: `Arriving in ${estimatedTime} mins`,
-      color: "bg-green-700",
+      color: "bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]",
     },
     "On the way": {
       title: "Order picked up",
       subtitle: `Arriving in ${estimatedTime} mins`,
-      color: "bg-green-700",
+      color: "bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]",
     },
     Delivered: {
       title: "Order delivered",
       subtitle: "Enjoy your meal!",
-      color: "bg-green-600",
+      color: "bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]",
     },
     // Backend status mappings
     Pending: {
@@ -757,7 +692,7 @@ export default function OrderDetail() {
     Processed: {
       title: "Order processed",
       subtitle: "Preparing for delivery",
-      color: "bg-green-700",
+      color: "bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]",
     },
     Shipped: {
       title: "Order shipped",
@@ -767,7 +702,7 @@ export default function OrderDetail() {
     "Out for Delivery": {
       title: "Out for delivery",
       subtitle: `Arriving in ${estimatedTime} mins`,
-      color: "bg-green-700",
+      color: "bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]",
     },
     Cancelled: {
       title: "Order cancelled",
@@ -818,7 +753,7 @@ export default function OrderDetail() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.5 }}
                 className="mt-8">
-                <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <div className="w-8 h-8 border-2 border-[#FF2E7A] border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-sm text-gray-500 mt-3">
                   Loading order details...
                 </p>
@@ -835,7 +770,7 @@ export default function OrderDetail() {
         animate={{ opacity: 1 }}>
         {/* Navigation bar */}
         <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/orders">
+          <Link to="/user/orders">
             <motion.button
               className="w-10 h-10 flex items-center justify-center"
               whileTap={{ scale: 0.9 }}>
@@ -870,8 +805,8 @@ export default function OrderDetail() {
             <span className="text-sm">{currentStatus.subtitle}</span>
             {(orderStatus === "Accepted" || orderStatus === "On the way") && (
               <>
-                <span className="w-1 h-1 rounded-full bg-white" />
-                <span className="text-sm text-green-200">On time</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                <span className="text-sm text-pink-100">On time</span>
               </>
             )}
             <motion.button
@@ -961,26 +896,7 @@ export default function OrderDetail() {
 
       {/* Scrollable Content */}
       <div className="px-4 py-4 space-y-4 pb-24">
-        {/* Payment Pending */}
-        <motion.div
-          className="bg-white rounded-xl p-4 shadow-sm"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-gray-900">
-                Payment of ₹{order.totalAmount?.toFixed(0) || "0"} pending
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Pay now, or pay to the delivery partner using Cash/UPI
-              </p>
-            </div>
-            <Button className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6">
-              Pay now <ChevronRightIcon className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </motion.div>
+
 
         {/* Promo Carousel */}
         <PromoCarousel />
@@ -1005,8 +921,7 @@ export default function OrderDetail() {
           </motion.div>
         )}
 
-        {/* Tip Section */}
-        <TipSection />
+
 
         {/* Delivery Partner Safety */}
         <motion.button
@@ -1079,10 +994,10 @@ export default function OrderDetail() {
               </p>
             </div>
             <motion.button
-              className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center"
               whileTap={{ scale: 0.9 }}
               onClick={handleCallStore}>
-              <PhoneIcon className="w-5 h-5 text-green-700" />
+              <PhoneIcon className="w-5 h-5 text-[#FF2E7A]" />
             </motion.button>
           </div>
 
@@ -1102,8 +1017,8 @@ export default function OrderDetail() {
                     <div
                       key={index}
                       className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="w-4 h-4 rounded border border-green-600 flex items-center justify-center">
-                        <span className="w-2 h-2 rounded-full bg-green-600" />
+                      <span className="w-4 h-4 rounded border border-[#FF2E7A] flex items-center justify-center">
+                        <span className="w-2 h-2 rounded-full bg-[#FF2E7A]" />
                       </span>
                       <span>
                         {item.quantity} x{" "}
@@ -1161,8 +1076,8 @@ export default function OrderDetail() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.85 }}>
           {order?.invoiceEnabled ? (
-            <Link to={`/orders/${id}/invoice`} className="flex-1">
-              <Button className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white">
+            <Link to={`/user/orders/${id}/invoice`} className="flex-1">
+              <Button className="w-full bg-[#FF2E7A] text-white hover:opacity-90">
                 View Invoice
               </Button>
             </Link>
@@ -1176,7 +1091,7 @@ export default function OrderDetail() {
               </Button>
             </div>
           )}
-          <Link to="/orders" className="flex-1">
+          <Link to="/user/orders" className="flex-1">
             <Button variant="outline" className="w-full border-gray-300">
               All Orders
             </Button>
@@ -1253,7 +1168,7 @@ export default function OrderDetail() {
                 Share details to help the delivery partner find you
               </p>
               <textarea
-                className="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:ring-2 focus:ring-[#FF2E7A]"
                 rows={4}
                 maxLength={200}
                 placeholder="e.g., Ring the bell, Leave at door, etc."
@@ -1271,7 +1186,7 @@ export default function OrderDetail() {
                   Cancel
                 </Button>
                 <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  className="flex-1 bg-[#FF2E7A] text-white hover:opacity-90"
                   onClick={handleSaveInstructions}>
                   Save
                 </Button>
@@ -1337,7 +1252,7 @@ export default function OrderDetail() {
                 ))}
               </div>
               <Button
-                className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
+                className="w-full mt-4 bg-[#FF2E7A] text-white hover:opacity-90"
                 onClick={() => setShowItemsModal(false)}>
                 Close
               </Button>
@@ -1368,7 +1283,7 @@ export default function OrderDetail() {
                 Let the store know if you have any special preferences
               </p>
               <textarea
-                className="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:ring-2 focus:ring-[#FF2E7A]"
                 rows={4}
                 maxLength={200}
                 placeholder="e.g., No onions, Extra napkins, etc."
@@ -1386,7 +1301,7 @@ export default function OrderDetail() {
                   Cancel
                 </Button>
                 <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  className="flex-1 bg-[#FF2E7A] text-white hover:opacity-90"
                   onClick={handleSaveSpecialRequests}>
                   Save
                 </Button>

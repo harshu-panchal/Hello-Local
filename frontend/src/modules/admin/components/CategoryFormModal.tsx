@@ -8,6 +8,7 @@ import { uploadImage } from "../../../services/api/uploadService";
 import {
   validateImageFile,
   createImagePreview,
+  compressImage,
 } from "../../../utils/imageUpload";
 import {
   getAvailableParents,
@@ -344,7 +345,8 @@ export default function CategoryFormModal({
       // Upload image if a new file is selected
       if (imageFile) {
         setUploading(true);
-        const imageResult = await uploadImage(imageFile, "dhakadsnazzy/categories");
+        const compressed = await compressImage(imageFile);
+        const imageResult = await uploadImage(compressed, "dhakadsnazzy/categories");
         imageUrl = imageResult.secureUrl;
         setUploading(false);
       }
@@ -453,7 +455,7 @@ export default function CategoryFormModal({
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.name ? "border-red-300" : "border-neutral-300"
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.name ? "border-red-300" : "border-neutral-300"
                 }`}
               placeholder="Enter category name"
               disabled={submitting}
@@ -557,7 +559,7 @@ export default function CategoryFormModal({
                           headerCategoryId: e.target.value || null,
                         }))
                       }
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.headerCategoryId
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.headerCategoryId
                         ? "border-red-300"
                         : "border-neutral-300"
                         }`}
@@ -591,8 +593,8 @@ export default function CategoryFormModal({
             </label>
             <label
               className={`block border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isDragging
-                ? "border-teal-500 bg-teal-50"
-                : "border-neutral-300 hover:border-teal-500"
+                ? "border-rose-600 bg-rose-50"
+                : "border-neutral-300 hover:border-rose-600"
                 }`}
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
@@ -668,7 +670,7 @@ export default function CategoryFormModal({
                     parentId: e.target.value || null,
                   }))
                 }
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.parentId ? "border-red-300" : "border-neutral-300"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.parentId ? "border-red-300" : "border-neutral-300"
                   }`}
                 disabled={submitting}>
                 <option value="">None (Root Category)</option>
@@ -695,7 +697,7 @@ export default function CategoryFormModal({
               value={formData.order}
               onChange={handleInputChange}
               min="0"
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.order ? "border-red-300" : "border-neutral-300"
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.order ? "border-red-300" : "border-neutral-300"
                 }`}
               disabled={submitting}
             />
@@ -755,7 +757,7 @@ export default function CategoryFormModal({
                   min="0"
                   max="100"
                   step="0.01"
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.commissionRate
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.commissionRate
                     ? "border-red-300"
                     : "border-neutral-300"
                     }`}
@@ -864,7 +866,7 @@ export default function CategoryFormModal({
                     name="groupCategory"
                     value={formData.groupCategory}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600"
                     placeholder="Enter group category"
                     disabled={submitting}
                   />
@@ -887,7 +889,7 @@ export default function CategoryFormModal({
             disabled={submitting || uploading}
             className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${submitting || uploading
               ? "bg-neutral-400 cursor-not-allowed"
-              : "bg-teal-600 hover:bg-teal-700"
+              : "bg-rose-700 hover:bg-rose-800"
               }`}>
             {submitting
               ? "Saving..."
@@ -902,3 +904,4 @@ export default function CategoryFormModal({
     </div>
   );
 }
+

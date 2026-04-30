@@ -109,16 +109,16 @@ export default function Search() {
             {isScanning && (
               <>
                 {/* AI Scanning Line Animation */}
-                <motion.div
-                  initial={{ top: '0%' }}
-                  animate={{ top: '100%' }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent shadow-[0_0_15px_rgba(74,222,128,0.8)] z-10"
-                />
+                  <motion.div
+                    initial={{ top: '0%' }}
+                    animate={{ top: '100%' }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#FF2E7A] to-transparent shadow-[0_0_15px_rgba(255,46,122,0.8)] z-10"
+                  />
                 <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
                   <div className="text-center">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white mb-4 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+                      <span className="w-2 h-2 rounded-full bg-[#FF2E7A] shadow-[0_0_8px_rgba(255,46,122,0.8)]"></span>
                       <span className="text-sm font-bold tracking-tight uppercase">Analyzing Image...</span>
                     </div>
                     <p className="text-white/60 text-xs font-medium">Identifying fresh produce & local products</p>
@@ -129,7 +129,7 @@ export default function Search() {
 
             {!isScanning && (
               <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
-                <div className="px-3 py-1.5 rounded-full bg-green-500/90 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-widest shadow-lg">
+                <div className="px-3 py-1.5 rounded-full bg-[#FF2E7A]/90 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-widest shadow-lg">
                   Object Found
                 </div>
                 <button
@@ -145,7 +145,7 @@ export default function Search() {
           {!isScanning && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="flex items-center gap-2 mb-6">
-                <div className="h-8 w-1.5 bg-green-600 rounded-full"></div>
+                <div className="h-8 w-1.5 bg-[#FF2E7A] rounded-full"></div>
                 <h2 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight">
                   Visual Matches Found
                 </h2>
@@ -175,7 +175,7 @@ export default function Search() {
           </h2>
           {loading ? (
             <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF2E7A]"></div>
             </div>
           ) : searchResults.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
@@ -204,7 +204,7 @@ export default function Search() {
         <>
           {contentLoading && (
             <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF2E7A]"></div>
             </div>
           )}
 
@@ -215,7 +215,7 @@ export default function Search() {
                 {trendingItems.map((item: any) => (
                   <div
                     key={item.id || item._id}
-                    className="bg-white rounded-lg border-2 border-green-600 p-3 cursor-pointer hover:shadow-md transition-shadow"
+                    className="bg-white rounded-lg border-2 border-[#FF2E7A] p-3 cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => navigate(item.type === 'category' ? `/category/${item.id || item._id}` : `/product/${item.id || item._id}`)}
                   >
                     <div className="w-full h-24 rounded-lg mb-2 overflow-hidden bg-neutral-50 flex items-center justify-center">
@@ -240,7 +240,7 @@ export default function Search() {
 
           {/* See all products - Placeholder or link to popular items */}
           <div className="px-4 md:px-6 lg:px-8 py-2 md:py-4">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 cursor-pointer" onClick={() => navigate('/category/all')}>
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 cursor-pointer" onClick={() => navigate('/user/category/all')}>
               <span className="text-sm md:text-base text-neutral-700 font-medium whitespace-nowrap">Browse all categories ▸</span>
             </div>
           </div>

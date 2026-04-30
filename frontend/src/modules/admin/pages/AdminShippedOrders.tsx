@@ -244,7 +244,7 @@ export default function AdminShippedOrders() {
       case "Out For Delivery":
         return "bg-orange-100 text-orange-800";
       case "Delivered":
-        return "bg-green-100 text-green-800";
+        return "bg-rose-100 text-rose-900";
       case "Cancelled":
         return "bg-red-100 text-red-800";
       default:
@@ -255,7 +255,7 @@ export default function AdminShippedOrders() {
   const getDeliveryBoyStatusColor = (status: string) => {
     switch (status) {
       case "Assigned":
-        return "bg-green-100 text-green-800";
+        return "bg-rose-100 text-rose-900";
       case "Not Assigned":
         return "bg-red-100 text-red-800";
       default:
@@ -289,7 +289,7 @@ export default function AdminShippedOrders() {
         {/* White Card Container */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
           {/* Green Banner */}
-          <div className="bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-2 sm:py-3">
             <h2 className="text-base sm:text-lg font-semibold">
               View Order List
             </h2>
@@ -350,7 +350,7 @@ export default function AdminShippedOrders() {
                     setSeller(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500">
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600">
                   <option>All Sellers</option>
                   <option>Seller 1</option>
                   <option>Seller 2</option>
@@ -369,7 +369,7 @@ export default function AdminShippedOrders() {
                     setStatus(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500">
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600">
                   <option>Shipped</option>
                   <option>All Status</option>
                   <option>Payment Pending</option>
@@ -389,7 +389,7 @@ export default function AdminShippedOrders() {
                     setEntriesPerPage(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500">
+                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600">
                   <option>10</option>
                   <option>25</option>
                   <option>50</option>
@@ -402,7 +402,7 @@ export default function AdminShippedOrders() {
                 <div className="relative">
                   <button
                     onClick={handleExport}
-                    className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto">
+                    className="flex items-center justify-center gap-2 bg-rose-700 hover:bg-rose-800 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto">
                     <svg
                       width="16"
                       height="16"
@@ -449,7 +449,7 @@ export default function AdminShippedOrders() {
                     setSearchQuery(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
                   placeholder="Search by Order ID, Customer, or Amount"
                 />
               </div>
@@ -804,7 +804,7 @@ export default function AdminShippedOrders() {
                       <td className="px-4 sm:px-6 py-3">
                         <Link to={`/admin/orders/${order._id}`}>
                           <button
-                            className="bg-teal-600 hover:bg-teal-700 text-white p-2 rounded transition-colors"
+                            className="bg-rose-700 hover:bg-rose-800 text-white p-2 rounded transition-colors"
                             aria-label="View order">
                             <svg
                               width="16"
@@ -903,4 +903,5 @@ export default function AdminShippedOrders() {
     </div>
   );
 }
+
 

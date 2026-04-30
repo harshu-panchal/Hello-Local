@@ -109,7 +109,7 @@ export default function SellerSalesReport() {
             <div className="flex-1 p-4 sm:p-6">
                 <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex flex-col">
                     {/* Section Header */}
-                    <div className="bg-teal-600 text-white px-4 sm:px-6 py-3 rounded-t-lg">
+                    <div className="bg-pink-700 text-white px-4 sm:px-6 py-3 rounded-t-lg">
                         <h2 className="text-lg sm:text-xl font-semibold">View Sales Report</h2>
                     </div>
 
@@ -123,7 +123,7 @@ export default function SellerSalesReport() {
                                     type="text"
                                     value={fromDate && toDate ? `${fromDate} - ${toDate}` : ''}
                                     placeholder="Select date range"
-                                    className="pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none w-full sm:w-64"
+                                    className="pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none w-full sm:w-64"
                                     readOnly
                                 />
                                 <svg
@@ -162,7 +162,7 @@ export default function SellerSalesReport() {
                                         setRowsPerPage(Number(e.target.value));
                                         setCurrentPage(1);
                                     }}
-                                    className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer"
+                                    className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                                 >
                                     <option value={10}>10</option>
                                     <option value={20}>20</option>
@@ -196,7 +196,7 @@ export default function SellerSalesReport() {
                                     link.click();
                                     document.body.removeChild(link);
                                 }}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
+                                className="bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -214,7 +214,7 @@ export default function SellerSalesReport() {
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">Search:</span>
                                 <input
                                     type="text"
-                                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-teal-500 w-full sm:w-48"
+                                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-full sm:w-48"
                                     value={searchTerm}
                                     onChange={(e) => {
                                         setSearchTerm(e.target.value);
@@ -230,7 +230,7 @@ export default function SellerSalesReport() {
                     <div className="overflow-x-auto min-h-[400px]">
                         {loading ? (
                             <div className="flex items-center justify-center p-20">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-700"></div>
                             </div>
                         ) : error ? (
                             <div className="p-8 text-center text-red-500">{error}</div>
@@ -331,7 +331,7 @@ export default function SellerSalesReport() {
                             <button
                                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                                 disabled={currentPage === 1 || pagination.pages === 0}
-                                className="w-8 h-8 flex items-center justify-center border border-teal-300 rounded hover:bg-teal-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="w-8 h-8 flex items-center justify-center border border-pink-300 rounded hover:bg-pink-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="15 18 9 12 15 6"></polyline>
@@ -345,8 +345,8 @@ export default function SellerSalesReport() {
                                         key={pageNum}
                                         onClick={() => setCurrentPage(pageNum)}
                                         className={`w-8 h-8 flex items-center justify-center border rounded transition-colors ${currentPage === pageNum
-                                                ? 'border-teal-600 bg-teal-600 text-white'
-                                                : 'border-teal-300 hover:bg-teal-50 text-neutral-900'
+                                                ? 'border-pink-700 bg-pink-700 text-white'
+                                                : 'border-pink-300 hover:bg-pink-50 text-neutral-900'
                                             }`}
                                     >
                                         {pageNum}
@@ -356,7 +356,7 @@ export default function SellerSalesReport() {
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
                                 disabled={currentPage === pagination.pages || pagination.pages === 0}
-                                className="w-8 h-8 flex items-center justify-center border border-teal-300 rounded hover:bg-teal-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="w-8 h-8 flex items-center justify-center border border-pink-300 rounded hover:bg-pink-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="9 18 15 12 9 6"></polyline>
@@ -371,11 +371,12 @@ export default function SellerSalesReport() {
             <footer className="px-4 sm:px-6 py-4 text-center bg-white border-t border-neutral-200">
                 <p className="text-xs sm:text-sm text-neutral-600">
                     Copyright © 2025. Developed By{' '}
-                    <span className="font-semibold text-teal-600">Hello Local - 10 Minute App</span>
+                    <span className="font-semibold text-pink-700">Hello Local - 10 Minute App</span>
                 </p>
             </footer>
         </div>
     );
 }
+
 
 

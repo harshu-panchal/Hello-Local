@@ -103,7 +103,7 @@ export default function PharmaStore() {
 
         {loading ? (
           <div className="flex justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF2E7A]"></div>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2">
@@ -222,7 +222,7 @@ export default function PharmaStore() {
                               e.stopPropagation();
                               addToCart(product);
                             }}
-                            className="w-full border-2 border-green-600 text-green-600 bg-transparent hover:bg-green-50 rounded-full font-semibold text-[10px] h-7 px-2"
+                            className="w-full border-2 border-[#FF2E7A] text-[#FF2E7A] bg-transparent hover:bg-pink-50 rounded-full font-semibold text-[10px] h-7 px-2"
                           >
                             ADD
                           </Button>
@@ -234,7 +234,7 @@ export default function PharmaStore() {
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.8 }}
                           transition={{ duration: 0.2 }}
-                          className="flex items-center justify-center gap-1.5 bg-white border-2 border-green-600 rounded-full px-1.5 py-1 w-full"
+                          className="flex items-center justify-center gap-1.5 bg-white border-2 border-[#FF2E7A] rounded-full px-1.5 py-1 w-full"
                         >
                           <motion.div whileTap={{ scale: 0.9 }}>
                             <Button
@@ -255,7 +255,7 @@ export default function PharmaStore() {
                             initial={{ scale: 1.2, y: -4 }}
                             animate={{ scale: 1, y: 0 }}
                             transition={{ type: 'spring', stiffness: 500, damping: 15 }}
-                            className="text-xs font-bold text-green-600 min-w-[1rem] text-center"
+                            className="text-xs font-bold text-[#FF2E7A] min-w-[1rem] text-center"
                           >
                             {inCartQty}
                           </motion.span>
@@ -279,12 +279,12 @@ export default function PharmaStore() {
 
                     {/* Bottom Link */}
                     <Link
-                      to={`/category/health-pharma`}
-                      className="w-full bg-green-100 text-green-700 text-[8px] font-medium py-0.5 rounded-lg flex items-center justify-between px-1 hover:bg-green-200 transition-colors mt-1"
+                      to={`/category/pharma`}
+                      className="w-full bg-pink-100 text-pink-700 text-[8px] font-medium py-0.5 rounded-lg flex items-center justify-between px-1 hover:bg-pink-200 transition-colors mt-1"
                     >
                       <span>See more like this</span>
                       <svg width="6" height="6" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0 0L8 4L0 8Z" fill="#16a34a" />
+                        <path d="M0 0L8 4L0 8Z" fill="#FF2E7A" />
                       </svg>
                     </Link>
                   </div>

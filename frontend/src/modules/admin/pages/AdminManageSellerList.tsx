@@ -367,7 +367,7 @@ export default function AdminManageSellerList() {
                 {/* Main Panel */}
                 <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
                     {/* Header */}
-                    <div className="bg-teal-600 text-white px-6 py-4 rounded-t-lg">
+                    <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
                         <h2 className="text-lg font-semibold">View Seller List</h2>
                     </div>
 
@@ -386,11 +386,11 @@ export default function AdminManageSellerList() {
                     )}
                     {/* Success Message */}
                     {successMessage && (
-                        <div className="p-4 bg-green-50 border-l-4 border-green-500 text-green-700 flex items-center justify-between">
+                        <div className="p-4 bg-rose-50 border-l-4 border-rose-600 text-rose-800 flex items-center justify-between">
                             <p className="text-sm">{successMessage}</p>
                             <button
                                 onClick={() => setSuccessMessage('')}
-                                className="text-green-700 hover:text-green-900 ml-4 text-lg font-bold"
+                                className="text-rose-800 hover:text-rose-900 ml-4 text-lg font-bold"
                                 type="button"
                             >
                                 ×
@@ -415,7 +415,7 @@ export default function AdminManageSellerList() {
                                     setRowsPerPage(Number(e.target.value));
                                     setCurrentPage(1);
                                 }}
-                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-teal-500 focus:outline-none cursor-pointer"
+                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer"
                             >
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
@@ -426,7 +426,7 @@ export default function AdminManageSellerList() {
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleExport}
-                                className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
+                                className="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
                             >
                                 Export
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -437,7 +437,7 @@ export default function AdminManageSellerList() {
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">Search:</span>
                                 <input
                                     type="text"
-                                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-teal-500 w-48"
+                                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-rose-600 w-48"
                                     value={searchTerm}
                                     onChange={(e) => {
                                         setSearchTerm(e.target.value);
@@ -551,7 +551,7 @@ export default function AdminManageSellerList() {
                                             <td className="p-4 align-middle">
                                                 <button
                                                     onClick={() => handleViewCategories(seller)}
-                                                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded transition-colors flex items-center gap-1"
+                                                    className="px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-xs font-medium rounded transition-colors flex items-center gap-1"
                                                 >
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -562,7 +562,7 @@ export default function AdminManageSellerList() {
                                             </td>
                                             <td className="p-4 align-middle">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${seller.status === 'Approved'
-                                                    ? 'bg-green-100 text-green-800'
+                                                    ? 'bg-rose-100 text-rose-900'
                                                     : seller.status === 'Pending'
                                                         ? 'bg-yellow-100 text-yellow-800'
                                                         : 'bg-red-100 text-red-800'
@@ -582,7 +582,7 @@ export default function AdminManageSellerList() {
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={() => handleEdit(seller._id)}
-                                                        className="p-1.5 text-teal-600 hover:bg-teal-50 rounded transition-colors"
+                                                        className="p-1.5 text-rose-700 hover:bg-rose-50 rounded transition-colors"
                                                         title="Edit"
                                                     >
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -626,9 +626,9 @@ export default function AdminManageSellerList() {
                                 <button
                                     onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                                     disabled={currentPage === 1}
-                                    className={`p-2 border border-teal-600 rounded ${currentPage === 1
+                                    className={`p-2 border border-rose-700 rounded ${currentPage === 1
                                         ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                                        : 'text-teal-600 hover:bg-teal-50'
+                                        : 'text-rose-700 hover:bg-rose-50'
                                         }`}
                                     aria-label="Previous page"
                                 >
@@ -649,16 +649,16 @@ export default function AdminManageSellerList() {
                                     </svg>
                                 </button>
                                 <button
-                                    className="px-3 py-1.5 border border-teal-600 bg-teal-600 text-white rounded font-medium text-sm"
+                                    className="px-3 py-1.5 border border-rose-700 bg-rose-700 text-white rounded font-medium text-sm"
                                 >
                                     {currentPage}
                                 </button>
                                 <button
                                     onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                                     disabled={currentPage === totalPages}
-                                    className={`p-2 border border-teal-600 rounded ${currentPage === totalPages
+                                    className={`p-2 border border-rose-700 rounded ${currentPage === totalPages
                                         ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                                        : 'text-teal-600 hover:bg-teal-50'
+                                        : 'text-rose-700 hover:bg-rose-50'
                                         }`}
                                     aria-label="Next page"
                                 >
@@ -695,14 +695,14 @@ export default function AdminManageSellerList() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={handleCloseModal}>
                     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         {/* Modal Header */}
-                        <div className="bg-teal-600 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
+                        <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-semibold">Categories</h3>
-                                <p className="text-sm text-teal-100 mt-1">{selectedSeller.storeName} - {selectedSeller.name}</p>
+                                <p className="text-sm text-rose-100 mt-1">{selectedSeller.storeName} - {selectedSeller.name}</p>
                             </div>
                             <button
                                 onClick={handleCloseModal}
-                                className="text-white hover:text-teal-200 transition-colors p-1"
+                                className="text-white hover:text-rose-200 transition-colors p-1"
                                 aria-label="Close modal"
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -719,13 +719,13 @@ export default function AdminManageSellerList() {
                                     {selectedSeller.categories.map((category, index) => (
                                         <div
                                             key={index}
-                                            className="flex items-center gap-2 px-4 py-3 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                                            className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors"
                                         >
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal-600 flex-shrink-0">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-rose-700 flex-shrink-0">
                                                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                                                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
                                             </svg>
-                                            <span className="text-sm font-medium text-teal-900">{category}</span>
+                                            <span className="text-sm font-medium text-rose-900">{category}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -740,7 +740,7 @@ export default function AdminManageSellerList() {
                         <div className="px-6 py-4 border-t border-neutral-200 flex justify-end">
                             <button
                                 onClick={handleCloseModal}
-                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-sm font-medium transition-colors"
+                                className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded text-sm font-medium transition-colors"
                             >
                                 Close
                             </button>
@@ -754,14 +754,14 @@ export default function AdminManageSellerList() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={handleCloseEditModal}>
                     <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         {/* Modal Header */}
-                        <div className="bg-teal-600 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
+                        <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-semibold">Edit Seller - {editingSeller.name}</h3>
-                                <p className="text-sm text-teal-100 mt-1">View and manage seller details</p>
+                                <p className="text-sm text-rose-100 mt-1">View and manage seller details</p>
                             </div>
                             <button
                                 onClick={handleCloseEditModal}
-                                className="text-white hover:text-teal-200 transition-colors p-1"
+                                className="text-white hover:text-rose-200 transition-colors p-1"
                                 aria-label="Close modal"
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -784,7 +784,7 @@ export default function AdminManageSellerList() {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${editingSeller.status === 'Approved'
-                                            ? 'bg-green-100 text-green-800'
+                                            ? 'bg-rose-100 text-rose-900'
                                             : editingSeller.status === 'Pending'
                                                 ? 'bg-yellow-100 text-yellow-800'
                                                 : 'bg-red-100 text-red-800'
@@ -796,7 +796,7 @@ export default function AdminManageSellerList() {
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => handleApprove(editingSeller._id)}
-                                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+                                                className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
                                             >
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                     <polyline points="20 6 9 17 4 12"></polyline>
@@ -901,12 +901,12 @@ export default function AdminManageSellerList() {
                                                             step="0.1"
                                                             value={newRadius}
                                                             onChange={(e) => setNewRadius(parseFloat(e.target.value))}
-                                                            className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                            className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-rose-600 focus:border-rose-600"
                                                         />
                                                         <button
                                                             onClick={handleUpdateRadius}
                                                             disabled={isUpdatingRadius || newRadius === editingSeller.serviceRadiusKm}
-                                                            className="px-4 py-2 bg-teal-600 text-white rounded text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                                            className="px-4 py-2 bg-rose-700 text-white rounded text-sm font-medium hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                                         >
                                                             {isUpdatingRadius ? 'Updating...' : 'Update Radius'}
                                                         </button>
@@ -1034,7 +1034,7 @@ export default function AdminManageSellerList() {
                                             {editingSeller.categories.map((category, index) => (
                                                 <span
                                                     key={index}
-                                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800"
+                                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-900"
                                                 >
                                                     {category}
                                                 </span>
@@ -1060,5 +1060,7 @@ export default function AdminManageSellerList() {
         </div>
     );
 }
+
+
 
 

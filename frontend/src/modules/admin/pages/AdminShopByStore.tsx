@@ -455,7 +455,7 @@ export default function AdminShopByStore() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Left Panel - Add Store */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="bg-teal-600 text-white px-4 sm:px-6 py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-3">
             <h2 className="text-base sm:text-lg font-semibold">
               {editingId ? "Edit Store" : "Add Store"}
             </h2>
@@ -472,7 +472,7 @@ export default function AdminShopByStore() {
                 value={storeName}
                 onChange={(e) => setStoreName(e.target.value)}
                 placeholder="Enter Store Name"
-                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600"
               />
             </div>
 
@@ -495,7 +495,7 @@ export default function AdminShopByStore() {
                   placeholder="Search products..."
                   value={productSearchTerm}
                   onChange={(e) => setProductSearchTerm(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600"
                 />
 
                 {/* Category and Subcategory */}
@@ -506,7 +506,7 @@ export default function AdminShopByStore() {
                       setFilterCategory(e.target.value);
                       setFilterSubcategory(""); // Reset subcategory when category changes
                     }}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer bg-white"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 cursor-pointer bg-white"
                   >
                     <option value="">All Categories</option>
                     {categories.filter(c => !c.parentId).map((cat) => (
@@ -520,7 +520,7 @@ export default function AdminShopByStore() {
                     value={filterSubcategory}
                     onChange={(e) => setFilterSubcategory(e.target.value)}
                     disabled={!filterCategory}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer bg-white disabled:bg-neutral-100 disabled:cursor-not-allowed"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 cursor-pointer bg-white disabled:bg-neutral-100 disabled:cursor-not-allowed"
                   >
                     <option value="">All Subcategories</option>
                     {getSubcategoriesForCategory().map((sub) => (
@@ -536,7 +536,7 @@ export default function AdminShopByStore() {
                   <select
                     value={filterBrand}
                     onChange={(e) => setFilterBrand(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer bg-white"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 cursor-pointer bg-white"
                   >
                     <option value="">All Brands</option>
                     {brands.map((brand) => (
@@ -549,7 +549,7 @@ export default function AdminShopByStore() {
                   <select
                     value={filterSeller}
                     onChange={(e) => setFilterSeller(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer bg-white"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 cursor-pointer bg-white"
                   >
                     <option value="">All Sellers</option>
                     {sellers.map((seller) => (
@@ -565,7 +565,7 @@ export default function AdminShopByStore() {
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer bg-white"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 cursor-pointer bg-white"
                   >
                     <option value="">All Status</option>
                     <option value="Active">Active</option>
@@ -579,7 +579,7 @@ export default function AdminShopByStore() {
                     placeholder="Min Price"
                     value={filterMinPrice}
                     onChange={(e) => setFilterMinPrice(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600"
                   />
 
                   <input
@@ -587,7 +587,7 @@ export default function AdminShopByStore() {
                     placeholder="Max Price"
                     value={filterMaxPrice}
                     onChange={(e) => setFilterMaxPrice(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    className="w-full px-2 py-1.5 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600"
                   />
                 </div>
 
@@ -614,7 +614,7 @@ export default function AdminShopByStore() {
               <div className="border border-neutral-300 rounded-md max-h-60 overflow-y-auto p-2 bg-neutral-50">
                 {loadingData ? (
                   <div className="text-center text-sm text-neutral-500 py-2">
-                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-teal-600 mr-2"></div>
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-rose-700 mr-2"></div>
                     Loading products...
                   </div>
                 ) : products.length > 0 ? (
@@ -626,7 +626,7 @@ export default function AdminShopByStore() {
                           id={`prod-${product._id}`}
                           checked={selectedProductIds.includes(product._id)}
                           onChange={() => toggleProductSelection(product._id)}
-                          className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded cursor-pointer"
+                          className="h-4 w-4 text-rose-700 focus:ring-rose-600 border-gray-300 rounded cursor-pointer"
                         />
                         <label htmlFor={`prod-${product._id}`} className="ml-2 block text-sm text-gray-900 truncate cursor-pointer flex-1">
                           {product.productName}
@@ -655,11 +655,11 @@ export default function AdminShopByStore() {
               </div>
             )}
             {successMessage && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between">
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-lg flex items-center justify-between">
                 <span>{successMessage}</span>
                 <button
                   onClick={() => setSuccessMessage("")}
-                  className="text-green-700 hover:text-green-900 ml-4 text-lg font-bold"
+                  className="text-rose-800 hover:text-rose-900 ml-4 text-lg font-bold"
                   type="button"
                 >
                   ×
@@ -671,7 +671,7 @@ export default function AdminShopByStore() {
               <label className="block text-sm font-medium text-neutral-700 mb-2">
                 Store Image:
               </label>
-              <label className="block border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center cursor-pointer hover:border-teal-500 transition-colors bg-white">
+              <label className="block border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center cursor-pointer hover:border-rose-600 transition-colors bg-white">
                 {storeImagePreview ? (
                   <div className="space-y-2">
                     <img
@@ -728,7 +728,7 @@ export default function AdminShopByStore() {
                 disabled={uploading}
                 className={`flex-1 py-2.5 rounded text-sm font-medium transition-colors ${uploading
                   ? "bg-neutral-400 cursor-not-allowed text-white"
-                  : "bg-teal-600 hover:bg-teal-700 text-white"
+                  : "bg-rose-700 hover:bg-rose-800 text-white"
                   }`}>
                 {uploading
                   ? "Uploading..."
@@ -749,7 +749,7 @@ export default function AdminShopByStore() {
 
         {/* Right Panel - View Stores */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="bg-teal-600 text-white px-4 sm:px-6 py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-3">
             <h2 className="text-base sm:text-lg font-semibold">View Stores</h2>
           </div>
 
@@ -765,7 +765,7 @@ export default function AdminShopByStore() {
                     setEntriesPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="px-2 py-1 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 cursor-pointer">
+                  className="px-2 py-1 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 cursor-pointer">
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
@@ -777,7 +777,7 @@ export default function AdminShopByStore() {
               {/* Export Button */}
               <button
                 onClick={handleExport}
-                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors">
+                className="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors">
                 <svg
                   width="16"
                   height="16"
@@ -805,7 +805,7 @@ export default function AdminShopByStore() {
                     setCurrentPage(1);
                   }}
                   placeholder="Search..."
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 min-w-[150px]"
+                  className="px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[150px]"
                 />
               </div>
             </div>
@@ -999,7 +999,7 @@ export default function AdminShopByStore() {
                     key={page}
                     onClick={() => setCurrentPage(page)}
                     className={`px-3 py-1 border border-neutral-300 rounded text-sm ${currentPage === page
-                      ? "bg-teal-600 text-white border-teal-600"
+                      ? "bg-rose-700 text-white border-rose-700"
                       : "text-neutral-700 hover:bg-neutral-50"
                       }`}>
                     {page}
@@ -1039,11 +1039,13 @@ export default function AdminShopByStore() {
       {/* Footer */}
       <div className="text-center text-sm text-neutral-500 py-4">
         Copyright © 2025. Developed By{" "}
-        <a href="#" className="text-teal-600 hover:text-teal-700">
+        <a href="#" className="text-rose-700 hover:text-rose-800">
           Hello Local - 10 Minute App
         </a>
       </div>
     </div>
   );
 }
+
+
 

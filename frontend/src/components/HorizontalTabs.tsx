@@ -49,7 +49,17 @@ export default function HorizontalTabs({ activeTab: controlledActiveTab, onTabCh
             {activeTab === tab.id && (
               <div className="absolute inset-0 bg-amber-200/40 rounded-full -z-10" />
             )}
-            <span className="text-xl mb-0.5">{tab.icon}</span>
+            <span
+              className={`text-xl mb-0.5 ${
+                tab.id === 'all' && activeTab === 'all'
+                  ? 'text-white'
+                  : activeTab === tab.id
+                  ? 'text-primary-dark'
+                  : 'text-neutral-500'
+              }`}
+            >
+              {tab.icon}
+            </span>
             <span
               className={`text-xs ${
                 activeTab === tab.id ? 'font-semibold' : 'font-medium'

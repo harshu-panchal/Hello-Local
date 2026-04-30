@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-gradient: linear-gradient(135deg, #ff6a5c, #ff3d8d, #ffa63d);
+  --accent: #ff3d8d;
+  --background: #fff6f7;
+  --text: #111;
+  --card-bg: #ffffff;
+  --border: #f1f1f1;
+  --shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.website-body {
+  font-family: 'Inter', 'Poppins', sans-serif;
+  background-color: var(--background);
+  color: var(--text);
+  overflow-x: hidden;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.website-body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+html.lenis {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.gradient-text {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-bg {
+  background: var(--primary-gradient);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.soft-shadow {
+  box-shadow: var(--shadow);
+}
+
+.btn-gradient {
+  background: var(--primary-gradient);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(255, 61, 141, 0.2);
+}
+
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Floating Animation */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Blur Blobs */
+.blob {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: var(--primary-gradient);
+  filter: blur(80px);
+  opacity: 0.2;
+  border-radius: 50%;
+  z-index: -1;
+}

@@ -34,7 +34,7 @@ export default function ProtectedRoute({
     if (requiredUserType === "Admin") {
       const isAdmin = userType === "Admin" || userType === "Super Admin";
       if (!isAdmin) {
-        return <Navigate to="/" replace />;
+        return <Navigate to="/user" replace />;
       }
     } else if (userType && userType !== requiredUserType) {
       if (requiredUserType === "Seller")
@@ -43,7 +43,7 @@ export default function ProtectedRoute({
         return <Navigate to="/delivery/login" replace />;
       if (requiredUserType === "Customer")
         return <Navigate to="/login" replace />;
-      return <Navigate to="/" replace />;
+      return <Navigate to="/user" replace />;
     }
   }
 
@@ -51,7 +51,7 @@ export default function ProtectedRoute({
   if (requiredRole && user) {
     const userRole = (user as any).role;
     if (!userRole || userRole !== requiredRole) {
-      return <Navigate to="/" replace />;
+      return <Navigate to="/user" replace />;
     }
   }
 

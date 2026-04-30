@@ -8,6 +8,7 @@ import HomeSection from "../../../models/HomeSection";
 import BestsellerCard from "../../../models/BestsellerCard";
 import LowestPricesProduct from "../../../models/LowestPricesProduct";
 import PromoStrip from "../../../models/PromoStrip";
+import ShopAd from "../../../models/ShopAd";
 import mongoose from "mongoose";
 import { cache } from "../../../utils/cache";
 import { findSellersWithinRange } from "../../../utils/locationHelper";
@@ -20,8 +21,6 @@ async function fetchSectionData(
   try {
     const { categories, subCategories, displayType, limit } = section;
 
-    // If displayType is "subcategories", fetch subcategories
-    // If displayType is "subcategories", fetch subcategories
     // If displayType is "subcategories", fetch subcategories
     if (displayType === "subcategories") {
       let subcategoryQuery: any = {};
@@ -172,7 +171,7 @@ async function fetchSectionData(
 
       return products.map((p: any) => {
         // Check if the product's seller is within range
-          const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p?.seller
+        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p?.seller
           ? nearbySellerIds.some(id => id?.toString() === p.seller?.toString())
           : false;
 
@@ -205,7 +204,9 @@ async function fetchSectionData(
     if (displayType === "categories") {
       // If categories are specified, fetch those specific categories
       if (categories && categories.length > 0) {
-        const categoryIds = categories.map((cat: any) => cat._id || cat);
+        const categoryIds = categories
+          .map((cat: any) => cat ? (cat._id || cat) : null)
+          .filter((id: any) => id);
 
         const fetchedCategories = await Category.find({
           _id: { $in: categoryIds },
@@ -240,7 +241,7 @@ async function fetchSectionData(
 // Get Home Page Content
 export const getHomeContent = async (req: Request, res: Response) => {
   const { headerCategorySlug, latitude, longitude } = req.query; // Get header category slug and location from query params
-  
+
   try {
     // Find sellers within user's location range
     const userLat = latitude ? parseFloat(latitude as string) : null;
@@ -267,7 +268,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
     const bestsellers = await Promise.all(
       bestsellerCards.map(async (card: any) => {
         const categoryId = card.category?._id || card.category;
-        
+
         if (!categoryId) {
           return {
             id: card._id.toString(),
@@ -321,7 +322,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
         return {
           id: card._id.toString(),
-          categoryId: categoryId?.toString() || "",
+          categoryId: categoryId ? categoryId.toString() : "",
           name: card.name,
           productImages: productImages.slice(0, 4),
           productCount: categoryProducts.length,
@@ -609,10 +610,11 @@ export const getHomeContent = async (req: Request, res: Response) => {
     const currentHeaderCategorySlug = (headerCategorySlug as string) || "all";
     const promoStripCacheKey = `promoStrip-${currentHeaderCategorySlug.toLowerCase()}`;
 
-    // Try to get from cache first
+    // Try to get from cache first (supports cached `null`)
+    const hasPromoStripCache = cache.has(promoStripCacheKey);
     let promoStrip = cache.get(promoStripCacheKey) as any;
 
-    if (!promoStrip) {
+    if (!hasPromoStripCache) {
       const now = new Date();
       const promoStripDoc = await PromoStrip.findOne({
         headerCategorySlug: currentHeaderCategorySlug.toLowerCase(),
@@ -621,7 +623,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         endDate: { $gte: now },
       })
         .populate("categoryCards.categoryId", "name slug image")
-        .populate("featuredProducts", "productName mainImage mainImageUrl galleryImageUrls galleryImages price mrp compareAtPrice discount rating reviewsCount seller variations")
+        .populate("featuredProducts", "productName mainImage galleryImages price compareAtPrice discount rating reviewsCount seller variations")
         .sort({ order: 1 })
         .lean();
 
@@ -629,15 +631,14 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
       // If we have promoStrip, add availability flag to featured products
       if (promoStrip && (promoStrip as any).featuredProducts) {
-        // Filter out null products if any were deleted
-        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.filter(Boolean);
-        
-        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.map((p: any) => {
-          const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p?.seller
-            ? nearbySellerIds.some(id => id?.toString() === p.seller?.toString())
-            : false;
-          return { ...p, isAvailable };
-        });
+        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts
+          .filter((p: any) => p !== null) // Filter out null products
+          .map((p: any) => {
+            const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
+              ? nearbySellerIds.some(id => id && id.toString() === p.seller.toString())
+              : false;
+            return { ...p, isAvailable };
+          });
       }
 
       // Cache for 3 minutes (PromoStrip data doesn't change frequently)
@@ -649,6 +650,39 @@ export const getHomeContent = async (req: Request, res: Response) => {
       }
     }
 
+    // 11. Fetch Active Shop Ads for Promo Banners
+    const activeShopAds = await ShopAd.find({
+      isActive: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() }
+    })
+      .sort({ order: 1 })
+      .lean();
+
+    const mappedAds = activeShopAds.map((ad: any) => ({
+      id: ad._id.toString(),
+      image: ad.imageUrl,
+      link: ad.ctaLink || "#",
+      badge: ad.badge,
+      badgeColor: ad.badgeColor,
+      title: ad.shopName,
+      description: ad.tagline
+    }));
+
+    // If no dynamic ads, use fallbacks
+    const promoBanners = mappedAds.length > 0 ? mappedAds : [
+      {
+        id: "promo-fallback-1",
+        image: "https://img.freepik.com/free-vector/horizontal-banner-template-grocery-sales_23-2149432421.jpg",
+        link: "/category/grocery",
+      },
+      {
+        id: "promo-fallback-2",
+        image: "https://img.freepik.com/free-vector/flat-supermarket-social-media-cover-template_23-2149363385.jpg",
+        link: "/category/snacks",
+      }
+    ];
+
     res.status(200).json({
       success: true,
       data: {
@@ -658,20 +692,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         // Dynamic sections created by admin
         homeSections: dynamicSections,
         shops,
-        promoBanners: [
-          {
-            id: 1,
-            image:
-              "https://img.freepik.com/free-vector/horizontal-banner-template-grocery-sales_23-2149432421.jpg",
-            link: "/category/grocery",
-          },
-          {
-            id: 2,
-            image:
-              "https://img.freepik.com/free-vector/flat-supermarket-social-media-cover-template_23-2149363385.jpg",
-            link: "/category/snacks",
-          },
-        ],
+        promoBanners,
         trending,
         cookingIdeas,
         promoCards: finalPromoCards, // Return dynamic or fallback cards

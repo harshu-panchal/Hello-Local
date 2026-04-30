@@ -38,6 +38,9 @@ import adminWithdrawalRoutes from "./adminWithdrawalRoutes";
 import { getActiveShopAds } from "../modules/admin/controllers/adminShopAdController";
 import * as sellerAdRequestController from "../modules/seller/controllers/sellerAdRequestController";
 import * as adminAdRequestController from "../modules/admin/controllers/adminAdRequestController";
+import websiteRoutes from "../modules/website/routes/websiteRoutes";
+import { submitContactForm } from "../modules/website/controllers/contactController";
+
 
 import {
   createOrder,
@@ -49,6 +52,7 @@ import {
 
 const router = Router();
 
+
 // Health check route
 router.get("/health", (_req, res) => {
   res.json({
@@ -58,14 +62,24 @@ router.get("/health", (_req, res) => {
   });
 });
 
+// Upload routes (Public for documents, protected for images)
+router.use("/upload", uploadRoutes);
+
 // Public route for shop ads carousel (no auth required)
 router.get("/shop-ads/active", getActiveShopAds);
+
+// Website routes
+router.use("/website", websiteRoutes);
+router.post("/contact", submitContactForm);
+
+
 
 // Authentication routes
 router.use("/auth/admin", adminAuthRoutes);
 router.use("/auth/seller", sellerAuthRoutes);
 router.use("/auth/customer", customerAuthRoutes);
 router.use("/auth/delivery", deliveryAuthRoutes);
+
 
 // FCM Token routes (protected - requires authentication)
 router.use("/fcm-tokens", authenticate, fcmTokenRoutes);
@@ -127,9 +141,6 @@ router.use("/sellers", sellerRoutes);
 // Admin routes (protected, admin only)
 router.use("/admin", adminRoutes);
 
-// Upload routes (protected)
-router.use("/upload", uploadRoutes);
-
 // Product routes (protected, seller only)
 router.use("/products", productRoutes);
 
@@ -169,10 +180,10 @@ router.use("/admin/withdrawals", authenticate, requireUserType("Admin"), adminWi
 // Seller ad request routes (protected, seller only)
 router.post("/seller/ad-requests", authenticate, requireUserType("Seller"), sellerAdRequestController.createAdRequest);
 router.get("/seller/ad-requests", authenticate, requireUserType("Seller"), sellerAdRequestController.getMyAdRequests);
+router.get("/seller/ad-requests/availability", authenticate, requireUserType("Seller"), sellerAdRequestController.getPublicAdStats);
 router.get("/seller/ad-requests/:id", authenticate, requireUserType("Seller"), sellerAdRequestController.getMyAdRequestById);
 router.post("/seller/ad-requests/:id/payment", authenticate, requireUserType("Seller"), sellerAdRequestController.submitPaymentProof);
 router.delete("/seller/ad-requests/:id", authenticate, requireUserType("Seller"), sellerAdRequestController.cancelAdRequest);
-router.get("/seller/ad-requests/availability", authenticate, requireUserType("Seller"), sellerAdRequestController.getPublicAdStats);
 
 
 // Admin ad request management routes

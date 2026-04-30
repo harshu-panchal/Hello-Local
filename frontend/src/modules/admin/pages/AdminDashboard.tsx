@@ -403,7 +403,7 @@ export default function AdminDashboard() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-rose-600 mb-4"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-rose-700 mb-4"></div>
           <p className="text-neutral-600">Loading dashboard data...</p>
         </div>
       </div>
@@ -436,7 +436,7 @@ export default function AdminDashboard() {
           <p className="text-neutral-600 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg transition-colors">
+            className="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-lg transition-colors">
             Retry
           </button>
         </div>
@@ -540,7 +540,7 @@ export default function AdminDashboard() {
               ?{salesToday.toFixed(2)}
             </p>
             {salesDifference >= 0 ? (
-              <p className="text-sm text-green-600 mt-1">
+              <p className="text-sm text-rose-700 mt-1">
                 ▲ ?{Math.abs(salesDifference).toFixed(2)} (+{salesPercentChange}%)
                 vs same day last week
               </p>
@@ -625,7 +625,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* View New Orders Table */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="bg-rose-600 text-white px-4 sm:px-6 py-3">
+          <div className="bg-rose-700 text-white px-4 sm:px-6 py-3">
             <h2 className="text-base sm:text-lg font-semibold">
               View New Orders
             </h2>
@@ -769,7 +769,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-4 sm:px-6 py-3">
                         <button
-                          className="bg-teal-600 hover:bg-teal-700 text-white p-2 rounded transition-colors"
+                          className="bg-rose-700 hover:bg-rose-800 text-white p-2 rounded transition-colors"
                           aria-label="View order">
                           <svg
                             width="16"
@@ -1079,4 +1079,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
 

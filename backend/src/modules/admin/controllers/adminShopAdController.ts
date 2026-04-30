@@ -1,9 +1,15 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import ShopAd from "../../../models/ShopAd";
-import SellerAdRequest from "../../../models/SellerAdRequest";
-
-const MAX_ACTIVE_ADS = 10;
+import {
+    MAX_ACTIVE_SHOP_ADS,
+    addDays,
+    enforceMaxActiveAdsNow,
+    findNextAvailableWindow,
+    getDurationDaysFromRange,
+    shopAdActiveAtQuery,
+    toDayStart,
+} from "../../../utils/shopAdCapacity";
 
 /**
  * Get all shop ads
@@ -34,23 +40,13 @@ export const getAllShopAds = asyncHandler(async (req: Request, res: Response) =>
 export const getActiveShopAds = asyncHandler(async (req: Request, res: Response) => {
     void req;
     const now = new Date();
-    const ads = await ShopAd.find({
-        isActive: true,
-        $or: [
-            // If dates are set, check if now is between them
-            {
-                startDate: { $lte: now },
-                endDate: { $gte: now }
-            },
-            // Fallback for legacy ads without startDate
-            {
-                startDate: { $exists: false },
-                $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }]
-            }
-        ],
-    })
+
+    // Enforce strict max concurrency before returning the carousel payload.
+    await enforceMaxActiveAdsNow(now);
+
+    const ads = await ShopAd.find(shopAdActiveAtQuery(now))
         .sort({ order: 1, createdAt: -1 })
-        .limit(MAX_ACTIVE_ADS);
+        .limit(MAX_ACTIVE_SHOP_ADS);
 
     return res.status(200).json({
         success: true,
@@ -90,41 +86,17 @@ export const createShopAd = asyncHandler(async (req: Request, res: Response) => 
         });
     }
 
-    // Check limit if activating
-    if (isActive !== false) {
-        const checkStart = startDate ? new Date(startDate) : new Date();
-        const checkEnd = endDate ? new Date(endDate) : (expiresAt ? new Date(expiresAt) : new Date(checkStart.getTime() + 24 * 60 * 60 * 1000));
+    const nowDay = toDayStart(new Date());
+    const requestedStart = startDate ? toDayStart(new Date(startDate)) : nowDay;
+    const safeRequestedStart = requestedStart < nowDay ? nowDay : requestedStart;
+    const requestedEnd = endDate ? new Date(endDate) : undefined;
+    const requestedExpires = expiresAt ? new Date(expiresAt) : undefined;
+    const durationDays = getDurationDaysFromRange(safeRequestedStart, requestedEnd, requestedExpires);
 
-        const duration = Math.ceil((checkEnd.getTime() - checkStart.getTime()) / (1000 * 60 * 60 * 24)) || 1;
-
-        for (let i = 0; i < duration; i++) {
-            const dayStart = new Date(checkStart);
-            dayStart.setDate(dayStart.getDate() + i);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
-
-            const liveAdsCount = await ShopAd.countDocuments({
-                isActive: true,
-                startDate: { $lt: dayEnd },
-                endDate: { $gt: dayStart }
-            });
-
-            const reservedSlotsCount = await SellerAdRequest.countDocuments({
-                status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
-                startDate: { $lt: dayEnd },
-                endDate: { $gt: dayStart }
-            });
-
-            const activeOnThisDay = liveAdsCount + reservedSlotsCount;
-
-            if (activeOnThisDay >= MAX_ACTIVE_ADS) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Slots are already full for ${dayStart.toDateString()}. Cannot add more ads for this range.`,
-                });
-            }
-        }
-    }
+    const shouldSchedule = isActive !== false;
+    const scheduled = shouldSchedule
+        ? await findNextAvailableWindow({ desiredStart: safeRequestedStart, durationDays })
+        : { startDate: safeRequestedStart, endDate: addDays(safeRequestedStart, durationDays) };
 
     const ad = await ShopAd.create({
         shopName, tagline, description, imageUrl,
@@ -136,16 +108,24 @@ export const createShopAd = asyncHandler(async (req: Request, res: Response) => 
         isActive: isActive !== undefined ? isActive : true,
         contactInfo,
         requestedBy,
-        expiresAt: expiresAt ? new Date(expiresAt) : (endDate ? new Date(endDate) : undefined),
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : (startDate ? new Date(new Date(startDate).getTime() + 24 * 60 * 60 * 1000) : undefined),
+        startDate: scheduled.startDate,
+        endDate: scheduled.endDate,
+        expiresAt: scheduled.endDate,
         approvedAt: new Date(),
     });
 
     return res.status(201).json({
         success: true,
-        message: "Shop ad created successfully",
+        message:
+            shouldSchedule && scheduled.startDate.getTime() !== safeRequestedStart.getTime()
+                ? "Capacity was full. Ad has been queued to the next available slot."
+                : "Shop ad created successfully",
         data: ad,
+        scheduledWindow: {
+            requestedStartDate: safeRequestedStart,
+            startDate: scheduled.startDate,
+            endDate: scheduled.endDate,
+        },
     });
 });
 
@@ -164,42 +144,25 @@ export const updateShopAd = asyncHandler(async (req: Request, res: Response) => 
         return res.status(404).json({ success: false, message: "Shop ad not found" });
     }
 
-    // If trying to activate or change dates while active, check range limit
-    if ((updateData.isActive === true || (ad.isActive && (updateData.startDate || updateData.endDate || updateData.expiresAt)))) {
-        const checkStart = new Date(updateData.startDate || ad.startDate || new Date());
-        const checkEnd = new Date(updateData.endDate || updateData.expiresAt || ad.endDate || ad.expiresAt || new Date(checkStart.getTime() + 24 * 60 * 60 * 1000));
+    const willBeActive = updateData.isActive !== undefined ? updateData.isActive : ad.isActive;
+    const nowDay = toDayStart(new Date());
 
-        const duration = Math.ceil((checkEnd.getTime() - checkStart.getTime()) / (1000 * 60 * 60 * 24)) || 1;
+    const requestedStart = toDayStart(new Date(updateData.startDate || ad.startDate || nowDay));
+    const safeRequestedStart = requestedStart < nowDay ? nowDay : requestedStart;
+    const requestedEnd = updateData.endDate || updateData.expiresAt || ad.endDate || ad.expiresAt;
+    const durationDays = getDurationDaysFromRange(safeRequestedStart, requestedEnd, requestedEnd);
 
-        for (let i = 0; i < duration; i++) {
-            const dayStart = new Date(checkStart);
-            dayStart.setDate(dayStart.getDate() + i);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
+    const scheduled = willBeActive
+        ? await findNextAvailableWindow({
+            desiredStart: safeRequestedStart,
+            durationDays,
+            excludeShopAdId: id,
+        })
+        : { startDate: safeRequestedStart, endDate: addDays(safeRequestedStart, durationDays) };
 
-            const liveAdsCount = await ShopAd.countDocuments({
-                _id: { $ne: id },
-                isActive: true,
-                startDate: { $lt: dayEnd },
-                endDate: { $gt: dayStart }
-            });
-
-            const reservedSlotsCount = await SellerAdRequest.countDocuments({
-                status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
-                startDate: { $lt: dayEnd },
-                endDate: { $gt: dayStart }
-            });
-
-            const activeOnThisDay = liveAdsCount + reservedSlotsCount;
-
-            if (activeOnThisDay >= MAX_ACTIVE_ADS) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Slots are already full for ${dayStart.toDateString()}. Cannot set this active range.`,
-                });
-            }
-        }
-    }
+    updateData.startDate = scheduled.startDate;
+    updateData.endDate = scheduled.endDate;
+    updateData.expiresAt = scheduled.endDate;
 
     const updatedAd = await ShopAd.findByIdAndUpdate(id, updateData, {
         new: true,
@@ -208,8 +171,12 @@ export const updateShopAd = asyncHandler(async (req: Request, res: Response) => 
 
     return res.status(200).json({
         success: true,
-        message: "Shop ad updated successfully",
+        message:
+            willBeActive && scheduled.startDate.getTime() !== safeRequestedStart.getTime()
+                ? "Capacity was full. Ad has been queued to the next available slot."
+                : "Shop ad updated successfully",
         data: updatedAd,
+        scheduledWindow: { requestedStartDate: safeRequestedStart, startDate: scheduled.startDate, endDate: scheduled.endDate },
     });
 });
 
@@ -238,41 +205,34 @@ export const toggleShopAdStatus = asyncHandler(async (req: Request, res: Respons
         return res.status(404).json({ success: false, message: "Shop ad not found" });
     }
 
-    // If activating, check limit for its date range
+    const nowDay = toDayStart(new Date());
+    let scheduledWindow: { requestedStartDate: Date; startDate: Date; endDate: Date } | undefined;
+
+    // If activating, queue to next available slot if needed.
     if (!ad.isActive) {
-        const checkStart = ad.startDate || new Date();
-        const checkEnd = ad.endDate || ad.expiresAt || new Date(checkStart.getTime() + 24 * 60 * 60 * 1000);
+        const requestedStart = toDayStart(new Date(ad.startDate || nowDay));
+        const safeRequestedStart = requestedStart < nowDay ? nowDay : requestedStart;
+        const durationDays = getDurationDaysFromRange(
+            safeRequestedStart,
+            ad.endDate || undefined,
+            ad.expiresAt || undefined
+        );
 
-        const duration = Math.ceil((checkEnd.getTime() - checkStart.getTime()) / (1000 * 60 * 60 * 24)) || 1;
+        const scheduled = await findNextAvailableWindow({
+            desiredStart: safeRequestedStart,
+            durationDays,
+            excludeShopAdId: id,
+        });
 
-        for (let i = 0; i < duration; i++) {
-            const dayStart = new Date(checkStart);
-            dayStart.setDate(dayStart.getDate() + i);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
+        ad.startDate = scheduled.startDate as any;
+        ad.endDate = scheduled.endDate as any;
+        ad.expiresAt = scheduled.endDate as any;
 
-            const liveAdsCount = await ShopAd.countDocuments({
-                _id: { $ne: id },
-                isActive: true,
-                startDate: { $lt: dayEnd },
-                endDate: { $gt: dayStart }
-            });
-
-            const reservedSlotsCount = await SellerAdRequest.countDocuments({
-                status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
-                startDate: { $lt: dayEnd },
-                endDate: { $gt: dayStart }
-            });
-
-            const activeOnThisDay = liveAdsCount + reservedSlotsCount;
-
-            if (activeOnThisDay >= MAX_ACTIVE_ADS) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Cannot activate: Slots full for ${dayStart.toDateString()} in this ad's range.`,
-                });
-            }
-        }
+        scheduledWindow = {
+            requestedStartDate: safeRequestedStart,
+            startDate: scheduled.startDate,
+            endDate: scheduled.endDate,
+        };
     }
 
     ad.isActive = !ad.isActive;
@@ -282,6 +242,7 @@ export const toggleShopAdStatus = asyncHandler(async (req: Request, res: Respons
         success: true,
         message: `Shop ad ${ad.isActive ? "activated" : "deactivated"} successfully`,
         data: ad,
+        ...(scheduledWindow ? { scheduledWindow } : {}),
     });
 });
 

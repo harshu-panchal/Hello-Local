@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import OTPInput from '../../components/OTPInput';
 import Lottie from 'lottie-react';
 import groceryAnimation from '../../../assets/animation/Grocery-animation.json';
+import { useThemeContext } from '../../context/ThemeContext';
+import { getCategoryGradient } from '../../utils/themes';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ export default function Login() {
   const [sessionId, setSessionId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { activeCategory, currentTheme } = useThemeContext();
 
   const handleContinue = async () => {
     if (mobileNumber.length !== 10) return;
@@ -51,7 +54,7 @@ export default function Login() {
           refCode: response.data.user.refCode,
           status: response.data.user.status,
         });
-        navigate('/');
+        navigate('/user');
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
@@ -61,12 +64,12 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors" style={{ background: `linear-gradient(to bottom right, ${currentTheme.primary[0]}10, ${currentTheme.primary[0]}20)` }}>
 
       {/* Background Decorative Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-green-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-      <div className="absolute bottom-[-10%] left-[20%] w-64 h-64 bg-yellow-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-64 h-64 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" style={{ background: currentTheme.primary[0] }}></div>
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" style={{ background: currentTheme.secondary[0] }}></div>
+      <div className="absolute bottom-[-10%] left-[20%] w-64 h-64 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" style={{ background: currentTheme.accentColor }}></div>
 
       {/* Back Button */}
       <button
@@ -120,7 +123,8 @@ export default function Login() {
                   type="tel"
                   value={mobileNumber}
                   onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  className="block w-full pl-14 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-medium text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all"
+                  className="block w-full pl-14 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-medium text-neutral-900 placeholder-neutral-400 focus:outline-none transition-all"
+                  style={{ focusRingColor: currentTheme.accentColor, borderColor: mobileNumber.length > 0 ? currentTheme.accentColor : '#e5e5e5' } as any}
                   placeholder="Enter mobile number"
                   maxLength={10}
                   disabled={loading}
@@ -142,9 +146,10 @@ export default function Login() {
                 onClick={handleContinue}
                 disabled={mobileNumber.length !== 10 || loading}
                 className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 ${mobileNumber.length === 10 && !loading
-                  ? 'bg-gradient-to-r from-green-600 to-green-500 text-white'
+                  ? 'text-white'
                   : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                   }`}
+                style={mobileNumber.length === 10 && !loading ? { background: getCategoryGradient(activeCategory) } : {}}
               >
                 {loading ? (
                   <div className="flex items-center justify-center gap-2">
@@ -182,7 +187,8 @@ export default function Login() {
                 <button
                   onClick={handleContinue}
                   disabled={loading}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-sm bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-sm transition-colors border shadow-sm"
+                  style={{ background: `${currentTheme.primary[0]}10`, color: currentTheme.accentColor, borderColor: `${currentTheme.accentColor}40` }}
                 >
                   {loading ? 'Sending...' : 'Resend OTP'}
                 </button>
@@ -192,7 +198,7 @@ export default function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-xs text-neutral-400">
-              By continuing, you agree to our <a href="#" className="text-green-600 hover:underline">Terms of Service</a> & <a href="#" className="text-green-600 hover:underline">Privacy Policy</a>
+              By continuing, you agree to our <a href="#" className="hover:underline" style={{ color: currentTheme.accentColor }}>Terms of Service</a> & <a href="#" className="hover:underline" style={{ color: currentTheme.accentColor }}>Privacy Policy</a>
             </p>
           </div>
         </div>

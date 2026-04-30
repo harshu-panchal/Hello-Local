@@ -1,269 +1,186 @@
-import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface FAQItem {
-  id: string;
+  id: number;
   question: string;
   answer: string;
 }
 
-const faqData: FAQItem[] = [
+const faqs: FAQItem[] = [
   {
-    id: '1',
-    question: 'How do I place an order?',
-    answer: 'To place an order, simply browse our products, add items to your cart, and proceed to checkout. You\'ll need to provide your delivery address and payment details. Once confirmed, your order will be processed and delivered to you.',
+    id: 1,
+    question: "How do I place an order?",
+    answer: "Placing an order is simple! Browse through our categories or use the search bar to find products. Add them to your cart, review your cart, and proceed to checkout. Provide your delivery address and choose your payment method to complete the order."
   },
   {
-    id: '2',
-    question: 'What are the delivery charges?',
-    answer: 'Delivery charges vary based on your location and order value. We offer free delivery on orders above ₹199. For orders below this threshold, a nominal delivery fee applies. You can check the exact charges during checkout.',
+    id: 2,
+    question: "What are the delivery charges?",
+    answer: "Delivery charges vary based on your order value and location. We offer free delivery on orders above ₹499. For orders below this value, a nominal delivery fee is applicable, which will be shown at the checkout page."
   },
   {
-    id: '3',
-    question: 'How long does delivery take?',
-    answer: 'We typically deliver within 17-20 minutes for most locations. Delivery time may vary based on your location, order size, and current demand. You\'ll receive real-time updates about your order status.',
+    id: 3,
+    question: "How long does delivery take?",
+    answer: "We offer express delivery within 15-30 minutes for most locations. You can track your order in real-time from the 'My Orders' section after placing it."
   },
   {
-    id: '4',
-    question: 'Can I cancel my order?',
-    answer: 'Yes, you can cancel your order before it\'s confirmed by the seller. Once confirmed, cancellation may not be possible. Please check our cancellation policy for more details. Refunds are processed within 5-7 business days.',
+    id: 4,
+    question: "Can I cancel my order?",
+    answer: "Yes, you can cancel your order before it is out for delivery. Go to 'My Orders', select the order you wish to cancel, and click on 'Cancel Order'. Once the order is out for delivery, cancellation may not be possible."
   },
   {
-    id: '5',
-    question: 'What payment methods do you accept?',
-    answer: 'We accept various payment methods including credit/debit cards, UPI, net banking, and digital wallets. Cash on delivery (COD) is also available for select locations.',
+    id: 5,
+    question: "How can I pay for my order?",
+    answer: "We accept various payment methods including Credit/Debit cards, UPI (Google Pay, PhonePe, etc.), Net Banking, and Cash on Delivery (COD)."
   },
   {
-    id: '6',
-    question: 'How do I track my order?',
-    answer: 'You can track your order in real-time through the Orders section in your account. We also send SMS and email notifications with order updates. For detailed tracking, visit the order details page.',
-  },
-  {
-    id: '7',
-    question: 'What is your return policy?',
-    answer: 'Most products are returnable within 2 days of delivery. Some items like perishables may not be returnable. Please check the product details for specific return policies. Returns are subject to our terms and conditions.',
-  },
-  {
-    id: '8',
-    question: 'How do I apply a coupon code?',
-    answer: 'During checkout, you\'ll see an option to "See all coupons". Click on it, browse available coupons, and click "Apply" on the coupon you want to use. The discount will be automatically applied to your order.',
-  },
-  {
-    id: '9',
-    question: 'Can I modify my delivery address?',
-    answer: 'Yes, you can modify your delivery address before placing the order. You can also save multiple addresses in your Address Book for quick selection during checkout.',
-  },
-  {
-    id: '10',
-    question: 'What if I receive a damaged or wrong item?',
-    answer: 'If you receive a damaged or incorrect item, please contact our customer support immediately. We offer 48-hour replacement guarantee. You can report the issue through the order details page or contact us at help@dhakadsnazzy.com.',
-  },
-  {
-    id: '11',
-    question: 'How do I add items to my wishlist?',
-    answer: 'Simply click the heart icon on any product to add it to your wishlist. You can access your wishlist from the Account page. Items in your wishlist can be easily added to cart when you\'re ready to purchase.',
-  },
-  {
-    id: '12',
-    question: 'Is my personal information secure?',
-    answer: 'Yes, we take your privacy seriously. All personal information is encrypted and stored securely. We never share your data with third parties without your consent. Please review our Privacy Policy for more details.',
-  },
+    id: 6,
+    question: "What is your refund policy?",
+    answer: "If you receive a damaged or incorrect product, you can request a return/refund within 24 hours of delivery. Our team will verify the request and process the refund to your original payment method or wallet."
+  }
 ];
 
 export default function FAQ() {
   const navigate = useNavigate();
-  const [openItems, setOpenItems] = useState<Set<string>>(new Set());
+  const [activeItem, setActiveItem] = useState<number | null>(null);
 
-  const toggleItem = (id: string) => {
-    const newOpenItems = new Set(openItems);
-    if (newOpenItems.has(id)) {
-      newOpenItems.delete(id);
-    } else {
-      newOpenItems.add(id);
-    }
-    setOpenItems(newOpenItems);
+  const toggleItem = (id: number) => {
+    setActiveItem(activeItem === id ? null : id);
   };
 
   return (
     <div className="pb-24 md:pb-8 bg-white min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-b from-green-200 via-green-100 to-white pb-6 md:pb-8 pt-12 md:pt-16">
-        <div className="px-4 md:px-6 lg:px-8">
-          <button
-            onClick={() => navigate(-1)}
-            className="mb-4 text-neutral-900"
-            aria-label="Back"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <div className="bg-gradient-to-b from-pink-50 to-white px-4 pt-12 pb-8">
+        <div className="flex flex-col items-center text-center">
+          <div className="w-20 h-20 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border-2 border-pink-100">
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-[#FF2E7A]"
+            >
               <path
-                d="M15 18L9 12L15 6"
+                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
-          </button>
-          <div className="flex flex-col items-center mb-4 md:mb-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white flex items-center justify-center mb-3 md:mb-4 border-2 border-white shadow-sm">
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="text-green-600 md:w-12 md:h-12"
-              >
-                <path
-                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <h1 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">
-              Frequently Asked Questions
-            </h1>
-            <p className="text-sm md:text-base text-neutral-600 text-center px-4">
-              Find answers to common questions about our services
-            </p>
           </div>
+          <h1 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">
+            Frequently Asked Questions
+          </h1>
+          <p className="text-sm md:text-base text-neutral-600 text-center px-4">
+            Find answers to common questions about our services
+          </p>
         </div>
       </div>
 
-      {/* FAQ Content */}
-      <div className="px-4 md:px-6 lg:px-8 py-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="space-y-3">
-            {faqData.map((item) => {
-              const isOpen = openItems.has(item.id);
-              return (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-lg border border-neutral-200 overflow-hidden transition-all"
+      <div className="px-4 max-w-3xl mx-auto">
+        <div className="space-y-3">
+          {faqs.map((item) => (
+            <div
+              key={item.id}
+              className="border border-neutral-200 rounded-xl overflow-hidden bg-white hover:border-pink-200 transition-colors"
+            >
+              <button
+                onClick={() => toggleItem(item.id)}
+                className="w-full flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors text-left"
+              >
+                <span className="text-sm md:text-base font-semibold text-neutral-900 pr-4">
+                  {item.question}
+                </span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className={`text-neutral-400 transition-transform duration-300 ${activeItem === item.id ? 'rotate-180' : ''}`}
                 >
-                  <button
-                    onClick={() => toggleItem(item.id)}
-                    className="w-full flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors text-left"
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <AnimatePresence>
+                {activeItem === item.id && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
                   >
-                    <span className="text-sm md:text-base font-semibold text-neutral-900 pr-4">
-                      {item.question}
-                    </span>
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className={`flex-shrink-0 text-neutral-500 transition-transform ${
-                        isOpen ? 'rotate-180' : ''
-                      }`}
-                    >
-                      <path
-                        d="M6 9l6 6 6-6"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                  {isOpen && (
-                    <div className="px-4 pb-4 pt-0">
-                      <p className="text-sm md:text-base text-neutral-600 leading-relaxed">
-                        {item.answer}
-                      </p>
+                    <div className="px-4 pb-4 text-sm md:text-base text-neutral-600 leading-relaxed border-t border-neutral-50 pt-3">
+                      {item.answer}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
 
-          {/* Contact Support Section */}
-          <div className="mt-8 bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
-            <div className="text-center">
+        {/* Contact Support Section */}
+        <div className="mt-12 p-6 bg-neutral-50 rounded-2xl border border-neutral-100 text-center">
+          <h2 className="text-lg font-bold text-neutral-900 mb-2">Still have questions?</h2>
+          <p className="text-sm text-neutral-600 mb-6">
+            If you can't find the answer you're looking for, please contact our support team.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <a
+              href="mailto:help@dhakadsnazzy.com"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#FF2E7A] text-white rounded-lg font-semibold hover:opacity-90 transition-colors text-sm"
+            >
               <svg
-                width="48"
-                height="48"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
-                className="mx-auto mb-4 text-green-600"
+                xmlns="http://www.w3.org/2000/svg"
               >
                 <path
-                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                  d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
                   stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
                 <path
-                  d="M13 8H7M17 12H7M17 16H7"
+                  d="M22 6l-10 7L2 6"
                   stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
               </svg>
-              <h3 className="text-lg font-bold text-neutral-900 mb-2">
-                Still have questions?
-              </h3>
-              <p className="text-sm text-neutral-600 mb-4">
-                Our customer support team is here to help you 24/7
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <a
-                  href="mailto:help@dhakadsnazzy.com"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors text-sm"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <path
-                      d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <polyline
-                      points="22,6 12,13 2,6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Email Us
-                </a>
-                <a
-                  href="tel:+91-XXXXX-XXXXX"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-green-600 border-2 border-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors text-sm"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <path
-                      d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Call Us
-                </a>
-              </div>
-            </div>
+              Email Support
+            </a>
+            <a
+              href="tel:+91-XXXXX-XXXXX"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#FF2E7A] border-2 border-[#FF2E7A] rounded-lg font-semibold hover:bg-pink-50 transition-colors text-sm"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Call Us
+            </a>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

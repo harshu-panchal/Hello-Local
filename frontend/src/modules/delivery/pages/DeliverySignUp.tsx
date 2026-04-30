@@ -7,7 +7,9 @@ import {
 } from "../../../services/api/auth/deliveryAuthService";
 import { uploadDocument } from "../../../services/api/uploadService";
 import { validateDocumentFile } from "../../../utils/imageUpload";
+import api from "../../../services/api/config";
 import OTPInput from "../../../components/OTPInput";
+
 
 export default function DeliverySignUp() {
   const navigate = useNavigate();
@@ -20,8 +22,6 @@ export default function DeliverySignUp() {
     address: "",
     city: "",
     pincode: "",
-    drivingLicenseUrl: "",
-    nationalIdentityCardUrl: "",
     accountName: "",
     bankName: "",
     accountNumber: "",
@@ -29,18 +29,14 @@ export default function DeliverySignUp() {
     bonusType: "",
   });
 
-  // File state for UI
-  const [drivingLicenseFile, setDrivingLicenseFile] = useState<File | null>(
-    null
-  );
-  const [nationalIdentityCardFile, setNationalIdentityCardFile] =
-    useState<File | null>(null);
-  const [uploadingDocs, setUploadingDocs] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isCityLoading, setIsCityLoading] = useState(false);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [drivingLicenseFile, setDrivingLicenseFile] = useState<File | null>(null);
+  const [nationalIdentityCardFile, setNationalIdentityCardFile] = useState<File | null>(null);
 
   const bonusTypes = [
     "Select Bonus Type",
@@ -111,24 +107,7 @@ export default function DeliverySignUp() {
     );
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, files } = e.target;
-    if (!files || !files[0]) return;
 
-    const file = files[0];
-    const validation = validateDocumentFile(file);
-    if (!validation.valid) {
-      setError(validation.error || "Invalid document file");
-      return;
-    }
-
-    if (name === "drivingLicense") {
-      setDrivingLicenseFile(file);
-    } else if (name === "nationalIdentityCard") {
-      setNationalIdentityCardFile(file);
-    }
-    setError("");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,32 +139,49 @@ export default function DeliverySignUp() {
     setError("");
 
     try {
-      // Upload documents if provided
-      let drivingLicenseUrl = formData.drivingLicenseUrl;
-      let nationalIdentityCardUrl = formData.nationalIdentityCardUrl;
+      // 1. Check if user already exists BEFORE uploading documents
+      const checkRes = await api.get(`/auth/delivery/check-existence?mobile=${formData.mobile}&email=${formData.email}`);
+      if (checkRes.data.success && checkRes.data.exists) {
+        setError(checkRes.data.message || "Account already exists with this mobile or email");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Upload documents if provided
+      let drivingLicenseUrl = (formData as any).drivingLicenseUrl;
+      let nationalIdentityCardUrl = (formData as any).nationalIdentityCardUrl;
 
       if (drivingLicenseFile || nationalIdentityCardFile) {
         setUploadingDocs(true);
 
-        if (drivingLicenseFile) {
-          const drivingLicenseResult = await uploadDocument(
-            drivingLicenseFile,
-            "hellolocal/delivery/documents"
-          );
-          drivingLicenseUrl = drivingLicenseResult.secureUrl;
-        }
+        try {
+          if (drivingLicenseFile) {
+            const drivingLicenseResult = await uploadDocument(
+              drivingLicenseFile,
+              "hellolocal/delivery/documents"
+            );
+            drivingLicenseUrl = drivingLicenseResult.secureUrl;
+          }
 
-        if (nationalIdentityCardFile) {
-          const nationalIdResult = await uploadDocument(
-            nationalIdentityCardFile,
-            "hellolocal/delivery/documents"
-          );
-          nationalIdentityCardUrl = nationalIdResult.secureUrl;
+          if (nationalIdentityCardFile) {
+            const nationalIdResult = await uploadDocument(
+              nationalIdentityCardFile,
+              "hellolocal/delivery/documents"
+            );
+            nationalIdentityCardUrl = nationalIdResult.secureUrl;
+          }
+        } catch (uploadErr: any) {
+          console.error("Document upload failed:", uploadErr);
+          setError(`Document upload failed: ${uploadErr.message || "Please try again or skip documents for now."}`);
+          setUploadingDocs(false);
+          setLoading(false);
+          return;
         }
 
         setUploadingDocs(false);
       }
 
+      // 3. Register the user
       const response = await register({
         name: formData.name,
         mobile: formData.mobile,
@@ -195,8 +191,6 @@ export default function DeliverySignUp() {
         address: formData.address,
         city: formData.city,
         pincode: formData.pincode || undefined,
-        drivingLicense: drivingLicenseUrl || undefined,
-        nationalIdentityCard: nationalIdentityCardUrl || undefined,
         accountName: formData.accountName || undefined,
         bankName: formData.bankName || undefined,
         accountNumber: formData.accountNumber || undefined,
@@ -221,13 +215,15 @@ export default function DeliverySignUp() {
         }
       }
     } catch (err: any) {
-      setError(
-        err.message || "Registration failed. Please try again."
-      );
+      console.error("Registration error:", err);
+      const errorMessage = err.response?.data?.message || err.message || "Registration failed. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
+      setUploadingDocs(false);
     }
   };
+
 
   const handleOTPComplete = async (otp: string) => {
     setLoading(true);
@@ -246,7 +242,7 @@ export default function DeliverySignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center px-4 py-8">
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
@@ -293,19 +289,7 @@ export default function DeliverySignUp() {
         </div>
 
         {/* Sign Up Form */}
-        <div
-          className="p-6 space-y-4 delivery-signup-form"
-          style={{
-            maxHeight: "70vh",
-            overflowY: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}>
-          <style>{`
-            .delivery-signup-form::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
+        <div className="p-6 space-y-4">
           {!showOTP ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Personal Information */}
@@ -552,54 +536,7 @@ export default function DeliverySignUp() {
                 </div>
               </div>
 
-              {/* Documents Section */}
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="text-sm font-semibold text-neutral-700 border-b pb-2">
-                  Documents (Optional - Can be uploaded later)
-                </h3>
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Driving License
-                  </label>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      name="drivingLicense"
-                      onChange={handleFileChange}
-                      accept="image/*,.pdf"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                      disabled={loading || uploadingDocs}
-                    />
-                    {drivingLicenseFile && (
-                      <p className="text-xs text-neutral-600">
-                        {drivingLicenseFile.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    National Identity Card
-                  </label>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      name="nationalIdentityCard"
-                      onChange={handleFileChange}
-                      accept="image/*,.pdf"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                      disabled={loading || uploadingDocs}
-                    />
-                    {nationalIdentityCardFile && (
-                      <p className="text-xs text-neutral-600">
-                        {nationalIdentityCardFile.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
 
               {error && (
                 <div className="text-sm text-red-600 bg-red-50 p-2 rounded text-center">
@@ -609,16 +546,14 @@ export default function DeliverySignUp() {
 
               <button
                 type="submit"
-                disabled={loading || uploadingDocs}
-                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${!loading && !uploadingDocs
+                disabled={loading}
+                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${!loading
                   ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
                   : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
                   }`}>
-                {uploadingDocs
-                  ? "Uploading Documents..."
-                  : loading
-                    ? "Creating Account..."
-                    : "Sign Up"}
+                {loading
+                  ? "Creating Account..."
+                  : "Sign Up"}
               </button>
 
               {/* Login Link */}

@@ -179,7 +179,7 @@ export default function SellerWallet() {
                           </span>
                         )}
                         {item.status === 'Completed' && (
-                          <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                          <span className="bg-pink-100 text-pink-800 text-xs px-2 py-0.5 rounded-full font-medium">
                             Success
                           </span>
                         )}
@@ -194,7 +194,7 @@ export default function SellerWallet() {
                         })}
                       </p>
                     </div>
-                    <p className={`font-bold text-lg ${item.type === 'Credit' ? 'text-green-600' : 'text-red-600'} ${item.status === 'Pending' ? 'opacity-60' : ''}`}>
+                    <p className={`font-bold text-lg ${item.type === 'Credit' ? 'text-pink-700' : 'text-red-600'} ${item.status === 'Pending' ? 'opacity-60' : ''}`}>
                       {item.type === 'Credit' ? '+' : '-'}₹{item.amount.toFixed(2)}
                     </p>
                   </div>
@@ -218,7 +218,7 @@ export default function SellerWallet() {
                       </div>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${withdrawal.status === 'Completed'
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-pink-100 text-pink-800'
                           : withdrawal.status === 'Approved'
                             ? 'bg-blue-100 text-blue-700'
                             : withdrawal.status === 'Rejected'
@@ -258,7 +258,7 @@ export default function SellerWallet() {
                         <p className="font-medium text-gray-900">Order Commission</p>
                         <p className="text-xs text-gray-600">Rate: {comm.rate}%</p>
                       </div>
-                      <p className="font-bold text-green-600">₹{comm.amount.toFixed(2)}</p>
+                      <p className="font-bold text-pink-700">₹{comm.amount.toFixed(2)}</p>
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>Order Amount: ₹{comm.orderAmount.toFixed(2)}</span>
@@ -335,3 +335,4 @@ export default function SellerWallet() {
     </div >
   );
 }
+

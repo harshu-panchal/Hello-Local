@@ -259,7 +259,7 @@ export default function AdminManageCustomer() {
                   value={dateRange}
                   onChange={(e) => setDateRange(e.target.value)}
                   placeholder="MM/DD/YYYY - MM/DD/YYYY"
-                  className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600"
                 />
               </div>
               <div>
@@ -273,7 +273,7 @@ export default function AdminManageCustomer() {
                     setStatusFilter(val === "All" ? undefined : (val as "Active" | "Inactive"));
                     setCurrentPage(1);
                   }}
-                  className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white">
+                  className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600 bg-white">
                   <option value="All">All</option>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
@@ -289,7 +289,7 @@ export default function AdminManageCustomer() {
                     setEntriesPerPage(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white">
+                  className="w-full px-3 py-2 text-sm border border-neutral-300 rounded focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-rose-600 bg-white">
                   <option value="10">10</option>
                   <option value="20">20</option>
                   <option value="50">50</option>
@@ -299,7 +299,7 @@ export default function AdminManageCustomer() {
               <div className="flex items-end">
                 <button
                   onClick={handleExport}
-                  className="w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                  className="w-full bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2">
                   Export
                   <svg
                     width="14"
@@ -328,7 +328,7 @@ export default function AdminManageCustomer() {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full pl-14 pr-3 py-2 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-teal-500"
+                className="w-full pl-14 pr-3 py-2 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-rose-600"
                 placeholder="Search by name, email, phone, or ref code..."
               />
             </div>
@@ -449,7 +449,7 @@ export default function AdminManageCustomer() {
                       <td className="p-4 border border-neutral-200">
                         <span
                           className={`px-2 py-1 rounded text-xs font-medium ${customer.status === "Active"
-                            ? "bg-green-100 text-green-800"
+                            ? "bg-rose-100 text-rose-900"
                             : "bg-red-100 text-red-800"
                             }`}>
                           {customer.status}
@@ -481,7 +481,7 @@ export default function AdminManageCustomer() {
                             </svg>
                           </button>
                           <button
-                            className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+                            className="p-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded transition-colors"
                             title="Edit">
                             <svg
                               width="14"
@@ -514,9 +514,9 @@ export default function AdminManageCustomer() {
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className={`p-2 border border-teal-600 rounded ${currentPage === 1
+                className={`p-2 border border-rose-700 rounded ${currentPage === 1
                   ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-teal-600 hover:bg-teal-50"
+                  : "text-rose-700 hover:bg-rose-50"
                   }`}>
                 <svg
                   width="16"
@@ -528,7 +528,7 @@ export default function AdminManageCustomer() {
                   <path d="M15 18L9 12L15 6"></path>
                 </svg>
               </button>
-              <button className="px-3 py-1.5 border border-teal-600 bg-teal-600 text-white rounded font-medium text-sm">
+              <button className="px-3 py-1.5 border border-rose-700 bg-rose-700 text-white rounded font-medium text-sm">
                 {currentPage}
               </button>
               <button
@@ -536,9 +536,9 @@ export default function AdminManageCustomer() {
                   setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                 }
                 disabled={currentPage === totalPages}
-                className={`p-2 border border-teal-600 rounded ${currentPage === totalPages
+                className={`p-2 border border-rose-700 rounded ${currentPage === totalPages
                   ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-teal-600 hover:bg-teal-50"
+                  : "text-rose-700 hover:bg-rose-50"
                   }`}>
                 <svg
                   width="16"
@@ -557,3 +557,4 @@ export default function AdminManageCustomer() {
     </div>
   );
 }
+

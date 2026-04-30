@@ -110,7 +110,7 @@ export default function Invoice() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF2E7A]"></div>
           <p className="text-sm text-neutral-500">Loading invoice...</p>
         </div>
       </div>
@@ -122,7 +122,7 @@ export default function Invoice() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-xl font-bold mb-4">Invoice Not Found</h1>
-          <Link to="/orders">
+          <Link to="/user/orders">
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -154,7 +154,7 @@ export default function Invoice() {
               <PrinterIcon className="w-4 h-4" />
               Print
             </Button>
-            <Link to={`/orders/${id}`}>
+            <Link to={`/user/orders/${id}`}>
               <Button className="flex items-center gap-2">View Order</Button>
             </Link>
           </div>

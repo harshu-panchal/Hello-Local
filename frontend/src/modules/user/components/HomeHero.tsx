@@ -2,7 +2,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useLayoutEffect, useRef, useState, useEffect, useMemo } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { getTheme } from '../../../utils/themes';
+import { getTheme, getCategoryGradient } from '../../../utils/themes';
+import { getLenis } from '../../../utils/smoothScroll';
 import { useLocation } from '../../../hooks/useLocation';
 import { getCategories } from '../../../services/api/customerProductService';
 import { Category } from '../../../types/domain';
@@ -91,8 +92,17 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
   const [isListening, setIsListening] = useState(false);
+  const languageOptions = [
+    { code: 'en', label: 'English' },
+    { code: 'hi', label: 'Hindi' },
+    { code: 'es', label: 'Spanish' },
+  ];
+  const [selectedLanguageCode, setSelectedLanguageCode] = useState('en');
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
+  const languageButtonRef = useRef<HTMLButtonElement>(null);
 
   const startVoiceSearch = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -148,6 +158,46 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       reader.readAsDataURL(file);
     }
   };
+
+  const selectedLanguage = languageOptions.find((l) => l.code === selectedLanguageCode) || languageOptions[0];
+
+  const toggleLanguageMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsLanguageMenuOpen((prev) => !prev);
+  };
+
+  const handleLanguageSelect = (code: string) => {
+    setSelectedLanguageCode(code);
+    setIsLanguageMenuOpen(false);
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('hl-language');
+    if (saved && languageOptions.some((l) => l.code === saved)) {
+      setSelectedLanguageCode(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('hl-language', selectedLanguageCode);
+  }, [selectedLanguageCode]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isLanguageMenuOpen &&
+        languageMenuRef.current &&
+        languageButtonRef.current &&
+        !languageMenuRef.current.contains(event.target as Node) &&
+        !languageButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsLanguageMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isLanguageMenuOpen]);
 
   // Format location display text - only show if user has provided location
   const locationDisplayText = useMemo(() => {
@@ -270,10 +320,22 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       }
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    const lenis = getLenis();
+    if (lenis) {
+      lenis.on('scroll', handleScroll);
+    } else {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
     handleScroll(); // Check initial state
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      if (lenis) {
+        lenis.off('scroll', handleScroll);
+      } else {
+        window.removeEventListener('scroll', handleScroll);
+      }
+    };
   }, []);
 
   // Update sliding indicator position when activeTab changes and scroll to active tab
@@ -350,11 +412,36 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   };
 
   const theme = getTheme(activeTab || 'all');
-  const heroGradient = `linear-gradient(135deg, #FF8A3D, #FF2E7A, #FFC233)`;
+  const activeTabDetails = tabs.find(t => t.id === activeTab);
+  const heroGradient = getCategoryGradient(activeTab || 'all', activeTabDetails?.label);
 
-  // Helper to convert RGB to RGBA
-  const rgbToRgba = (rgb: string, alpha: number) => {
-    return rgb.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+  // Helper to convert hex to RGB
+  const hexToRgb = (hex: string) => {
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) {
+      r = parseInt(hex.substring(1, 3), 16);
+      g = parseInt(hex.substring(3, 5), 16);
+      b = parseInt(hex.substring(5, 7), 16);
+    }
+    return `${r}, ${g}, ${b}`;
+  };
+
+  const getStickyBackground = () => {
+    if (scrollProgress <= 0.05) return 'transparent';
+    const bgOpacity = 1 - scrollProgress;
+
+    // If it's the default gradient
+    if (heroGradient.includes('linear-gradient')) {
+      return `linear-gradient(135deg, rgba(255,138,61,${bgOpacity}), rgba(255,46,122,${bgOpacity}), rgba(255,194,51,${bgOpacity})), rgba(255,255,255,${scrollProgress})`;
+    }
+
+    // Otherwise it's a hex code
+    const rgb = hexToRgb(heroGradient);
+    return `linear-gradient(rgba(${rgb}, ${bgOpacity}), rgba(${rgb}, ${bgOpacity})), rgba(255,255,255,${scrollProgress})`;
   };
 
   return (
@@ -387,7 +474,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               {/* Service name with premium status badge */}
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 shadow-sm border border-white scale-[0.85] origin-left">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF2E7A] animate-pulse shadow-[0_0_8px_rgba(255,46,122,0.8)]" />
                   <span className="text-[9px] font-black text-neutral-800 uppercase tracking-tighter">LIVE</span>
                 </div>
                 <div className="text-neutral-950 font-extrabold text-[12px] md:text-base leading-none tracking-tight">
@@ -427,9 +514,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         className="sticky top-0 z-50"
         style={{
           ...(scrollProgress >= 0.1 && {
-            background: scrollProgress > 0.05
-              ? `linear-gradient(135deg, rgba(255,138,61,${1 - scrollProgress}), rgba(255,46,122,${1 - scrollProgress}), rgba(255,194,51,${1 - scrollProgress})), rgba(255,255,255,${scrollProgress})`
-              : 'transparent',
+            background: getStickyBackground(),
             boxShadow: `0 4px 6px -1px rgba(0, 0, 0, ${scrollProgress * 0.1})`,
             transition: 'background 0.15s ease-out, box-shadow 0.15s ease-out',
           }),
@@ -489,7 +574,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   })
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 flex-shrink-0 relative">
                 <button
                   onClick={startVoiceSearch}
                   className={`w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${isListening
@@ -512,7 +597,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 </button>
                 <button
                   onClick={handleCameraClick}
-                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 md:hidden text-neutral-600"
+                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 text-neutral-600"
                   aria-label="Camera Search"
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -521,6 +606,48 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     <circle cx="18" cy="9" r="1.2" fill="currentColor" />
                   </svg>
                 </button>
+                <button
+                  ref={languageButtonRef}
+                  onClick={toggleLanguageMenu}
+                  className={`w-7 h-7 md:w-8 md:h-8 rounded-full border flex items-center justify-center bg-neutral-100/95 border-neutral-200/70 hover:bg-neutral-200 active:scale-90 shadow-sm transition-all duration-300 text-neutral-600 relative ${isLanguageMenuOpen ? 'ring-2 ring-neutral-200' : ''}`}
+                  aria-label="Language Option"
+                  aria-haspopup="menu"
+                  aria-expanded={isLanguageMenuOpen}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                    <path d="M2.5 12h19M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                  <span className="absolute -bottom-2 right-0 text-[10px] font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-full px-1 leading-none shadow-sm">
+                    {selectedLanguage.code.toUpperCase()}
+                  </span>
+                </button>
+
+                {isLanguageMenuOpen && (
+                  <div
+                    ref={languageMenuRef}
+                    className="absolute right-0 top-[115%] w-40 bg-white border border-neutral-200 rounded-xl shadow-lg py-2 z-50"
+                    role="menu"
+                  >
+                    {languageOptions.map((lang) => {
+                      const isActive = lang.code === selectedLanguageCode;
+                      return (
+                        <button
+                          key={lang.code}
+                          role="menuitem"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLanguageSelect(lang.code);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-neutral-50 ${isActive ? 'text-neutral-900 font-semibold bg-neutral-50' : 'text-neutral-700'}`}
+                        >
+                          <span>{lang.label}</span>
+                          <span className="text-[11px] font-bold text-neutral-500">{lang.code.toUpperCase()}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -550,7 +677,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
 
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            const tabColor = isActive
+            const iconColor = 'text-neutral-900';
+            const labelColor = isActive
               ? 'text-neutral-900'
               : scrollProgress > 0.5
                 ? 'text-neutral-600'
@@ -567,20 +695,20 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   }
                 }}
                 onClick={() => handleTabClick(tab.id, tab.label)}
-                className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${tabColor} z-10`}
+                className={`flex-shrink-0 flex flex-col md:flex-row items-center justify-center min-w-[50px] md:min-w-fit md:px-3 py-1 md:py-1.5 relative ${labelColor} z-10`}
                 style={{
                   transition: 'color 0.3s ease-out',
                 }}
                 type="button"
               >
-                <div className={`mb-0.5 md:hidden w-5 h-5 flex items-center justify-center ${tabColor}`} style={{
+                <div className={`mb-0.5 md:hidden w-5 h-5 flex items-center justify-center ${iconColor}`} style={{
                   transition: 'color 0.3s ease-out, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   transform: isActive ? 'scale(1.1)' : 'scale(1)',
                 }}>
                   {tab.icon}
                 </div>
                 <span
-                  className={`text-[10px] md:text-xs md:whitespace-nowrap ${isActive ? 'font-semibold' : 'font-medium'}`}
+                  className={`text-[10px] md:text-xs md:whitespace-nowrap ${labelColor} ${isActive ? 'font-semibold' : 'font-medium'}`}
                   style={{
                     transition: 'font-weight 0.3s ease-out',
                   }}

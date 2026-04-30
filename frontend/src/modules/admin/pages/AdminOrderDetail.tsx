@@ -72,7 +72,7 @@ export default function AdminOrderDetail() {
           <p className="text-red-600 mb-4">{error}</p>
           <button
             onClick={() => navigate('/admin/orders/all')}
-            className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+            className="bg-rose-700 hover:bg-rose-800 text-white px-6 py-2 rounded-lg transition-colors"
           >
             Back to Orders
           </button>
@@ -88,7 +88,7 @@ export default function AdminOrderDetail() {
           <h2 className="text-xl font-bold text-neutral-900 mb-4">Order Not Found</h2>
           <button
             onClick={() => navigate('/admin/orders/all')}
-            className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg transition-colors"
+            className="bg-rose-700 hover:bg-rose-800 text-white px-6 py-2 rounded-lg transition-colors"
           >
             Back to Orders
           </button>
@@ -130,7 +130,7 @@ export default function AdminOrderDetail() {
       <div className="mb-6">
         <button
           onClick={() => navigate('/admin/orders/all')}
-          className="text-teal-600 hover:text-teal-700 mb-4 flex items-center gap-2"
+          className="text-rose-700 hover:text-rose-800 mb-4 flex items-center gap-2"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -155,7 +155,7 @@ export default function AdminOrderDetail() {
                 value={order.status}
                 onChange={(e) => handleStatusUpdate(e.target.value)}
                 disabled={updating}
-                className="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-600"
               >
                 {statusOptions.map((status) => (
                   <option key={status} value={status}>
@@ -335,4 +335,5 @@ export default function AdminOrderDetail() {
     </div>
   );
 }
+
 

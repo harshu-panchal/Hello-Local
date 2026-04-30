@@ -4,6 +4,7 @@ import { otpRateLimiter, loginRateLimiter } from "../middleware/rateLimiter";
 
 const router = Router();
 
+
 // Send SMS OTP route
 router.post("/send-sms-otp", otpRateLimiter, deliveryAuthController.sendSmsOtp);
 
@@ -12,5 +13,11 @@ router.post("/verify-sms-otp", loginRateLimiter, deliveryAuthController.verifySm
 
 // Register route
 router.post("/register", deliveryAuthController.register);
+
+// Check existence route
+router.get("/check-existence", deliveryAuthController.checkExistence);
+
+
+
 
 export default router;

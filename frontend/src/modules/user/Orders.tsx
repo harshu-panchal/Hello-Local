@@ -4,7 +4,7 @@ import { useOrders } from '../../hooks/useOrders';
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'Delivered':
-      return 'bg-green-100 text-green-700';
+      return 'bg-pink-100 text-pink-700';
     case 'On the way':
       return 'bg-blue-100 text-blue-700';
     case 'Accepted':
@@ -40,8 +40,8 @@ export default function Orders() {
         <h2 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">No orders yet</h2>
         <p className="text-neutral-600 mb-6 md:mb-8 md:text-lg">Start shopping to see your orders here!</p>
         <Link
-          to="/"
-          className="inline-block bg-green-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-lg font-semibold hover:bg-green-700 transition-colors md:text-lg"
+          to="/user"
+          className="inline-block bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] text-white px-6 md:px-8 py-3 md:py-4 rounded-lg font-semibold hover:opacity-90 transition-opacity md:text-lg"
         >
           Start Shopping
         </Link>
@@ -61,7 +61,7 @@ export default function Orders() {
           return (
             <Link
               key={order.id}
-              to={`/orders/${order.id}`}
+              to={`/user/orders/${order.id}`}
               className="block bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">

@@ -266,7 +266,7 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
                           <div className="flex flex-col gap-0.5">
                             <div className="flex justify-between items-start">
                               <span className={`text-[11px] font-bold uppercase tracking-wider ${n.type === 'Payment' ? 'text-amber-600' :
-                                  n.type === 'Success' ? 'text-green-600' : 'text-rose-600'
+                                  n.type === 'Success' ? 'text-rose-700' : 'text-rose-600'
                                 }`}>
                                 {n.type}
                               </span>
@@ -337,5 +337,6 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
     </header>
   );
 }
+
 
 
