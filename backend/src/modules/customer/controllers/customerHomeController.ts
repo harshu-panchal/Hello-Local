@@ -172,8 +172,8 @@ async function fetchSectionData(
 
       return products.map((p: any) => {
         // Check if the product's seller is within range
-        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-          ? nearbySellerIds.some(id => id.toString() === p.seller.toString())
+          const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p?.seller
+          ? nearbySellerIds.some(id => id?.toString() === p.seller?.toString())
           : false;
 
         return {
@@ -240,7 +240,7 @@ async function fetchSectionData(
 // Get Home Page Content
 export const getHomeContent = async (req: Request, res: Response) => {
   const { headerCategorySlug, latitude, longitude } = req.query; // Get header category slug and location from query params
-
+  
   try {
     // Find sellers within user's location range
     const userLat = latitude ? parseFloat(latitude as string) : null;
@@ -267,6 +267,16 @@ export const getHomeContent = async (req: Request, res: Response) => {
     const bestsellers = await Promise.all(
       bestsellerCards.map(async (card: any) => {
         const categoryId = card.category?._id || card.category;
+        
+        if (!categoryId) {
+          return {
+            id: card._id.toString(),
+            categoryId: "",
+            name: card.name,
+            productImages: [],
+            productCount: 0,
+          };
+        }
 
         // Build product query for images (ignore location to show category preview)
         const productQuery: any = {
@@ -311,7 +321,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
         return {
           id: card._id.toString(),
-          categoryId: categoryId.toString(),
+          categoryId: categoryId?.toString() || "",
           name: card.name,
           productImages: productImages.slice(0, 4),
           productCount: categoryProducts.length,
@@ -347,8 +357,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
       .map((item: any) => {
         const product = item.product;
         // Check if the product's seller is within range
-        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && product.seller
-          ? nearbySellerIds.some(id => id.toString() === product.seller.toString())
+        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && product?.seller
+          ? nearbySellerIds.some(id => id?.toString() === product.seller?.toString())
           : false;
 
         return {
@@ -407,7 +417,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
           productImages, // Include preview images irrespective of location
           slug: shop.storeId || shop._id.toString(),
           category: shop.category,
-          productIds: shop.products?.map((p: any) => p.toString()) || [],
+          productIds: shop.products?.map((p: any) => p?.toString()).filter(Boolean) || [],
           bgColor: shop.bgColor || "bg-neutral-50",
         };
       })
@@ -619,9 +629,12 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
       // If we have promoStrip, add availability flag to featured products
       if (promoStrip && (promoStrip as any).featuredProducts) {
+        // Filter out null products if any were deleted
+        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.filter(Boolean);
+        
         (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.map((p: any) => {
-          const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-            ? nearbySellerIds.some(id => id.toString() === p.seller.toString())
+          const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p?.seller
+            ? nearbySellerIds.some(id => id?.toString() === p.seller?.toString())
             : false;
           return { ...p, isAvailable };
         });
@@ -666,6 +679,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
+    console.error("Error in getHomeContent:", error.stack || error);
     res.status(500).json({
       success: false,
       message: "Error fetching home content",
