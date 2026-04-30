@@ -229,8 +229,12 @@ export async function findDeliveryBoysNearSellerLocations(
         // Get unique seller IDs from order items
         const sellerIds = [...new Set(
             order.items
-                ?.map((item: any) => item.seller?.toString())
-                .filter((id: string) => id) || []
+                ?.map((item: any) => {
+                    const seller = item?.seller;
+                    if (!seller) return null;
+                    return seller._id ? seller._id.toString() : seller.toString();
+                })
+                .filter((id: string | null): id is string => !!id && id !== '[object Object]') || []
         )];
 
         if (sellerIds.length === 0) {
@@ -348,19 +352,19 @@ export async function notifyDeliveryBoysOfNewOrder(
 
         // Prepare order data for notification
         const orderData = {
-            orderId: order._id.toString(),
+            orderId: order._id ? order._id.toString() : order.id,
             orderNumber: order.orderNumber,
             customerName: order.customerName,
             customerPhone: order.customerPhone,
             deliveryAddress: {
-                address: order.deliveryAddress.address,
-                city: order.deliveryAddress.city,
-                state: order.deliveryAddress.state,
-                pincode: order.deliveryAddress.pincode,
+                address: order.deliveryAddress?.address || '',
+                city: order.deliveryAddress?.city || '',
+                state: order.deliveryAddress?.state || '',
+                pincode: order.deliveryAddress?.pincode || '',
             },
-            total: order.total,
-            subtotal: order.subtotal,
-            shipping: order.shipping,
+            total: order.total || 0,
+            subtotal: order.subtotal || 0,
+            shipping: order.shipping || 0,
             deliveryBoyEarning: deliveryBoyEarning, // Estimated earning for delivery boy
             createdAt: order.createdAt,
         };

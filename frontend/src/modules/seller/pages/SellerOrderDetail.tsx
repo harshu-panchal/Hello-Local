@@ -46,10 +46,12 @@ export default function SellerOrderDetail() {
         setOrderStatus(newStatus);
         setOrderDetail({ ...orderDetail, status: newStatus as any });
       } else {
-        alert('Failed to update order status');
+        alert(response.message || 'Failed to update order status');
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update order status');
+      console.error('Error updating order status:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to update order status';
+      alert(errorMessage);
     }
   };
 

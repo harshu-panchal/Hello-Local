@@ -253,6 +253,7 @@ export const updateOrderStatus = asyncHandler(
     const sellerItems = await OrderItem.findOne({ order: id, seller: sellerId });
 
     if (!sellerItems) {
+      console.log(`[Order Update] Seller ${sellerId} not authorized for order ${id}`);
       return res.status(404).json({
         success: false,
         message: "Order not found or you are not authorized to manage this order",
@@ -278,6 +279,23 @@ export const updateOrderStatus = asyncHandler(
 
     const previousStatus = order.status;
     order.status = status;
+    
+    // Update seller's items status in this order if applicable
+    const itemStatusMap: Record<string, string> = {
+      'Accepted': 'Pending',
+      'On the way': 'Shipped',
+      'Delivered': 'Delivered',
+      'Cancelled': 'Cancelled',
+      'Rejected': 'Cancelled'
+    };
+
+    if (itemStatusMap[status]) {
+      await OrderItem.updateMany(
+        { order: id, seller: sellerId },
+        { status: itemStatusMap[status] }
+      );
+    }
+
     await order.save();
 
     // Trigger delivery notification if seller accepts the order
