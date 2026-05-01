@@ -117,12 +117,8 @@ export default function Checkout() {
   const isPlaceholderUser =
     user?.name === "User" || user?.email?.endsWith("@dhakadsnazzy.temp");
 
-  // Redirect if empty
-  useEffect(() => {
-    if (!cartLoading && cart.items.length === 0 && !showOrderSuccess) {
-      navigate("/");
-    }
-  }, [cart.items.length, cartLoading, navigate, showOrderSuccess]);
+  // Redirect logic removed to prevent jarring experience. 
+  // The UI below handles empty states more gracefully.
 
   // Load addresses and coupons
   useEffect(() => {
@@ -235,14 +231,36 @@ export default function Checkout() {
     fetchSimilar();
   }, [cart?.items?.length]);
 
-  if (cartLoading || ((cart?.items?.length || 0) === 0 && !showOrderSuccess)) {
+  if (cartLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="flex flex-col items-center">
           <div className="w-12 h-12 border-4 border-[#FF2E7A] border-t-transparent rounded-full animate-spin mb-4"></div>
           <p className="text-sm font-medium text-neutral-600">
-            {cartLoading ? "Loading checkout..." : "Redirecting..."}
+            Loading checkout...
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!showOrderSuccess && (cart?.items?.length || 0) === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+        <div className="flex flex-col items-center text-center max-w-sm">
+          <div className="text-6xl mb-6">🛒</div>
+          <h2 className="text-xl font-bold text-neutral-900 mb-2">
+            Your cart is empty
+          </h2>
+          <p className="text-sm text-neutral-600 mb-8">
+            Looks like you haven't added anything to your cart yet or your items
+            are unavailable at the selected location.
+          </p>
+          <button
+            onClick={() => navigate("/")}
+            className="w-full bg-[#FF2E7A] text-white py-3 rounded-xl font-bold hover:opacity-90 transition-opacity">
+            Start Shopping
+          </button>
         </div>
       </div>
     );

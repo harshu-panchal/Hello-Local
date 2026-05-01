@@ -102,6 +102,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      setLoading(true);
       // Use provided coordinates or fallback to current location
       const queryLat = lat !== undefined ? lat : location?.latitude;
       const queryLng = lng !== undefined ? lng : location?.longitude;

@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useLocation as useGlobalLocation } from '../../hooks/useLocation';
 import { OrderAddress } from '../../types/order';
 import { getAddresses, addAddress, updateAddress, Address } from '../../services/api/customerAddressService';
 import { appConfig } from '../../services/configService';
@@ -16,6 +17,7 @@ export default function CheckoutAddress() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const { location: globalLocation, updateLocation: updateGlobalLocation } = useGlobalLocation();
 
   // Get address from navigation state if editing
   const editAddress = (location.state as any)?.editAddress as OrderAddress | undefined;
@@ -40,6 +42,14 @@ export default function CheckoutAddress() {
   // Location picker state
   const [selectedLatitude, setSelectedLatitude] = useState<number>(0);
   const [selectedLongitude, setSelectedLongitude] = useState<number>(0);
+
+  // Prefill with global location if available
+  useEffect(() => {
+    if (globalLocation?.latitude && globalLocation?.longitude && !selectedLatitude) {
+      setSelectedLatitude(globalLocation.latitude);
+      setSelectedLongitude(globalLocation.longitude);
+    }
+  }, [globalLocation, selectedLatitude]);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -252,6 +262,18 @@ export default function CheckoutAddress() {
         await addAddress(payload);
       }
 
+      // Update global location to match the selected address
+      if (finalLat && finalLng) {
+        await updateGlobalLocation({
+          latitude: finalLat,
+          longitude: finalLng,
+          address: `${address.flat}, ${address.street}, ${address.city}, ${address.state}`,
+          city: address.city,
+          state: address.state,
+          pincode: address.pincode
+        });
+      }
+
       // Show success feedback logic if needed or just navigate
       setTimeout(() => {
         setIsSaving(false);
@@ -305,6 +327,29 @@ export default function CheckoutAddress() {
         <label className="block text-xs font-medium text-neutral-700 mb-2">
            Delivery Address Details
         </label>
+      </div>
+
+      {/* Map Picker */}
+      <div className="px-4 py-3 border-b border-neutral-200">
+        <GoogleMapsLocationPicker
+          initialLat={selectedLatitude || globalLocation?.latitude || 28.6139}
+          initialLng={selectedLongitude || globalLocation?.longitude || 77.2090}
+          onLocationSelect={(lat, lng, addr) => {
+            setSelectedLatitude(lat);
+            setSelectedLongitude(lng);
+            if (addr) {
+              setAddress(prev => ({
+                ...prev,
+                street: addr.street || prev.street,
+                city: addr.city || prev.city,
+                state: addr.state || prev.state,
+                pincode: addr.pincode || prev.pincode,
+                landmark: addr.landmark || prev.landmark
+              }));
+            }
+          }}
+          height="180px"
+        />
       </div>
 
       {/* Who you are ordering for? */}
