@@ -176,3 +176,42 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     },
   });
 });
+
+/**
+ * Check if admin already exists
+ */
+export const checkExistence = asyncHandler(async (req: Request, res: Response) => {
+  const { mobile, email } = req.query;
+
+  if (!mobile && !email) {
+    return res.status(400).json({
+      success: false,
+      message: "Mobile or email is required",
+    });
+  }
+
+  const query: any = {};
+  if (mobile) query.mobile = mobile;
+  if (email) query.email = email;
+
+  const existingAdmin = await Admin.findOne({
+    $or: Object.entries(query).map(([key, value]) => ({ [key]: value })),
+  });
+
+  if (existingAdmin) {
+    let conflictField = "mobile or email";
+    if (existingAdmin.mobile === mobile) conflictField = "mobile number";
+    else if (existingAdmin.email === email) conflictField = "email address";
+
+    return res.status(200).json({
+      success: true,
+      exists: true,
+      message: `An admin is already registered with this ${conflictField}`,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    exists: false,
+  });
+});

@@ -13,4 +13,7 @@ router.post("/verify-otp", loginRateLimiter, adminAuthController.verifyOTP);
 // Register route
 router.post("/register", adminAuthController.register);
 
+// Check existence route
+router.get("/check-existence", adminAuthController.checkExistence);
+
 export default router;

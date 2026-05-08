@@ -411,3 +411,42 @@ export const toggleShopStatus = asyncHandler(
     });
   },
 );
+
+/**
+ * Check if seller already exists
+ */
+export const checkExistence = asyncHandler(async (req: Request, res: Response) => {
+  const { mobile, email } = req.query;
+
+  if (!mobile && !email) {
+    return res.status(400).json({
+      success: false,
+      message: "Mobile or email is required",
+    });
+  }
+
+  const query: any = {};
+  if (mobile) query.mobile = mobile;
+  if (email) query.email = email;
+
+  const existingSeller = await Seller.findOne({
+    $or: Object.entries(query).map(([key, value]) => ({ [key]: value })),
+  });
+
+  if (existingSeller) {
+    let conflictField = "mobile or email";
+    if (existingSeller.mobile === mobile) conflictField = "mobile number";
+    else if (existingSeller.email === email) conflictField = "email address";
+
+    return res.status(200).json({
+      success: true,
+      exists: true,
+      message: `A seller is already registered with this ${conflictField}`,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    exists: false,
+  });
+});

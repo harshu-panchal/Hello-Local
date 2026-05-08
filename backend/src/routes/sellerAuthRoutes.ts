@@ -14,6 +14,9 @@ router.post("/verify-otp", loginRateLimiter, sellerAuthController.verifyOTP);
 // Register route
 router.post("/register", sellerAuthController.register);
 
+// Check existence route
+router.get("/check-existence", sellerAuthController.checkExistence);
+
 // Profile routes (protected)
 router.get("/profile", authenticate, sellerAuthController.getProfile);
 router.put("/profile", authenticate, sellerAuthController.updateProfile);
