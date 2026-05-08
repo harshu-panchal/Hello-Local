@@ -255,6 +255,7 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
  * Check if delivery partner already exists
  */
 export const checkExistence = asyncHandler(async (req: Request, res: Response) => {
+  console.log(`[DeliveryAuth] checkExistence called with:`, req.query);
   const { mobile, email } = req.query;
 
   if (!mobile && !email) {
