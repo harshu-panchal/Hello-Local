@@ -156,7 +156,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     } else {
       // Navigate to search page with query
       if (value.trim()) {
-        navigate(`/user/search?q=${encodeURIComponent(value)}`);
+        navigate(`/search?q=${encodeURIComponent(value)}`);
       }
     }
   };
@@ -167,7 +167,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Reset scroll position when navigating to any page (smooth, no flash)
   // BUT skip for Home page if there's a saved scroll position to restore
   useEffect(() => {
-    const isHomePage = location.pathname === '/user' || location.pathname === '/user/home';
+    const isHomePage = location.pathname === '/' || location.pathname === '/home';
 
     // Home page handles its own scroll restoration and reset logic
     if (isHomePage) {
@@ -185,7 +185,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, [location.pathname]);
 
   // Track categories active state for rotation
-  const isCategoriesActive = isActive('/user/categories') || location.pathname.startsWith('/user/category/');
+  const isCategoriesActive = isActive('/categories') || location.pathname.startsWith('/category/');
 
   useEffect(() => {
     if (isCategoriesActive && !prevCategoriesActive) {
@@ -274,8 +274,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const isProductDetailPage = location.pathname.startsWith('/product/');
   const isSearchPage = location.pathname === '/search';
-  const isCheckoutPage = location.pathname === '/user/checkout' || location.pathname.startsWith('/user/checkout/') || location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
-  const isCartPage = location.pathname === '/user/cart' || location.pathname === '/cart';
+  const isCheckoutPage = location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
+  const isCartPage = location.pathname === '/cart';
   const showHeader = isSearchPage && !isCheckoutPage && !isCartPage;
   const showSearchBar = isSearchPage && !isCheckoutPage && !isCartPage;
   const showFooter = !isCheckoutPage && !isProductDetailPage;
@@ -294,19 +294,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 borderBottom: `1px solid ${currentTheme.primary[0]}`
               }}
             >
-              <Link to="/user" className="flex items-center hover:opacity-90 transition-opacity">
+              <Link to="/" className="flex items-center hover:opacity-90 transition-opacity">
                 <img src="/logo.png?v=4" alt="Hello Local" className="h-10 w-10 object-contain rounded-lg shadow-sm" />
               </Link>
 
               <div className="flex items-center gap-6 lg:gap-8">
                 <Link
-                  to="/user"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${(isActive('/user/home') || isActive('/user'))
+                  to="/"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${(isActive('/home') || isActive('/'))
                     ? 'bg-white shadow-md font-semibold'
                     : 'hover:bg-white/20'
                     }`}
                   style={{
-                    color: (isActive('/user/home') || isActive('/user')) ? currentTheme.accentColor : currentTheme.headerTextColor
+                    color: (isActive('/home') || isActive('/')) ? currentTheme.accentColor : currentTheme.headerTextColor
                   }}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -326,13 +326,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Link>
 
                 <Link
-                  to="/user/order-again"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isActive('/user/order-again')
+                  to="/order-again"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isActive('/order-again')
                     ? 'bg-white shadow-md font-semibold'
                     : 'hover:bg-white/20'
                     }`}
                   style={{
-                    color: isActive('/user/order-again') ? currentTheme.accentColor : currentTheme.headerTextColor
+                    color: isActive('/order-again') ? currentTheme.accentColor : currentTheme.headerTextColor
                   }}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -346,13 +346,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Link>
 
                 <Link
-                  to="/user/categories"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${(isActive('/user/categories') || location.pathname.startsWith('/user/category/'))
+                  to="/categories"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${(isActive('/categories') || location.pathname.startsWith('/category/'))
                     ? 'bg-white shadow-md font-semibold'
                     : 'hover:bg-white/20'
                     }`}
                   style={{
-                    color: (isActive('/user/categories') || location.pathname.startsWith('/user/category/')) ? currentTheme.accentColor : currentTheme.headerTextColor
+                    color: (isActive('/categories') || location.pathname.startsWith('/category/')) ? currentTheme.accentColor : currentTheme.headerTextColor
                   }}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -376,13 +376,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Link>
 
                 <Link
-                  to="/user/account"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isActive('/user/account')
+                  to="/account"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isActive('/account')
                     ? 'bg-white shadow-md font-semibold'
                     : 'hover:bg-white/20'
                     }`}
                   style={{
-                    color: isActive('/user/account') ? currentTheme.accentColor : currentTheme.headerTextColor
+                    color: isActive('/account') ? currentTheme.accentColor : currentTheme.headerTextColor
                   }}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -543,7 +543,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             >
               <div className="relative mx-3">
                 <button
-                  onClick={() => navigate('/user/local-setu')}
+                  onClick={() => navigate('/local-setu')}
                   className="absolute left-1/2 -translate-x-1/2 -top-7 z-20 w-12 h-12 rounded-full text-black flex items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.28)] border-2 border-white/15 active:scale-95 transition-all"
                   style={{
                     background: getCategoryGradient(activeCategory)
@@ -566,25 +566,25 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     <div className="w-16 h-16 -mt-9 rounded-full bg-white/95" />
                   </div>
 
-                  <Link to="/user" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={(isActive('/user') || isActive('/user/home')) ? 'text-black' : 'text-black/70'}>
+                  <Link to="/" className="flex-1 flex flex-col items-center justify-end">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={(isActive('/') || isActive('/home')) ? 'text-black' : 'text-black/70'}>
                       <path d="M3 11L12 4L21 11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                       <path d="M6 10V20H18V10" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
                     </svg>
-                    <span className={`text-[11px] mt-1 ${(isActive('/user') || isActive('/user/home')) ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Home</span>
+                    <span className={`text-[11px] mt-1 ${(isActive('/') || isActive('/home')) ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Home</span>
                   </Link>
 
-                  <Link to="/user/order-again" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/user/order-again') ? 'text-black' : 'text-black/70'}>
+                  <Link to="/order-again" className="flex-1 flex flex-col items-center justify-end">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/order-again') ? 'text-black' : 'text-black/70'}>
                       <path d="M6 8H18L17 19H7L6 8Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
                       <path d="M9 8V6C9 4.9 9.9 4 11 4H13C14.1 4 15 4.9 15 6V8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                     </svg>
-                    <span className={`text-[11px] mt-1 ${isActive('/user/order-again') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Order</span>
+                    <span className={`text-[11px] mt-1 ${isActive('/order-again') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Order</span>
                   </Link>
 
                   <div className="w-12" />
 
-                  <Link to="/user/categories" className="flex-1 flex flex-col items-center justify-end">
+                  <Link to="/categories" className="flex-1 flex flex-col items-center justify-end">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isCategoriesActive ? 'text-black' : 'text-black/70'}>
                       <circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="2.2" />
                       <circle cx="17" cy="7" r="2.2" stroke="currentColor" strokeWidth="2.2" />
@@ -594,12 +594,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     <span className={`text-[11px] mt-1 ${isCategoriesActive ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Categories</span>
                   </Link>
 
-                  <Link to="/user/account" className="flex-1 flex flex-col items-center justify-end">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/user/account') ? 'text-black' : 'text-black/70'}>
+                  <Link to="/account" className="flex-1 flex flex-col items-center justify-end">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={isActive('/account') ? 'text-black' : 'text-black/70'}>
                       <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2.2" />
                       <path d="M5 20C5 16.7 8 14.5 12 14.5C16 14.5 19 16.7 19 20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                     </svg>
-                    <span className={`text-[11px] mt-1 ${isActive('/user/account') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Profile</span>
+                    <span className={`text-[11px] mt-1 ${isActive('/account') ? 'text-black font-semibold' : 'text-black/70 font-medium'}`}>Profile</span>
                   </Link>
                 </div>
               </div>

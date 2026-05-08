@@ -533,7 +533,7 @@ export default function Home() {
                             const storeSlug =
                               tile.slug || tile.id.replace("-store", "");
                             saveScrollPosition();
-                            navigate(`/user/store/${storeSlug}`);
+                            navigate(`/store/${storeSlug}`);
                           }}
                           className="block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
                           {hasImages ? (

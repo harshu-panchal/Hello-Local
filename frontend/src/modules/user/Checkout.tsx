@@ -523,9 +523,9 @@ export default function Checkout() {
 
   const handleGoToOrders = () => {
     if (placedOrderId) {
-      navigate(`/user/orders/${placedOrderId}`);
+      navigate(`/orders/${placedOrderId}`);
     } else {
-      navigate("/user/orders");
+      navigate("/orders");
     }
   };
 
@@ -966,7 +966,7 @@ export default function Checkout() {
           </span>
           <button
             onClick={() =>
-              navigate("/user/checkout/address", {
+              navigate("/checkout/address", {
                 state: {
                   editAddress: savedAddress,
                 },
@@ -1052,7 +1052,7 @@ export default function Checkout() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate("/user/checkout/address", {
+                  navigate("/checkout/address", {
                     state: {
                       editAddress: savedAddress,
                     },
@@ -2365,7 +2365,7 @@ export default function Checkout() {
         ) : (
           <button
             onClick={() =>
-              navigate("/user/checkout/address", {
+              navigate("/checkout/address", {
                 state: {
                   editAddress: savedAddress,
                 },

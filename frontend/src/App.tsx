@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Suspense, lazy, startTransition } from "react";
 import { CartProvider } from "./context/CartContext";
 import { OrdersProvider } from "./context/OrdersContext";
@@ -146,6 +146,13 @@ const AdminWallet = lazy(() => import("./modules/admin/pages/AdminWallet"));
 const AdminBillingSettings = lazy(() => import("./modules/admin/pages/AdminBillingSettings"));
 const SellerAdRequests = lazy(() => import("./modules/seller/pages/SellerAdRequests"));
 const WebsiteHome = lazy(() => import("./modules/website/pages/WebsiteHome"));
+
+// Helper for legacy redirects
+const NavigateToNewPath = () => {
+  const { pathname, search } = useLocation();
+  const newPath = pathname.replace(/^\/user/, '') || '/';
+  return <Navigate to={`${newPath}${search}`} replace />;
+};
 
 function App() {
   // Initialize push notifications on app load
@@ -366,28 +373,9 @@ function App() {
                             }
                           />
 
-                          {/* Landing Page - Root */}
+                          {/* User App Routes - Now at Root */}
                           <Route
-                            path="/"
-                            element={
-                              <Suspense fallback={<IconLoader forceShow />}>
-                                <WebsiteHome />
-                              </Suspense>
-                            }
-                          />
-
-                          <Route
-                            path="/landing"
-                            element={
-                              <Suspense fallback={<IconLoader forceShow />}>
-                                <WebsiteHome />
-                              </Suspense>
-                            }
-                          />
-
-                          {/* User App Routes */}
-                          <Route
-                            path="/user/*"
+                            path="/*"
                             element={
                               <AppLayout>
                                 <Suspense fallback={<IconLoader forceShow />}>
@@ -421,6 +409,10 @@ function App() {
                                     <Route path="store/fashion-basics" element={<FashionStore />} />
                                     <Route path="store/toy" element={<ToyStore />} />
                                     <Route path="store/hobby" element={<HobbyStore />} />
+                                    
+                                    {/* Legacy /user redirect - preserves subpath */}
+                                    <Route path="user" element={<Navigate to="/" replace />} />
+                                    <Route path="user/*" element={<NavigateToNewPath />} />
                                   </Routes>
                                 </Suspense>
                               </AppLayout>
