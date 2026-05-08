@@ -20,6 +20,15 @@ export default function PublicRoute({ children, userType: allowedUserType }: Pub
             return children ? <>{children}</> : <Outlet />;
         }
 
+        // If no allowedUserType is specified, but we are on a login page,
+        // we should still allow seeing other login pages if the user is curious,
+        // but generally we redirect them to their dashboard.
+        // However, to fix the "not opening" issue, let's be more lenient.
+        const isLoginPath = window.location.pathname.includes('/login');
+        if (isLoginPath && !window.location.pathname.includes(currentUserType.toLowerCase())) {
+            return children ? <>{children}</> : <Outlet />;
+        }
+
         if (currentUserType === 'Admin' || currentUserType === 'Super Admin') {
             return <Navigate to="/admin" replace />;
         }
