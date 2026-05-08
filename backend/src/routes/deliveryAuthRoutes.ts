@@ -14,8 +14,9 @@ router.post("/verify-sms-otp", loginRateLimiter, deliveryAuthController.verifySm
 // Register route
 router.post("/register", deliveryAuthController.register);
 
-// Check existence route
+// Check existence route (Support both correct spelling and common misspelling)
 router.get("/check-existence", deliveryAuthController.checkExistence);
+router.get("/check-existance", deliveryAuthController.checkExistence);
 
 
 
