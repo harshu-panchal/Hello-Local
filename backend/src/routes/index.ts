@@ -75,9 +75,11 @@ router.post("/contact", submitContactForm);
 
 
 // Authentication routes
+console.log("🔥 REGISTERING AUTH ROUTES");
 router.use("/auth/admin", adminAuthRoutes);
 router.use("/auth/seller", sellerAuthRoutes);
 router.use("/auth/customer", customerAuthRoutes);
+console.log("🔥 REGISTERING DELIVERY AUTH ROUTES");
 router.use("/auth/delivery", deliveryAuthRoutes);
 
 
