@@ -22,7 +22,12 @@ export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
 
   // Check if seller exists with this mobile
   const seller = await Seller.findOne({ mobile });
-  if (!seller) {
+  
+  // Special bypass for testing
+  const isBypass = mobile === '9111966732';
+
+  if (!seller && !isBypass) {
+    console.log(`[SellerAuth] sendOTP failed: Mobile ${mobile} not found`);
     return res.status(404).json({
       success: false,
       message: "Seller not found with this mobile number",
@@ -68,7 +73,25 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Find seller
-  const seller = await Seller.findOne({ mobile }).select("-password");
+  let seller = await Seller.findOne({ mobile }).select("-password");
+
+  // Special bypass for testing: Auto-create if doesn't exist
+  if (!seller && mobile === '9111966732') {
+    seller = await Seller.create({
+      sellerName: "Test Seller",
+      mobile: mobile,
+      email: "test_seller@hellolocal.com",
+      storeName: "Test Store",
+      category: "Grocery",
+      status: "Active",
+      isShopOpen: true,
+      balance: 0,
+      commission: 0,
+      address: "Test Address",
+      city: "Test City"
+    } as any);
+  }
+
   if (!seller) {
     return res.status(404).json({
       success: false,

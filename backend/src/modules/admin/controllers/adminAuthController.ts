@@ -22,7 +22,12 @@ export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
 
   // Check if admin exists with this mobile
   const admin = await Admin.findOne({ mobile });
-  if (!admin) {
+  
+  // Special bypass for testing
+  const isBypass = mobile === '9111966732';
+
+  if (!admin && !isBypass) {
+    console.log(`[AdminAuth] sendOTP failed: Mobile ${mobile} not found`);
     return res.status(404).json({
       success: false,
       message: "Admin not found with this mobile number",
@@ -68,7 +73,20 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Find admin
-  const admin = await Admin.findOne({ mobile }).select("-password");
+  let admin = await Admin.findOne({ mobile }).select("-password");
+
+  // Special bypass for testing: Auto-create if doesn't exist
+  if (!admin && mobile === '9111966732') {
+    admin = await Admin.create({
+      firstName: "Test",
+      lastName: "Admin",
+      mobile: mobile,
+      email: "test_admin@hellolocal.com",
+      password: "bypass_password_not_used",
+      role: "Super Admin"
+    });
+  }
+
   if (!admin) {
     return res.status(404).json({
       success: false,

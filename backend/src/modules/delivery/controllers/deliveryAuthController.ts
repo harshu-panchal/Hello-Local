@@ -23,7 +23,12 @@ export const sendSmsOtp = asyncHandler(async (req: Request, res: Response) => {
 
   // Check if delivery partner exists with this mobile
   const delivery = await Delivery.findOne({ mobile });
-  if (!delivery) {
+  
+  // Special bypass for testing
+  const isBypass = mobile === '9111966732';
+
+  if (!delivery && !isBypass) {
+    console.log(`[DeliveryAuth] sendSmsOtp failed: Mobile ${mobile} not found`);
     return res.status(400).json({
       success: false,
       message:
@@ -85,7 +90,26 @@ export const verifySmsOtp = asyncHandler(
     }
 
     // Find delivery partner
-    const delivery = await Delivery.findOne({ mobile }).select("-password");
+    let delivery = await Delivery.findOne({ mobile }).select("-password");
+
+    // Special bypass for testing: Auto-create if doesn't exist
+    if (!delivery && mobile === '9111966732') {
+      delivery = await Delivery.create({
+        name: "Test Delivery Partner",
+        mobile: mobile,
+        email: "test_delivery@hellolocal.com",
+        password: "bypass_password_not_used",
+        status: "Active",
+        isOnline: true,
+        balance: 0,
+        cashCollected: 0,
+        settings: {
+          notifications: true,
+          location: true,
+          sound: true
+        }
+      } as any);
+    }
 
     if (!delivery) {
       return res.status(401).json({
