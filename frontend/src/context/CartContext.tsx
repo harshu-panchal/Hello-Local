@@ -40,6 +40,7 @@ interface ExtendedCartItem extends CartItem {
 
 export function CartProvider({ children }: { children: ReactNode }) {
   // Initialize state from localStorage for persistence on refresh
+  const fetchCountRef = useRef(0);
   const [items, setItems] = useState<ExtendedCartItem[]>(() => {
     const saved = localStorage.getItem(CART_STORAGE_KEY);
     if (saved) {
@@ -54,6 +55,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return [];
   });
   const [lastAddEvent, setLastAddEvent] = useState<AddToCartEvent | null>(null);
+  const [estimatedFee, setEstimatedFee] = useState<number | undefined>(undefined);
+  const [platformFee, setPlatformFee] = useState<number | undefined>(undefined);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState<number | undefined>(undefined);
+  const [debugConfig, setDebugConfig] = useState<any>(null);
+  const [backendTotal, setBackendTotal] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const pendingOperationsRef = useRef<Set<string>>(new Set());
 
@@ -101,28 +107,47 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Use provided coordinates or fallback to current location
+    const queryLat = lat !== undefined ? lat : location?.latitude;
+    const queryLng = lng !== undefined ? lng : location?.longitude;
+
+    // CRITICAL: If authenticated but location is missing, don't call backend yet.
+    // The backend returns an empty list if coordinates are missing, which would
+    // wipe our local/optimistic state. We'll wait for the next trigger when location is ready.
+    if (isAuthenticated && (queryLat === undefined || queryLng === undefined || queryLat === null || queryLng === null)) {
+      setLoading(false);
+      return;
+    }
+
+    const currentFetchCount = ++fetchCountRef.current;
+
     try {
       setLoading(true);
-      // Use provided coordinates or fallback to current location
-      const queryLat = lat !== undefined ? lat : location?.latitude;
-      const queryLng = lng !== undefined ? lng : location?.longitude;
 
       const response = await getCart({
         latitude: queryLat,
         longitude: queryLng
       });
+
+      // Race condition protection: only update state if this is still the most recent fetch
+      if (currentFetchCount !== fetchCountRef.current) {
+        return;
+      }
+
       if (response && response.data && response.data.items) {
         setItems(mapApiItemsToState(response.data.items));
         setEstimatedFee(response.data.estimatedDeliveryFee);
         setPlatformFee(response.data.platformFee);
         setFreeDeliveryThreshold(response.data.freeDeliveryThreshold);
-        (items as any).debug_config = response.data.debug_config; // Hack to pass it through
-        (items as any).backendTotal = response.data.backendTotal; // Hack to pass backend total
-      } else {
+        setDebugConfig(response.data.debug_config);
+        setBackendTotal(response.data.backendTotal);
+      } else if (response && response.data) {
         setItems([]);
         setEstimatedFee(undefined);
         setPlatformFee(undefined);
         setFreeDeliveryThreshold(undefined);
+        setDebugConfig(null);
+        setBackendTotal(undefined);
       }
     } catch (error) {
       console.error("Failed to fetch cart:", error);
@@ -141,10 +166,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, user?.userType, location?.latitude, location?.longitude]);
 
-  // State for estimate delivery fee
-  const [estimatedFee, setEstimatedFee] = useState<number | undefined>(undefined);
-  const [platformFee, setPlatformFee] = useState<number | undefined>(undefined);
-  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState<number | undefined>(undefined);
+
 
   const cart: Cart = useMemo(() => {
     // Filter out any items with null products before computing totals
@@ -161,10 +183,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       estimatedDeliveryFee: estimatedFee,
       platformFee,
       freeDeliveryThreshold,
-      debug_config: (items as any).debug_config,
-      backendTotal: (items as any).backendTotal
+      debug_config: debugConfig,
+      backendTotal: backendTotal
     };
-  }, [items, estimatedFee, platformFee, freeDeliveryThreshold]);
+  }, [items, estimatedFee, platformFee, freeDeliveryThreshold, debugConfig, backendTotal]);
 
   const addToCart = async (product: Product, sourceElement?: HTMLElement | null) => {
     // Get consistent product ID - MongoDB returns _id, frontend expects id

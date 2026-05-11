@@ -5,7 +5,7 @@ import { appConfig } from '../../services/configService';
 import { calculateProductPrice } from '../../utils/priceUtils';
 
 export default function Cart() {
-  const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
+  const { cart, updateQuantity, removeFromCart, clearCart, loading } = useCart();
   const navigate = useNavigate();
 
   const deliveryFee = cart.total >= appConfig.freeDeliveryThreshold ? 0 : appConfig.deliveryFee;
@@ -15,6 +15,15 @@ export default function Cart() {
   const handleCheckout = () => {
     navigate('/checkout');
   };
+
+  if (loading && cart.items.length === 0) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-[#FF2E7A] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-neutral-600 font-medium italic">Syncing your basket...</p>
+      </div>
+    );
+  }
 
   if (cart.items.length === 0) {
     return (
