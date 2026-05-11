@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import OrderItem from '../models/OrderItem';
 import mongoose from 'mongoose';
+import { sendNotificationToUser } from './firebaseAdmin';
 
 /**
  * Notify all sellers involved in an order about a new order or status change
@@ -59,6 +60,28 @@ export async function notifySellersOfOrderUpdate(
             // Emit to seller-specific room
             io.to(`seller-${sellerId}`).emit('seller-notification', notificationData);
             console.log(`📤 Emitted notification to seller-${sellerId}`);
+
+            // Send push notification
+            let title = '🔔 Order Update';
+            let body = `Order #${order.orderNumber} status is now ${order.status}`;
+
+            if (type === 'NEW_ORDER') {
+                title = '📦 New Order Received!';
+                body = `You have a new order #${order.orderNumber} for ₹${notificationData.totalAmount.toLocaleString('en-IN')}`;
+            } else if (type === 'ORDER_CANCELLED') {
+                title = '❌ Order Cancelled';
+                body = `Order #${order.orderNumber} has been cancelled`;
+            }
+
+            sendNotificationToUser(sellerId, 'Seller', {
+                title,
+                body,
+                data: {
+                    type,
+                    orderId: order._id.toString(),
+                    orderNumber: order.orderNumber
+                }
+            }).catch(err => console.error(`❌ Push notification failed for seller ${sellerId}:`, err));
         }
     } catch (error) {
         console.error('Error in notifySellersOfOrderUpdate:', error);

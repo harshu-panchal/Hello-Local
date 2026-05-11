@@ -6,6 +6,7 @@ import DeliveryTracking from '../models/DeliveryTracking';
 import AppSettings from '../models/AppSettings';
 import mongoose from 'mongoose';
 import { notifySellersOfOrderUpdate } from './sellerNotificationService';
+import { sendNotificationToUser } from './firebaseAdmin';
 
 /**
  * Calculate estimated delivery boy earning for a new order
@@ -384,8 +385,24 @@ export async function notifyDeliveryBoysOfNewOrder(
                 io.to(roomName).emit('new-order', orderData);
                 console.log(`📤 Emitted new-order to connected delivery boy room: ${roomName}`);
             } else {
-                console.log(`⏩ Skipping disconnected delivery boy: ${idString}`);
+                console.log(`⏩ Skipping socket emission for disconnected delivery boy: ${idString}, will send push instead`);
             }
+
+            // Always attempt to send a push notification to ensure the delivery boy sees it
+            // even if the app is in the background or socket is disconnected
+            sendNotificationToUser(idString, 'Delivery', {
+                title: '📦 New Order Nearby!',
+                body: `New order available with estimated earning of ₹${deliveryBoyEarning.toFixed(2)}. Open app to accept!`,
+                data: {
+                    type: 'NEW_ORDER',
+                    orderId: orderData.orderId,
+                    orderNumber: orderData.orderNumber
+                },
+                icon: 'notification_icon' // Optional: reference to a drawable resource on Android
+            }).catch(err => console.error(`❌ Push notification failed for delivery boy ${idString}:`, err));
+
+            // Mark as notified for state tracking (if they got either socket or we attempted push)
+            notifiedIds.add(idString);
         }
 
         if (notifiedIds.size === 0) {
@@ -501,6 +518,19 @@ export async function handleOrderAcceptance(
             deliveryBoyId: normalizedDeliveryBoyId,
             message: 'Delivery boy accepted your order. Tracking started.',
         });
+
+        // Also send push notification to customer
+        if (order.customer) {
+            sendNotificationToUser(order.customer.toString(), 'Customer', {
+                title: '🚚 Delivery Partner Assigned!',
+                body: 'A delivery partner has been assigned to your order and is on the way!',
+                data: {
+                    type: 'ORDER_UPDATE',
+                    orderId: orderId,
+                    status: 'Partner Assigned'
+                }
+            }).catch(err => console.error(`❌ Push notification failed for customer ${order.customer}:`, err));
+        }
 
         console.log(`✅ Order ${orderId} accepted by delivery boy ${normalizedDeliveryBoyId} ${state ? '(Memory)' : '(DB Fallback)'}`);
         return { success: true, message: 'Order accepted successfully' };
