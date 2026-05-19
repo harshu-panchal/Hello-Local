@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
@@ -47,7 +48,7 @@ export const getOrders = asyncHandler(
       const statusMapping: Record<string, string> = {
         'Pending': 'Pending',
         'Accepted': 'Accepted',
-        'On the way': 'On the way',
+        'On the way': 'Out for Delivery',
         'Delivered': 'Delivered',
         'Cancelled': 'Cancelled',
         'Rejected': 'Rejected',
@@ -58,10 +59,10 @@ export const getOrders = asyncHandler(
     // Search filter
     if (search) {
       query.$or = [
-        { orderId: { $regex: search, $options: "i" } },
+        { orderNumber: { $regex: search, $options: "i" } },
         { invoiceNumber: { $regex: search, $options: "i" } },
-        { 'deliveryAddress.name': { $regex: search, $options: "i" } },
-        { 'deliveryAddress.phone': { $regex: search, $options: "i" } },
+        { customerName: { $regex: search, $options: "i" } },
+        { customerPhone: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -93,7 +94,7 @@ export const getOrders = asyncHandler(
         ? order.estimatedDeliveryDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
         : order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
       orderDate: order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-      status: order.status === 'On the way' ? 'On the way' : order.status,
+      status: order.status === 'Out for Delivery' ? 'On the way' : order.status,
       amount: order.total,
       customerName: (order.customer as any)?.name || order.customerName || '',
       customerPhone: (order.customer as any)?.phone || order.customerPhone || '',
@@ -122,7 +123,13 @@ export const getOrderById = asyncHandler(
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
 
-    // First check if this seller has items in this order
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
+
     // First check if this seller has items in this order
     const sellerItems = await OrderItem.find({ order: id, seller: sellerId })
       .populate("seller", "storeName")
@@ -208,7 +215,7 @@ export const getOrderById = asyncHandler(
       orderDate: order.orderDate ? order.orderDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       deliveryDate: order.estimatedDeliveryDate ? order.estimatedDeliveryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       timeSlot: order.timeSlot || 'N/A',
-      status: order.status === 'On the way' ? 'Out For Delivery' : order.status,
+      status: order.status === 'Out for Delivery' ? 'On the way' : order.status,
       customerName: (order.customer as any)?.name || order.customerName || '',
       customerEmail: (order.customer as any)?.email || order.customerEmail || '',
       customerPhone: (order.customer as any)?.phone || order.customerPhone || '',
@@ -239,6 +246,13 @@ export const updateOrderStatus = asyncHandler(
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
     const { status } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     // Validate allowed status updates for seller
     const allowedStatuses = ['Accepted', 'On the way', 'Delivered', 'Cancelled', 'Rejected'];
@@ -278,7 +292,7 @@ export const updateOrderStatus = asyncHandler(
     }
 
     const previousStatus = order.status;
-    order.status = status;
+    order.status = status === 'On the way' ? 'Out for Delivery' : status;
     
     // Update seller's items status in this order if applicable
     const itemStatusMap: Record<string, string> = {
@@ -325,28 +339,34 @@ export const updateOrderStatus = asyncHandler(
       }
     }
 
-    // If order is delivered, credit seller's balance
+    // If order is delivered, trigger the commission flow via processOrderStatusTransition
     if (status === 'Delivered' && previousStatus !== 'Delivered') {
-      const seller = await Seller.findById(sellerId);
-      if (seller) {
-        // Calculate net earning (sale amount - commission)
-        // Commission is stored in seller model
-        const commissionRate = (seller.commission || 0) / 100;
-        const commissionAmount = order.total * commissionRate;
-        const netEarning = order.total - commissionAmount;
+      try {
+        const { processOrderStatusTransition } = await import("../../../services/orderService");
+        await processOrderStatusTransition(id, 'Delivered', previousStatus);
 
-        seller.balance = (seller.balance || 0) + netEarning;
-        await seller.save();
+        // If COD, add a pending WalletTransaction for confirmation
+        if (order.paymentMethod === 'COD') {
+          const seller = await Seller.findById(sellerId);
+          if (seller) {
+            const commissionRate = (seller.commission || 0) / 100;
+            const commissionAmount = order.total * commissionRate;
+            const netEarning = order.total - commissionAmount;
 
-        // Log transaction
-        await WalletTransaction.create({
-          sellerId,
-          amount: netEarning,
-          type: 'Credit',
-          description: `Earnings from Order #${order.orderNumber}`,
-          reference: `ORD-${order.orderNumber}-${Date.now()}`,
-          status: 'Completed'
-        });
+            await WalletTransaction.create({
+              userId: sellerId,
+              userType: 'SELLER',
+              amount: netEarning,
+              type: 'Credit',
+              description: `Earnings from COD Order #${order.orderNumber} (Pending Settlement)`,
+              reference: `ORD-COD-PEND-${order.orderNumber}-${Date.now()}`,
+              status: 'Pending',
+              relatedOrder: order._id
+            });
+          }
+        }
+      } catch (transitionError: any) {
+        console.error("Error processing order status transition for seller:", transitionError);
       }
     }
 

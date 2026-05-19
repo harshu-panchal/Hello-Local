@@ -39,26 +39,65 @@ const calculateItemPrice = (product: any, variationSelector: any) => {
     return finalPrice;
 };
 
-// Helper to calculate cart total with location filtering
-const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.ObjectId[] = []) => {
-    const items = await CartItem.find({ cart: cartId }).populate({
-        path: 'product',
-        select: 'price discPrice variations seller status publish productName'
+// Helper to sync cart items, removing out-of-range/inactive items, and updating total
+const syncCartWithLocation = async (
+    cartId: any,
+    nearbySellerIds: mongoose.Types.ObjectId[],
+    locationProvided: boolean
+) => {
+    const cart = await Cart.findById(cartId).populate({
+        path: 'items',
+        populate: {
+            path: 'product',
+            select: 'productName price mainImage stock pack mrp category seller status publish discPrice variations'
+        }
     });
 
+    if (!cart) return null;
+
+    const filteredItems = [];
+    const outOfRangeItemIds = [];
     let total = 0;
-    for (const item of items) {
-        const product = item.product as any;
+
+    for (const item of (cart.items as any[] || [])) {
+        const product = item.product;
+        let isAvailable = true;
+
         if (product && product.status === 'Active' && product.publish) {
-            // Check if seller is in range
-            const isAvailable = nearbySellerIds.some(id => id.toString() === product.seller.toString());
-            if (isAvailable) {
-                const price = calculateItemPrice(product, item.variation);
-                total += price * item.quantity;
+            if (locationProvided) {
+                isAvailable = nearbySellerIds.some(id => id.toString() === product.seller.toString());
             }
+        } else {
+            isAvailable = false;
+        }
+
+        if (isAvailable) {
+            filteredItems.push(item);
+            const price = calculateItemPrice(product, item.variation);
+            total += price * item.quantity;
+        } else {
+            outOfRangeItemIds.push(item._id);
         }
     }
-    return total;
+
+    if (outOfRangeItemIds.length > 0) {
+        await CartItem.deleteMany({ _id: { $in: outOfRangeItemIds } });
+        cart.items = cart.items.filter(id => !outOfRangeItemIds.some(outId => outId.toString() === id.toString()));
+    }
+
+    cart.total = total;
+    await cart.save();
+
+    // Return the final populated cart doc
+    const finalCart = await Cart.findById(cartId).populate({
+        path: 'items',
+        populate: {
+            path: 'product',
+            select: 'productName price mainImage stock pack mrp category seller status publish discPrice variations'
+        }
+    });
+
+    return finalCart;
 };
 
 // Helper to calculate delivery fee
@@ -159,41 +198,16 @@ export const getCart = async (req: Request, res: Response) => {
 
         const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
 
-        let cart = await Cart.findOne({ customer: userId }).populate({
-            path: 'items',
-            populate: {
-                path: 'product',
-                select: 'productName price mainImage stock pack mrp category seller status publish discPrice variations'
-            }
-        });
+        let cart = await Cart.findOne({ customer: userId });
 
         if (!cart) {
             cart = await Cart.create({ customer: userId, items: [], total: 0 });
             return res.status(200).json({ success: true, data: cart });
         }
 
-        // Filter items based on location availability and update total
-        const filteredItems = [];
-        let total = 0;
-
-        for (const item of (cart.items as any)) {
-            const product = item.product;
-            if (product && product.status === 'Active' && product.publish) {
-                const isAvailable = nearbySellerIds.some(id => id.toString() === product.seller.toString());
-                if (isAvailable) {
-                    filteredItems.push(item);
-                    const price = calculateItemPrice(product, item.variation);
-                    total += price * item.quantity;
-                    console.log(`[DEBUG CartLoop] Item: ${product.productName}, Price: ${price}, Qty: ${item.quantity}, RunningTotal: ${total}`);
-                }
-            }
-        }
-
-        // Update cart total in DB if it changed
-        if (cart.total !== total) {
-            cart.total = total;
-            await cart.save();
-        }
+        const updatedCart = await syncCartWithLocation(cart._id, nearbySellerIds, true);
+        const filteredItems = updatedCart?.items || [];
+        const total = updatedCart?.total || 0;
 
         // Calculate fees
         const fees = await calculateDeliveryStuff(total, filteredItems, userLat, userLng);
@@ -201,7 +215,7 @@ export const getCart = async (req: Request, res: Response) => {
         return res.status(200).json({
             success: true,
             data: {
-                ...cart.toObject(),
+                ...updatedCart?.toObject(),
                 items: filteredItems,
                 total,
                 ...fees
@@ -289,28 +303,16 @@ export const addToCart = async (req: Request, res: Response) => {
                 variation
             });
             cart.items.push(cartItem._id as any);
+            await cart.save();
         }
 
-        // Update total with location filtering
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
-        await cart.save();
-
-        // Return updated cart with filtering
-        const updatedCart = await Cart.findById(cart._id).populate({
-            path: 'items',
-            populate: {
-                path: 'product',
-                select: 'productName price mainImage stock pack mrp category seller status publish discPrice variations'
-            }
-        });
-
-        const filteredItems = (updatedCart?.items as any[] || []).filter(item => {
-            const prod = item.product;
-            return prod && nearbySellerIds.some(id => id.toString() === prod.seller.toString());
-        });
+        // Sync cart with location (removes out-of-range items and updates total)
+        const updatedCart = await syncCartWithLocation(cart._id, nearbySellerIds, true);
+        const filteredItems = updatedCart?.items || [];
+        const total = updatedCart?.total || 0;
 
         // Calculate fees
-        const fees = await calculateDeliveryStuff(cart.total, filteredItems, userLat, userLng);
+        const fees = await calculateDeliveryStuff(total, filteredItems, userLat, userLng);
 
         return res.status(200).json({
             success: true,
@@ -318,7 +320,7 @@ export const addToCart = async (req: Request, res: Response) => {
             data: {
                 ...updatedCart?.toObject(),
                 items: filteredItems,
-                total: cart.total,
+                total,
                 ...fees
             }
         });
@@ -380,24 +382,12 @@ export const updateCartItem = async (req: Request, res: Response) => {
         cartItem.quantity = quantity;
         await cartItem.save();
 
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
-        await cart.save();
-
-        const updatedCart = await Cart.findById(cart._id).populate({
-            path: 'items',
-            populate: {
-                path: 'product',
-                select: 'productName price mainImage stock pack mrp category seller status publish discPrice variations'
-            }
-        });
-
-        const filteredItems = (updatedCart?.items as any[] || []).filter(item => {
-            const prod = item.product;
-            return prod && nearbySellerIds.some(id => id.toString() === prod.seller.toString());
-        });
+        const updatedCart = await syncCartWithLocation(cart._id, nearbySellerIds, true);
+        const filteredItems = updatedCart?.items || [];
+        const total = updatedCart?.total || 0;
 
         // Calculate fees
-        const fees = await calculateDeliveryStuff(cart.total, filteredItems, userLat, userLng);
+        const fees = await calculateDeliveryStuff(total, filteredItems, userLat, userLng);
 
         return res.status(200).json({
             success: true,
@@ -405,7 +395,7 @@ export const updateCartItem = async (req: Request, res: Response) => {
             data: {
                 ...updatedCart?.toObject(),
                 items: filteredItems,
-                total: cart.total,
+                total,
                 ...fees
             }
         });
@@ -438,34 +428,21 @@ export const removeFromCart = async (req: Request, res: Response) => {
 
         // Remove from cart array
         cart.items = cart.items.filter(id => id.toString() !== itemId);
+        await cart.save();
 
         // Calculate total with location if provided
         let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-        if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
+        const locationProvided = userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng);
+        if (locationProvided) {
             nearbySellerIds = await findSellersWithinRange(userLat, userLng);
         }
 
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
-        await cart.save();
-
-        const updatedCart = await Cart.findById(cart._id).populate({
-            path: 'items',
-            populate: {
-                path: 'product',
-                select: 'productName price mainImage stock pack mrp category seller status publish discPrice variations'
-            }
-        });
-
-        const filteredItems = (updatedCart?.items as any[] || []).filter(item => {
-            const prod = item.product;
-            if (nearbySellerIds.length > 0) {
-                return prod && nearbySellerIds.some(id => id.toString() === prod.seller.toString());
-            }
-            return true; // If no location provided for removal, just return all (though getCart will filter)
-        });
+        const updatedCart = await syncCartWithLocation(cart._id, nearbySellerIds, locationProvided);
+        const filteredItems = updatedCart?.items || [];
+        const total = updatedCart?.total || 0;
 
         // Calculate fees
-        const fees = await calculateDeliveryStuff(cart.total, filteredItems, userLat, userLng);
+        const fees = await calculateDeliveryStuff(total, filteredItems, userLat, userLng);
 
         return res.status(200).json({
             success: true,
@@ -473,7 +450,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
             data: {
                 ...updatedCart?.toObject(),
                 items: filteredItems,
-                total: cart.total,
+                total,
                 ...fees
             }
         });

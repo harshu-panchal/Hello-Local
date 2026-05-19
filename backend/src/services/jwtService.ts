@@ -7,7 +7,10 @@ export interface TokenPayload {
   role?: string;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is missing! Server cannot start securely.');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**
@@ -30,7 +33,7 @@ export function generateToken(userId: string, userType: UserType, role?: string)
  */
 export function verifyToken(token: string): TokenPayload {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as unknown as TokenPayload;
     return decoded;
   } catch (error: any) {
     if (error.name === 'TokenExpiredError') {

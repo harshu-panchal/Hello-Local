@@ -13,25 +13,17 @@ declare global {
 }
 
 /**
- * Authenticate user by verifying JWT token
+ * Authenticate user by verifying JWT token.
+ * Uses standard HTTP 401 for all unauthenticated responses.
  */
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    const fullUrl = (req.originalUrl || req.url || req.path || '').toLowerCase();
-    const isPublicUpload = fullUrl.includes('upload/document') || 
-                          fullUrl.includes('upload/documents') ||
-                          fullUrl.includes('/document');
-
-    if (isPublicUpload) {
-      return next();
-    }
-
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(418).json({
+      res.status(401).json({
         success: false,
-        message: `No token provided. URL: ${fullUrl}. Authorization header must be in format: Bearer <token>`,
+        message: 'Authentication required. Please log in.',
       });
       return;
     }
@@ -43,29 +35,30 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       req.user = decoded;
       next();
     } catch (error: any) {
-      res.status(419).json({
+      // Use 401 for expired/invalid tokens so the frontend interceptor handles auto-logout
+      res.status(401).json({
         success: false,
-        message: `${error.message || 'Invalid or expired token'}`,
+        message: error.message || 'Invalid or expired token. Please log in again.',
       });
       return;
     }
-  } catch (error: any) {
+  } catch {
     res.status(500).json({
       success: false,
       message: 'Authentication error',
-      error: error.message,
     });
     return;
   }
 };
 
 /**
- * Authorize user by checking role (for Admin users)
+ * Authorize user by checking role (for Admin users).
+ * Uses 401 when not authenticated, 403 when authenticated but lacking permission.
  */
 export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(420).json({
+      res.status(401).json({
         success: false,
         message: 'Authentication required',
       });
@@ -85,12 +78,13 @@ export const authorize = (...roles: string[]) => {
 };
 
 /**
- * Require specific user type(s)
+ * Require specific user type(s).
+ * Uses 401 when not authenticated, 403 when authenticated but wrong type.
  */
 export const requireUserType = (...userTypes: AuthUserType[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(421).json({
+      res.status(401).json({
         success: false,
         message: 'Authentication required',
       });

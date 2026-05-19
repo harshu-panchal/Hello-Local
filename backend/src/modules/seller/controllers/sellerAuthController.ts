@@ -22,20 +22,16 @@ export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
 
   // Check if seller exists with this mobile
   const seller = await Seller.findOne({ mobile });
-  
-  // Special bypass for testing
-  const isBypass = mobile === '9111966732';
 
-  if (!seller && !isBypass) {
-    console.log(`[SellerAuth] sendOTP failed: Mobile ${mobile} not found`);
+  if (!seller) {
     return res.status(404).json({
       success: false,
       message: "Seller not found with this mobile number",
     });
   }
 
-  // Send OTP - for login, always use default OTP
-  const result = await sendOTPService(mobile, "Seller", true);
+  // Send OTP
+  const result = await sendOTPService(mobile, "Seller");
 
   return res.status(200).json({
     success: true,
@@ -73,24 +69,7 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Find seller
-  let seller = await Seller.findOne({ mobile }).select("-password");
-
-  // Special bypass for testing: Auto-create if doesn't exist
-  if (!seller && mobile === '9111966732') {
-    seller = await Seller.create({
-      sellerName: "Test Seller",
-      mobile: mobile,
-      email: "test_seller@hellolocal.com",
-      storeName: "Test Store",
-      category: "Grocery",
-      status: "Active",
-      isShopOpen: true,
-      balance: 0,
-      commission: 0,
-      address: "Test Address",
-      city: "Test City"
-    } as any);
-  }
+  const seller = await Seller.findOne({ mobile }).select("-password");
 
   if (!seller) {
     return res.status(404).json({
@@ -289,17 +268,44 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
 export const updateProfile = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
-    const updates = req.body;
+    const rawUpdates = req.body;
 
-    // Prevent updating sensitive fields directly
-    const restrictedFields = [
-      "password",
-      "mobile",
-      "email",
-      "status",
-      "balance",
+    // ALLOWLIST — only permit safe, seller-editable fields (prevents mass assignment)
+    const allowedFields = [
+      "sellerName",
+      "storeName",
+      "storeDescription",
+      "address",
+      "city",
+      "serviceableArea",
+      "searchLocation",
+      "latitude",
+      "longitude",
+      "serviceRadiusKm",
+      "logo",
+      "storeBanner",
+      "panCard",
+      "taxName",
+      "taxNumber",
+      "fssaiLicNo",
+      "workingHours",
+      "socialLinks",
+      "accountName",
+      "bankName",
+      "branch",
+      "accountNumber",
+      "ifsc",
+      "idProof",
+      "addressProof",
+      "profile",
     ];
-    restrictedFields.forEach((field) => delete updates[field]);
+
+    const updates: Record<string, any> = {};
+    for (const field of allowedFields) {
+      if (rawUpdates[field] !== undefined) {
+        updates[field] = rawUpdates[field];
+      }
+    }
 
     // Handle location update (convert lat/lng to GeoJSON)
     if (updates.latitude && updates.longitude) {

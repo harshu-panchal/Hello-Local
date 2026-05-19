@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Commission from "../../../models/Commission";
 import WalletTransaction from "../../../models/WalletTransaction";
 import WithdrawRequest from "../../../models/WithdrawRequest";
+import Seller from "../../../models/Seller";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import {
   approveWithdrawal,
@@ -361,4 +362,57 @@ export const processWithdrawalWrapper = asyncHandler(
       });
     }
   },
+);
+
+/**
+ * Get Seller Wallet Details & Transactions by ID (for Admin)
+ */
+export const getSellerWalletById = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { sellerId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+
+    const seller = await Seller.findById(sellerId).select("balance storeName sellerName email mobile");
+    if (!seller) {
+      return res.status(404).json({
+        success: false,
+        message: "Seller not found",
+      });
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const query = { userId: sellerId, userType: "SELLER" };
+
+    const transactions = await WalletTransaction.find(query)
+      .populate("relatedOrder", "orderNumber")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit));
+
+    const total = await WalletTransaction.countDocuments(query);
+
+    const formattedTransactions = transactions.map((t: any) => ({
+      id: t._id,
+      amount: t.amount,
+      transactionType: t.type.toLowerCase(), // 'credit' or 'debit'
+      date: t.createdAt,
+      type: t.type, // 'Credit' or 'Debit'
+      status: t.status,
+      description: t.description,
+      relatedOrder: t.relatedOrder,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: formattedTransactions,
+      balance: seller.balance || 0,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit)),
+      },
+    });
+  }
 );

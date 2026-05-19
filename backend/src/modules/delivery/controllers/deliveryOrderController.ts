@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Order from "../../../models/Order";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
@@ -197,6 +198,13 @@ export const getOrderDetails = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
+
     const order = await Order.findById(id).populate("items");
 
     if (!order) {
@@ -242,6 +250,13 @@ export const updateOrderStatus = asyncHandler(
     const { id } = req.params;
     const { status } = req.body;
     const deliveryId = req.user?.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     const order = await Order.findById(id);
     if (!order) {
@@ -384,6 +399,13 @@ export const getSellerLocationsForOrder = asyncHandler(
     const { id } = req.params;
     const deliveryId = req.user?.userId;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
+
     // Verify order exists and is assigned to this delivery boy
     const order = await Order.findById(id);
     if (!order) {
@@ -436,6 +458,13 @@ export const sendDeliveryOtp = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
     const deliveryId = req.user?.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     const order = await Order.findById(id);
     if (!order) {
@@ -500,6 +529,13 @@ export const verifyDeliveryOtpController = asyncHandler(
     const { otp } = req.body;
     const deliveryId = req.user?.userId;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
+
     if (!otp) {
       return res
         .status(400)
@@ -544,32 +580,8 @@ export const verifyDeliveryOtpController = asyncHandler(
         }
       }
 
-      // Update delivery boy balance and cash collected (if COD)
+      // Emit socket events for real-time status update
       if (updatedOrder && updatedOrder.status === "Delivered") {
-        if (updatedOrder.paymentMethod === "COD") {
-          // Use new COD processing function
-          const { processCODOrderDelivery } =
-            await import("../../../services/commissionService");
-          try {
-            await processCODOrderDelivery(id);
-            console.log(`[COD] Order ${updatedOrder.orderNumber} delivery processed via OTP verification`);
-          } catch (codError: any) {
-            console.error("Error processing COD order delivery:", codError);
-            // Continue - order is already marked as delivered
-          }
-        } else {
-          // For non-COD orders, use existing distribution logic
-          const { distributeCommissions } =
-            await import("../../../services/commissionService");
-          try {
-            await distributeCommissions(id);
-          } catch (commError: any) {
-            console.error("Error distributing commissions:", commError);
-            // Continue even if commission distribution fails
-          }
-        }
-
-        // Emit socket events for real-time status update
         const io = (req.app as any).get("io");
         if (io && previousStatus !== "Delivered") {
           // Emit order-delivered event to customer
@@ -614,6 +626,13 @@ export const checkSellerProximity = asyncHandler(
     const { id } = req.params;
     const { sellerId, latitude, longitude } = req.body;
     const deliveryId = req.user?.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     if (!sellerId || latitude === undefined || longitude === undefined) {
       return res
@@ -679,6 +698,13 @@ export const confirmSellerPickup = asyncHandler(
     const { id } = req.params;
     const { sellerId, latitude, longitude } = req.body;
     const deliveryId = req.user?.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     if (!sellerId || latitude === undefined || longitude === undefined) {
       return res
@@ -836,6 +862,13 @@ export const checkCustomerProximity = asyncHandler(
     const { id } = req.params;
     const { latitude, longitude } = req.body;
     const deliveryId = req.user?.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     if (latitude === undefined || longitude === undefined) {
       return res

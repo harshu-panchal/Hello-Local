@@ -188,16 +188,58 @@ export const getProducts = async (req: Request, res: Response) => {
     if (sort === "discount") sortOptions = { discount: -1 };
     if (sort === "popular") sortOptions = { popular: -1, dealOfDay: -1 };
 
-    const products = await Product.find(query)
-      .populate("category", "name icon image")
-      .populate("subcategory", "name")
-      .populate("brand", "name")
-      .populate("seller", "storeName")
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(Number(limit));
+    let products;
+    let total;
 
-    const total = await Product.countDocuments(query);
+    try {
+      products = await Product.find(query)
+        .populate("category", "name icon image")
+        .populate("subcategory", "name")
+        .populate("brand", "name")
+        .populate("seller", "storeName")
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(Number(limit));
+
+      total = await Product.countDocuments(query);
+    } catch (dbError: any) {
+      if (
+        query.$text &&
+        (dbError.message.includes("text index") ||
+          dbError.message.includes("textIndex") ||
+          dbError.code === 27 ||
+          dbError.message.includes("$text"))
+      ) {
+        console.warn("⚠️ Text search failed, falling back to regex search:", dbError.message);
+        
+        // Remove text search
+        delete query.$text;
+        
+        // Safe regex search appended via $and to avoid overwriting existing $or conditions
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { productName: { $regex: search as string, $options: "i" } },
+            { smallDescription: { $regex: search as string, $options: "i" } },
+            { description: { $regex: search as string, $options: "i" } },
+            { tags: { $in: [new RegExp(search as string, "i")] } },
+          ],
+        });
+
+        products = await Product.find(query)
+          .populate("category", "name icon image")
+          .populate("subcategory", "name")
+          .populate("brand", "name")
+          .populate("seller", "storeName")
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(Number(limit));
+
+        total = await Product.countDocuments(query);
+      } else {
+        throw dbError;
+      }
+    }
 
     return res.status(200).json({
       success: true,

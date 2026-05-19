@@ -28,7 +28,14 @@ export const createOrder = async (req: Request, res: Response) => {
         }
 
         const { items, address, paymentMethod, fees } = req.body;
-        const userId = req.user!.userId;
+        const userId = req.user?.userId;
+        if (!userId) {
+            if (session) await session.abortTransaction();
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
 
         // ... (logging and validation checks for items, address, city, pincode)
 
@@ -139,17 +146,21 @@ export const createOrder = async (req: Request, res: Response) => {
 
             if (variationValue) {
                 // Try to decrement stock for the specific variation first
-                // We check variations._id, variations.value, variations.title, or variations.pack
+                const variationConditions: any[] = [];
+                if (mongoose.isValidObjectId(variationValue)) {
+                    variationConditions.push({ "variations._id": variationValue });
+                }
+                variationConditions.push(
+                    { "variations.value": variationValue },
+                    { "variations.title": variationValue },
+                    { "variations.pack": variationValue }
+                );
+
                 product = session
                     ? await Product.findOneAndUpdate(
                         {
                             _id: item.product.id,
-                            $or: [
-                                { "variations._id": mongoose.isValidObjectId(variationValue) ? variationValue : new mongoose.Types.ObjectId() },
-                                { "variations.value": variationValue },
-                                { "variations.title": variationValue },
-                                { "variations.pack": variationValue }
-                            ],
+                            $or: variationConditions,
                             "variations.stock": { $gte: qty }
                         },
                         { $inc: { "variations.$.stock": -qty, stock: -qty } },
@@ -158,12 +169,7 @@ export const createOrder = async (req: Request, res: Response) => {
                     : await Product.findOneAndUpdate(
                         {
                             _id: item.product.id,
-                            $or: [
-                                { "variations._id": mongoose.isValidObjectId(variationValue) ? variationValue : new mongoose.Types.ObjectId() },
-                                { "variations.value": variationValue },
-                                { "variations.title": variationValue },
-                                { "variations.pack": variationValue }
-                            ],
+                            $or: variationConditions,
                             "variations.stock": { $gte: qty }
                         },
                         { $inc: { "variations.$.stock": -qty, stock: -qty } },
@@ -172,54 +178,66 @@ export const createOrder = async (req: Request, res: Response) => {
             }
 
             if (!product) {
-                // If we are here, either variationValue wasn't provided, or it didn't match any variation with enough stock.
-                // We'll try to find the product first to see if it has variations.
+                // Either variationValue was not provided, or it didn't match (insufficient stock / invalid variation / not found)
                 const checkProduct = await Product.findById(item.product.id);
+                if (!checkProduct) {
+                    const err = new Error(`Product not found with ID: ${item.product.id}`);
+                    (err as any).statusCode = 400;
+                    throw err;
+                }
 
-                if (checkProduct && checkProduct.variations && checkProduct.variations.length > 0) {
-                    // Product has variations, but we didn't match one.
-                    // If a variation was provided, it means that specific variation is out of stock.
-                    if (variationValue) {
-                        throw new Error(`Insufficient stock for variation: ${variationValue}`);
+                const hasVariations = checkProduct.variations && checkProduct.variations.length > 0;
+
+                if (hasVariations) {
+                    if (!variationValue) {
+                        const err = new Error(`Variation selection is required for product: ${checkProduct.name}`);
+                        (err as any).statusCode = 400;
+                        throw err;
                     }
 
-                    // No variation was provided, but the product has them.
-                    // To maintain data consistency, we'll try to decrement from the first variation.
-                    product = session
-                        ? await Product.findOneAndUpdate(
-                            {
-                                _id: item.product.id,
-                                "variations.0.stock": { $gte: qty }
-                            },
-                            { $inc: { "variations.0.stock": -qty, stock: -qty } },
-                            { session, new: true }
-                        )
-                        : await Product.findOneAndUpdate(
-                            {
-                                _id: item.product.id,
-                                "variations.0.stock": { $gte: qty }
-                            },
-                            { $inc: { "variations.0.stock": -qty, stock: -qty } },
-                            { new: true }
-                        );
-                } else {
-                    // No variations, just decrement top-level stock
-                    product = session
-                        ? await Product.findOneAndUpdate(
-                            { _id: item.product.id, stock: { $gte: qty } },
-                            { $inc: { stock: -qty } },
-                            { session, new: true }
-                        )
-                        : await Product.findOneAndUpdate(
-                            { _id: item.product.id, stock: { $gte: qty } },
-                            { $inc: { stock: -qty } },
-                            { new: true }
-                        );
-                }
-            }
+                    // A variation was provided, but didn't match. Check if it actually exists in product variations
+                    const matchedVar = checkProduct.variations.find((v: any) =>
+                        (mongoose.isValidObjectId(variationValue) && v._id.toString() === variationValue.toString()) ||
+                        v.value === variationValue ||
+                        v.title === variationValue ||
+                        v.pack === variationValue
+                    );
 
-            if (!product) {
-                throw new Error(`Insufficient stock or product not found: ${item.product.name || 'ID: ' + item.product.id}${variationValue ? ' (' + variationValue + ')' : ''}`);
+                    if (matchedVar) {
+                        const err = new Error(`Insufficient stock for variation "${variationValue}" of product "${checkProduct.name}". Available: ${matchedVar.stock}, requested: ${qty}`);
+                        (err as any).statusCode = 400;
+                        throw err;
+                    } else {
+                        const err = new Error(`Invalid variation "${variationValue}" specified for product "${checkProduct.name}". Please specify a valid variation.`);
+                        (err as any).statusCode = 400;
+                        throw err;
+                    }
+                } else {
+                    if (variationValue) {
+                        const err = new Error(`Product "${checkProduct.name}" does not have variations defined, but variation "${variationValue}" was specified.`);
+                        (err as any).statusCode = 400;
+                        throw err;
+                    }
+
+                    // No variations, decrement top-level stock
+                    product = session
+                        ? await Product.findOneAndUpdate(
+                            { _id: item.product.id, stock: { $gte: qty } },
+                            { $inc: { stock: -qty } },
+                            { session, new: true }
+                        )
+                        : await Product.findOneAndUpdate(
+                            { _id: item.product.id, stock: { $gte: qty } },
+                            { $inc: { stock: -qty } },
+                            { new: true }
+                        );
+
+                    if (!product) {
+                        const err = new Error(`Insufficient stock for product "${checkProduct.name}". Available: ${checkProduct.stock}, requested: ${qty}`);
+                        (err as any).statusCode = 400;
+                        throw err;
+                    }
+                }
             }
 
             // Track seller IDs to validate location
@@ -229,17 +247,18 @@ export const createOrder = async (req: Request, res: Response) => {
 
             // Determine the price based on variation and discounts
             let selectedVariation;
-            if (variationValue && product.variations) {
+            if (product.variations && product.variations.length > 0) {
                 selectedVariation = product.variations.find((v: any) =>
                     (v._id && v._id.toString() === variationValue) ||
                     v.value === variationValue ||
                     v.title === variationValue ||
                     v.pack === variationValue
                 );
-            }
-            if (!selectedVariation && product.variations && product.variations.length > 0) {
-                // Fallback to first if no variation spec or not found (consistent with stock fallback)
-                selectedVariation = product.variations[0];
+                if (!selectedVariation) {
+                    const err = new Error(`Variation "${variationValue}" not found on product "${product.productName}"`);
+                    (err as any).statusCode = 400;
+                    throw err;
+                }
             }
 
             const itemPrice = (selectedVariation?.discPrice && selectedVariation.discPrice > 0)
@@ -455,7 +474,8 @@ export const createOrder = async (req: Request, res: Response) => {
             errorMessage = `Validation failed for fields: ${fields}. ${error.message}`;
         }
 
-        return res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
             success: false,
             message: errorMessage,
             error: error.message,
@@ -470,7 +490,13 @@ export const createOrder = async (req: Request, res: Response) => {
 // Get authenticated customer's orders
 export const getMyOrders = async (req: Request, res: Response) => {
     try {
-        const userId = req.user!.userId;
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
         const { status, page = 1, limit = 10 } = req.query;
 
         const query: any = { customer: userId };
@@ -533,7 +559,20 @@ export const getMyOrders = async (req: Request, res: Response) => {
 export const getOrderById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const userId = req.user!.userId;
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Order ID format",
+            });
+        }
 
         // Find order and ensure it belongs to the user
         const order = await Order.findOne({ _id: id, customer: userId })
@@ -598,7 +637,20 @@ export const getOrderById = async (req: Request, res: Response) => {
 export const refreshDeliveryOtp = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const userId = req.user!.userId;
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Order ID format",
+            });
+        }
 
         const order = await Order.findOne({ _id: id, customer: userId });
         if (!order) {
@@ -639,7 +691,20 @@ export const cancelOrder = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { reason } = req.body;
-        const userId = req.user!.userId;
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Order ID format",
+            });
+        }
 
         if (!reason) {
             return res.status(400).json({ success: false, message: "Cancellation reason is required" });
@@ -794,7 +859,20 @@ export const updateOrderNotes = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { deliveryInstructions, specialRequests } = req.body;
-        const userId = req.user!.userId;
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Order ID format",
+            });
+        }
 
         const order = await Order.findOne({ _id: id, customer: userId });
 

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
@@ -81,6 +82,13 @@ export const getAllOrders = asyncHandler(
 export const getOrderById = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format",
+      });
+    }
 
     const order = await Order.findById(id)
       .populate("customer", "name email phone")

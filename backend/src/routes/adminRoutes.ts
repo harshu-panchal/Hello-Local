@@ -120,11 +120,11 @@ router.get(
 // ==================== Category Routes ====================
 router.post("/categories", productController.createCategory);
 router.get("/categories", productController.getCategories);
+router.put("/categories/reorder", productController.updateCategoryOrder);
 router.put("/categories/:id", productController.updateCategory);
 router.delete("/categories/:id", productController.deleteCategory);
 router.patch("/categories/:id/status", productController.toggleCategoryStatus);
 router.post("/categories/bulk-delete", productController.bulkDeleteCategories);
-router.put("/categories/reorder", productController.updateCategoryOrder);
 
 // ==================== SubCategory Routes ====================
 router.post("/subcategories", productController.createSubCategory);
@@ -154,11 +154,11 @@ router.put("/products/bulk-update", productController.bulkUpdateProducts);
 
 // ==================== Order Routes ====================
 router.get("/orders", orderController.getAllOrders);
+router.get("/orders/export/csv", orderController.exportOrders);
 router.get("/orders/status/:status", orderController.getOrdersByStatus);
 router.get("/orders/:id", orderController.getOrderById);
 router.patch("/orders/:id/status", orderController.updateOrderStatus);
 router.patch("/orders/:id/assign-delivery", orderController.assignDeliveryBoy);
-router.get("/orders/export/csv", orderController.exportOrders);
 
 // ==================== Return Request Routes ====================
 router.get("/return-requests", orderController.getReturnRequests);
@@ -246,6 +246,7 @@ router.patch(
 router.get("/financial/dashboard", walletController.getFinancialDashboard);
 router.get("/wallet/earnings", walletController.getAdminEarnings);
 router.get("/wallet/transactions", walletController.getWalletTransactions);
+router.get("/wallet/seller/:sellerId", walletController.getSellerWalletById);
 router.get("/wallet/withdrawals", withdrawalController.getAllWithdrawals);
 router.post("/wallet/withdrawal/process", walletController.processWithdrawalWrapper);
 
@@ -282,12 +283,12 @@ router.delete(
 
 // ==================== FAQ Routes ====================
 router.get("/faqs", faqController.getFAQs);
-router.get("/faqs/:id", faqController.getFAQById);
 router.post("/faqs", faqController.createFAQ);
+router.put("/faqs/order", faqController.updateFAQOrder);
+router.get("/faqs/:id", faqController.getFAQById);
 router.put("/faqs/:id", faqController.updateFAQ);
 router.patch("/faqs/:id/status", faqController.updateFAQStatus);
 router.delete("/faqs/:id", faqController.deleteFAQ);
-router.put("/faqs/order", faqController.updateFAQOrder);
 
 // ==================== Role Routes ====================
 // Manage Roles functionality removed from admin panel
@@ -331,27 +332,27 @@ router.delete("/system-users/:id", systemUserController.deleteSystemUser);
 
 // ==================== Home Section Routes ====================
 router.get("/home-sections", homeSectionController.getHomeSections);
-router.get("/home-sections/:id", homeSectionController.getHomeSectionById);
 router.post("/home-sections", homeSectionController.createHomeSection);
+router.put("/home-sections/reorder", homeSectionController.reorderHomeSections);
+router.get("/home-sections/:id", homeSectionController.getHomeSectionById);
 router.put("/home-sections/:id", homeSectionController.updateHomeSection);
 router.delete("/home-sections/:id", homeSectionController.deleteHomeSection);
-router.put("/home-sections/reorder", homeSectionController.reorderHomeSections);
 
 // ==================== Bestseller Card Routes ====================
 router.get("/bestseller-cards", bestsellerCardController.getBestsellerCards);
-router.get("/bestseller-cards/:id", bestsellerCardController.getBestsellerCardById);
 router.post("/bestseller-cards", bestsellerCardController.createBestsellerCard);
+router.put("/bestseller-cards/reorder", bestsellerCardController.reorderBestsellerCards);
+router.get("/bestseller-cards/:id", bestsellerCardController.getBestsellerCardById);
 router.put("/bestseller-cards/:id", bestsellerCardController.updateBestsellerCard);
 router.delete("/bestseller-cards/:id", bestsellerCardController.deleteBestsellerCard);
-router.put("/bestseller-cards/reorder", bestsellerCardController.reorderBestsellerCards);
 
 // ==================== Lowest Prices Product Routes ====================
 router.get("/lowest-prices-products", lowestPricesController.getLowestPricesProducts);
-router.get("/lowest-prices-products/:id", lowestPricesController.getLowestPricesProductById);
 router.post("/lowest-prices-products", lowestPricesController.createLowestPricesProduct);
+router.put("/lowest-prices-products/reorder", lowestPricesController.reorderLowestPricesProducts);
+router.get("/lowest-prices-products/:id", lowestPricesController.getLowestPricesProductById);
 router.put("/lowest-prices-products/:id", lowestPricesController.updateLowestPricesProduct);
 router.delete("/lowest-prices-products/:id", lowestPricesController.deleteLowestPricesProduct);
-router.put("/lowest-prices-products/reorder", lowestPricesController.reorderLowestPricesProducts);
 
 // ==================== PromoStrip Routes ====================
 router.get("/promo-strips", promoStripController.getAllPromoStrips);
@@ -362,12 +363,12 @@ router.delete("/promo-strips/:id", promoStripController.deletePromoStrip);
 
 // ==================== Shop Ad Carousel Routes ====================
 router.get("/shop-ads", shopAdController.getAllShopAds);
-router.get("/shop-ads/:id", shopAdController.getShopAdById);
 router.post("/shop-ads", shopAdController.createShopAd);
+router.put("/shop-ads/reorder", shopAdController.reorderShopAds);
+router.get("/shop-ads/:id", shopAdController.getShopAdById);
 router.put("/shop-ads/:id", shopAdController.updateShopAd);
 router.delete("/shop-ads/:id", shopAdController.deleteShopAd);
 router.patch("/shop-ads/:id/toggle", shopAdController.toggleShopAdStatus);
-router.put("/shop-ads/reorder", shopAdController.reorderShopAds);
 
 // ==================== Contact Inquiry Routes ====================
 router.get("/contact-inquiries", contactController.getContactInquiries);

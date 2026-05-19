@@ -13,6 +13,17 @@ const orderDestinationsCache = new Map<string, { latitude: number; longitude: nu
 // Key: orderId, Value: last timestamp
 const locationUpdateThrottler = new Map<string, number>();
 
+// Periodically prune throttler to prevent memory leak (every hour)
+const pruneInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [orderId, lastUpdate] of locationUpdateThrottler.entries()) {
+        if (now - lastUpdate > 2 * 60 * 60 * 1000) { // older than 2 hours
+            locationUpdateThrottler.delete(orderId);
+        }
+    }
+}, 60 * 60 * 1000); // run every hour
+pruneInterval.unref();
+
 // Haversine formula to calculate distance
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371e3; // Earth's radius in meters

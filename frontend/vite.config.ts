@@ -42,12 +42,31 @@ export default defineConfig({
     // Code splitting optimization
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunks
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['framer-motion', 'gsap'],
-          'chart-vendor': ['apexcharts', 'react-apexcharts', 'recharts'],
-          'map-vendor': ['@react-google-maps/api', 'leaflet', 'react-leaflet'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('framer-motion') || id.includes('gsap')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('apexcharts') || id.includes('react-apexcharts') || id.includes('recharts')) {
+              return 'chart-vendor';
+            }
+            if (id.includes('leaflet') || id.includes('react-leaflet') || id.includes('@react-google-maps')) {
+              return 'map-vendor';
+            }
+            return 'vendor';
+          }
+          if (id.includes('src/modules/admin')) {
+            return 'admin-chunk';
+          }
+          if (id.includes('src/modules/seller')) {
+            return 'seller-chunk';
+          }
+          if (id.includes('src/modules/delivery')) {
+            return 'delivery-chunk';
+          }
         },
       },
     },

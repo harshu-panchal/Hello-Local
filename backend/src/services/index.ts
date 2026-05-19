@@ -4,6 +4,6 @@ export * from "./jwtService";
 export * from "./dashboardService";
 export * from "./orderService";
 export * from "./notificationService";
-export * from "./walletService";
+export * from "./walletManagementService";
 
 

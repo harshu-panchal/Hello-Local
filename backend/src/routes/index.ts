@@ -17,7 +17,6 @@ import categoryRoutes from "./categoryRoutes";
 import orderRoutes from "./orderRoutes";
 import returnRoutes from "./returnRoutes";
 import reportRoutes from "./reportRoutes";
-import walletRoutes from "./walletRoutes";
 import taxRoutes from "./taxRoutes";
 import customerProductRoutes from "./customerProductRoutes";
 import customerCategoryRoutes from "./customerCategoryRoutes";
@@ -42,13 +41,7 @@ import websiteRoutes from "../modules/website/routes/websiteRoutes";
 import { submitContactForm } from "../modules/website/controllers/contactController";
 
 
-import {
-  createOrder,
-  getMyOrders,
-  getOrderById,
-  cancelOrder,
-  updateOrderNotes,
-} from "../modules/customer/controllers/customerOrderController";
+import customerOrderRoutes from "./customerOrderRoutes";
 
 const router = Router();
 
@@ -108,22 +101,8 @@ router.use("/customer/categories", customerCategoryRoutes);
 // Tracking routes (must be before general /customer/orders/:id route)
 router.use("/customer", customerTrackingRoutes);
 
-// Customer orders route - direct registration to avoid module loading issue
-console.log("🔥 REGISTERING CUSTOMER ORDER ROUTES");
-router.post(
-  "/customer/orders",
-  (_req, _res, next) => {
-    console.log("✅ POST /customer/orders ROUTE MATCHED!");
-    next();
-  },
-  authenticate,
-  requireUserType("Customer", "Admin"),
-  createOrder
-);
-router.get("/customer/orders", authenticate, requireUserType("Customer", "Admin"), getMyOrders);
-router.get("/customer/orders/:id", authenticate, requireUserType("Customer", "Admin"), getOrderById);
-router.post("/customer/orders/:id/cancel", authenticate, requireUserType("Customer", "Admin"), cancelOrder);
-router.patch("/customer/orders/:id/notes", authenticate, requireUserType("Customer", "Admin"), updateOrderNotes);
+// Customer orders routes
+router.use("/customer/orders", customerOrderRoutes);
 
 router.use("/customer/coupons", customerCouponRoutes);
 router.use("/customer/addresses", customerAddressRoutes);
@@ -161,17 +140,14 @@ router.use("/returns", returnRoutes);
 // Report routes (protected, seller only)
 router.use("/seller/reports", reportRoutes);
 
-// Wallet routes (protected, seller only)
-router.use("/seller/wallet", walletRoutes);
+// Seller wallet routes (protected, seller only)
+router.use("/seller/wallet", authenticate, requireUserType("Seller"), sellerWalletRoutes);
 
 // Tax routes (protected, seller/admin)
 router.use("/seller/taxes", taxRoutes);
 
 // Payment routes (Razorpay integration)
 router.use("/payment", paymentRoutes);
-
-// Seller wallet routes (protected, seller only)
-router.use("/seller/wallet-new", authenticate, requireUserType("Seller"), sellerWalletRoutes);
 
 // Delivery wallet routes (protected, delivery only)
 router.use("/delivery/wallet", authenticate, requireUserType("Delivery"), deliveryWalletRoutes);

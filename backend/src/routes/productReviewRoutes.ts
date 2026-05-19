@@ -1,7 +1,7 @@
 
 import { Router } from 'express';
 import { getProductReviews, addReview } from '../modules/customer/controllers/productReviewController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireUserType } from '../middleware/auth';
 
 const router = Router();
 
@@ -9,6 +9,6 @@ const router = Router();
 router.get('/:productId', getProductReviews);
 
 // Protected route to add review
-router.post('/', authenticate, addReview);
+router.post('/', authenticate, requireUserType('Customer'), addReview);
 
 export default router;

@@ -1,11 +1,12 @@
 
 import { Router } from 'express';
 import { getCart, addToCart, updateCartItem, removeFromCart, clearCart } from '../modules/customer/controllers/customerCartController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireUserType } from '../middleware/auth';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireUserType('Customer'));
 
 router.get('/', getCart);
 router.post('/add', addToCart);

@@ -31,9 +31,14 @@ export const createRazorpayOrder = async (
     try {
         const keyId = process.env.RAZORPAY_KEY_ID;
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        const isProduction = process.env.NODE_ENV === 'production';
+        const bypassAllowed = process.env.RAZORPAY_BYPASS === 'true' || !isProduction;
 
-        // Dev/Testing bypass: if credentials are missing, return a dummy order
+        // Dev/Testing bypass: if credentials are missing, return a dummy order only when bypass is allowed
         if (!keyId || !keySecret) {
+            if (!bypassAllowed) {
+                throw new Error('Razorpay credentials not configured');
+            }
             console.warn('⚠️ Razorpay credentials not configured. Returning DUMMY order for testing.');
             return {
                 success: true,
@@ -90,8 +95,15 @@ export const verifyPaymentSignature = (
     razorpayPaymentId: string,
     razorpaySignature: string
 ): boolean => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const bypassAllowed = process.env.RAZORPAY_BYPASS === 'true' || !isProduction;
+
     // Development/Testing bypass
     if (razorpayPaymentId.startsWith('mock_')) {
+        if (!bypassAllowed) {
+            console.error('❌ Blocked mock payment bypass attempt in production mode');
+            return false;
+        }
         console.log('✅ Bypassing payment signature verification for MOCK payment');
         return true;
     }

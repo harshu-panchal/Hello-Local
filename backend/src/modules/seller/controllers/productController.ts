@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import Product from "../../../models/Product";
 import Shop from "../../../models/Shop";
 import { asyncHandler } from "../../../utils/asyncHandler";
@@ -221,6 +222,13 @@ export const getProductById = asyncHandler(
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Product ID format",
+      });
+    }
+
     // Prevent reserved route names from being treated as product IDs
     const reservedRoutes = ["shops", "brands"];
     if (reservedRoutes.includes(id)) {
@@ -260,6 +268,13 @@ export const updateProduct = asyncHandler(
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
     const updateData = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Product ID format",
+      });
+    }
 
     console.log("DEBUG updateProduct: sellerId from token:", sellerId);
     console.log("DEBUG updateProduct: productId:", id);
@@ -400,6 +415,13 @@ export const deleteProduct = asyncHandler(
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Product ID format",
+      });
+    }
+
     console.log("DEBUG deleteProduct: sellerId from token:", sellerId);
     console.log("DEBUG deleteProduct: productId:", id);
 
@@ -428,6 +450,20 @@ export const deleteProduct = asyncHandler(
 export const updateStock = asyncHandler(async (req: Request, res: Response) => {
   const sellerId = (req as any).user.userId;
   const { id, variationId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Product ID format",
+    });
+  }
+
+  if (variationId && !mongoose.Types.ObjectId.isValid(variationId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Variation ID format",
+    });
+  }
   const { stock, status } = req.body;
 
   const product = await Product.findOne({ _id: id, seller: sellerId });
@@ -481,6 +517,13 @@ export const updateProductStatus = asyncHandler(
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
     const { publish, popular, dealOfDay } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Product ID format",
+      });
+    }
 
     const updateData: any = {};
     if (publish !== undefined) updateData.publish = publish;
