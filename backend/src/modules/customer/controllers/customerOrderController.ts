@@ -190,13 +190,13 @@ export const createOrder = async (req: Request, res: Response) => {
 
                 if (hasVariations) {
                     if (!variationValue) {
-                        const err = new Error(`Variation selection is required for product: ${checkProduct.name}`);
+                        const err = new Error(`Variation selection is required for product: ${checkProduct.productName}`);
                         (err as any).statusCode = 400;
                         throw err;
                     }
 
                     // A variation was provided, but didn't match. Check if it actually exists in product variations
-                    const matchedVar = checkProduct.variations.find((v: any) =>
+                    const matchedVar = (checkProduct.variations || []).find((v: any) =>
                         (mongoose.isValidObjectId(variationValue) && v._id.toString() === variationValue.toString()) ||
                         v.value === variationValue ||
                         v.title === variationValue ||
@@ -204,17 +204,17 @@ export const createOrder = async (req: Request, res: Response) => {
                     );
 
                     if (matchedVar) {
-                        const err = new Error(`Insufficient stock for variation "${variationValue}" of product "${checkProduct.name}". Available: ${matchedVar.stock}, requested: ${qty}`);
+                        const err = new Error(`Insufficient stock for variation "${variationValue}" of product "${checkProduct.productName}". Available: ${matchedVar.stock}, requested: ${qty}`);
                         (err as any).statusCode = 400;
                         throw err;
                     } else {
-                        const err = new Error(`Invalid variation "${variationValue}" specified for product "${checkProduct.name}". Please specify a valid variation.`);
+                        const err = new Error(`Invalid variation "${variationValue}" specified for product "${checkProduct.productName}". Please specify a valid variation.`);
                         (err as any).statusCode = 400;
                         throw err;
                     }
                 } else {
                     if (variationValue) {
-                        const err = new Error(`Product "${checkProduct.name}" does not have variations defined, but variation "${variationValue}" was specified.`);
+                        const err = new Error(`Product "${checkProduct.productName}" does not have variations defined, but variation "${variationValue}" was specified.`);
                         (err as any).statusCode = 400;
                         throw err;
                     }
@@ -233,7 +233,7 @@ export const createOrder = async (req: Request, res: Response) => {
                         );
 
                     if (!product) {
-                        const err = new Error(`Insufficient stock for product "${checkProduct.name}". Available: ${checkProduct.stock}, requested: ${qty}`);
+                        const err = new Error(`Insufficient stock for product "${checkProduct.productName}". Available: ${checkProduct.stock}, requested: ${qty}`);
                         (err as any).statusCode = 400;
                         throw err;
                     }

@@ -56,7 +56,7 @@ const syncCartWithLocation = async (
     if (!cart) return null;
 
     const filteredItems = [];
-    const outOfRangeItemIds = [];
+    const outOfRangeItemIds: any[] = [];
     let total = 0;
 
     for (const item of (cart.items as any[] || [])) {
