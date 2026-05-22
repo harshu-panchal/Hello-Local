@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { getNotifications, Notification as NotificationType, markAsRead } from '../../../services/api/admin/adminNotificationService';
+import { useAdminSocket, AdminSocketNotification } from '../hooks/useAdminSocket';
 import helloLocalLogo from '@assets/logo.png';
 
 interface AdminHeaderProps {
@@ -22,6 +23,31 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
 
   const isActive = (path: string) => location.pathname.includes(path);
 
+  // Real-time socket notification handler — fires immediately when a new order arrives
+  const handleSocketNotification = useCallback((socketNotif: AdminSocketNotification) => {
+    if (socketNotif.type !== 'NEW_ORDER') return;
+
+    // Prepend a synthetic notification entry to the list without waiting for HTTP
+    const syntheticNotif: NotificationType = {
+      _id: `socket-${Date.now()}`,
+      recipientType: 'Admin',
+      title: '📦 New Order Received',
+      message: `Order #${socketNotif.orderNumber} — ₹${socketNotif.totalAmount.toLocaleString('en-IN')} (${socketNotif.paymentMethod || 'Unknown'})`,
+      type: 'Order',
+      isRead: false,
+      priority: 'High',
+      createdAt: new Date(socketNotif.timestamp).toISOString(),
+      link: `/admin/orders/${socketNotif.orderId}`,
+      actionLabel: 'View Order',
+    };
+
+    setNotifications(prev => [syntheticNotif, ...prev].slice(0, 10));
+    setUnreadCount(prev => prev + 1);
+  }, []);
+
+  // Connect to socket for real-time admin notifications
+  useAdminSocket(handleSocketNotification);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
@@ -29,8 +55,9 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
       }
     };
 
+    // Initial fetch; re-poll every 60s as a safety net (socket covers real-time)
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Check every 30 seconds
+    const interval = setInterval(fetchNotifications, 60000);
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {

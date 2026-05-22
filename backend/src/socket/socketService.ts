@@ -48,83 +48,70 @@ const calculateETA = (distanceInMeters: number): number => {
 };
 
 export const initializeSocket = (httpServer: HttpServer) => {
+    // Build the allowed origins list — same logic as server.ts HTTP CORS
+    const envOrigins = (process.env.FRONTEND_URL || '')
+        .split(',')
+        .map((u) => u.trim().replace(/\/$/, ''))
+        .filter(Boolean);
+
+    // Default production origins — must match whatever domain the frontend is served from
+    const defaultProductionOrigins = [
+        'https://www.hellolocal.com',
+        'https://hellolocal.com',
+    ];
+
+    const productionOrigins = envOrigins.length > 0
+        ? [...new Set([...envOrigins, ...defaultProductionOrigins])]
+        : defaultProductionOrigins;
+
     const io = new SocketIOServer(httpServer, {
         cors: {
             origin: (origin, callback) => {
-                // Allow requests with no origin (like mobile apps or server-to-server)
+                // Allow requests with no origin (mobile apps, Postman, server-to-server)
                 if (!origin) return callback(null, true);
 
-                // In production, check against allowed origins
-                if (process.env.NODE_ENV === 'production') {
-                    // Get allowed origins from environment variable (comma-separated)
-                    const frontendUrl = process.env.FRONTEND_URL || "";
-                    const allowedOrigins = frontendUrl
-                        .split(",")
-                        .map((url) => url.trim())
-                        .filter((url) => url.length > 0);
-
-                    // Default production origins if FRONTEND_URL not set
-                    const defaultOrigins = [
-                        "https://www.dhakadsnazzy.com",
-                        "https://dhakadsnazzy.com",
-                    ];
-
-                    const allAllowedOrigins = allowedOrigins.length > 0
-                        ? [...allowedOrigins, ...defaultOrigins]
-                        : defaultOrigins;
-
-                    // Normalize origins for comparison (remove trailing slash, lowercase)
-                    const normalizeUrl = (url: string) => url.replace(/\/$/, '').toLowerCase();
-                    const normalizedOrigin = normalizeUrl(origin);
-
-                    // Check if origin matches any allowed origin
-                    const isAllowed = allAllowedOrigins.some((allowedOrigin) => {
-                        const normalizedAllowed = normalizeUrl(allowedOrigin);
-
-                        // Exact match
-                        if (normalizedOrigin === normalizedAllowed) return true;
-
-                        // Support for www and non-www variants
-                        if (normalizedAllowed.includes("www.")) {
-                            const nonWww = normalizedAllowed.replace("www.", "");
-                            if (normalizedOrigin === nonWww) return true;
-                        } else {
-                            const withWww = normalizedAllowed.replace(/^(https?:\/\/)/, "$1www.");
-                            if (normalizedOrigin === withWww) return true;
-                        }
-                        return false;
-                    });
-
-                    if (!isAllowed) {
-                        console.warn(`⚠️ Socket.io connection rejected from origin: ${origin}. Allowed origins: ${allAllowedOrigins.join(', ')}`);
-                        console.warn(`⚠️ Normalized origin: ${normalizedOrigin}`);
-                    } else {
-                        console.log(`✅ Socket.io connection allowed from origin: ${origin}`);
+                // Development: allow any localhost / 127.0.0.1 port
+                if (process.env.NODE_ENV !== 'production') {
+                    if (
+                        origin.startsWith('http://localhost:') ||
+                        origin.startsWith('http://127.0.0.1:') ||
+                        origin.startsWith('https://localhost:')
+                    ) {
+                        return callback(null, true);
                     }
-
-                    return callback(null, isAllowed);
+                    return callback(null, false);
                 }
 
-                // In development, allow any localhost port
-                if (
-                    origin.startsWith('http://localhost:') ||
-                    origin.startsWith('http://127.0.0.1:') ||
-                    origin.startsWith('https://localhost:')
-                ) {
-                    return callback(null, true);
-                }
+                // Production: check against allowed list (case-insensitive, no trailing slash)
+                const normalize = (url: string) => url.replace(/\/$/, '').toLowerCase();
+                const normalizedOrigin = normalize(origin);
 
-                return callback(null, false);
+                const isAllowed = productionOrigins.some((allowed) => {
+                    const n = normalize(allowed);
+                    if (normalizedOrigin === n) return true;
+                    // Support www ↔ non-www variants
+                    const withWww = n.replace(/^(https?:\/\/)(?!www\.)/, '$1www.');
+                    const withoutWww = n.replace(/^(https?:\/\/)www\./, '$1');
+                    return normalizedOrigin === withWww || normalizedOrigin === withoutWww;
+                });
+
+                if (!isAllowed) {
+                    console.warn(`⚠️  Socket.io CORS rejected: ${origin} | Allowed: ${productionOrigins.join(', ')}`);
+                } else {
+                    console.log(`✅ Socket.io CORS allowed: ${origin}`);
+                }
+                return callback(null, isAllowed);
             },
             methods: ['GET', 'POST'],
             credentials: true,
         },
-        // Production-specific Socket.io configuration
-        allowEIO3: true, // Allow Engine.IO v3 clients
-        pingTimeout: 60000, // 60 seconds
-        pingInterval: 25000, // 25 seconds
-        transports: ['websocket', 'polling'], // Allow both transports
-        upgradeTimeout: 30000, // 30 seconds for upgrade
+        // Allow both polling and WebSocket — polling is the reliable fallback behind
+        // nginx or other reverse proxies that don't forward WS upgrades.
+        transports: ['polling', 'websocket'],
+        allowEIO3: true,
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        upgradeTimeout: 30000,
     });
 
     // Authentication middleware
@@ -192,6 +179,16 @@ export const initializeSocket = (httpServer: HttpServer) => {
         socket.on('join-delivery-room', (deliveryPartnerId: string) => {
             console.log(`🛵 Delivery partner joined: ${deliveryPartnerId}`);
             socket.join(`delivery-${deliveryPartnerId}`);
+        });
+
+        // Admin joins their notification room
+        socket.on('join-admin-room', () => {
+            console.log(`🛡️  Admin joined admin-notifications room (socket: ${socket.id})`);
+            socket.join('admin-notifications');
+            socket.emit('joined-admin-room', {
+                success: true,
+                message: 'Successfully joined admin notifications room',
+            });
         });
 
         // Seller joins their notification room

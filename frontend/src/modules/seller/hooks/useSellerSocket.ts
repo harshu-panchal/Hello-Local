@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../../../context/AuthContext';
 import { getSocketBaseURL } from '../../../services/api/config';
@@ -34,54 +34,72 @@ export interface SellerNotification {
 
 export const useSellerSocket = (onNotificationReceived?: (notification: SellerNotification) => void) => {
     const { user, token, isAuthenticated } = useAuth();
-    const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const socketRef = useRef<Socket | null>(null);
+
+    // Keep a stable ref to the latest callback so the socket listener never goes stale
+    const callbackRef = useRef(onNotificationReceived);
+    useEffect(() => {
+        callbackRef.current = onNotificationReceived;
+    });
 
     useEffect(() => {
         if (!isAuthenticated || !token || !user || user.userType !== 'Seller') {
-            if (socket) {
-                socket.disconnect();
-                setSocket(null);
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+                setIsConnected(false);
             }
             return;
         }
 
         const socketUrl = getSocketBaseURL();
-        const newSocket = io(socketUrl, {
+        const socket = io(socketUrl, {
             auth: { token },
-            transports: ['websocket', 'polling'],
+            // polling first — always works behind nginx/reverse proxies;
+            // socket.io will upgrade to WebSocket automatically when available
+            transports: ['polling', 'websocket'],
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 30000,
+            timeout: 20000,
         });
 
-        newSocket.on('connect', () => {
-            console.log('✅ Seller connected to socket server');
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+            console.log('✅ Seller socket connected:', socket.id);
             setIsConnected(true);
-
-            // Join seller room
-            newSocket.emit('join-seller-room', user.id);
+            // Re-join seller room on every (re-)connect
+            socket.emit('join-seller-room', user.id);
         });
 
-        newSocket.on('joined-seller-room', (data) => {
+        socket.on('joined-seller-room', (data: any) => {
             console.log('📦 Joined seller notification room:', data.sellerId);
         });
 
-        newSocket.on('seller-notification', (notification: SellerNotification) => {
-            console.log('🔔 New seller notification received:', notification);
-            if (onNotificationReceived) {
-                onNotificationReceived(notification);
-            }
+        socket.on('seller-notification', (notification: SellerNotification) => {
+            console.log('🔔 Seller notification received:', notification);
+            // Always call the LATEST version of the callback via ref — no stale closure
+            callbackRef.current?.(notification);
         });
 
-        newSocket.on('disconnect', () => {
-            console.log('❌ Seller disconnected from socket server');
+        socket.on('disconnect', (reason) => {
+            console.log('❌ Seller socket disconnected:', reason);
             setIsConnected(false);
         });
 
-        setSocket(newSocket);
+        socket.on('connect_error', (err) => {
+            console.error('❌ Seller socket connection error:', err.message);
+            setIsConnected(false);
+        });
 
         return () => {
-            newSocket.disconnect();
+            socket.disconnect();
+            socketRef.current = null;
         };
     }, [isAuthenticated, token, user?.id, user?.userType]);
 
-    return { socket, isConnected };
+    return { socket: socketRef.current, isConnected };
 };

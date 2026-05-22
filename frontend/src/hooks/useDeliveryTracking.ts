@@ -59,10 +59,9 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
 
         const token = localStorage.getItem('authToken')
         const socket = io(getSocketBaseURL(), {
-            auth: {
-                token,
-            },
-            transports: ['websocket', 'polling'],
+            auth: { token },
+            // polling first — always works behind nginx reverse proxies
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
             reconnectionDelay: INITIAL_RECONNECT_DELAY,

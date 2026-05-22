@@ -96,6 +96,23 @@ export async function notifySellersOfOrderUpdate(
                 }
             }).catch(err => console.error(`❌ Push notification failed for seller ${sellerId}:`, err));
         }
+
+        // Also notify admin room in real-time for new orders
+        if (type === 'NEW_ORDER') {
+            const adminPayload = {
+                type: 'NEW_ORDER',
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                status: order.status,
+                paymentMethod: order.paymentMethod,
+                paymentStatus: order.paymentStatus,
+                totalAmount: order.total || 0,
+                customerName: order.customerName,
+                timestamp: new Date(),
+            };
+            io.to('admin-notifications').emit('admin-notification', adminPayload);
+            console.log(`📤 Emitted admin-notification for new order ${order.orderNumber}`);
+        }
     } catch (error) {
         console.error('Error in notifySellersOfOrderUpdate:', error);
     }

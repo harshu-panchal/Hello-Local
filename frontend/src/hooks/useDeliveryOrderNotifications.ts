@@ -41,10 +41,10 @@ export const useDeliveryOrderNotifications = () => {
 
         const token = localStorage.getItem('authToken');
         const socket = io(getSocketBaseURL(), {
-            auth: {
-                token,
-            },
-            transports: ['websocket', 'polling'],
+            auth: { token },
+            // polling first — works reliably behind nginx/reverse proxies;
+            // socket.io auto-upgrades to WebSocket when the server supports it
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
             reconnectionDelay: INITIAL_RECONNECT_DELAY,

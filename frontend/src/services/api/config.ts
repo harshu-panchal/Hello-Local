@@ -4,20 +4,22 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
 
-// Socket.io base URL - extract from API_BASE_URL by removing /api/v1
-// Socket connections need the base server URL without the API path
+// Socket.io base URL — the root server URL (no /api/v1 suffix)
+// Priority: VITE_SOCKET_URL > VITE_API_URL > derived from VITE_API_BASE_URL
 export const getSocketBaseURL = (): string => {
-  // Use VITE_API_URL if explicitly set (for socket connections)
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  // 1. Explicit socket URL (most reliable for production)
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL as string;
   }
 
-  // Otherwise, extract base URL from VITE_API_BASE_URL
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
+  // 2. Legacy explicit socket URL env var
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL as string;
+  }
 
-  // Remove /api/v1 or /api from the end
+  // 3. Derive from VITE_API_BASE_URL by stripping /api/v1 suffix
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:5000/api/v1";
   const socketUrl = apiBaseUrl.replace(/\/api\/v\d+$|\/api$/, '');
-
   return socketUrl || "http://localhost:5000";
 };
 

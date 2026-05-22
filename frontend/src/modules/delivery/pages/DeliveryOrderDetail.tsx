@@ -351,7 +351,8 @@ export default function DeliveryOrderDetail() {
 
                 socket = io(baseURL, {
                     auth: { token },
-                    transports: ['websocket', 'polling'],
+                    // polling first — reliable behind nginx; auto-upgrades to WebSocket
+                    transports: ['polling', 'websocket'],
                     reconnection: true,
                     reconnectionAttempts: 5,
                     reconnectionDelay: 2000
