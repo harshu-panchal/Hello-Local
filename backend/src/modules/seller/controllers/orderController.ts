@@ -46,12 +46,13 @@ export const getOrders = asyncHandler(
     if (status && status !== 'All Status') {
       // Map frontend status to backend status
       const statusMapping: Record<string, string> = {
-        'Pending': 'Pending',
+        'Received': 'Received',
         'Accepted': 'Accepted',
+        'Processed': 'Processed',
         'On the way': 'Out for Delivery',
         'Delivered': 'Delivered',
-        'Cancelled': 'Cancelled',
         'Rejected': 'Rejected',
+        'Cancelled': 'Cancelled',
       };
       query.status = statusMapping[status as string] || status;
     }
@@ -255,7 +256,7 @@ export const updateOrderStatus = asyncHandler(
     }
 
     // Validate allowed status updates for seller
-    const allowedStatuses = ['Accepted', 'On the way', 'Delivered', 'Cancelled', 'Rejected'];
+    const allowedStatuses = ['Accepted', 'Processed', 'On the way', 'Delivered', 'Cancelled', 'Rejected'];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -297,6 +298,7 @@ export const updateOrderStatus = asyncHandler(
     // Update seller's items status in this order if applicable
     const itemStatusMap: Record<string, string> = {
       'Accepted': 'Pending',
+      'Processed': 'Pending',
       'On the way': 'Shipped',
       'Delivered': 'Delivered',
       'Cancelled': 'Cancelled',

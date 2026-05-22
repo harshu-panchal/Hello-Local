@@ -9,7 +9,7 @@ export default function SellerOrderDetail() {
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [orderStatus, setOrderStatus] = useState<string>('Out For Delivery');
+  const [orderStatus, setOrderStatus] = useState<string>('');
 
   // Fetch order detail from API
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function SellerOrderDetail() {
     ];
 
     let xPos = margin;
-    const headers = ['Sr. No.', 'Product', 'Price', 'Tax ? (%)', 'Qty', 'Subtotal'];
+    const headers = ['Sr. No.', 'Product', 'Price', 'Tax ₹ (%)', 'Qty', 'Subtotal'];
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
@@ -230,10 +230,10 @@ export default function SellerOrderDetail() {
       const rowData = [
         item.srNo.toString(),
         item.product,
-        `?${item.price.toFixed(2)}`,
+        `Rs.${item.price.toFixed(2)}`,
         `${item.tax.toFixed(2)} (${item.taxPercent.toFixed(2)}%)`,
         item.qty.toString(),
-        `?${item.subtotal.toFixed(2)}`,
+        `Rs.${item.subtotal.toFixed(2)}`,
       ];
 
       rowData.forEach((data, index) => {
@@ -274,17 +274,17 @@ export default function SellerOrderDetail() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text('Subtotal:', pageWidth - margin - 60, yPos, { align: 'right' });
-    doc.text(`?${totalSubtotal.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
+    doc.text(`Rs.${totalSubtotal.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
     yPos += 7;
 
     doc.text('Tax:', pageWidth - margin - 60, yPos, { align: 'right' });
-    doc.text(`?${totalTax.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
+    doc.text(`Rs.${totalTax.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
     yPos += 7;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text('Grand Total:', pageWidth - margin - 60, yPos, { align: 'right' });
-    doc.text(`?${grandTotal.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
+    doc.text(`Rs.${grandTotal.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
     yPos += 15;
 
     // Footer
@@ -492,7 +492,7 @@ export default function SellerOrderDetail() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Unit</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Price</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tax ? (%)</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tax ₹ (%)</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Qty</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Subtotal</th>
                 </tr>
@@ -503,12 +503,12 @@ export default function SellerOrderDetail() {
                     <td className="px-4 py-3 text-sm text-neutral-900">{item.srNo}</td>
                     <td className="px-4 py-3 text-sm text-neutral-900">{item.product}</td>
                     <td className="px-4 py-3 text-sm text-neutral-900">{formatUnit(item.unit, item.qty)}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900">?{item.price.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-neutral-900">₹{item.price.toFixed(2)}</td>
                     <td className="px-4 py-3 text-sm text-neutral-600">
                       {item.tax.toFixed(2)} ({item.taxPercent.toFixed(2)}%)
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-900">{item.qty}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900 font-medium">?{item.subtotal.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-neutral-900 font-medium">₹{item.subtotal.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

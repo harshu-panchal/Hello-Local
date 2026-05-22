@@ -974,10 +974,10 @@ export default function SellerAddProduct() {
                         className="flex items-center justify-between p-3 bg-white border border-neutral-200 rounded-lg">
                         <div className="flex-1">
                           <span className="font-medium">{variation.title}</span>{" "}
-                          - ?{variation.price}
+                          - ₹{variation.price}
                           {variation.discPrice > 0 && (
                             <span className="text-pink-700 ml-2">
-                              (?{variation.discPrice})
+                              (₹{variation.discPrice})
                             </span>
                           )}
                           <span className="ml-4 text-sm text-neutral-600">

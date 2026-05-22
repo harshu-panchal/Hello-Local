@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { getOrders, Order, GetOrdersParams } from '../../../services/api/orderService';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { getOrders, updateOrderStatus, Order, GetOrdersParams } from '../../../services/api/orderService';
 
 
 type SortField = 'orderId' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
@@ -8,16 +8,19 @@ type SortDirection = 'asc' | 'desc';
 
 export default function SellerOrders() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [dateRange, setDateRange] = useState('');
-  const [status, setStatus] = useState('All Status');
+  // Pre-fill status from URL query param (e.g. ?status=Delivered from dashboard card click)
+  const [status, setStatus] = useState(() => searchParams.get('status') || 'All Status');
   const [entriesPerPage, setEntriesPerPage] = useState('10');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Fetch orders from API
   useEffect(() => {
@@ -81,6 +84,29 @@ export default function SellerOrders() {
     }
   };
 
+  const handleQuickStatus = async (
+    orderId: string,
+    newStatus: 'Accepted' | 'Rejected' | 'Processed',
+    label: string
+  ) => {
+    if (!window.confirm(`Are you sure you want to mark this order as "${label}"?`)) return;
+    setUpdatingId(orderId);
+    try {
+      const res = await updateOrderStatus(orderId, { status: newStatus });
+      if (res.success) {
+        setOrders(prev =>
+          prev.map(o => (o.id === orderId ? { ...o, status: newStatus } : o))
+        );
+      } else {
+        alert(res.message || 'Failed to update status');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to update status');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const handleExport = () => {
     // Create CSV content
     const headers = ['Order ID', 'Delivery Date', 'Order Date', 'Status', 'Amount'];
@@ -120,16 +146,20 @@ export default function SellerOrders() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pending':
+      case 'Received':
         return 'bg-yellow-100 text-yellow-800';
       case 'Accepted':
         return 'bg-blue-100 text-blue-800';
+      case 'Processed':
+        return 'bg-indigo-100 text-indigo-800';
       case 'On the way':
         return 'bg-purple-100 text-purple-800';
       case 'Delivered':
-        return 'bg-pink-100 text-pink-800';
-      case 'Cancelled':
+        return 'bg-green-100 text-green-800';
+      case 'Rejected':
         return 'bg-red-100 text-red-800';
+      case 'Cancelled':
+        return 'bg-orange-100 text-orange-800';
       default:
         return 'bg-neutral-100 text-neutral-800';
     }
@@ -223,10 +253,12 @@ export default function SellerOrders() {
                   className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option>All Status</option>
-                  <option>Pending</option>
+                  <option>Received</option>
                   <option>Accepted</option>
+                  <option>Processed</option>
                   <option>On the way</option>
                   <option>Delivered</option>
+                  <option>Rejected</option>
                   <option>Cancelled</option>
                 </select>
               </div>
@@ -502,15 +534,69 @@ export default function SellerOrders() {
                           </span>
                         </td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900 font-medium">
-                          ?{order.amount.toFixed(2)}
+                          ₹{order.amount.toFixed(2)}
                         </td>
                         <td className="px-3 sm:px-4 md:px-6 py-3">
-                          <button
-                            onClick={() => navigate(`/seller/orders/${order.id}`)}
-                            className="text-pink-600 hover:text-pink-700 text-xs sm:text-sm font-medium transition-colors"
-                          >
-                            View
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {/* View — always visible */}
+                            <button
+                              onClick={() => navigate(`/seller/orders/${order.id}`)}
+                              title="View order details"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded bg-pink-600 hover:bg-pink-700 text-white transition-colors flex-shrink-0"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </button>
+
+                            {/* Accept — only for Received orders */}
+                            {order.status === 'Received' && (
+                              <button
+                                onClick={() => handleQuickStatus(order.id, 'Accepted', 'Accepted')}
+                                disabled={updatingId === order.id}
+                                title="Accept order"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white transition-colors flex-shrink-0"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+                            )}
+
+                            {/* Reject — only for Received orders */}
+                            {order.status === 'Received' && (
+                              <button
+                                onClick={() => handleQuickStatus(order.id, 'Rejected', 'Rejected')}
+                                disabled={updatingId === order.id}
+                                title="Reject order"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white transition-colors flex-shrink-0"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+                            )}
+
+                            {/* Mark as Processed — only for Accepted orders */}
+                            {order.status === 'Accepted' && (
+                              <button
+                                onClick={() => handleQuickStatus(order.id, 'Processed', 'Processed')}
+                                disabled={updatingId === order.id}
+                                title="Mark as Processed (Ready for pickup)"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white transition-colors flex-shrink-0"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+                            )}
+
+                            {/* Loading spinner */}
+                            {updatingId === order.id && (
+                              <div className="w-4 h-4 border-2 border-pink-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))

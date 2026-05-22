@@ -1,8 +1,6 @@
 import { Request, Response } from "express";
 import Order from "../../../models/Order";
 import Product from "../../../models/Product";
-// import Category from "../../../models/Category";
-// import Category from "../../../models/Category";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import mongoose from "mongoose";
@@ -20,24 +18,36 @@ export const getDashboardStats = asyncHandler(
         const sellerOrderIds = [...new Set(sellerOrderItems.map(item => item.order.toString()))];
 
         // 1. KPI Metrics
+        const sellerObjectIds = sellerOrderIds.map(id => new mongoose.Types.ObjectId(id));
+
         const [
             totalOrders,
             completedOrders,
-            pendingOrders,
+            pendingOrders,    // Orders received by seller but not yet accepted/rejected
             cancelledOrders,
             totalProduct,
             totalCategoryCount,
             totalSubcategoryCount,
             totalCustomerCount,
+            revenueData,
         ] = await Promise.all([
             Order.countDocuments({ _id: { $in: sellerOrderIds } }),
             Order.countDocuments({ _id: { $in: sellerOrderIds }, status: "Delivered" }),
-            Order.countDocuments({ _id: { $in: sellerOrderIds }, status: "Pending" }),
+            // "Pending" for seller = orders they need to action (Received = new, Accepted = in progress, Processed = ready)
+            Order.countDocuments({
+                _id: { $in: sellerOrderIds },
+                status: { $in: ["Received", "Accepted", "Processed"] }
+            }),
             Order.countDocuments({ _id: { $in: sellerOrderIds }, status: "Cancelled" }),
-            Product.countDocuments({ seller: sellerId }), // Note: Product model uses 'seller' (ref) or 'sellerId'? Checking schema... Product.ts usually uses 'seller' as ref. Checking prev file... Product.countDocuments({ sellerId }) was used. Let's verify Product model.
+            Product.countDocuments({ seller: sellerId }),
             Product.distinct("category", { seller: sellerId }).then(ids => ids.length),
             Product.distinct("subcategory", { seller: sellerId }).then(ids => ids.length),
             Order.distinct("customer", { _id: { $in: sellerOrderIds } }).then(ids => ids.length),
+            // Total revenue = sum of seller's order items for delivered+paid orders
+            OrderItem.aggregate([
+                { $match: { seller: sellerId, status: { $in: ["Delivered", "Completed"] } } },
+                { $group: { _id: null, total: { $sum: "$total" } } }
+            ]).catch(() => []),
         ]);
 
         // 2. Alert Metrics (Low Stock < 5)
@@ -67,16 +77,19 @@ export const getDashboardStats = asyncHandler(
             else if (isLowStock) lowStockProducts++;
         });
 
+        const totalRevenue = revenueData[0]?.total || 0;
+
         // 3. New Orders Table (Latest 10)
         const newOrders = await Order.find({ _id: { $in: sellerOrderIds } })
             .sort({ createdAt: -1 })
             .limit(10);
 
         const formattedNewOrders = newOrders.map(order => ({
-            id: order.orderNumber || order._id.toString(), // Use orderNumber if available
+            id: order._id.toString(),                       // MongoDB ObjectId — used for navigation
+            orderId: order.orderNumber || order._id.toString(), // Human-readable order number for display
             orderDate: new Date(order.orderDate).toLocaleDateString('en-GB'),
             status: order.status === 'Out for Delivery' ? 'Out For Delivery' : order.status,
-            amount: order.total, // Use total instead of grandTotal (check Schema)
+            amount: order.total,
         }));
 
         // 4. Chart Data (Last 12 months)
@@ -84,7 +97,7 @@ export const getDashboardStats = asyncHandler(
         const monthlyStats = await Order.aggregate([
             {
                 $match: {
-                    _id: { $in: sellerOrderIds.map(id => new mongoose.Types.ObjectId(id)) },
+                    _id: { $in: sellerObjectIds },
                     orderDate: {
                         $gte: new Date(`${currentYear}-01-01`),
                         $lte: new Date(`${currentYear}-12-31`)
@@ -111,7 +124,7 @@ export const getDashboardStats = asyncHandler(
         const dailyStats = await Order.aggregate([
             {
                 $match: {
-                    _id: { $in: sellerOrderIds.map(id => new mongoose.Types.ObjectId(id)) },
+                    _id: { $in: sellerObjectIds },
                     orderDate: {
                         $gte: new Date(currentYear, currentMonth, 1),
                         $lte: new Date(currentYear, currentMonth + 1, 0)
@@ -149,6 +162,7 @@ export const getDashboardStats = asyncHandler(
                     cancelledOrders,
                     soldOutProducts,
                     lowStockProducts,
+                    totalRevenue: Math.round(totalRevenue * 100) / 100,
                     yearlyOrderData,
                     dailyOrderData
                 },

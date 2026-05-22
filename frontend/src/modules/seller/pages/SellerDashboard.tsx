@@ -276,14 +276,82 @@ export default function SellerDashboard() {
       </div>
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <DashboardCard icon={userIcon} title="Total User" value={stats.totalUser} accentColor="#3b82f6" />
-        <DashboardCard icon={categoryIcon} title="Total Category" value={stats.totalCategory} accentColor="#eab308" />
-        <DashboardCard icon={subcategoryIcon} title="Total Subcategory" value={stats.totalSubcategory} accentColor="#ec4899" />
-        <DashboardCard icon={productIcon} title="Total Product" value={stats.totalProduct} accentColor="#f97316" />
-        <DashboardCard icon={ordersIcon} title="Total Orders" value={stats.totalOrders} accentColor="#3b82f6" />
-        <DashboardCard icon={completedOrdersIcon} title="Completed Orders" value={stats.completedOrders} accentColor="#16a34a" />
-        <DashboardCard icon={pendingOrdersIcon} title="Pending Orders" value={stats.pendingOrders} accentColor="#a855f7" />
-        <DashboardCard icon={cancelledOrdersIcon} title="Cancelled Orders" value={stats.cancelledOrders} accentColor="#ef4444" />
+        <DashboardCard
+          icon={userIcon}
+          title="Total Customers"
+          value={stats.totalUser}
+          accentColor="#3b82f6"
+          onClick={() => navigate('/seller/orders')}
+        />
+        <DashboardCard
+          icon={categoryIcon}
+          title="Total Category"
+          value={stats.totalCategory}
+          accentColor="#eab308"
+          onClick={() => navigate('/seller/category')}
+        />
+        <DashboardCard
+          icon={subcategoryIcon}
+          title="Total Subcategory"
+          value={stats.totalSubcategory}
+          accentColor="#ec4899"
+          onClick={() => navigate('/seller/subcategory')}
+        />
+        <DashboardCard
+          icon={productIcon}
+          title="Total Product"
+          value={stats.totalProduct}
+          accentColor="#f97316"
+          onClick={() => navigate('/seller/product/list')}
+        />
+        <DashboardCard
+          icon={ordersIcon}
+          title="Total Orders"
+          value={stats.totalOrders}
+          accentColor="#3b82f6"
+          onClick={() => navigate('/seller/orders')}
+        />
+        <DashboardCard
+          icon={completedOrdersIcon}
+          title="Completed Orders"
+          value={stats.completedOrders}
+          accentColor="#16a34a"
+          onClick={() => navigate('/seller/orders?status=Delivered')}
+        />
+        <DashboardCard
+          icon={pendingOrdersIcon}
+          title="Active Orders"
+          value={stats.pendingOrders}
+          accentColor="#a855f7"
+          onClick={() => navigate('/seller/orders?status=Received')}
+        />
+        <DashboardCard
+          icon={cancelledOrdersIcon}
+          title="Cancelled Orders"
+          value={stats.cancelledOrders}
+          accentColor="#ef4444"
+          onClick={() => navigate('/seller/orders?status=Cancelled')}
+        />
+      </div>
+
+      {/* Revenue Card */}
+      <div
+        className="bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg shadow-sm p-4 sm:p-5 text-white cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-150 select-none"
+        onClick={() => navigate('/seller/wallet')}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-pink-100 text-sm font-medium mb-1">Total Revenue (Delivered Orders)</p>
+            <p className="text-3xl sm:text-4xl font-bold">
+              ₹{(stats.totalRevenue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="p-3 bg-white bg-opacity-20 rounded-lg">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.86 0 .53-.39 1.39-2.1 1.39-1.6 0-2.23-.72-2.32-1.64H8.04c.1 1.7 1.36 2.66 2.86 2.97V19h2.34v-1.67c1.52-.29 2.72-1.16 2.73-2.77-.01-2.2-1.9-2.96-3.66-3.42z" fill="currentColor"/>
+            </svg>
+          </div>
+        </div>
       </div>
 
       {/* Charts Row */}
@@ -295,8 +363,20 @@ export default function SellerDashboard() {
       {/* Alerts and Button Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Alert Cards - Side by Side */}
-        <AlertCard icon={soldOutIcon} title="Product Sold Out" value={stats.soldOutProducts} accentColor="#ec4899" />
-        <AlertCard icon={lowStockIcon} title="Product low on Stock" value={stats.lowStockProducts} accentColor="#eab308" />
+        <AlertCard
+          icon={soldOutIcon}
+          title="Product Sold Out"
+          value={stats.soldOutProducts}
+          accentColor="#ec4899"
+          onClick={() => navigate('/seller/product/stock')}
+        />
+        <AlertCard
+          icon={lowStockIcon}
+          title="Product low on Stock"
+          value={stats.lowStockProducts}
+          accentColor="#eab308"
+          onClick={() => navigate('/seller/product/stock')}
+        />
       </div>
 
       {/* View New Orders Table Section */}
@@ -421,7 +501,13 @@ export default function SellerDashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
-              {displayedOrders.map((order) => (
+              {displayedOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-neutral-500 text-sm">
+                    No orders found
+                  </td>
+                </tr>
+              ) : displayedOrders.map((order) => (
                 <tr key={order.id} className="hover:bg-neutral-50">
                   <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">{order.id}</td>
                   <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">{order.orderDate}</td>
@@ -430,7 +516,7 @@ export default function SellerDashboard() {
                       {order.status}
                     </span>
                   </td>
-                  <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">₹ {order.amount}</td>
+                  <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">₹{typeof order.amount === 'number' ? order.amount.toFixed(2) : order.amount}</td>
                   <td className="px-4 sm:px-6 py-3">
                     <button
                       onClick={() => navigate(`/seller/orders/${order.id}`)}
@@ -472,7 +558,9 @@ export default function SellerDashboard() {
         {/* Pagination Footer */}
         <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
           <div className="text-xs sm:text-sm text-neutral-700">
-            Showing {startIndex + 1} to {Math.min(endIndex, newOrders.length)} of {newOrders.length} entries
+            {newOrders.length === 0
+              ? 'No entries'
+              : `Showing ${startIndex + 1} to ${Math.min(endIndex, newOrders.length)} of ${newOrders.length} entries`}
           </div>
           <div className="flex items-center gap-2">
             <button
