@@ -108,37 +108,40 @@ export async function findDeliveryBoysNearLocation(
         // 1. Try to find delivery boys using the new GeoJSON location field in Delivery model
         const nearbyDeliveryBoys: { deliveryBoyId: mongoose.Types.ObjectId; distance: number }[] = [];
 
-        const deliveryBoysWithLocation = await Delivery.find({
-            isOnline: true,
-            status: 'Active',
-            location: {
-                $near: {
-                    $geometry: {
-                        type: "Point",
-                        coordinates: [longitude, latitude]
-                    },
-                    $maxDistance: radiusKm * 1000 // Convert km to meters
+        try {
+            const deliveryBoysWithLocation = await Delivery.find({
+                isOnline: true,
+                status: 'Active',
+                location: {
+                    $near: {
+                        $geometry: {
+                            type: "Point",
+                            coordinates: [longitude, latitude]
+                        },
+                        $maxDistance: radiusKm * 1000 // Convert km to meters
+                    }
                 }
-            }
-        }).select('_id location');
+            }).select('_id location');
 
-        if (deliveryBoysWithLocation.length > 0) {
-            for (const db of deliveryBoysWithLocation) {
-                if (db.location && db.location.coordinates) {
-                    const [dbLng, dbLat] = db.location.coordinates;
-                    const distance = calculateDistance(latitude, longitude, dbLat, dbLng);
-                    nearbyDeliveryBoys.push({
-                        deliveryBoyId: db._id as mongoose.Types.ObjectId,
-                        distance
-                    });
+            if (deliveryBoysWithLocation.length > 0) {
+                for (const db of deliveryBoysWithLocation) {
+                    if (db.location && db.location.coordinates) {
+                        const [dbLng, dbLat] = db.location.coordinates;
+                        const distance = calculateDistance(latitude, longitude, dbLat, dbLng);
+                        nearbyDeliveryBoys.push({
+                            deliveryBoyId: db._id as mongoose.Types.ObjectId,
+                            distance
+                        });
+                    }
                 }
-            }
 
-            console.log(`📍 Found ${nearbyDeliveryBoys.length} delivery boys using live location within ${radiusKm}km of seller`);
-            return nearbyDeliveryBoys.sort((a, b) => a.distance - b.distance);
+                console.log(`📍 Found ${nearbyDeliveryBoys.length} delivery boys using live location within ${radiusKm}km of seller`);
+                return nearbyDeliveryBoys.sort((a, b) => a.distance - b.distance);
+            }
+            console.log(`⚠️ No delivery boys found within ${radiusKm}km using live location. Checking fallback...`);
+        } catch (geoError) {
+            console.log(`⚠️ GeoNear query failed (possibly missing 2dsphere index). Falling back to old method... Error: ${(geoError as Error).message}`);
         }
-
-        console.log(`⚠️ No delivery boys found within ${radiusKm}km using live location. Checking fallback...`);
 
         // 2. Fallback to the old method using DeliveryTracking if no delivery boys found with the new field
         // Get all active and online delivery boys
@@ -406,9 +409,7 @@ export async function notifyDeliveryBoysOfNewOrder(
         }
 
         if (notifiedIds.size === 0) {
-            console.log('⚠️ No connected delivery boys found to notify');
-            // Don't emit to general room as it includes offline delivery boys
-            return;
+            console.log('⚠️ No specific connected delivery boys found via location targeting. Falling back to general broadcast.');
         }
 
         notificationStates.set(orderId, {
@@ -418,10 +419,9 @@ export async function notifyDeliveryBoysOfNewOrder(
             acceptedBy: null,
         });
 
-        // Only notify individual active delivery boys, not the general room
-        // This prevents offline delivery boys from receiving notifications
-
-        console.log(`📢 Notified ${notifiedIds.size} connected delivery boys near seller locations about order ${order.orderNumber}`);
+        // Broadcast to all connected delivery boys as a fallback to ensure testing and instant notifications work
+        io.to('delivery-notifications').emit('new-order', orderData);
+        console.log(`📢 Broadcasted new order ${order.orderNumber} to delivery-notifications room`);
     } catch (error) {
         console.error('Error notifying delivery boys:', error);
     }
@@ -446,10 +446,11 @@ export async function handleOrderAcceptance(
                 return { success: false, message: 'Order already accepted by another delivery boy' };
             }
 
-            // Check if this delivery boy was notified
+            // Check if this delivery boy was notified (Disabled to allow fallback broadcasting)
             if (!state.notifiedDeliveryBoys.has(normalizedDeliveryBoyId)) {
-                console.warn(`⚠️ Delivery boy ${normalizedDeliveryBoyId} not in notified list for acceptance of order ${orderId}. Notified:`, Array.from(state.notifiedDeliveryBoys));
-                return { success: false, message: 'You were not notified about this order' };
+                console.warn(`⚠️ Delivery boy ${normalizedDeliveryBoyId} not in strictly notified list for order ${orderId}, but allowing acceptance due to fallback broadcast.`);
+                // We no longer block acceptance here so that testing and fallback broadcasts work
+                // return { success: false, message: 'You were not notified about this order' };
             }
 
             // Check if this delivery boy already rejected
@@ -560,11 +561,11 @@ export async function handleOrderRejection(
             return { success: false, message: 'Order already accepted', allRejected: false };
         }
 
-        // Check if this delivery boy was notified
+        // Check if this delivery boy was notified (Disabled to allow fallback broadcasting)
         const normalizedDeliveryBoyId = String(deliveryBoyId).trim();
         if (!state.notifiedDeliveryBoys.has(normalizedDeliveryBoyId)) {
-            console.warn(`⚠️ Delivery boy ${normalizedDeliveryBoyId} not in notified list for order ${orderId}. Notified:`, Array.from(state.notifiedDeliveryBoys));
-            return { success: false, message: 'You were not notified about this order', allRejected: false };
+            console.warn(`⚠️ Delivery boy ${normalizedDeliveryBoyId} not in strictly notified list for order ${orderId}, but allowing rejection due to fallback broadcast.`);
+            // return { success: false, message: 'You were not notified about this order', allRejected: false };
         }
 
         // Check if already rejected

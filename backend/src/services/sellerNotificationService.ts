@@ -17,16 +17,29 @@ export async function notifySellersOfOrderUpdate(
             return;
         }
 
-        // Get all unique seller IDs from order items
-        // If items are populated, we can get them directly, otherwise we need to query
-        let orderItems = order.items;
+        // Ensure we have order items
+        let orderItems = order.items || [];
 
-        // If items are just IDs, fetch the full OrderItem details to get seller IDs
-        if (orderItems.length > 0 && typeof orderItems[0] === 'string' || orderItems[0] instanceof mongoose.Types.ObjectId) {
+        // Check if we need to fetch full items from DB
+        // We need to fetch if the first item is just an ID (missing 'productName' field)
+        if (orderItems.length > 0 && !orderItems[0].productName) {
+            orderItems = await OrderItem.find({ order: order._id });
+        } else if (orderItems.length === 0 && order.total > 0) {
+            // Fallback just in case items array is empty but it's a real order
             orderItems = await OrderItem.find({ order: order._id });
         }
 
-        const sellerIds: string[] = [...new Set(orderItems.map((item: any) => item.seller.toString()))] as string[];
+        if (!orderItems || orderItems.length === 0) {
+            console.log(`No items found for order ${order.orderNumber}, skipping seller notification.`);
+            return;
+        }
+
+        const sellerIds: string[] = [...new Set<string>(orderItems.map((item: any) => {
+            if (!item.seller) return '';
+            return typeof item.seller === 'object' && item.seller._id 
+                ? item.seller._id.toString() 
+                : item.seller.toString();
+        }).filter((id: string) => id !== ''))];
 
         console.log(`🔔 Notifying ${sellerIds.length} sellers about ${type} for order ${order.orderNumber}`);
 

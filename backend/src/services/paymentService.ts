@@ -136,7 +136,8 @@ export const capturePayment = async (
     razorpayOrderId: string,
     razorpayPaymentId: string,
     razorpaySignature: string,
-    type: 'Order' | 'AdRequest' = 'Order'
+    type: 'Order' | 'AdRequest' = 'Order',
+    io?: any
 ) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -198,6 +199,19 @@ export const capturePayment = async (
                 await createPendingCommissions(id);
             } catch (commError) {
                 console.error("Failed to create pending commissions after payment:", commError);
+            }
+
+            // Notify sellers of new order after payment is captured
+            if (io) {
+                try {
+                    const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
+                    const leanOrder = await Order.findById(id).lean();
+                    if (leanOrder) {
+                        await notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER');
+                    }
+                } catch (notifyError) {
+                    console.error("Failed to notify sellers after payment:", notifyError);
+                }
             }
 
         } else {
@@ -318,7 +332,8 @@ export const processRefund = async (
  */
 export const handleWebhook = async (
     body: any,
-    signature: string
+    signature: string,
+    io?: any
 ): Promise<{ success: boolean; message: string }> => {
     try {
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -344,7 +359,7 @@ export const handleWebhook = async (
         switch (event) {
             case 'payment.captured':
                 // Payment was captured successfully
-                await handlePaymentCaptured(payload);
+                await handlePaymentCaptured(payload, io);
                 break;
 
             case 'payment.failed':
@@ -375,7 +390,7 @@ export const handleWebhook = async (
 };
 
 // Helper functions for webhook events
-const handlePaymentCaptured = async (payload: any) => {
+const handlePaymentCaptured = async (payload: any, io?: any) => {
     try {
         const razorpayPaymentId = payload.id;
         const razorpayOrderId = payload.order_id;
@@ -384,16 +399,30 @@ const handlePaymentCaptured = async (payload: any) => {
         const payment = await Payment.findOne({ razorpayOrderId });
 
         if (payment) {
+            if (payment.status === 'Completed') return; // Prevent double processing
+
             payment.status = 'Completed';
             payment.razorpayPaymentId = razorpayPaymentId;
             payment.paidAt = new Date();
             await payment.save();
 
             // Update order
-            await Order.findByIdAndUpdate(payment.order, {
+            const order = await Order.findByIdAndUpdate(payment.order, {
                 paymentStatus: 'Paid',
                 paymentId: razorpayPaymentId,
-            });
+            }, { new: true });
+
+            if (io && order) {
+                try {
+                    const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
+                    const leanOrder = await Order.findById(order._id).lean();
+                    if (leanOrder) {
+                        await notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER');
+                    }
+                } catch (notifyError) {
+                    console.error("Failed to notify sellers after payment webhook:", notifyError);
+                }
+            }
         }
     } catch (error) {
         console.error('Error handling payment captured:', error);
