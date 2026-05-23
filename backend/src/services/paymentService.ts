@@ -129,7 +129,11 @@ export const verifyPaymentSignature = (
 };
 
 /**
- * Capture payment and update order or ad request
+ * Capture payment and update order or ad request.
+ *
+ * Uses a MongoDB session/transaction when available (replica-set).
+ * Falls back to plain saves when sessions are not supported (standalone dev DB)
+ * so that the notification path is never silently skipped.
  */
 export const capturePayment = async (
     id: string,
@@ -139,11 +143,18 @@ export const capturePayment = async (
     type: 'Order' | 'AdRequest' = 'Order',
     io?: any
 ) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // ── Session/transaction setup (optional — standalone MongoDB doesn't support it) ──
+    let session: mongoose.ClientSession | null = null;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+    } catch (sessionError) {
+        console.warn('⚠️ capturePayment: MongoDB transactions not supported. Proceeding without transaction.', sessionError);
+        session = null;
+    }
 
     try {
-        // Verify signature
+        // ── 1. Verify Razorpay signature ──────────────────────────────────────────
         const isValid = verifyPaymentSignature(
             razorpayOrderId,
             razorpayPaymentId,
@@ -157,11 +168,22 @@ export const capturePayment = async (
         let amount = 0;
         let customerOrSellerId = '';
 
+        // ── 2. Handle Order payment ───────────────────────────────────────────────
         if (type === 'Order') {
-            const order = await Order.findById(id).session(session);
+            const order = session
+                ? await Order.findById(id).session(session)
+                : await Order.findById(id);
+
             if (!order) throw new Error('Order not found');
             amount = order.total;
             customerOrSellerId = order.customer.toString();
+
+            // Guard against duplicate processing
+            if (order.paymentStatus === 'Paid') {
+                console.warn(`⚠️ capturePayment: Order ${id} is already marked as Paid. Skipping.`);
+                if (session) await session.abortTransaction();
+                return { success: true, message: 'Payment already captured', data: { razorpayPaymentId, id } };
+            }
 
             // Create payment record
             const payment = new Payment({
@@ -181,46 +203,72 @@ export const capturePayment = async (
                     message: 'Payment captured successfully',
                 },
             });
-            await payment.save({ session });
 
-            // Update order
+            if (session) {
+                await payment.save({ session });
+            } else {
+                await payment.save();
+            }
+
+            // Update order: mark paid and advance status from Pending → Received
             order.paymentStatus = 'Paid';
             order.paymentId = razorpayPaymentId;
             if (order.status === 'Pending') {
-                order.status = 'Received';
+                order.status = 'Received'; // Payment confirmed — now visible to seller
             }
-            await order.save({ session });
 
-            await session.commitTransaction();
+            if (session) {
+                await order.save({ session });
+                await session.commitTransaction();
+            } else {
+                await order.save();
+            }
 
-            // Create Pending Commissions
+            console.log(`✅ capturePayment: Order ${id} marked Paid and Received.`);
+
+            // ── 3a. Create pending commissions (non-critical) ─────────────────────
             try {
                 const { createPendingCommissions } = await import('./commissionService');
-                await createPendingCommissions(id);
-            } catch (commError) {
-                console.error("Failed to create pending commissions after payment:", commError);
+                // Run in background to speed up payment capture
+                createPendingCommissions(id).catch(commError => {
+                    console.error('Failed to create pending commissions after payment:', commError);
+                });
+            } catch (importError) {
+                console.error('Failed to import commissionService:', importError);
             }
 
-            // Notify sellers of new order after payment is captured
+            // ── 3b. Notify sellers AFTER payment is confirmed ─────────────────────
+            // This is the correct trigger point: order is now Paid + Received.
             if (io) {
                 try {
                     const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
-                    const leanOrder = await Order.findById(id).lean();
-                    if (leanOrder) {
-                        await notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER');
-                    }
-                } catch (notifyError) {
-                    console.error("Failed to notify sellers after payment:", notifyError);
+                    // Run in background
+                    Order.findById(id).lean().then(leanOrder => {
+                        if (leanOrder) {
+                            return notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER').then(() => {
+                                console.log(`📤 Seller notified for paid order ${leanOrder.orderNumber}`);
+                            });
+                        }
+                    }).catch(notifyError => {
+                        console.error('Failed to notify sellers after payment:', notifyError);
+                    });
+                } catch (importError) {
+                    console.error('Failed to import sellerNotificationService:', importError);
                 }
+            } else {
+                console.warn('⚠️ capturePayment: io not available — seller socket notification skipped.');
             }
 
+        // ── Handle AdRequest payment ──────────────────────────────────────────────
         } else {
-            const adReq = await SellerAdRequest.findById(id).session(session);
+            const adReq = session
+                ? await SellerAdRequest.findById(id).session(session)
+                : await SellerAdRequest.findById(id);
+
             if (!adReq) throw new Error('Ad Request not found');
             amount = adReq.adPrice || adReq.requestedPrice || 0;
             customerOrSellerId = adReq.sellerId.toString();
 
-            // Create payment record
             const payment = new Payment({
                 adRequest: id,
                 seller: customerOrSellerId,
@@ -238,39 +286,53 @@ export const capturePayment = async (
                     message: 'Payment captured successfully',
                 },
             });
-            await payment.save({ session });
 
-            // Update ad request
+            if (session) {
+                await payment.save({ session });
+            } else {
+                await payment.save();
+            }
+
             adReq.paymentStatus = 'Paid';
             adReq.paymentReference = razorpayPaymentId;
             adReq.paidAt = new Date();
-            // If it was already approved, maybe it can go to PaymentVerified or Live?
-            // Usually it goes to PaymentVerified for admin to finally check.
             if (adReq.status === 'Approved' || adReq.status === 'Pending') {
                 adReq.status = 'PaymentVerified';
             }
-            await adReq.save({ session });
 
-            await session.commitTransaction();
+            if (session) {
+                await adReq.save({ session });
+                await session.commitTransaction();
+            } else {
+                await adReq.save();
+            }
         }
 
         return {
             success: true,
             message: 'Payment captured successfully',
-            data: {
-                razorpayPaymentId,
-                id,
-            },
+            data: { razorpayPaymentId, id },
         };
+
     } catch (error: any) {
-        await session.abortTransaction();
+        if (session) {
+            try {
+                await session.abortTransaction();
+            } catch (abortErr) {
+                console.error('Error aborting transaction in capturePayment:', abortErr);
+            }
+        }
         console.error('Error capturing payment:', error);
         return {
             success: false,
             message: error.message || 'Failed to capture payment',
         };
     } finally {
-        session.endSession();
+        if (session) {
+            try {
+                session.endSession();
+            } catch (_) { /* ignore */ }
+        }
     }
 };
 
@@ -406,11 +468,29 @@ const handlePaymentCaptured = async (payload: any, io?: any) => {
             payment.paidAt = new Date();
             await payment.save();
 
-            // Update order
-            const order = await Order.findByIdAndUpdate(payment.order, {
-                paymentStatus: 'Paid',
-                paymentId: razorpayPaymentId,
-            }, { new: true });
+            // Update order: mark paid AND advance Pending → Received
+            // (Webhook fires after capturePayment in most cases, so the $cond
+            //  only upgrades status if it is still Pending — avoids downgrading.)
+            const order = await Order.findOneAndUpdate(
+                { _id: payment.order },
+                [
+                    {
+                        $set: {
+                            paymentStatus: 'Paid',
+                            paymentId: razorpayPaymentId,
+                            // Only promote 'Pending' → 'Received'; leave other statuses alone
+                            status: {
+                                $cond: {
+                                    if: { $eq: ['$status', 'Pending'] },
+                                    then: 'Received',
+                                    else: '$status',
+                                },
+                            },
+                        },
+                    },
+                ],
+                { new: true }
+            );
 
             if (io && order) {
                 try {
@@ -418,9 +498,10 @@ const handlePaymentCaptured = async (payload: any, io?: any) => {
                     const leanOrder = await Order.findById(order._id).lean();
                     if (leanOrder) {
                         await notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER');
+                        console.log(`📤 Webhook: seller notified for paid order ${leanOrder.orderNumber}`);
                     }
                 } catch (notifyError) {
-                    console.error("Failed to notify sellers after payment webhook:", notifyError);
+                    console.error('Failed to notify sellers after payment webhook:', notifyError);
                 }
             }
         }

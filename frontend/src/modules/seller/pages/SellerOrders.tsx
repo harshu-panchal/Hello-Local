@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getOrders, updateOrderStatus, Order, GetOrdersParams } from '../../../services/api/orderService';
-
+import { useSellerSocketContext } from '../../../context/SellerSocketContext';
 
 type SortField = 'orderId' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -10,10 +10,12 @@ export default function SellerOrders() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [totalOrders, setTotalOrders] = useState(0);         // ← true total from API
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [newOrderBadge, setNewOrderBadge] = useState(false); // ← blinking new-order indicator
   const [dateRange, setDateRange] = useState('');
-  // Pre-fill status from URL query param (e.g. ?status=Delivered from dashboard card click)
   const [status, setStatus] = useState(() => searchParams.get('status') || 'All Status');
   const [entriesPerPage, setEntriesPerPage] = useState('10');
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,53 +24,76 @@ export default function SellerOrders() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Fetch orders from API
-  useEffect(() => {
-    const fetchOrders = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const params: GetOrdersParams = {
-          page: currentPage,
-          limit: parseInt(entriesPerPage),
-          sortBy: sortField || 'orderDate',
-          sortOrder: sortDirection,
-        };
+  // Socket context — shared with SellerLayout (single connection)
+  const { lastNotification } = useSellerSocketContext();
 
-        // Parse date range
-        if (dateRange) {
-          const [startDate, endDate] = dateRange.split(' - ');
-          if (startDate && endDate) {
-            params.dateFrom = startDate;
-            params.dateTo = endDate;
-          }
-        }
+  // ─── Fetch orders ──────────────────────────────────────────────────────────
 
-        // Add status filter
-        if (status !== 'All Status') {
-          params.status = status;
-        }
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params: GetOrdersParams = {
+        page: currentPage,
+        limit: parseInt(entriesPerPage),
+        sortBy: sortField || 'orderDate',
+        sortOrder: sortDirection,
+      };
 
-        // Add search
-        if (searchQuery) {
-          params.search = searchQuery;
+      if (dateRange) {
+        const [startDate, endDate] = dateRange.split(' - ');
+        if (startDate && endDate) {
+          params.dateFrom = startDate;
+          params.dateTo = endDate;
         }
-
-        const response = await getOrders(params);
-        if (response.success && response.data) {
-          setOrders(response.data);
-        } else {
-          setError(response.message || 'Failed to fetch orders');
-        }
-      } catch (err: any) {
-        setError(err.response?.data?.message || err.message || 'Failed to fetch orders');
-      } finally {
-        setLoading(false);
       }
-    };
+      if (status !== 'All Status') params.status = status;
+      if (searchQuery) params.search = searchQuery;
 
-    fetchOrders();
+      const response = await getOrders(params);
+      if (response.success && response.data) {
+        setOrders(response.data);
+        // Use real totals from API — NOT orders.length
+        setTotalOrders(response.pagination?.total ?? response.data.length);
+        setTotalPages(response.pagination?.pages ?? Math.ceil((response.pagination?.total ?? response.data.length) / parseInt(entriesPerPage)));
+      } else {
+        setError(response.message || 'Failed to fetch orders');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to fetch orders');
+    } finally {
+      setLoading(false);
+    }
   }, [dateRange, status, entriesPerPage, searchQuery, currentPage, sortField, sortDirection]);
+
+  // Initial fetch + re-fetch on filter/page change
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // ─── Real-time: new order via socket ──────────────────────────────────────
+  // When seller gets a NEW_ORDER notification, refresh the orders list so the
+  // new order appears immediately without a manual page reload.
+  const prevNotificationRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!lastNotification) return;
+    if (lastNotification.type !== 'NEW_ORDER') return;
+    // Avoid re-running for the same notification reference
+    if (prevNotificationRef.current === lastNotification.orderId) return;
+    prevNotificationRef.current = lastNotification.orderId;
+
+    // Show badge if not on page 1 (so user knows there's a new order)
+    if (currentPage !== 1) {
+      setNewOrderBadge(true);
+    } else {
+      // On page 1: go back to top and re-fetch
+      setCurrentPage(1);
+      fetchOrders();
+    }
+  }, [lastNotification]);
+
+  // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleClearDate = () => {
     setDateRange('');
@@ -82,6 +107,7 @@ export default function SellerOrders() {
       setSortField(field);
       setSortDirection('asc');
     }
+    setCurrentPage(1);
   };
 
   const handleQuickStatus = async (
@@ -108,148 +134,127 @@ export default function SellerOrders() {
   };
 
   const handleExport = () => {
-    // Create CSV content
     const headers = ['Order ID', 'Delivery Date', 'Order Date', 'Status', 'Amount'];
     const csvContent = [
       headers.join(','),
       ...orders.map(order =>
         [order.orderId, order.deliveryDate, order.orderDate, order.status, order.amount].join(',')
-      )
+      ),
     ].join('\n');
-
-    // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `orders_${new Date().toISOString().split('T')[0]}.csv`);
+    link.href = URL.createObjectURL(blob);
+    link.download = `orders_${new Date().toISOString().split('T')[0]}.csv`;
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Pagination (client-side for now, can be moved to backend later)
-  const entriesPerPageNum = parseInt(entriesPerPage);
-  const totalPages = Math.ceil(orders.length / entriesPerPageNum);
-  const startIndex = (currentPage - 1) * entriesPerPageNum;
-  const endIndex = startIndex + entriesPerPageNum;
-  const paginatedOrders = orders.slice(startIndex, endIndex);
-
-  const handlePreviousPage = () => {
-    setCurrentPage(prev => Math.max(1, prev - 1));
-  };
-
-  const handleNextPage = () => {
-    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  const handleJumpToNewOrder = () => {
+    setNewOrderBadge(false);
+    setCurrentPage(1);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Received':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Accepted':
-        return 'bg-blue-100 text-blue-800';
-      case 'Processed':
-        return 'bg-indigo-100 text-indigo-800';
-      case 'On the way':
-        return 'bg-purple-100 text-purple-800';
-      case 'Delivered':
-        return 'bg-green-100 text-green-800';
-      case 'Rejected':
-        return 'bg-red-100 text-red-800';
-      case 'Cancelled':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-neutral-100 text-neutral-800';
+      case 'Received':    return 'bg-yellow-100 text-yellow-800';
+      case 'Accepted':    return 'bg-blue-100 text-blue-800';
+      case 'Processed':   return 'bg-indigo-100 text-indigo-800';
+      case 'On the way':  return 'bg-purple-100 text-purple-800';
+      case 'Delivered':   return 'bg-green-100 text-green-800';
+      case 'Rejected':    return 'bg-red-100 text-red-800';
+      case 'Cancelled':   return 'bg-orange-100 text-orange-800';
+      default:            return 'bg-neutral-100 text-neutral-800';
     }
   };
 
+  const sortIcon = (field: SortField) => {
+    if (sortField === field && sortDirection === 'asc')  return 'M7 14L12 9L17 14';
+    if (sortField === field && sortDirection === 'desc') return 'M7 10L12 15L17 10';
+    return 'M7 10L12 5L17 10M7 14L12 19L17 14';
+  };
+
+  // Pagination display values (API already paginates — orders IS the current page)
+  const entriesPerPageNum = parseInt(entriesPerPage);
+  const startEntry = totalOrders === 0 ? 0 : (currentPage - 1) * entriesPerPageNum + 1;
+  const endEntry   = Math.min(currentPage * entriesPerPageNum, totalOrders);
+
   return (
     <div className="space-y-4 sm:space-y-6 -mx-3 sm:-mx-4 md:-mx-6 -mt-3 sm:-mt-4 md:-mt-6">
-      {/* Header Section */}
+
+      {/* ── New-order badge banner ── */}
+      {newOrderBadge && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-pink-700 text-white px-5 py-3 rounded-xl shadow-lg animate-bounce">
+          <span className="text-lg">📦</span>
+          <span className="font-semibold">New order received!</span>
+          <button
+            onClick={handleJumpToNewOrder}
+            className="ml-2 underline text-pink-100 hover:text-white text-sm"
+          >
+            View
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="bg-white border-b border-neutral-200 px-3 sm:px-4 md:px-6 py-3 sm:py-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-          {/* Page Title */}
           <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Orders List</h1>
-
-          {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-xs sm:text-sm">
-            <Link to="/seller" className="text-blue-600 hover:text-blue-700">
-              Home
-            </Link>
+            <Link to="/seller" className="text-blue-600 hover:text-blue-700">Home</Link>
             <span className="text-neutral-500">/</span>
             <span className="text-neutral-700">Orders List</span>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main content */}
       <div className="px-3 sm:px-4 md:px-6">
-        {/* White Card Container */}
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          {/* Green Banner */}
-          <div className="bg-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-t-lg">
+
+          {/* Banner */}
+          <div className="bg-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-t-lg flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-semibold">View Order List</h2>
+            {/* Live-connection dot */}
+            <span className="flex items-center gap-1.5 text-xs opacity-80">
+              <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse inline-block" />
+              Live
+            </span>
           </div>
 
-          {/* Filter and Action Bar */}
+          {/* Filters */}
           <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-neutral-200">
             <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
-              {/* Date Range Filter */}
+
+              {/* Date range */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">
-                  From - To Order Date
-                </label>
+                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">From - To Order Date</label>
                 <div className="flex items-center gap-2 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 w-full sm:w-auto">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="text-neutral-500 flex-shrink-0"
-                  >
-                    <path
-                      d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-neutral-500 flex-shrink-0">
+                    <path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   <input
                     type="text"
                     value={dateRange}
-                    onChange={(e) => {
-                      setDateRange(e.target.value);
-                      setCurrentPage(1);
-                    }}
+                    onChange={e => { setDateRange(e.target.value); setCurrentPage(1); }}
                     className="flex-1 sm:w-48 text-xs sm:text-sm text-neutral-600 bg-transparent focus:outline-none placeholder:text-neutral-400"
                     placeholder="MM/DD/YYYY - MM/DD/YYYY"
                   />
                   {dateRange && (
-                    <button
-                      onClick={handleClearDate}
-                      className="ml-2 px-2 py-1 text-xs font-medium text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded transition-colors flex-shrink-0"
-                    >
+                    <button onClick={handleClearDate} className="ml-2 px-2 py-1 text-xs font-medium text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded transition-colors flex-shrink-0">
                       Clear
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Status Filter */}
+              {/* Status */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">
-                  Status
-                </label>
+                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">Status</label>
                 <select
                   value={status}
-                  onChange={(e) => {
-                    setStatus(e.target.value);
-                    setCurrentPage(1);
-                  }}
+                  onChange={e => { setStatus(e.target.value); setCurrentPage(1); }}
                   className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option>All Status</option>
@@ -263,14 +268,11 @@ export default function SellerOrders() {
                 </select>
               </div>
 
-              {/* Entries Per Page */}
+              {/* Entries per page */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
                 <select
                   value={entriesPerPage}
-                  onChange={(e) => {
-                    setEntriesPerPage(e.target.value);
-                    setCurrentPage(1);
-                  }}
+                  onChange={e => { setEntriesPerPage(e.target.value); setCurrentPage(1); }}
                   className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option>10</option>
@@ -280,75 +282,42 @@ export default function SellerOrders() {
                 </select>
               </div>
 
-              {/* Search Bar */}
+              {/* Search */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto sm:flex-1">
-                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">
-                  Search:
-                </label>
+                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">Search:</label>
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
+                  onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                   className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                   placeholder="Search by Order ID, Status, or Amount"
                 />
               </div>
 
-              {/* Export Button */}
+              {/* Export */}
               <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                 <button
                   onClick={handleExport}
                   className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="flex-shrink-0"
-                  >
-                    <path
-                      d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15M7 10L12 15M12 15L17 10M12 15V3"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15M7 10L12 15M12 15L17 10M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   <span className="hidden sm:inline">Export</span>
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="hidden sm:block flex-shrink-0"
-                  >
-                    <path
-                      d="M6 9L12 15L18 9"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Loading and Error States */}
+          {/* Loading / Error */}
           {loading && (
             <div className="flex items-center justify-center p-8">
-              <div className="text-neutral-500">Loading orders...</div>
+              <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mr-3" />
+              <span className="text-neutral-500 text-sm">Loading orders...</span>
             </div>
           )}
           {error && !loading && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg m-4">
+            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg m-4 text-sm">
               {error}
             </div>
           )}
@@ -359,175 +328,34 @@ export default function SellerOrders() {
               <table className="w-full min-w-[600px]">
                 <thead className="bg-neutral-50 border-b border-neutral-200">
                   <tr>
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort('orderId')}
-                        className="flex items-center gap-2 hover:text-neutral-900 transition-colors"
-                      >
-                        O. Id
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'orderId' ? 'text-pink-600' : 'text-neutral-400'
-                            }`}
-                        >
-                          <path
-                            d={sortField === 'orderId' && sortDirection === 'asc'
-                              ? "M7 14L12 9L17 14"
-                              : sortField === 'orderId' && sortDirection === 'desc'
-                                ? "M7 10L12 15L17 10"
-                                : "M7 10L12 5L17 10M7 14L12 19L17 14"}
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    </th>
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort('deliveryDate')}
-                        className="flex items-center gap-2 hover:text-neutral-900 transition-colors"
-                      >
-                        D. Date
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'deliveryDate' ? 'text-pink-600' : 'text-neutral-400'
-                            }`}
-                        >
-                          <path
-                            d={sortField === 'deliveryDate' && sortDirection === 'asc'
-                              ? "M7 14L12 9L17 14"
-                              : sortField === 'deliveryDate' && sortDirection === 'desc'
-                                ? "M7 10L12 15L17 10"
-                                : "M7 10L12 5L17 10M7 14L12 19L17 14"}
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    </th>
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort('orderDate')}
-                        className="flex items-center gap-2 hover:text-neutral-900 transition-colors"
-                      >
-                        O. Date
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'orderDate' ? 'text-pink-600' : 'text-neutral-400'
-                            }`}
-                        >
-                          <path
-                            d={sortField === 'orderDate' && sortDirection === 'asc'
-                              ? "M7 14L12 9L17 14"
-                              : sortField === 'orderDate' && sortDirection === 'desc'
-                                ? "M7 10L12 15L17 10"
-                                : "M7 10L12 5L17 10M7 14L12 19L17 14"}
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    </th>
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort('status')}
-                        className="flex items-center gap-2 hover:text-neutral-900 transition-colors"
-                      >
-                        Status
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'status' ? 'text-pink-600' : 'text-neutral-400'
-                            }`}
-                        >
-                          <path
-                            d={sortField === 'status' && sortDirection === 'asc'
-                              ? "M7 14L12 9L17 14"
-                              : sortField === 'status' && sortDirection === 'desc'
-                                ? "M7 10L12 15L17 10"
-                                : "M7 10L12 5L17 10M7 14L12 19L17 14"}
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    </th>
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort('amount')}
-                        className="flex items-center gap-2 hover:text-neutral-900 transition-colors"
-                      >
-                        Amount
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className={`cursor-pointer ${sortField === 'amount' ? 'text-pink-600' : 'text-neutral-400'
-                            }`}
-                        >
-                          <path
-                            d={sortField === 'amount' && sortDirection === 'asc'
-                              ? "M7 14L12 9L17 14"
-                              : sortField === 'amount' && sortDirection === 'desc'
-                                ? "M7 10L12 15L17 10"
-                                : "M7 10L12 5L17 10M7 14L12 19L17 14"}
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    </th>
+                    {(['orderId', 'deliveryDate', 'orderDate', 'status', 'amount'] as SortField[]).map((field) => (
+                      <th key={field} className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                        <button onClick={() => handleSort(field)} className="flex items-center gap-2 hover:text-neutral-900 transition-colors">
+                          {field === 'orderId' ? 'O. Id' : field === 'deliveryDate' ? 'D. Date' : field === 'orderDate' ? 'O. Date' : field.charAt(0).toUpperCase() + field.slice(1)}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`cursor-pointer ${sortField === field ? 'text-pink-600' : 'text-neutral-400'}`}>
+                            <path d={sortIcon(field)} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      </th>
+                    ))}
                     <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
                       Action
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-neutral-200">
-                  {paginatedOrders.length === 0 ? (
+                  {orders.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-3 sm:px-4 md:px-6 py-8 sm:py-12 text-center text-xs sm:text-sm text-neutral-500">
                         No data available in table
                       </td>
                     </tr>
                   ) : (
-                    paginatedOrders.map((order) => (
+                    orders.map((order) => (
                       <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">
-                          {order.orderId}
-                        </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">
-                          {order.deliveryDate}
-                        </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">
-                          {order.orderDate}
-                        </td>
+                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">{order.orderId}</td>
+                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.deliveryDate}</td>
+                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.orderDate}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
                             {order.status}
@@ -538,7 +366,7 @@ export default function SellerOrders() {
                         </td>
                         <td className="px-3 sm:px-4 md:px-6 py-3">
                           <div className="flex items-center gap-1.5">
-                            {/* View — always visible */}
+                            {/* View */}
                             <button
                               onClick={() => navigate(`/seller/orders/${order.id}`)}
                               title="View order details"
@@ -550,7 +378,7 @@ export default function SellerOrders() {
                               </svg>
                             </button>
 
-                            {/* Accept — only for Received orders */}
+                            {/* Accept – Received orders only */}
                             {order.status === 'Received' && (
                               <button
                                 onClick={() => handleQuickStatus(order.id, 'Accepted', 'Accepted')}
@@ -564,7 +392,7 @@ export default function SellerOrders() {
                               </button>
                             )}
 
-                            {/* Reject — only for Received orders */}
+                            {/* Reject – Received orders only */}
                             {order.status === 'Received' && (
                               <button
                                 onClick={() => handleQuickStatus(order.id, 'Rejected', 'Rejected')}
@@ -578,7 +406,7 @@ export default function SellerOrders() {
                               </button>
                             )}
 
-                            {/* Mark as Processed — only for Accepted orders */}
+                            {/* Processed – Accepted orders only */}
                             {order.status === 'Accepted' && (
                               <button
                                 onClick={() => handleQuickStatus(order.id, 'Processed', 'Processed')}
@@ -592,7 +420,7 @@ export default function SellerOrders() {
                               </button>
                             )}
 
-                            {/* Loading spinner */}
+                            {/* Spinner while updating */}
                             {updatingId === order.id && (
                               <div className="w-4 h-4 border-2 border-pink-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                             )}
@@ -606,64 +434,40 @@ export default function SellerOrders() {
             </div>
           )}
 
-          {/* Pagination */}
+          {/* Pagination — uses real API totals */}
           <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
             <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {orders.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, orders.length)} of {orders.length} entries
+              Showing {startEntry} to {endEntry} of {totalOrders} entries
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={handlePreviousPage}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className={`p-2 border border-neutral-300 rounded transition-colors ${currentPage === 1
-                  ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                  : 'text-neutral-700 hover:bg-neutral-50'
-                  }`}
+                className={`p-2 border border-neutral-300 rounded transition-colors ${currentPage === 1 ? 'text-neutral-400 cursor-not-allowed bg-neutral-50' : 'text-neutral-700 hover:bg-neutral-50'}`}
                 aria-label="Previous page"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M15 18L9 12L15 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
+
+              <span className="text-xs text-neutral-600 px-2">
+                {currentPage} / {totalPages}
+              </span>
+
               <button
-                onClick={handleNextPage}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
-                className={`p-2 border border-neutral-300 rounded transition-colors ${currentPage >= totalPages
-                  ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                  : 'text-neutral-700 hover:bg-neutral-50'
-                  }`}
+                className={`p-2 border border-neutral-300 rounded transition-colors ${currentPage >= totalPages ? 'text-neutral-400 cursor-not-allowed bg-neutral-50' : 'text-neutral-700 hover:bg-neutral-50'}`}
                 aria-label="Next page"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M9 18L15 12L9 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -671,14 +475,9 @@ export default function SellerOrders() {
       <footer className="px-3 sm:px-4 md:px-6 text-center py-4 sm:py-6">
         <p className="text-xs sm:text-sm text-neutral-600">
           Copyright © 2025. Developed By{' '}
-          <Link to="/seller" className="text-blue-600 hover:text-blue-700">
-            Hello Local
-          </Link>
+          <Link to="/seller" className="text-blue-600 hover:text-blue-700">Hello Local</Link>
         </p>
       </footer>
     </div>
   );
 }
-
-
-

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { OrderNotificationData } from '../../../services/api/delivery/deliveryOrderNotificationService';
 
 interface OrderNotificationCardProps {
@@ -14,216 +14,165 @@ export default function OrderNotificationCard({
     onReject,
 }: OrderNotificationCardProps) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    /**
+     * Tracks whether a pending play() Promise is in flight.
+     * We must await/cancel it before calling pause() to avoid the
+     * "play interrupted by pause" AbortError in browsers.
+     */
+    const playPromiseRef = useRef<Promise<void> | null>(null);
+    const isAudioStoppedRef = useRef(false); // once stopped, never restart
+
     const [isProcessing, setIsProcessing] = useState(false);
-    const [hasUserInteracted, setHasUserInteracted] = useState(false);
     const [audioError, setAudioError] = useState<string | null>(null);
+
     const vibrationPatternRef = useRef<number[]>([200, 100, 200, 100, 200]);
 
-    // Vibrate on notification (if supported)
     const vibrate = useCallback((pattern?: number | number[]) => {
         if ('vibrate' in navigator) {
             try {
                 navigator.vibrate(pattern || vibrationPatternRef.current);
-            } catch (error) {
-                console.log('Vibration not supported or blocked:', error);
-            }
+            } catch { /* ignore */ }
         }
     }, []);
 
-    // Initialize audio with better error handling
+    /** Safely pause the audio, handling the play-promise race. */
+    const stopAudio = useCallback(() => {
+        isAudioStoppedRef.current = true;
+        if ('vibrate' in navigator) navigator.vibrate(0);
+
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        if (playPromiseRef.current) {
+            // Wait for in-flight play() to resolve, then pause
+            playPromiseRef.current
+                .then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                })
+                .catch(() => {
+                    // play() was already rejected/aborted — nothing to do
+                });
+            playPromiseRef.current = null;
+        } else {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+    }, []);
+
+    // ── Audio initialisation ──────────────────────────────────────────────────
     useEffect(() => {
+        isAudioStoppedRef.current = false;
         const audio = new Audio('/assets/sound/delivery-alert.mp3');
         audio.loop = true;
         audio.volume = 0.8;
 
-        // Set up error handlers
-        const handleAudioError = (error: Event) => {
-            console.error('Audio error:', error);
-            setAudioError('Audio file could not be loaded');
-        };
-
-        const handleAudioAbort = () => {
-            console.log('Audio playback aborted');
-        };
-
-        const handleAudioStalled = () => {
-            console.log('Audio playback stalled');
-        };
-
-        audio.addEventListener('error', handleAudioError);
-        audio.addEventListener('abort', handleAudioAbort);
-        audio.addEventListener('stalled', handleAudioStalled);
-
         audioRef.current = audio;
 
-        // Vibrate when notification appears
-        vibrate();
-
-        // Try to play audio with better permission handling
-        const playAudio = async () => {
-            try {
-                // Check if audio is ready
-                if (audio.readyState >= 2) {
-                    await audio.play();
-                    setHasUserInteracted(true);
+        const startPlayback = () => {
+            if (isAudioStoppedRef.current) return;
+            const p = audio.play();
+            if (p !== undefined) {
+                playPromiseRef.current = p;
+                p.then(() => {
+                    playPromiseRef.current = null;
                     setAudioError(null);
-                } else {
-                    // Wait for audio to load
-                    audio.addEventListener('canplaythrough', async () => {
-                        try {
-                            await audio.play();
-                            setHasUserInteracted(true);
-                            setAudioError(null);
-                        } catch (playError: any) {
-                            console.log('Audio autoplay blocked:', playError);
-                            if (playError.name === 'NotAllowedError') {
-                                setAudioError('Tap to enable sound');
-                            } else if (playError.name === 'NotSupportedError') {
-                                setAudioError('Audio not supported');
-                            }
-                        }
-                    }, { once: true });
-
-                    // Load the audio
-                    audio.load();
-                }
-            } catch (error: any) {
-                console.log('Audio autoplay blocked:', error);
-                if (error.name === 'NotAllowedError') {
-                    setAudioError('Tap to enable sound');
-                } else if (error.name === 'NotSupportedError') {
-                    setAudioError('Audio not supported');
-                } else {
-                    setAudioError('Audio playback failed');
-                }
+                }).catch((err: DOMException) => {
+                    playPromiseRef.current = null;
+                    if (err.name === 'NotAllowedError') {
+                        setAudioError('Tap to enable sound');
+                    } else if (err.name !== 'AbortError') {
+                        // AbortError = we paused before play finished; not an error
+                        console.log('Audio playback error:', err.name);
+                    }
+                });
             }
         };
 
-        playAudio();
+        if (audio.readyState >= 2) {
+            startPlayback();
+        } else {
+            audio.addEventListener('canplaythrough', startPlayback, { once: true });
+            audio.load();
+        }
+
+        // Start vibration immediately
+        vibrate();
 
         return () => {
-            audio.removeEventListener('error', handleAudioError);
-            audio.removeEventListener('abort', handleAudioAbort);
-            audio.removeEventListener('stalled', handleAudioStalled);
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
+            // Cleanup: always stop audio when card unmounts (exit animation complete)
+            isAudioStoppedRef.current = true;
+            if (playPromiseRef.current) {
+                playPromiseRef.current.then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }).catch(() => {});
+            } else {
+                audio.pause();
+                audio.currentTime = 0;
             }
+            audioRef.current = null;
+            if ('vibrate' in navigator) navigator.vibrate(0);
         };
     }, [vibrate]);
 
-    // Play audio on user interaction with better error handling
-    const handleUserInteraction = async () => {
-        if (!hasUserInteracted && audioRef.current) {
-            try {
-                // Ensure audio is loaded
-                if (audioRef.current.readyState < 2) {
-                    audioRef.current.load();
-                }
-                await audioRef.current.play();
-                setHasUserInteracted(true);
-                setAudioError(null);
-            } catch (error: any) {
-                console.error('Failed to play audio:', error);
-                if (error.name === 'NotAllowedError') {
-                    setAudioError('Audio permission denied');
-                } else if (error.name === 'NotSupportedError') {
-                    setAudioError('Audio not supported on this device');
-                } else {
-                    setAudioError('Failed to play audio');
-                }
-            }
-        }
-    };
+    // ── User interaction: unlock audio on first tap (autoplay policy) ─────────
+    const handleUserInteraction = useCallback(() => {
+        if (isAudioStoppedRef.current) return;
+        const audio = audioRef.current;
+        if (!audio || !audio.paused) return; // already playing
 
-    // Stop audio when component unmounts or notification is dismissed
-    useEffect(() => {
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current.currentTime = 0;
-            }
-        };
+        const p = audio.play();
+        if (p !== undefined) {
+            playPromiseRef.current = p;
+            p.then(() => {
+                playPromiseRef.current = null;
+                setAudioError(null);
+            }).catch((err: DOMException) => {
+                playPromiseRef.current = null;
+                if (err.name === 'NotAllowedError') {
+                    setAudioError('Audio permission denied');
+                }
+            });
+        }
     }, []);
 
+    // ── Accept ────────────────────────────────────────────────────────────────
     const handleAccept = async () => {
         if (isProcessing) return;
-
         setIsProcessing(true);
-        // Stop audio and vibration
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-        // Stop any ongoing vibration
-        if ('vibrate' in navigator) {
-            navigator.vibrate(0);
-        }
 
+        // Stop sound & vibration immediately — before any async work
+        stopAudio();
+
+        // The hook handles dismiss + navigation for both success AND failure,
+        // so we don't need to do anything else here. Just await the result.
         try {
-            const result = await onAccept(notification.orderId);
-            if (!result.success) {
-                // Suppress alert for "Order notification not found" as it's handled by the hook clearing the notification
-                if (result.message !== 'Order notification not found') {
-                    alert(result.message || 'Failed to accept order');
-                }
-                setIsProcessing(false);
-                // Resume audio if accept failed
-                if (audioRef.current && hasUserInteracted) {
-                    audioRef.current.play().catch(console.error);
-                    vibrate(); // Resume vibration
-                }
-            }
-        } catch (error) {
-            console.error('Error accepting order:', error);
-            alert('Failed to accept order');
-            setIsProcessing(false);
-            // Resume audio if accept failed
-            if (audioRef.current && hasUserInteracted) {
-                audioRef.current.play().catch(console.error);
-                vibrate(); // Resume vibration
-            }
+            await onAccept(notification.orderId);
+        } catch (err) {
+            console.error('Error in onAccept:', err);
         }
+        // Note: isProcessing is intentionally left true because the card is
+        // being dismissed by the hook. Setting it false on an unmounting
+        // component would cause a React warning.
     };
 
+    // ── Reject ────────────────────────────────────────────────────────────────
     const handleReject = async () => {
         if (isProcessing) return;
-
         setIsProcessing(true);
-        // Stop audio and vibration
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-        // Stop any ongoing vibration
-        if ('vibrate' in navigator) {
-            navigator.vibrate(0);
-        }
 
+        // Stop sound & vibration immediately
+        stopAudio();
+
+        // The hook dismisses the card immediately (optimistic), then fires
+        // the socket call in the background. We just need to call it.
         try {
-            const result = await onReject(notification.orderId);
-            if (!result.success) {
-                // Suppress alert for "Order notification not found"
-                if (result.message !== 'Order notification not found') {
-                    alert(result.message || 'Failed to reject order');
-                }
-                // Resume audio if reject failed
-                if (audioRef.current && hasUserInteracted) {
-                    audioRef.current.play().catch(console.error);
-                    vibrate(); // Resume vibration
-                }
-            }
-        } catch (error) {
-            console.error('Error rejecting order:', error);
-            alert('Failed to reject order');
-            // Resume audio if reject failed
-            if (audioRef.current && hasUserInteracted) {
-                audioRef.current.play().catch(console.error);
-                vibrate(); // Resume vibration
-            }
-        } finally {
-            setIsProcessing(false);
+            await onReject(notification.orderId);
+        } catch (err) {
+            console.error('Error in onReject:', err);
         }
+        // Same as above — don't reset isProcessing; card is unmounting
     };
 
     const formatAddress = () => {
@@ -241,13 +190,10 @@ export default function OrderNotificationCard({
             onClick={handleUserInteraction}
             onMouseEnter={handleUserInteraction}
             onTouchStart={handleUserInteraction}
-            style={{
-                // Support for safe area insets (iOS notches, etc.)
-                paddingTop: 'env(safe-area-inset-top, 0)',
-            }}
+            style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}
         >
             <div className="bg-white rounded-xl shadow-2xl border-2 border-teal-500 p-4 sm:p-6">
-                {/* Header with pulsing indicator */}
+                {/* Header */}
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                     <div className="flex items-center gap-3">
                         <div className="relative">
@@ -256,9 +202,9 @@ export default function OrderNotificationCard({
                         </div>
                         <h3 className="text-base sm:text-lg font-bold text-neutral-900">New Order!</h3>
                     </div>
-                    {(audioError || !hasUserInteracted) && (
+                    {audioError && (
                         <div className="text-xs text-neutral-500 bg-neutral-100 px-2 py-1 rounded whitespace-nowrap">
-                            {audioError || 'Tap to enable sound'}
+                            {audioError}
                         </div>
                     )}
                 </div>
@@ -286,7 +232,7 @@ export default function OrderNotificationCard({
                         <p className="text-lg sm:text-xl font-bold text-teal-600">₹{notification.total.toFixed(2)}</p>
                     </div>
 
-                    {/* Delivery Boy Earning - Highlighted Section */}
+                    {/* Earning */}
                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3 -mx-1">
                         <p className="text-xs sm:text-sm text-green-700 font-medium flex items-center gap-1">
                             <span className="text-green-600">💰</span> Your Earning
@@ -300,24 +246,23 @@ export default function OrderNotificationCard({
                 {/* Action Buttons */}
                 <div className="flex gap-3">
                     <button
-                        onClick={handleReject}
+                        onClick={(e) => { e.stopPropagation(); handleReject(); }}
                         disabled={isProcessing}
                         className="flex-1 px-4 py-3 sm:py-3 bg-neutral-100 active:bg-neutral-200 text-neutral-700 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
-                        {isProcessing ? 'Processing...' : 'Reject'}
+                        {isProcessing ? 'Processing…' : 'Reject'}
                     </button>
                     <button
-                        onClick={handleAccept}
+                        onClick={(e) => { e.stopPropagation(); handleAccept(); }}
                         disabled={isProcessing}
                         className="flex-1 px-4 py-3 sm:py-3 bg-teal-600 active:bg-teal-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
-                        {isProcessing ? 'Processing...' : 'Accept'}
+                        {isProcessing ? 'Processing…' : 'Accept'}
                     </button>
                 </div>
             </div>
         </motion.div>
     );
 }
-

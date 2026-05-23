@@ -13,7 +13,7 @@ import { sendNotificationToUser } from './firebaseAdmin';
  * Uses the same logic as commission distribution but provides an estimate
  * before the order is assigned
  */
-async function calculateEstimatedDeliveryBoyEarning(order: any): Promise<number> {
+export async function calculateEstimatedDeliveryBoyEarning(order: any): Promise<number> {
     try {
         // @ts-ignore - getSettings is a static method
         const settings = await AppSettings.getSettings();
@@ -41,6 +41,54 @@ async function calculateEstimatedDeliveryBoyEarning(order: any): Promise<number>
         console.error('Error calculating estimated delivery boy earning:', error);
         // Return a safe default - 5% of subtotal
         return Math.round((order.subtotal * 5) / 100 * 100) / 100;
+    }
+}
+
+/**
+ * Persist delivery notifications to the database.
+ * This ensures delivery boys who are OFFLINE still see the notification
+ * when they reconnect — the GET /delivery/notifications API will return it.
+ */
+async function persistDeliveryNotifications(
+    deliveryBoyIds: mongoose.Types.ObjectId[],
+    order: any,
+    estimatedEarning: number
+): Promise<void> {
+    if (!deliveryBoyIds || deliveryBoyIds.length === 0) return;
+
+    try {
+        const { default: Notification } = await import('../models/Notification');
+
+        // Find recipients who already have a notification for this order (avoid duplicates)
+        const existing = await Notification.find({
+            link: order._id.toString(),
+            recipientType: 'Delivery',
+            type: 'Order',
+        }).distinct('recipientId');
+
+        const existingSet = new Set(existing.map((id: any) => id.toString()));
+
+        const toCreate = deliveryBoyIds
+            .filter(id => !existingSet.has(id.toString()))
+            .map(id => ({
+                recipientType: 'Delivery' as const,
+                recipientId: id,
+                title: '📦 New Order Nearby!',
+                message: `Order #${order.orderNumber} is available near you. Est. earning: ₹${estimatedEarning.toFixed(2)}`,
+                type: 'Order' as const,
+                priority: 'High' as const,
+                link: order._id.toString(), // orderId — used by frontend for deep-link
+                isRead: false,
+                sentAt: new Date(),
+            }));
+
+        if (toCreate.length > 0) {
+            await Notification.insertMany(toCreate, { ordered: false });
+            console.log(`💾 Persisted ${toCreate.length} delivery notification(s) to DB for order ${order.orderNumber}`);
+        }
+    } catch (error) {
+        // Non-critical — do NOT throw, just log
+        console.error('❌ Error persisting delivery notifications to DB:', error);
     }
 }
 
@@ -354,6 +402,12 @@ export async function notifyDeliveryBoysOfNewOrder(
         // Calculate estimated delivery boy earning for this order
         const deliveryBoyEarning = await calculateEstimatedDeliveryBoyEarning(order);
 
+        // Persist notifications to DB so offline delivery boys see them on reconnect
+        // Fire-and-forget — does not block the socket emit path
+        persistDeliveryNotifications(nearbyDeliveryBoyIds, order, deliveryBoyEarning).catch(
+            err => console.error('persistDeliveryNotifications failed:', err)
+        );
+
         // Prepare order data for notification
         const orderData = {
             orderId: order._id ? order._id.toString() : order.id,
@@ -403,9 +457,30 @@ export async function notifyDeliveryBoysOfNewOrder(
                 },
                 icon: 'notification_icon' // Optional: reference to a drawable resource on Android
             }).catch(err => console.error(`❌ Push notification failed for delivery boy ${idString}:`, err));
+            // NOTE: Do NOT add offline-only (push-only) delivery boys to notifiedIds.
+            // Only socket-connected delivery boys (added inside the if-block above) are
+            // tracked. Offline delivery boys cannot reject via socket, so including them
+            // prevents allRejected from ever becoming true.
+        }
 
-            // Mark as notified for state tracking (if they got either socket or we attempted push)
-            notifiedIds.add(idString);
+        // Broadcast to all connected delivery boys as a fallback to ensure testing and instant
+        // notifications work. Also add any newly discovered connected delivery boys to notifiedIds.
+        const broadcastRoom = io.sockets.adapter.rooms.get('delivery-notifications');
+        if (broadcastRoom && broadcastRoom.size > 0) {
+            // Find socket IDs in the broadcast room and map them to delivery boy IDs
+            // so that broadcast recipients are also tracked for rejection consensus.
+            const deliveryBoyIdStrings = new Set(nearbyDeliveryBoyIds.map(id => id.toString().trim()));
+            for (const socketId of broadcastRoom) {
+                const sock = io.sockets.sockets.get(socketId);
+                const sockUser = (sock as any)?.user;
+                if (sockUser?.userId) {
+                    const uid = String(sockUser.userId).trim();
+                    // Only track delivery boys who are in the nearby list (or already tracked)
+                    if (deliveryBoyIdStrings.has(uid) || notifiedIds.size === 0) {
+                        notifiedIds.add(uid);
+                    }
+                }
+            }
         }
 
         if (notifiedIds.size === 0) {
@@ -419,9 +494,8 @@ export async function notifyDeliveryBoysOfNewOrder(
             acceptedBy: null,
         });
 
-        // Broadcast to all connected delivery boys as a fallback to ensure testing and instant notifications work
         io.to('delivery-notifications').emit('new-order', orderData);
-        console.log(`📢 Broadcasted new order ${order.orderNumber} to delivery-notifications room`);
+        console.log(`📢 Broadcasted new order ${order.orderNumber} to delivery-notifications room (${notifiedIds.size} delivery boy(s) tracked for consensus)`);
     } catch (error) {
         console.error('Error notifying delivery boys:', error);
     }
@@ -485,6 +559,19 @@ export async function handleOrderAcceptance(
         order.status = 'Processed'; // Mark as processed when assigned
 
         await order.save();
+
+        // Mark all pending DB notifications for this order as read
+        // so delivery boys who were offline don't see a stale "available" notification
+        try {
+            const { default: Notification } = await import('../models/Notification');
+            await Notification.updateMany(
+                { link: orderId, recipientType: 'Delivery', type: 'Order', isRead: false },
+                { isRead: true, readAt: new Date() }
+            );
+            console.log(`🧹 Marked all delivery DB notifications as read for accepted order ${orderId}`);
+        } catch (cleanupErr) {
+            console.error('Error cleaning up delivery notifications after acceptance:', cleanupErr);
+        }
 
         // Emit order-accepted event to stop notifications for all delivery boys
         io.to('delivery-notifications').emit('order-accepted', {
@@ -553,7 +640,32 @@ export async function handleOrderRejection(
         const state = notificationStates.get(orderId);
 
         if (!state) {
-            return { success: false, message: 'Order notification not found', allRejected: false };
+            // State is missing — happens after a server restart or when the delivery boy
+            // received a re-notification on reconnect (the socket handler replays pending
+            // orders but does not recreate the in-memory state). Rather than silently
+            // ignoring the rejection, cancel the order immediately if it is still unassigned.
+            console.warn(`⚠️ No notification state for order ${orderId}. Processing stateless rejection from delivery boy ${deliveryBoyId}.`);
+            try {
+                const order = await Order.findById(orderId);
+                if (order && !order.deliveryBoy && (order.status === 'Accepted' || order.status === 'Pending')) {
+                    order.status = 'Rejected';
+                    order.deliveryBoyStatus = 'Failed';
+                    order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
+                        `[${new Date().toISOString()}] Auto-rejected: no in-memory notification state found. Delivery boy ${deliveryBoyId} rejected.`;
+                    await order.save();
+
+                    io.to(`order-${orderId}`).emit('order-rejected', {
+                        orderId,
+                        message: 'Unfortunately, no delivery partner is available at the moment. Your order has been rejected.',
+                    });
+
+                    notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
+                    console.log(`✅ Stateless rejection: order ${orderId} cancelled.`);
+                }
+            } catch (dbError) {
+                console.error(`❌ Error processing stateless rejection for order ${orderId}:`, dbError);
+            }
+            return { success: true, message: 'Order rejected', allRejected: true };
         }
 
         // Check if already accepted

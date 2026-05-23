@@ -28,8 +28,14 @@ export const getOrders = asyncHandler(
     // Find all order IDs that contain items from this seller
     const orderItems = await OrderItem.find({ seller: sellerId }).distinct("order");
 
-    // Build query - filter by orders containing this seller's items
-    const query: any = { _id: { $in: orderItems } };
+    // Build query - filter by orders containing this seller's items.
+    // Exclude orders that are still awaiting online payment (status='Pending' AND
+    // paymentStatus='Pending'). These orders are not yet confirmed and should not
+    // be visible to the seller until payment is verified.
+    const query: any = {
+        _id: { $in: orderItems },
+        $nor: [{ status: 'Pending', paymentStatus: 'Pending' }],
+    };
 
     // Date range filter
     if (dateFrom || dateTo) {

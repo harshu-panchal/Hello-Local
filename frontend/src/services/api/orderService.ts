@@ -87,11 +87,23 @@ export interface PaginatedResponse<T> {
   };
 }
 
+export interface GetOrdersResponse {
+  success: boolean;
+  message: string;
+  data: Order[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 /**
  * Get orders with filters
  */
-export const getOrders = async (params?: GetOrdersParams): Promise<ApiResponse<Order[]>> => {
-  const response = await api.get<ApiResponse<Order[]>>('/orders', { params });
+export const getOrders = async (params?: GetOrdersParams): Promise<GetOrdersResponse> => {
+  const response = await api.get<GetOrdersResponse>('/orders', { params });
   return response.data;
 };
 

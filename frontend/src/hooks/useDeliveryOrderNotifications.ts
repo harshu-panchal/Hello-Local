@@ -15,6 +15,16 @@ interface NotificationState {
 const MAX_RECONNECT_ATTEMPTS = 5;
 const INITIAL_RECONNECT_DELAY = 2000;
 
+/** Helper: advance to the next queued notification */
+const advanceQueue = (prev: NotificationState): NotificationState => {
+    const nextNotification = prev.notificationQueue[0] || null;
+    return {
+        ...prev,
+        currentNotification: nextNotification,
+        notificationQueue: prev.notificationQueue.slice(1),
+    };
+};
+
 export const useDeliveryOrderNotifications = () => {
     const { isAuthenticated, user } = useAuth();
     const [state, setState] = useState<NotificationState>({
@@ -27,6 +37,13 @@ export const useDeliveryOrderNotifications = () => {
     const socketRef = useRef<Socket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
+
+    /**
+     * Track order IDs this delivery boy has already rejected (within this session).
+     * Used to suppress re-notifications from the backend re-send logic on reconnect.
+     * Persisted across re-renders via ref; not stored in DB (in-memory per session).
+     */
+    const rejectedOrderIdsRef = useRef<Set<string>>(new Set());
 
     const connectSocket = useCallback(() => {
         if (!isAuthenticated || user?.userType !== 'Delivery' || !user?.id) {
@@ -88,10 +105,28 @@ export const useDeliveryOrderNotifications = () => {
             }));
         });
 
-        socket.on('new-order', (orderData: OrderNotificationData) => {
-            console.log('📦 New order notification received:', orderData);
+        socket.on('new-order', (orderData: OrderNotificationData & { isPendingRenotification?: boolean }) => {
+            console.log('📦 New order notification received:', orderData.orderId, orderData.isPendingRenotification ? '(re-notification)' : '(fresh)');
 
             setState(prev => {
+                // ── 1. De-duplicate: the backend emits to both individual room and
+                //      delivery-notifications broadcast, so the same orderId can arrive twice.
+                if (prev.currentNotification?.orderId === orderData.orderId) {
+                    console.log('⚠️ Duplicate ignored (already current):', orderData.orderId);
+                    return prev;
+                }
+                if (prev.notificationQueue.some(n => n.orderId === orderData.orderId)) {
+                    console.log('⚠️ Duplicate ignored (already queued):', orderData.orderId);
+                    return prev;
+                }
+
+                // ── 2. For re-notifications from backend reconnect logic: skip orders
+                //      this delivery boy already rejected in this session.
+                if (orderData.isPendingRenotification && rejectedOrderIdsRef.current.has(orderData.orderId)) {
+                    console.log('⏭️ Re-notification ignored — already rejected this order:', orderData.orderId);
+                    return prev;
+                }
+
                 // If there's already a current notification, queue this one
                 if (prev.currentNotification) {
                     return {
@@ -99,7 +134,7 @@ export const useDeliveryOrderNotifications = () => {
                         notificationQueue: [...prev.notificationQueue, orderData],
                     };
                 }
-                // Otherwise, show it immediately
+                // Otherwise show immediately
                 return {
                     ...prev,
                     currentNotification: orderData,
@@ -108,20 +143,12 @@ export const useDeliveryOrderNotifications = () => {
         });
 
         socket.on('order-accepted', (data: { orderId: string; acceptedBy: string }) => {
-            console.log('✅ Order accepted by another delivery boy:', data);
+            console.log('✅ Order accepted:', data.orderId, 'by', data.acceptedBy);
 
             setState(prev => {
-                // If this is the current notification, clear it
                 if (prev.currentNotification?.orderId === data.orderId) {
-                    // Show next notification from queue if available
-                    const nextNotification = prev.notificationQueue[0] || null;
-                    return {
-                        ...prev,
-                        currentNotification: nextNotification,
-                        notificationQueue: prev.notificationQueue.slice(1),
-                    };
+                    return advanceQueue(prev);
                 }
-                // Remove from queue if it's there
                 return {
                     ...prev,
                     notificationQueue: prev.notificationQueue.filter(
@@ -132,20 +159,12 @@ export const useDeliveryOrderNotifications = () => {
         });
 
         socket.on('order-rejected-by-all', (data: { orderId: string }) => {
-            console.log('❌ All delivery boys rejected order:', data);
+            console.log('❌ All delivery boys rejected order:', data.orderId);
 
             setState(prev => {
-                // If this is the current notification, clear it
                 if (prev.currentNotification?.orderId === data.orderId) {
-                    // Show next notification from queue if available
-                    const nextNotification = prev.notificationQueue[0] || null;
-                    return {
-                        ...prev,
-                        currentNotification: nextNotification,
-                        notificationQueue: prev.notificationQueue.slice(1),
-                    };
+                    return advanceQueue(prev);
                 }
-                // Remove from queue if it's there
                 return {
                     ...prev,
                     notificationQueue: prev.notificationQueue.filter(
@@ -155,11 +174,17 @@ export const useDeliveryOrderNotifications = () => {
             });
         });
 
+        // Handle order-rejection-acknowledged — dismiss from THIS delivery boy's UI
+        socket.on('order-rejection-acknowledged', (data: { orderId: string }) => {
+            console.log('✅ Rejection acknowledged for order:', data.orderId);
+            // Notification was already dismissed optimistically in handleReject; this is
+            // just a confirmation. No extra UI action needed.
+        });
+
         socket.on('disconnect', (reason: any) => {
             console.log('❌ Delivery notification socket disconnected:', reason);
             setState(prev => ({ ...prev, isConnected: false }));
 
-            // Attempt reconnection
             if (reason === 'io server disconnect' || reason === 'io client disconnect') {
                 return; // Don't auto-reconnect if intentionally disconnected
             }
@@ -222,8 +247,16 @@ export const useDeliveryOrderNotifications = () => {
         }
     }, []);
 
+    /**
+     * Accept an order.
+     * On ANY outcome (success or failure), the notification is cleared from the UI.
+     * Success  → navigate to the order detail page.
+     * Failure  → dismiss silently (order may have been taken by another delivery boy).
+     */
     const handleAccept = useCallback(async (orderId: string, navigate?: (path: string) => void) => {
         if (!socketRef.current || !user?.id) {
+            // No socket — dismiss immediately so the card doesn't get stuck
+            setState(prev => advanceQueue(prev));
             return { success: false, message: 'Not connected or user not found' };
         }
 
@@ -231,56 +264,50 @@ export const useDeliveryOrderNotifications = () => {
             const result = await acceptOrder(socketRef.current, orderId, user.id);
 
             if (result.success) {
-                // Clear current notification and show next from queue
-                setState(prev => {
-                    const nextNotification = prev.notificationQueue[0] || null;
-                    return {
-                        ...prev,
-                        currentNotification: nextNotification,
-                        notificationQueue: prev.notificationQueue.slice(1),
-                    };
-                });
-
-                // Navigate to order detail page
+                // Dismiss card and navigate to order detail
+                setState(prev => advanceQueue(prev));
                 if (navigate) {
                     navigate(`/delivery/orders/${orderId}`);
                 }
-            } else if (result.message === 'Order notification not found') {
-                // If notification is not found on server (stale), clear it from UI too
-                console.warn('⚠️ clearing stale notification:', orderId);
-                setState(prev => {
-                    const nextNotification = prev.notificationQueue[0] || null;
-                    return {
-                        ...prev,
-                        currentNotification: nextNotification,
-                        notificationQueue: prev.notificationQueue.slice(1),
-                    };
-                });
+            } else {
+                // Dismiss silently for ALL failures:
+                //   • "Order already assigned to another delivery boy" — taken, nothing to do
+                //   • "Order notification not found" — stale state, already cleaned up
+                //   • "You have already rejected this order" — shouldn't happen, dismiss anyway
+                //   • Any other error — dismiss rather than confusing the delivery boy
+                console.warn(`⚠️ Accept failed for order ${orderId}: ${result.message} — auto-dismissing.`);
+                setState(prev => advanceQueue(prev));
             }
 
             return result;
         } catch (error: any) {
+            console.error('Error accepting order:', error);
+            setState(prev => advanceQueue(prev));
             return { success: false, message: error.message || 'Failed to accept order' };
         }
     }, [user]);
 
+    /**
+     * Reject an order.
+     * The notification is dismissed IMMEDIATELY (optimistic UI) before the socket call
+     * so the delivery boy never sees a "Processing…" spinner.
+     * The order ID is stored in rejectedOrderIdsRef so it won't reappear on reconnect.
+     */
     const handleReject = useCallback(async (orderId: string) => {
         if (!socketRef.current || !user?.id) {
+            // No socket — still dismiss and track locally
+            rejectedOrderIdsRef.current.add(orderId);
+            setState(prev => advanceQueue(prev));
             return { success: false, message: 'Not connected or user not found', allRejected: false };
         }
 
-        // Immediately clear the notification from UI
-        setState(prev => {
-            const nextNotification = prev.notificationQueue[0] || null;
-            return {
-                ...prev,
-                currentNotification: nextNotification,
-                notificationQueue: prev.notificationQueue.slice(1),
-            };
-        });
+        // Track locally BEFORE the socket call so reconnect logic can filter it out
+        rejectedOrderIdsRef.current.add(orderId);
+
+        // Optimistic dismiss — card disappears immediately
+        setState(prev => advanceQueue(prev));
 
         try {
-            // Perform the actual rejection in the background
             const result = await rejectOrder(socketRef.current, orderId, user.id);
             return result;
         } catch (error: any) {
@@ -290,14 +317,7 @@ export const useDeliveryOrderNotifications = () => {
     }, [user]);
 
     const clearCurrentNotification = useCallback(() => {
-        setState(prev => {
-            const nextNotification = prev.notificationQueue[0] || null;
-            return {
-                ...prev,
-                currentNotification: nextNotification,
-                notificationQueue: prev.notificationQueue.slice(1),
-            };
-        });
+        setState(prev => advanceQueue(prev));
     }, []);
 
     useEffect(() => {
@@ -306,7 +326,7 @@ export const useDeliveryOrderNotifications = () => {
             return;
         }
 
-        const socket = connectSocket();
+        connectSocket();
 
         return () => {
             if (reconnectTimeoutRef.current) {
@@ -327,4 +347,3 @@ export const useDeliveryOrderNotifications = () => {
         socket: socketRef.current,
     };
 };
-

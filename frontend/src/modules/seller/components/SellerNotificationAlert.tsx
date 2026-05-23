@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SellerNotification } from '../hooks/useSellerSocket';
+import { SellerNotification } from '../../../context/SellerSocketContext';
 import { updateOrderStatus } from '../../../services/api/orderService';
 import { useNavigate } from 'react-router-dom';
 

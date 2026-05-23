@@ -1,7 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
-import { handleOrderAcceptance, handleOrderRejection } from '../services/orderNotificationService';
+import { handleOrderAcceptance, handleOrderRejection, calculateEstimatedDeliveryBoyEarning } from '../services/orderNotificationService';
 import Order from '../models/Order';
 import DeliveryTracking from '../models/DeliveryTracking';
 
@@ -205,7 +205,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Delivery boy joins notification room
-        socket.on('join-delivery-notifications', (deliveryBoyId: string) => {
+        socket.on('join-delivery-notifications', async (deliveryBoyId: string) => {
             // Normalize deliveryBoyId to string to ensure consistent room naming
             const normalizedDeliveryBoyId = String(deliveryBoyId).trim();
             console.log(`🔔 Delivery boy ${normalizedDeliveryBoyId} joined notifications room`);
@@ -221,6 +221,89 @@ export const initializeSocket = (httpServer: HttpServer) => {
                 message: 'Successfully joined delivery notifications room',
                 deliveryBoyId: normalizedDeliveryBoyId
             });
+
+            // ─── Re-notify about pending unassigned orders ───────────────────
+            // If the delivery boy was OFFLINE when seller accepted an order,
+            // they would have missed the socket/push notification.
+            // On reconnect, we check DB for any 'Accepted' orders still needing
+            // a delivery boy and replay the new-order event — BUT only if:
+            //   • the order was created within the last 4 hours (not stale 24h)
+            //   • this delivery boy has NOT already rejected it (in-memory check)
+            //   • the order has not already been accepted by someone else
+            // We also CREATE a notificationState for these re-sent orders so that
+            // the accept/reject socket handlers work correctly.
+            try {
+                const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours (was 24h)
+                const pendingOrders = await Order.find({
+                    status: 'Accepted',
+                    deliveryBoy: null,
+                    createdAt: { $gte: cutoff },
+                }).lean();
+
+                if (pendingOrders.length > 0) {
+                    console.log(`📬 Re-notifying delivery boy ${normalizedDeliveryBoyId} about up to ${pendingOrders.length} pending order(s)`);
+
+                    for (const pendingOrder of pendingOrders) {
+                        const orderId = (pendingOrder._id as any).toString();
+
+                        // Skip if already accepted by someone else
+                        const existingState = notificationStates.get(orderId);
+                        if (existingState?.acceptedBy) {
+                            console.log(`⏭️ Skip re-notify order ${orderId} — already accepted`);
+                            continue;
+                        }
+
+                        // Skip if THIS delivery boy already rejected it (in-memory)
+                        if (existingState?.rejectedDeliveryBoys.has(normalizedDeliveryBoyId)) {
+                            console.log(`⏭️ Skip re-notify order ${orderId} — delivery boy already rejected`);
+                            continue;
+                        }
+
+                        // Create or update notification state so accept/reject handlers work
+                        if (!existingState) {
+                            notificationStates.set(orderId, {
+                                orderId,
+                                notifiedDeliveryBoys: new Set([normalizedDeliveryBoyId]),
+                                rejectedDeliveryBoys: new Set(),
+                                acceptedBy: null,
+                            });
+                        } else {
+                            // Add this delivery boy to the notified set so their rejection counts
+                            existingState.notifiedDeliveryBoys.add(normalizedDeliveryBoyId);
+                        }
+
+                        let estimatedEarning = 0;
+                        try {
+                            estimatedEarning = await calculateEstimatedDeliveryBoyEarning(pendingOrder);
+                        } catch {
+                            estimatedEarning = Math.round((pendingOrder.subtotal || 0) * 0.05 * 100) / 100;
+                        }
+
+                        socket.emit('new-order', {
+                            orderId,
+                            orderNumber: pendingOrder.orderNumber,
+                            customerName: pendingOrder.customerName,
+                            customerPhone: pendingOrder.customerPhone,
+                            deliveryAddress: {
+                                address: pendingOrder.deliveryAddress?.address || '',
+                                city: pendingOrder.deliveryAddress?.city || '',
+                                state: pendingOrder.deliveryAddress?.state || '',
+                                pincode: pendingOrder.deliveryAddress?.pincode || '',
+                            },
+                            total: pendingOrder.total || 0,
+                            subtotal: pendingOrder.subtotal || 0,
+                            shipping: pendingOrder.shipping || 0,
+                            deliveryBoyEarning: estimatedEarning,
+                            createdAt: pendingOrder.createdAt,
+                            isPendingRenotification: true,
+                        });
+                        console.log(`📤 Re-sent pending order ${orderId} to delivery boy ${normalizedDeliveryBoyId}`);
+                    }
+                }
+            } catch (renotifyErr) {
+                console.error('❌ Error re-notifying delivery boy about pending orders:', renotifyErr);
+            }
+            // ─────────────────────────────────────────────────────────────────
         });
 
         // Handle order acceptance

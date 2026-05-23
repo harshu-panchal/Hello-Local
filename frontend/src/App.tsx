@@ -20,6 +20,7 @@ import RouteTransition from "./components/RouteTransition";
 import { useEffect } from "react";
 import { initializePushNotifications, setupForegroundNotificationHandler } from "./services/pushNotificationService";
 import { initSmoothScroll } from "./utils/smoothScroll";
+import { SellerSocketProvider } from "./context/SellerSocketContext";
 
 // Lazy loaded routes for code splitting
 const Home = lazy(() => import("./modules/user/Home"));
@@ -292,8 +293,9 @@ function App() {
                       element={
                         <ProtectedRoute requiredUserType="Seller" redirectTo="/seller/login">
                           <Suspense fallback={<IconLoader forceShow />}>
-                            <SellerLayout>
-                              <Routes>
+                            <SellerSocketProvider>
+                              <SellerLayout>
+                                <Routes>
                                 <Route path="/" element={<SellerDashboard />} />
                                 <Route path="orders" element={<SellerOrders />} />
                                 <Route path="orders/:id" element={<SellerOrderDetail />} />
@@ -310,8 +312,9 @@ function App() {
                                 <Route path="reports/sales" element={<SellerSalesReport />} />
                                 <Route path="account-settings" element={<SellerAccountSettings />} />
                                 <Route path="ad-requests" element={<SellerAdRequests />} />
-                              </Routes>
-                            </SellerLayout>
+                                </Routes>
+                              </SellerLayout>
+                            </SellerSocketProvider>
                           </Suspense>
                         </ProtectedRoute>
                       }
