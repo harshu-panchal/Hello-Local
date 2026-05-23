@@ -8,7 +8,7 @@ import Customer from '../models/Customer';
  */
 export async function generateDeliveryOtp(orderId: string): Promise<{ success: boolean; message: string }> {
   try {
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).populate('customer');
 
     if (!order) {
       throw new Error('Order not found');
@@ -19,12 +19,39 @@ export async function generateDeliveryOtp(orderId: string): Promise<{ success: b
     }
 
     // No longer generate per-order OTP - customer has permanent deliveryOtp
-    // Just return success as the customer's permanent OTP will be used
+    let customerOtp: string | undefined;
+
+    if (order.customer && typeof order.customer === 'object' && 'deliveryOtp' in order.customer) {
+      customerOtp = (order.customer as any).deliveryOtp;
+    } else if (order.customer) {
+      // If not populated, fetch customer
+      const customer = await Customer.findById(order.customer);
+      customerOtp = customer?.deliveryOtp;
+    }
+
+    if (customerOtp) {
+      // Dynamically import to avoid circular dependencies
+      const { sendNotificationToUser } = await import('./firebaseAdmin');
+      const customerId = typeof order.customer === 'object' && 'id' in (order.customer as any) 
+                         ? (order.customer as any).id 
+                         : order.customer.toString();
+                         
+      sendNotificationToUser(
+        customerId,
+        'Customer',
+        {
+          title: 'Delivery Partner Arrived',
+          body: `Your delivery partner is here. Your Delivery OTP is ${customerOtp}.`,
+          data: { type: 'DELIVERY_OTP', orderId: order._id.toString() }
+        }
+      ).catch(err => console.error('Failed to send OTP push notification to customer:', err));
+    }
+
     console.log(`[Delivery OTP] Using customer's permanent delivery OTP for order ${orderId}`);
 
     return {
       success: true,
-      message: 'Customer has a permanent delivery OTP. Share it with the delivery partner.',
+      message: 'Customer has been notified of their Delivery OTP. Ask them to share it.',
     };
   } catch (error: any) {
     console.error('Error in generateDeliveryOtp:', error);
@@ -62,28 +89,20 @@ export async function verifyDeliveryOtp(orderId: string, otp: string): Promise<{
       throw new Error('Customer delivery OTP not found. Please contact support.');
     }
 
-    // Developer bypass for testing
-    if ((process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_OTP === 'true') && otp === '9999') {
-      order.deliveryOtpVerified = true;
-      order.status = 'Delivered';
-      order.deliveredAt = new Date();
-      order.invoiceEnabled = true;
-      await order.save();
-
-      return {
-        success: true,
-        message: 'OTP verified successfully. Order marked as delivered.',
-      };
-    }
-
     // Verify OTP against customer's permanent OTP
-    if (customerOtp !== otp) {
+    // Developer bypass for testing
+    const isMockOtp = (process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_OTP === 'true') && otp === '9999';
+    if (!isMockOtp && customerOtp !== otp) {
       throw new Error('Invalid OTP. Please check and try again.');
     }
 
     // Mark order as delivered
     order.deliveryOtpVerified = true;
     order.status = 'Delivered';
+    order.deliveryBoyStatus = 'Delivered';
+    if (order.paymentMethod === 'COD') {
+      order.paymentStatus = 'Paid';
+    }
     order.deliveredAt = new Date();
     order.invoiceEnabled = true;
     await order.save();
