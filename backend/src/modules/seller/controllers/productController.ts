@@ -194,7 +194,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     .populate("category", "name")
     .populate("subcategory", "name")
     .populate("brand", "name")
-    .populate("tax", "name rate")
+    .populate("tax", "name percentage")
     .sort(sort)
     .skip(skip)
     .limit(limitNum);
@@ -240,10 +240,10 @@ export const getProductById = asyncHandler(
 
     const product = await Product.findOne({ _id: id, seller: sellerId })
       .populate("category", "name")
-      .populate("subcategory", "subcategoryName")
+      .populate("subcategory", "name")
       .populate("headerCategoryId", "name slug")
       .populate("brand", "name")
-      .populate("tax", "name rate");
+      .populate("tax", "name percentage");
 
     if (!product) {
       return res.status(404).json({
@@ -275,9 +275,6 @@ export const updateProduct = asyncHandler(
         message: "Invalid Product ID format",
       });
     }
-
-    console.log("DEBUG updateProduct: sellerId from token:", sellerId);
-    console.log("DEBUG updateProduct: productId:", id);
 
     // Remove sellerId from update data if present (cannot change owner)
     delete updateData.sellerId;
@@ -365,14 +362,6 @@ export const updateProduct = asyncHandler(
     const product = await Product.findOne({ _id: id, seller: sellerId });
 
     if (!product) {
-      // Check if product exists at all
-      const existingProduct = await Product.findById(id).select("seller");
-      if (existingProduct) {
-        console.log(
-          "DEBUG updateProduct: product exists but owned by:",
-          existingProduct.seller
-        );
-      }
       return res.status(404).json({
         success: false,
         message: "Product not found",
@@ -392,12 +381,10 @@ export const updateProduct = asyncHandler(
     // Re-populate for response
     const populatedProduct = await Product.findById(product._id)
       .populate("category", "name")
-      .populate("subcategory", "subcategoryName")
+      .populate("subcategory", "name")
       .populate("headerCategoryId", "name slug")
       .populate("brand", "name")
-      .populate("tax", "name rate");
-
-    console.log("DEBUG updateProduct: product updated successfully");
+      .populate("tax", "name percentage");
 
     return res.status(200).json({
       success: true,
@@ -421,9 +408,6 @@ export const deleteProduct = asyncHandler(
         message: "Invalid Product ID format",
       });
     }
-
-    console.log("DEBUG deleteProduct: sellerId from token:", sellerId);
-    console.log("DEBUG deleteProduct: productId:", id);
 
     const product = await Product.findOneAndDelete({
       _id: id,

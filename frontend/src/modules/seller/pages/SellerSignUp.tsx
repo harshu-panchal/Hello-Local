@@ -109,6 +109,11 @@ export default function SellerSignUp() {
       setError('Please enter your email address');
       return;
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     if (!formData.storeName) {
       setError('Please enter your store name');
       return;
@@ -131,22 +136,23 @@ export default function SellerSignUp() {
       return;
     }
 
+    // Validate location BEFORE setting loading (prevents spinner getting stuck)
+    if (!formData.searchLocation || !formData.latitude || !formData.longitude) {
+      setError('Please select your store location using the location search');
+      return;
+    }
+
+    // Validate service radius BEFORE setting loading
+    const radius = parseFloat(formData.serviceRadiusKm);
+    if (isNaN(radius) || radius < 0.1 || radius > 100) {
+      setError('Service radius must be between 0.1 and 100 kilometers');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      // Validate location is selected
-      if (!formData.searchLocation || !formData.latitude || !formData.longitude) {
-        setError('Please select your store location using the location search');
-        return;
-      }
-
-      // Validate service radius
-      const radius = parseFloat(formData.serviceRadiusKm);
-      if (isNaN(radius) || radius < 0.1 || radius > 100) {
-        setError('Service radius must be between 0.1 and 100 kilometers');
-        return;
-      }
 
       const response = await register({
         sellerName: formData.sellerName,

@@ -3,10 +3,10 @@ import mongoose from "mongoose";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import Seller from "../../../models/Seller";
 import WalletTransaction from "../../../models/WalletTransaction";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import { Server as SocketIOServer } from "socket.io";
+import { sendNotificationToUser } from "../../../services/firebaseAdmin";
 
 /**
  * Get seller's orders with filters, sorting, and pagination
@@ -320,6 +320,45 @@ export const updateOrderStatus = asyncHandler(
 
     await order.save();
 
+    // Notify customer about status change (socket + push)
+    try {
+      const io: SocketIOServer = (req.app.get("io") as SocketIOServer);
+      const customerStatusMessages: Record<string, { title: string; body: string }> = {
+        'Accepted':  { title: '✅ Order Confirmed!',        body: `Your order #${order.orderNumber} has been confirmed by the seller.` },
+        'Processed': { title: '📦 Order Being Prepared',    body: `Your order #${order.orderNumber} is being prepared for delivery.` },
+        'On the way':{ title: '🚚 Out for Delivery!',       body: `Your order #${order.orderNumber} is on the way to you!` },
+        'Delivered': { title: '🎉 Order Delivered!',        body: `Your order #${order.orderNumber} has been delivered. Enjoy!` },
+        'Cancelled': { title: '❌ Order Cancelled',         body: `Your order #${order.orderNumber} has been cancelled by the seller.` },
+        'Rejected':  { title: '❌ Order Rejected',          body: `Your order #${order.orderNumber} has been rejected. Please contact support.` },
+      };
+      const msgInfo = customerStatusMessages[status];
+      if (msgInfo && order.customer) {
+        const customerId = order.customer.toString();
+        // Real-time socket (for open app / tracking screen)
+        if (io) {
+          io.to(`order-${id}`).emit('order-status-update', {
+            orderId: id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            message: msgInfo.body,
+          });
+        }
+        // Push notification (for background / closed app)
+        sendNotificationToUser(customerId, 'Customer', {
+          title: msgInfo.title,
+          body: msgInfo.body,
+          data: {
+            type: 'ORDER_STATUS_UPDATE',
+            orderId: id,
+            orderNumber: order.orderNumber || '',
+            status: order.status,
+          }
+        }).catch(err => console.error(`❌ Customer push notification failed for order ${id}:`, err));
+      }
+    } catch (notifyErr) {
+      console.error('Error sending customer status notification:', notifyErr);
+    }
+
     // Trigger delivery notification if seller accepts the order
     if (status === 'Accepted' && previousStatus !== 'Accepted') {
       try {
@@ -355,11 +394,12 @@ export const updateOrderStatus = asyncHandler(
 
         // If COD, add a pending WalletTransaction for confirmation
         if (order.paymentMethod === 'COD') {
-          const seller = await Seller.findById(sellerId);
-          if (seller) {
-            const commissionRate = (seller.commission || 0) / 100;
-            const commissionAmount = order.total * commissionRate;
-            const netEarning = order.total - commissionAmount;
+          // Use per-item commission rates snapshotted at order creation (not current seller rate)
+          const sellerOrderItems = await OrderItem.find({ order: id, seller: sellerId });
+          if (sellerOrderItems.length > 0) {
+            const sellerSubtotal = sellerOrderItems.reduce((sum, item) => sum + (item.total || 0), 0);
+            const totalCommission = sellerOrderItems.reduce((sum, item) => sum + ((item as any).commissionAmount || 0), 0);
+            const netEarning = sellerSubtotal - totalCommission;
 
             await WalletTransaction.create({
               userId: sellerId,

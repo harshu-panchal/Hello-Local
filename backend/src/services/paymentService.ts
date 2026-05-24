@@ -4,6 +4,7 @@ import Payment from '../models/Payment';
 import Order from '../models/Order';
 import mongoose from 'mongoose';
 import SellerAdRequest from '../models/SellerAdRequest';
+import { sendNotificationToUser } from './firebaseAdmin';
 
 // Initialize Razorpay instance
 const getRazorpayInstance = () => {
@@ -226,7 +227,18 @@ export const capturePayment = async (
 
             console.log(`✅ capturePayment: Order ${id} marked Paid and Received.`);
 
-            // ── 3a. Create pending commissions (non-critical) ─────────────────────
+            // ── 3a. Push notification to customer: payment confirmed ───────────────
+            sendNotificationToUser(customerOrSellerId, 'Customer', {
+                title: '✅ Order Placed Successfully!',
+                body: `Your order #${order.orderNumber} has been confirmed. We'll notify you when the seller prepares it.`,
+                data: {
+                    type: 'ORDER_PLACED',
+                    orderId: id,
+                    orderNumber: order.orderNumber || '',
+                }
+            }).catch(err => console.error(`❌ Push notification failed for customer ${customerOrSellerId}:`, err));
+
+            // ── 3b. Create pending commissions (non-critical) ─────────────────────
             try {
                 const { createPendingCommissions } = await import('./commissionService');
                 // Run in background to speed up payment capture
@@ -237,7 +249,7 @@ export const capturePayment = async (
                 console.error('Failed to import commissionService:', importError);
             }
 
-            // ── 3b. Notify sellers AFTER payment is confirmed ─────────────────────
+            // ── 3c. Notify sellers AFTER payment is confirmed ─────────────────────
             // This is the correct trigger point: order is now Paid + Received.
             if (io) {
                 try {
@@ -249,6 +261,7 @@ export const capturePayment = async (
                                 console.log(`📤 Seller notified for paid order ${leanOrder.orderNumber}`);
                             });
                         }
+                        return undefined;
                     }).catch(notifyError => {
                         console.error('Failed to notify sellers after payment:', notifyError);
                     });

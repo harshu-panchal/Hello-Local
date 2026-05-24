@@ -104,22 +104,8 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 
-// Debug middleware - log all incoming requests
-app.use((req: Request, _res: Response, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
-
 // API Routes
 app.use("/api/v1", routes);
-
-// Global catch-all for debugging unmatched routes (only logs, doesn't handle)
-app.use((req: Request, _res: Response, next) => {
-  if (req.path.startsWith('/api/v1')) {
-    console.log(`[DEBUG] Unmatched API Route: ${req.method} ${req.path}`);
-  }
-  next();
-});
 
 // Error handling middleware (must be last)
 app.use(notFound);

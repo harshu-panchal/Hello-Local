@@ -277,7 +277,7 @@ export default function CheckoutAddress() {
       // Show success feedback logic if needed or just navigate
       setTimeout(() => {
         setIsSaving(false);
-        navigate('/user/checkout', { replace: true });
+        navigate('/checkout', { replace: true });
       }, 500);
     } catch (error) {
       console.error('Error saving address:', error);

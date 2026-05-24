@@ -1,6 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
 import OrderItem from '../models/OrderItem';
-import mongoose from 'mongoose';
 import { sendNotificationToUser } from './firebaseAdmin';
 
 /**

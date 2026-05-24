@@ -122,7 +122,7 @@ export default function Invoice() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-xl font-bold mb-4">Invoice Not Found</h1>
-          <Link to="/user/orders">
+          <Link to="/orders">
             <Button>Back to Orders</Button>
           </Link>
         </div>

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"d:\\\\pro5 hello local\\\\frontend\\\\src\\\\modules\\\\user\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"d:\\\\pro5 hello local\\\\frontend\\\\src\\\\modules\\\\admin\" -Recurse | ForEach-Object { $_.FullName })"
+    ]
+  }
+}

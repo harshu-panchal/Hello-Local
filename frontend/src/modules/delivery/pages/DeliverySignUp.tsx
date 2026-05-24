@@ -9,10 +9,12 @@ import { uploadDocument } from "../../../services/api/uploadService";
 import { validateDocumentFile } from "../../../utils/imageUpload";
 import api from "../../../services/api/config";
 import OTPInput from "../../../components/OTPInput";
+import { useAuth } from "../../../context/AuthContext";
 
 
 export default function DeliverySignUp() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     mobile: "",
@@ -135,6 +137,12 @@ export default function DeliverySignUp() {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -231,8 +239,16 @@ export default function DeliverySignUp() {
 
     try {
       const response = await verifyOTP(formData.mobile, otp, sessionId);
-      if (response.success) {
+      if (response.success && response.data) {
+        // Properly update AuthContext so ProtectedRoute allows access
+        login(response.data.token, {
+          ...response.data.user,
+          userType: "Delivery",
+        });
         navigate("/delivery");
+      } else if (response.success) {
+        // Fallback: no data returned but OTP was valid — go to login
+        navigate("/delivery/login");
       }
     } catch (err: any) {
       setError(err.message || "Invalid OTP. Please try again.");
@@ -377,7 +393,7 @@ export default function DeliverySignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter password (min 6 characters)"
                     required
-                    minLength={4}
+                    minLength={6}
                     className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
                     disabled={loading}
                   />

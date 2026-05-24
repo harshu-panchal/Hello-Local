@@ -13,6 +13,7 @@ import { getRoadDistances } from "../../../services/mapService";
 import { Server as SocketIOServer } from "socket.io";
 import { getOrderItemCommissionRate } from "../../../services/commissionService";
 import Admin from "../../../models/Admin";
+import { sendNotificationToUser } from "../../../services/firebaseAdmin";
 
 // Create a new order
 export const createOrder = async (req: Request, res: Response) => {
@@ -400,7 +401,7 @@ export const createOrder = async (req: Request, res: Response) => {
                     // Override the delivery fee
                     deliveryFee = Math.ceil(calculatedDeliveryFee);
 
-                    console.log(`DEBUG: Distance Calculation: MaxDistance=${deliveryDistanceKm}km, Fee=${deliveryFee} (Base: ${config.baseCharge}, Rate: ${config.kmRate}/km)`);
+                    // Distance calculation complete
                 }
             }
         } catch (calcError) {
@@ -425,7 +426,6 @@ export const createOrder = async (req: Request, res: Response) => {
             // Validate before saving to catch errors with details
             const validationError = newOrder.validateSync();
             if (validationError) {
-                console.error("DEBUG: Order Validation Error:", validationError.errors);
                 throw validationError;
             }
             await newOrder.save();
@@ -443,12 +443,27 @@ export const createOrder = async (req: Request, res: Response) => {
                         if (savedOrder) {
                             return notifySellersOfOrderUpdate(io, savedOrder, 'NEW_ORDER');
                         }
+                        return undefined;
                     }).catch(notificationError => {
                         console.error("Error notifying sellers (COD):", notificationError);
                     });
                 }
             } catch (error) {
                 console.error("Error setting up seller notification:", error);
+            }
+
+            // Push notification to customer confirming COD order placement
+            if (newOrder.customer) {
+                const customerId = (newOrder.customer as any).toString();
+                sendNotificationToUser(customerId, 'Customer', {
+                    title: '✅ Order Placed Successfully!',
+                    body: `Your COD order #${newOrder.orderNumber} has been placed. Seller will confirm shortly.`,
+                    data: {
+                        type: 'ORDER_PLACED',
+                        orderId: (newOrder._id as any).toString(),
+                        orderNumber: newOrder.orderNumber || '',
+                    }
+                }).catch(err => console.error(`❌ COD order push notification failed:`, err));
             }
         }
 
@@ -467,17 +482,7 @@ export const createOrder = async (req: Request, res: Response) => {
             }
         }
 
-        console.error("DEBUG: Order Creation Error Detail:", {
-            message: error.message,
-            name: error.name,
-            errors: error.errors ? Object.keys(error.errors).map(key => ({
-                field: key,
-                message: error.errors[key].message,
-                value: error.errors[key].value
-            })) : undefined,
-            stack: error.stack,
-            body: req.body
-        });
+        console.error("Order Creation Error:", error.message);
 
         // Return a more informative error message if it's a validation error
         let errorMessage = "Error creating order. " + error.message;

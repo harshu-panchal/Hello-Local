@@ -51,7 +51,7 @@ const Navbar = () => {
             </a>
           ))}
           <button 
-            onClick={() => navigate('/user')}
+            onClick={() => navigate('/')}
             className="btn-gradient px-5 py-2 rounded-full font-semibold text-sm"
           >
             Get the App
@@ -99,7 +99,7 @@ const Navbar = () => {
                 </a>
               ))}
               <button 
-                onClick={() => navigate('/user')}
+                onClick={() => navigate('/')}
                 className="btn-gradient px-6 py-3 rounded-xl font-semibold w-full mt-2"
               >
                 Get the App

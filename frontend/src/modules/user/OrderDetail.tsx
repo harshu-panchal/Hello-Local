@@ -651,7 +651,7 @@ export default function OrderDetail() {
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">
             Order Not Found
           </h1>
-          <Link to="/user/orders">
+          <Link to="/orders">
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -770,7 +770,7 @@ export default function OrderDetail() {
         animate={{ opacity: 1 }}>
         {/* Navigation bar */}
         <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/user/orders">
+          <Link to="/orders">
             <motion.button
               className="w-10 h-10 flex items-center justify-center"
               whileTap={{ scale: 0.9 }}>
@@ -1091,7 +1091,7 @@ export default function OrderDetail() {
               </Button>
             </div>
           )}
-          <Link to="/user/orders" className="flex-1">
+          <Link to="/orders" className="flex-1">
             <Button variant="outline" className="w-full border-gray-300">
               All Orders
             </Button>

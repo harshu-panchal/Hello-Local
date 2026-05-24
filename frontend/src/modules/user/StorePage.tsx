@@ -178,7 +178,7 @@ export default function StorePage() {
                 ) : (
                     <div className="text-center py-20 text-neutral-500">
                         <p>No products found in this store yet.</p>
-                        <Link to="/user" className="text-[#FF2E7A] font-medium mt-2 inline-block">Explore other categories</Link>
+                        <Link to="/" className="text-[#FF2E7A] font-medium mt-2 inline-block">Explore other categories</Link>
                     </div>
                 )}
             </div>
