@@ -19,12 +19,16 @@ export const otpRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req: Request) => req.method === 'OPTIONS',
   keyGenerator: (req: Request) => {
-    // Key by mobile number for per-user limiting, fallback to IP
+    // Primary key: mobile number (not IP, so IPv6 is not an issue here)
     if (req.body?.mobile) {
       return `otp:${req.body.mobile}`;
     }
-    return `otp:ip:${req.ip || 'unknown'}`;
+    // Fallback: normalize IPv4-mapped IPv6 (::ffff:1.2.3.4 → 1.2.3.4)
+    const rawIp = req.ip ?? 'unknown';
+    const ip = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
+    return `otp:ip:${ip}`;
   },
+  validate: false, // suppress IPv6 warning — mobile number is the primary key, not IP
 });
 
 /**
