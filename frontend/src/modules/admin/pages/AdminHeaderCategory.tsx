@@ -141,7 +141,7 @@ export default function AdminHeaderCategory() {
         name: headerCategoryName,
         iconLibrary: selectedIconLibrary,
         iconName: headerCategoryIcon,
-        slug: selectedTheme, // Use theme as slug for color mapping
+        theme: selectedTheme, // Color/styling theme key — stored separately from slug
         relatedCategory: selectedCategory,
         status: selectedStatus,
       };
@@ -168,7 +168,7 @@ export default function AdminHeaderCategory() {
     setSelectedIconLibrary(category.iconLibrary);
     setHeaderCategoryIcon(category.iconName);
     setSelectedCategory(category.relatedCategory || '');
-    setSelectedTheme(category.slug);
+    setSelectedTheme(category.theme || category.slug); // Use theme if available, fall back to slug for old records
     setSelectedStatus(category.status);
     setIconSearchTerm('');
   };
@@ -443,9 +443,9 @@ export default function AdminHeaderCategory() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-neutral-100 text-neutral-800 capitalize border border-neutral-200">
                           <div
                             className="w-2 h-2 rounded-full mr-1.5"
-                            style={{ background: themes[category.slug]?.primary[0] || '#ccc' }}
+                            style={{ background: themes[category.theme || category.slug]?.primary[0] || '#ccc' }}
                           />
-                          {category.slug}
+                          {category.theme || category.slug}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">

@@ -5,6 +5,7 @@ export interface IHeaderCategory extends Document {
     iconLibrary: string;
     iconName: string;
     slug: string;
+    theme?: string; // Color theme key (e.g. 'grocery', 'beauty'). Separate from slug so multiple categories can share a color.
     relatedCategory?: string; // Links to a product category
     order: number;
     status: 'Published' | 'Unpublished';
@@ -18,6 +19,7 @@ const HeaderCategorySchema: Schema = new Schema(
         iconLibrary: { type: String, required: true },
         iconName: { type: String, required: true },
         slug: { type: String, required: true, unique: true },
+        theme: { type: String, required: false }, // Color/styling theme key — not unique
         relatedCategory: { type: String, required: false },
         order: { type: Number, default: 0 },
         status: { type: String, enum: ['Published', 'Unpublished'], default: 'Published' },

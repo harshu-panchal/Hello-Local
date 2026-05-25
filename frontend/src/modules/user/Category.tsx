@@ -481,6 +481,19 @@ export default function CategoryPage() {
                 ))}
               </div>
             </div>
+          ) : !userLocation ? (
+            <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 text-center flex flex-col items-center gap-3">
+              <div className="w-16 h-16 bg-pink-50 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-[#FF2E7A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <p className="text-neutral-700 font-semibold text-base">Enable Location</p>
+              <p className="text-neutral-500 text-sm max-w-xs">
+                Please allow location access to see products available near you.
+              </p>
+            </div>
           ) : (
             <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 text-center">
               <p className="text-neutral-500 md:text-lg">

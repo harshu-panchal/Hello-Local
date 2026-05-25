@@ -54,6 +54,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             })
             .map(c => ({
               id: c.slug,
+              theme: c.theme || c.slug, // color theme key; falls back to slug for old records
               label: c.name,
               icon: getIconByName(c.iconName)
             }));
@@ -411,9 +412,10 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     // Don't scroll - keep page at current position
   };
 
-  const theme = getTheme(activeTab || 'all');
   const activeTabDetails = tabs.find(t => t.id === activeTab);
-  const heroGradient = getCategoryGradient(activeTab || 'all', activeTabDetails?.label);
+  const activeThemeKey = (activeTabDetails as any)?.theme || activeTab || 'all';
+  const theme = getTheme(activeThemeKey);
+  const heroGradient = getCategoryGradient(activeThemeKey, activeTabDetails?.label);
 
   // Helper to convert hex to RGB
   const hexToRgb = (hex: string) => {

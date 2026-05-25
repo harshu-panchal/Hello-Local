@@ -6,7 +6,8 @@ export interface HeaderCategory {
     name: string;
     iconLibrary: string; // 'IonIcons' | 'MaterialIcons' | 'FontAwesome' | 'Feather'
     iconName: string;
-    slug: string; // Maps to theme key
+    slug: string; // URL-safe unique identifier (generated from name)
+    theme?: string; // Color theme key (e.g. 'grocery', 'beauty'). Falls back to slug for old records.
     relatedCategory?: string;
     status: 'Published' | 'Unpublished';
     order?: number;

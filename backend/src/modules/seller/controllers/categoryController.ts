@@ -13,9 +13,9 @@ export const getCategories = asyncHandler(
     const { includeSubcategories, search } = req.query;
 
     // Build query - by default, get only parent categories (no parentId)
-    const query: any = { parentId: null };
+    const query: any = { parentId: null, status: "Active" };
 
-    // If includeSubcategories is true, get all categories
+    // If includeSubcategories is true, get all categories (still only Active)
     if (includeSubcategories === "true") {
       delete query.parentId;
     }
@@ -26,7 +26,7 @@ export const getCategories = asyncHandler(
     }
 
     const categories = await Category.find(query)
-      .populate("headerCategoryId", "name slug")
+      .populate("headerCategoryId", "name slug theme")
       .sort({ name: 1 });
 
     // Get subcategory and product counts for each category

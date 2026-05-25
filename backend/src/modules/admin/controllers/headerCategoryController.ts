@@ -34,6 +34,17 @@ export const getHeaderCategories = async (_req: Request, res: Response) => {
   }
 };
 
+// Helper: generate a URL-safe slug from a name string
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 // @desc    Create a header category
 // @route   POST /api/v1/header-categories
 // @access  Private/Admin
@@ -43,17 +54,24 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       name,
       iconLibrary,
       iconName,
-      slug,
+      theme,    // New: color theme key (e.g. 'grocery', 'beauty')
+      slug: sentSlug, // Deprecated: old clients may send slug=theme, we ignore it now
       relatedCategory,
       status,
       order,
     } = req.body;
 
-    const categoryExists = await HeaderCategory.findOne({ slug });
-    if (categoryExists) {
-      return res
-        .status(400)
-        .json({ message: "Header category already exists" });
+    if (!name) {
+      return res.status(400).json({ message: "Header category name is required" });
+    }
+
+    // Generate unique slug from the category name
+    let baseSlug = generateSlug(name);
+    let slug = baseSlug;
+    let suffix = 1;
+    while (await HeaderCategory.findOne({ slug })) {
+      slug = `${baseSlug}-${suffix}`;
+      suffix++;
     }
 
     const category = await HeaderCategory.create({
@@ -61,6 +79,7 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       iconLibrary,
       iconName,
       slug,
+      theme: theme || sentSlug || 'all', // store color theme separately; fall back to sent slug for old clients
       relatedCategory,
       status,
       order,
@@ -84,7 +103,8 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
       name,
       iconLibrary,
       iconName,
-      slug,
+      theme,     // New: color theme key
+      slug: sentSlug, // Old clients may send slug=theme — ignored for slug updates
       relatedCategory,
       status,
       order,
@@ -92,21 +112,29 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
     const category = await HeaderCategory.findById(req.params.id);
 
     if (category) {
-      // Check if slug is being updated and if it's already taken
-      if (slug && slug !== category.slug) {
-        const slugExists = await HeaderCategory.findOne({ slug });
-        if (slugExists) {
-          return res
-            .status(400)
-            .json({ message: "Theme/Slug already used by another category" });
+      // If name changed, regenerate the slug
+      if (name && name !== category.name) {
+        let baseSlug = generateSlug(name);
+        let newSlug = baseSlug;
+        let suffix = 1;
+        while (await HeaderCategory.findOne({ slug: newSlug, _id: { $ne: category._id } })) {
+          newSlug = `${baseSlug}-${suffix}`;
+          suffix++;
         }
+        category.slug = newSlug;
       }
 
       category.name = name || category.name;
       category.iconLibrary = iconLibrary || category.iconLibrary;
       category.iconName = iconName || category.iconName;
-      category.slug = slug || category.slug;
-      category.relatedCategory = relatedCategory; // Allow clearing it (undefined or null or empty string)
+      // Update theme (color) — allow multiple categories to share the same color
+      if (theme !== undefined) {
+        (category as any).theme = theme;
+      } else if (sentSlug !== undefined) {
+        // Old client compatibility: sent slug was actually the theme
+        (category as any).theme = sentSlug;
+      }
+      category.relatedCategory = relatedCategory; // Allow clearing it
       category.status = status || category.status;
       category.order = order !== undefined ? order : category.order;
 
@@ -120,7 +148,7 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
     if (error.code === 11000) {
       return res
         .status(400)
-        .json({ message: "Category with this slug/theme already exists" });
+        .json({ message: "A header category with this name already exists. Please use a different name." });
     }
     return res
       .status(500)
