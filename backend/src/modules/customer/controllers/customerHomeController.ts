@@ -496,29 +496,50 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
     const promoCards = await Promise.all(
       categoriesWithHeaderCategory.map(async (category: any) => {
-        // Get child categories (subcategories) for this category
+        // Get subcategory images from BOTH models
+        // 1. New model: Category with parentId
         const childCategories = await Category.find({
           parentId: category._id,
           status: "Active",
         })
           .select("name image _id")
           .sort({ order: 1 })
-          .limit(4) // Limit to 4 subcategory images
+          .limit(4)
           .lean();
 
+        // 2. Old model: SubCategory collection
+        const subCategoryDocs = await SubCategory.find({
+          category: category._id,
+        })
+          .select("name image _id")
+          .sort({ order: 1 })
+          .limit(4)
+          .lean();
+
+        // Merge and deduplicate
+        const allChildren = [...childCategories, ...subCategoryDocs];
+        const seen = new Set<string>();
+        const uniqueChildren = allChildren.filter((c: any) => {
+          const key = c._id.toString();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
         // Extract subcategory images
-        const subcategoryImages = childCategories
+        const subcategoryImages = uniqueChildren
           .map((child: any) => child.image)
           .filter((img: string) => img && img.trim() !== "");
 
         return {
           id: category._id.toString(),
-          badge: "Up to 55% OFF", // Default badge, can be customized later
+          badge: "Up to 55% OFF",
           title: category.name,
           categoryId: category._id.toString(),
           slug: category.slug || category._id.toString(),
           bgColor: "bg-yellow-50",
           subcategoryImages: subcategoryImages.slice(0, 4), // Max 4 images
+          subcategoryCount: uniqueChildren.length,
         };
       })
     );

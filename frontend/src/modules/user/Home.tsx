@@ -453,12 +453,33 @@ export default function Home() {
           </>
         )}
 
-        {/* Filtered Products Section */}
+        {/* Category Tiles Section - Show when a specific header category is active */}
+        {/* Shows the product categories linked to this header category (e.g. Bakery → Breads, Cakes) */}
+        {activeTab !== "all" && (homeData as any).promoCards && (homeData as any).promoCards.length > 0 && (
+          <div className="mt-4 mb-2">
+            <Suspense fallback={<div className="h-40 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
+              <CategoryTileSection
+                title="Shop by Category"
+                tiles={(homeData as any).promoCards.map((card: any) => ({
+                  id: card.id,
+                  name: card.title || card.name || "Category",
+                  categoryId: card.categoryId,
+                  slug: card.slug,
+                  productImages: card.subcategoryImages || [],
+                  bgColor: card.bgColor || "bg-yellow-50",
+                }))}
+                columns={2}
+                showProductCount={false}
+              />
+            </Suspense>
+          </div>
+        )}
+
         {/* Filtered Products Section */}
         {activeTab !== "all" && filteredProducts.length > 0 && (
           <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
             <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-4 md:px-6 lg:px-8 tracking-tight capitalize">
-              {activeTab === "grocery" ? "Grocery Items" : activeTab}
+              {activeTabName || activeTab}
             </h2>
             <div className="px-4 md:px-6 lg:px-8">
               <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
