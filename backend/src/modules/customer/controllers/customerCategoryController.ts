@@ -16,6 +16,7 @@ export const getCategories = async (_req: Request, res: Response) => {
     if (!categories) {
       categories = await Category.find({
         status: "Active", // Only return active categories
+        parentId: null,   // Only root-level categories (not subcategories stored in Category model)
       })
         .sort({ order: 1 })
         .select("name image icon description color slug _id")
@@ -252,19 +253,42 @@ export const getCategoryById = async (req: Request, res: Response) => {
         }
     }
 
-    // Query for BOTH ObjectId and String representation to be safe against legacy data references
-    // Use Category model to find subcategories (children) instead of separate SubCategory model
-    // Using parentId to find children
-    const subcategories = await Category.find({
+    // 1. Get subcategories from new Category model (children via parentId)
+    const categorySubcategories = await Category.find({
       parentId: { $in: [catId, catId.toString()] },
-      status: "Active"
+      status: "Active",
     })
       .select("name image order slug icon")
-      .sort({
-        order: 1,
-      });
+      .sort({ order: 1 })
+      .lean();
 
-    console.log(`[getCategoryById] Found ${subcategories.length} subcategories for ${category.name}`);
+    // 2. Get subcategories from old SubCategory model (admin-created subcategories)
+    const subCategoryDocs = await SubCategory.find({
+      category: catId,
+    })
+      .select("name image order")
+      .sort({ order: 1 })
+      .lean();
+
+    // 3. Merge both sources, avoiding duplicates by _id
+    const seen = new Set<string>();
+    const subcategories: any[] = [];
+
+    for (const doc of [...categorySubcategories, ...subCategoryDocs]) {
+      const key = doc._id.toString();
+      if (!seen.has(key)) {
+        seen.add(key);
+        subcategories.push(doc);
+      }
+    }
+
+    // Sort merged list by order
+    subcategories.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    console.log(
+      `[getCategoryById] Found ${subcategories.length} subcategories for ${category.name}` +
+      ` (${categorySubcategories.length} from Category model, ${subCategoryDocs.length} from SubCategory model)`
+    );
 
     const responseData = {
       category,
