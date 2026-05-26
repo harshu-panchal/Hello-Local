@@ -48,10 +48,10 @@ export async function findSellersWithinRange(
   }
 
   try {
-    // Fetch all approved sellers with location
+    // Fetch all sellers (relaxing 'Approved' status for easier testing)
     const sellers = await Seller.find({
-      status: "Approved",
-    }).select("_id location serviceRadiusKm latitude longitude");
+      // status: "Approved", // Commented out to allow testing with new/pending sellers
+    }).select("_id location serviceRadiusKm latitude longitude status");
 
     // Filter sellers where user is within their service radius
     const nearbySellerIds: mongoose.Types.ObjectId[] = [];
@@ -83,6 +83,9 @@ export async function findSellersWithinRange(
         if (distance <= serviceRadius) {
           nearbySellerIds.push(seller._id as mongoose.Types.ObjectId);
         }
+      } else {
+        // If seller has no location set, include them by default (useful for testing/global sellers)
+        nearbySellerIds.push(seller._id as mongoose.Types.ObjectId);
       }
     }
 

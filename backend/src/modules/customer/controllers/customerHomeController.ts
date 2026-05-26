@@ -527,9 +527,31 @@ export const getHomeContent = async (req: Request, res: Response) => {
         });
 
         // Extract subcategory images
-        const subcategoryImages = uniqueChildren
+        let subcategoryImages = uniqueChildren
           .map((child: any) => child.image)
           .filter((img: string) => img && img.trim() !== "");
+
+        // If not enough subcategory images, fetch product images for this category to fill the preview
+        if (subcategoryImages.length < 4) {
+          const categoryProducts = await Product.find({
+            category: category._id,
+            status: "Active",
+            publish: true,
+          })
+            .select("mainImage galleryImages")
+            .sort({ createdAt: -1 })
+            .limit(4)
+            .lean();
+
+          for (const p of categoryProducts) {
+            if (subcategoryImages.length >= 4) break;
+            if (p.mainImage && !subcategoryImages.includes(p.mainImage)) {
+              subcategoryImages.push(p.mainImage);
+            } else if (p.galleryImages && p.galleryImages.length > 0 && !subcategoryImages.includes(p.galleryImages[0])) {
+              subcategoryImages.push(p.galleryImages[0]);
+            }
+          }
+        }
 
         return {
           id: category._id.toString(),
