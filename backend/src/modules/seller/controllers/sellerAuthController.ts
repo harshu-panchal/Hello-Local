@@ -24,7 +24,7 @@ export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
   const seller = await Seller.findOne({ mobile });
 
   if (!seller) {
-    return res.status(404).json({
+    return res.status(200).json({
       success: false,
       message: "Seller not found with this mobile number",
     });
@@ -72,7 +72,7 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   const seller = await Seller.findOne({ mobile }).select("-password");
 
   if (!seller) {
-    return res.status(404).json({
+    return res.status(200).json({
       success: false,
       message: "Seller not found",
     });

@@ -104,6 +104,7 @@ const AdminBrand = lazy(() => import("./modules/admin/pages/AdminBrand"));
 const AdminTaxes = lazy(() => import("./modules/admin/pages/AdminTaxes"));
 const AdminSellerTransaction = lazy(() => import("./modules/admin/pages/AdminSellerTransaction"));
 const AdminStockManagement = lazy(() => import("./modules/admin/pages/AdminStockManagement"));
+const AdminAddProduct = lazy(() => import("./modules/admin/pages/AdminAddProduct"));
 const AdminSubcategoryOrder = lazy(() => import("./modules/admin/pages/AdminSubcategoryOrder"));
 const AdminManageSellerList = lazy(() => import("./modules/admin/pages/AdminManageSellerList"));
 const AdminCoupon = lazy(() => import("./modules/admin/pages/AdminCoupon"));
@@ -336,6 +337,7 @@ function App() {
                                 <Route path="brand" element={<AdminBrand />} />
                                 <Route path="product/taxes" element={<AdminTaxes />} />
                                 <Route path="product/list" element={<AdminStockManagement />} />
+                                <Route path="product/edit/:id" element={<AdminAddProduct />} />
                                 <Route path="manage-seller/list" element={<AdminManageSellerList />} />
                                 <Route path="manage-seller/transaction" element={<AdminSellerTransaction />} />
                                 <Route path="delivery-boy/manage" element={<AdminManageDeliveryBoy />} />

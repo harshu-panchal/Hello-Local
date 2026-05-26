@@ -10,10 +10,8 @@ import {
   createProduct,
   updateProduct,
   getProductById,
-  getShops,
   ProductVariation,
-  Shop,
-} from "../../../services/api/productService";
+  } from "../../../services/api/admin/adminProductService";
 import {
   getCategories,
   getSubcategories,
@@ -29,7 +27,7 @@ import {
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
 
-export default function SellerAddProduct() {
+export default function AdminAddProduct() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [formData, setFormData] = useState({
@@ -89,7 +87,7 @@ export default function SellerAddProduct() {
   const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>(
     []
   );
-  const [shops, setShops] = useState<Shop[]>([]);
+  const shops: any[] = [];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -100,7 +98,7 @@ export default function SellerAddProduct() {
           getActiveTaxes(),
           getBrands(),
           getHeaderCategoriesPublic(),
-          getShops(),
+          
         ]);
 
         // Handle categories
@@ -187,7 +185,7 @@ export default function SellerAddProduct() {
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
-              galleryImageUrls: product.galleryImageUrls || [],
+              galleryImageUrls: product.galleryImageUrls || product.galleryImages || [],
               isShopByStoreOnly: (product as any).isShopByStoreOnly ? "Yes" : "No",
               shopId: (product as any).shopId?._id || (product as any).shopId || "",
             });
@@ -197,8 +195,8 @@ export default function SellerAddProduct() {
                 product.mainImageUrl || product.mainImage || ""
               );
             }
-            if (product.galleryImageUrls) {
-              setGalleryImagePreviews(product.galleryImageUrls);
+            if (product.galleryImageUrls || product.galleryImages) {
+              setGalleryImagePreviews(product.galleryImageUrls || product.galleryImages || []);
             }
           }
         } catch (err) {
@@ -467,10 +465,10 @@ export default function SellerAddProduct() {
       const productData = {
         productName: formData.productName,
         headerCategoryId: formData.headerCategory || undefined,
-        categoryId: formData.category || undefined,
-        subcategoryId: formData.subcategory || undefined,
-        subSubCategoryId: formData.subSubCategory || undefined,
-        brandId: formData.brand || undefined,
+        category: formData.category || undefined,
+        subcategory: formData.subcategory || undefined,
+        subSubCategory: formData.subSubCategory || undefined,
+        brand: formData.brand || undefined,
         publish: formData.publish === "Yes",
         popular: formData.popular === "Yes",
         dealOfDay: formData.dealOfDay === "Yes",
@@ -482,16 +480,20 @@ export default function SellerAddProduct() {
         tags: tagsArray,
         manufacturer: formData.manufacturer || undefined,
         madeIn: formData.madeIn || undefined,
-        taxId: formData.tax || undefined,
+        tax: formData.tax || undefined,
         isReturnable: formData.isReturnable === "Yes",
         maxReturnDays: formData.maxReturnDays
           ? parseInt(formData.maxReturnDays)
           : undefined,
         totalAllowedQuantity: parseInt(formData.totalAllowedQuantity || "10"),
         fssaiLicNo: formData.fssaiLicNo || undefined,
-        mainImageUrl: mainImageUrl || undefined,
-        galleryImageUrls,
-        variations: variations,
+        mainImage: mainImageUrl || undefined,
+        galleryImages: galleryImageUrls,
+        variations: variations.map((v) => ({
+          ...v,
+          value: (v as any).value || v.title,
+          name: (v as any).name || "Variation",
+        })),
         variationType: formData.variationType || undefined,
         isShopByStoreOnly: formData.isShopByStoreOnly === "Yes",
         shopId: formData.isShopByStoreOnly === "Yes" && formData.shopId ? formData.shopId : undefined,
@@ -549,7 +551,7 @@ export default function SellerAddProduct() {
           }
           setSuccessMessage("");
           // Navigate to product list
-          navigate("/seller/product/list");
+          navigate("/admin/product/list");
         }, 1500);
       } else {
         setUploadError(response.message || "Failed to create product");

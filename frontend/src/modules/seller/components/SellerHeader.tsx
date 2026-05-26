@@ -86,8 +86,18 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
             )}
           </button>
 
-          {/* Mobile Logout Button - Only visible on mobile */}
-          <div className="ml-auto sm:hidden">
+          {/* Mobile Profile and Logout Buttons - Only visible on mobile */}
+          <div className="ml-auto flex items-center sm:hidden">
+            <button
+              onClick={() => navigate('/seller/account-settings')}
+              className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+              aria-label="Profile"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             <button
               onClick={handleLogout}
               className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
