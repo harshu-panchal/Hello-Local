@@ -385,14 +385,14 @@ export default function AdminShopByStore() {
     if (filterMinPrice) {
       const minPrice = parseFloat(filterMinPrice);
       if (!isNaN(minPrice)) {
-        filtered = filtered.filter(p => p.price >= minPrice);
+        filtered = filtered.filter(p => (p.price || 0) >= minPrice);
       }
     }
 
     if (filterMaxPrice) {
       const maxPrice = parseFloat(filterMaxPrice);
       if (!isNaN(maxPrice)) {
-        filtered = filtered.filter(p => p.price <= maxPrice);
+        filtered = filtered.filter(p => (p.price || 0) <= maxPrice);
       }
     }
 

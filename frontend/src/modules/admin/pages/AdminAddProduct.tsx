@@ -11,7 +11,8 @@ import {
   updateProduct,
   getProductById,
   ProductVariation,
-  } from "../../../services/api/admin/adminProductService";
+} from "../../../services/api/admin/adminProductService";
+import { getShops } from "../../../services/api/productService";
 import {
   getCategories,
   getSubcategories,
@@ -87,7 +88,7 @@ export default function AdminAddProduct() {
   const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>(
     []
   );
-  const shops: any[] = [];
+  const [shops, setShops] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -98,7 +99,7 @@ export default function AdminAddProduct() {
           getActiveTaxes(),
           getBrands(),
           getHeaderCategoriesPublic(),
-          
+          getShops(),
         ]);
 
         // Handle categories
@@ -189,7 +190,7 @@ export default function AdminAddProduct() {
               isShopByStoreOnly: (product as any).isShopByStoreOnly ? "Yes" : "No",
               shopId: (product as any).shopId?._id || (product as any).shopId || "",
             });
-            setVariations(product.variations);
+            setVariations(product.variations || []);
             if (product.mainImageUrl || product.mainImage) {
               setMainImagePreview(
                 product.mainImageUrl || product.mainImage || ""
@@ -977,7 +978,7 @@ export default function AdminAddProduct() {
                         <div className="flex-1">
                           <span className="font-medium">{variation.title}</span>{" "}
                           - ₹{variation.price}
-                          {variation.discPrice > 0 && (
+                          {(variation.discPrice || 0) > 0 && (
                             <span className="text-pink-700 ml-2">
                               (₹{variation.discPrice})
                             </span>

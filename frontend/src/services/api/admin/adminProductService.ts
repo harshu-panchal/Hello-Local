@@ -104,30 +104,42 @@ export interface CreateBrandData {
 }
 
 // ==================== Product Interfaces ====================
+export interface ProductVariation {
+  title?: string;
+  price?: number;
+  discPrice?: number;
+  stock?: number;
+  status?: string;
+  value?: string;
+  name?: string;
+  sku?: string;
+}
+
 export interface Product {
   _id: string;
   productName: string;
   smallDescription?: string;
   description?: string;
   category: string | Category;
+  categoryId?: string;
   subcategory?: string | SubCategory;
+  subcategoryId?: string;
+  subSubCategory?: string | any;
+  subSubCategoryId?: string;
   brand?: string | Brand;
+  brandId?: string;
   seller: string | { sellerName: string; storeName: string };
   mainImage?: string;
+  mainImageUrl?: string;
   galleryImages: string[];
-  price: number;
+  galleryImageUrls?: string[];
+  price?: number;
   compareAtPrice?: number;
-  stock: number;
+  stock?: number;
   sku?: string;
   barcode?: string;
   variationType?: string;
-  variations?: Array<{
-    name: string;
-    value: string;
-    price?: number;
-    stock?: number;
-    sku?: string;
-  }>;
+  variations?: ProductVariation[];
   publish: boolean;
   popular: boolean;
   dealOfDay: boolean;
@@ -135,6 +147,7 @@ export interface Product {
   manufacturer?: string;
   madeIn?: string;
   tax?: string;
+  taxId?: string;
   fssaiLicNo?: string;
   totalAllowedQuantity?: number;
   isReturnable: boolean;
@@ -150,31 +163,30 @@ export interface Product {
   commission?: number;
   createdAt?: string;
   updatedAt?: string;
+  headerCategoryId?: string | any;
+  isShopByStoreOnly?: boolean;
+  shopId?: string | any;
 }
 
 export interface CreateProductData {
   productName: string;
+  headerCategoryId?: string;
   smallDescription?: string;
   description?: string;
-  category: string;
+  category?: string;
   subcategory?: string;
+  subSubCategory?: string;
   brand?: string;
   seller?: string;
   mainImage?: string;
   galleryImages?: string[];
-  price: number;
+  price?: number;
   compareAtPrice?: number;
-  stock: number;
+  stock?: number;
   sku?: string;
   barcode?: string;
   variationType?: string;
-  variations?: Array<{
-    name: string;
-    value: string;
-    price?: number;
-    stock?: number;
-    sku?: string;
-  }>;
+  variations?: ProductVariation[];
   publish?: boolean;
   popular?: boolean;
   dealOfDay?: boolean;
@@ -191,6 +203,8 @@ export interface CreateProductData {
   seoImageAlt?: string;
   tags?: string[];
   commission?: number;
+  isShopByStoreOnly?: boolean;
+  shopId?: string;
 }
 
 export interface GetProductsParams {
