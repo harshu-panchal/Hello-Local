@@ -574,7 +574,7 @@ export default function AdminTaxes() {
 
       {/* Footer */}
       <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <a href="#" className="text-blue-600 hover:underline">
           Hello Local - 10 Minute App
         </a>

@@ -8,18 +8,15 @@ const useRouteLoader = () => {
   const isInitialMount = useRef(true);
 
   useEffect(() => {
-    // Start loader on navigation
-    // On initial mount, the LoadingProvider already started it (count=1)
-    if (!isInitialMount.current) {
-      startRouteLoading();
-    }
+    // Only show the full-screen route loader on the very first load (page refresh).
+    // In-app navigations should NOT trigger a full-screen loader — each page renders
+    // its own inline loader, and lazy routes already use the Suspense fallback.
+    // This prevents the loader from re-appearing on every navigation/refetch.
+    if (!isInitialMount.current) return;
 
-    // Small delay to simulate route processing and ensure loader visibility
     const timer = setTimeout(() => {
-      stopRouteLoading(); // This will decrement the count (to 0 on initial mount, or matching the startRouteLoading on navigation)
-      if (isInitialMount.current) {
-        isInitialMount.current = false;
-      }
+      stopRouteLoading(); // clears the initial-load loader started by LoadingProvider
+      isInitialMount.current = false;
     }, 100);
 
     return () => clearTimeout(timer);

@@ -22,6 +22,13 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
     }
   }, [lastNotification]);
 
+  // Lock background scroll while the mobile sidebar drawer is open
+  useEffect(() => {
+    const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
+    document.body.style.overflow = isSidebarOpen && isMobile ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isSidebarOpen]);
+
   const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
 
   const closeNotification = () => {

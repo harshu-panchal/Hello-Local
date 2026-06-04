@@ -28,10 +28,15 @@ import {
   getHeaderCategoriesPublic,
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
+import { useAuth } from "../../../context/AuthContext";
 
 export default function SellerAddProduct() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  // Pending/Rejected sellers cannot add or edit products (#148/#306).
+  // Backend enforces this too; this just blocks the UI early.
+  const isApproved = ((user as any)?.status ?? "Approved") === "Approved";
   const [formData, setFormData] = useState({
     productName: "",
     headerCategory: "",
@@ -55,6 +60,7 @@ export default function SellerAddProduct() {
     isReturnable: "No",
     maxReturnDays: "",
     fssaiLicNo: "",
+    foodType: "None",
     totalAllowedQuantity: "10",
     mainImageUrl: "",
     galleryImageUrls: [] as string[],
@@ -184,6 +190,7 @@ export default function SellerAddProduct() {
               isReturnable: product.isReturnable ? "Yes" : "No",
               maxReturnDays: product.maxReturnDays?.toString() || "",
               fssaiLicNo: product.fssaiLicNo || "",
+              foodType: (product as any).foodType || "None",
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
@@ -397,6 +404,12 @@ export default function SellerAddProduct() {
     e.preventDefault();
     setUploadError("");
 
+    // Block unapproved sellers (#148/#306)
+    if (!isApproved) {
+      setUploadError("Your seller account is awaiting admin approval. You can add products once approved.");
+      return;
+    }
+
     // Basic validation
     if (!formData.productName.trim()) {
       setUploadError("Please enter a product name.");
@@ -413,6 +426,24 @@ export default function SellerAddProduct() {
         setUploadError("Please select a category.");
         return;
       }
+    }
+
+    // Product main image is required (label is marked * but was never enforced)
+    if (!mainImageFile && !formData.mainImageUrl) {
+      setUploadError("Please add a product main image.");
+      return;
+    }
+
+    // Made In should only contain alphabets and spaces (when provided)
+    if (formData.madeIn.trim() && !/^[A-Za-z\s]+$/.test(formData.madeIn.trim())) {
+      setUploadError("Made In should contain only alphabets.");
+      return;
+    }
+
+    // FSSAI Lic. No. should be in a valid format (digits/slashes only) when provided
+    if (formData.fssaiLicNo.trim() && !/^[0-9/]{8,}$/.test(formData.fssaiLicNo.trim())) {
+      setUploadError("Please enter a valid FSSAI Lic. No. (e.g. 21/001/00012345).");
+      return;
     }
 
     setUploading(true);
@@ -489,6 +520,7 @@ export default function SellerAddProduct() {
           : undefined,
         totalAllowedQuantity: parseInt(formData.totalAllowedQuantity || "10"),
         fssaiLicNo: formData.fssaiLicNo || undefined,
+        foodType: (formData.foodType || "None") as "Veg" | "Non-Veg" | "None",
         mainImageUrl: mainImageUrl || undefined,
         galleryImageUrls,
         variations: variations,
@@ -535,6 +567,7 @@ export default function SellerAddProduct() {
               isReturnable: "No",
               maxReturnDays: "",
               fssaiLicNo: "",
+              foodType: "None",
               totalAllowedQuantity: "10",
               mainImageUrl: "",
               galleryImageUrls: [],
@@ -570,6 +603,14 @@ export default function SellerAddProduct() {
       {/* Main Content */}
       <div className="flex-1">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Pending-approval banner (#148/#306) */}
+          {!isApproved && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg text-sm">
+              Your seller account is <span className="font-semibold">awaiting admin approval</span>.
+              You can browse the panel, but adding or editing products is disabled until your account is approved.
+            </div>
+          )}
+
           {/* Product Section */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
             <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
@@ -930,6 +971,12 @@ export default function SellerAddProduct() {
                         discPrice: e.target.value,
                       })
                     }
+                    onFocus={(e) => {
+                      // Auto-clear the default "0" so the seller can type a value cleanly
+                      if (e.target.value === "0") {
+                        setVariationForm((prev) => ({ ...prev, discPrice: "" }));
+                      }
+                    }}
                     placeholder="80"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
                   />
@@ -1059,7 +1106,15 @@ export default function SellerAddProduct() {
                   <select
                     name="isReturnable"
                     value={formData.isReturnable}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        isReturnable: value,
+                        // Clear return days when the product is not returnable
+                        maxReturnDays: value === "Yes" ? prev.maxReturnDays : "",
+                      }));
+                    }}
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
                     <option value="No">No</option>
                     <option value="Yes">Yes</option>
@@ -1074,9 +1129,24 @@ export default function SellerAddProduct() {
                     name="maxReturnDays"
                     value={formData.maxReturnDays}
                     onChange={handleChange}
-                    placeholder="Enter Max Return Days"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
+                    disabled={formData.isReturnable !== "Yes"}
+                    placeholder={formData.isReturnable === "Yes" ? "Enter Max Return Days" : "Not returnable"}
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 disabled:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Veg / Non-Veg
+                  </label>
+                  <select
+                    name="foodType"
+                    value={formData.foodType}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
+                    <option value="None">Not Applicable (non-food)</option>
+                    <option value="Veg">Veg</option>
+                    <option value="Non-Veg">Non-Veg</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
@@ -1345,8 +1415,9 @@ export default function SellerAddProduct() {
           <div className="flex justify-end pb-6">
             <button
               type="submit"
-              disabled={uploading}
-              className={`px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm ${uploading
+              disabled={uploading || !isApproved}
+              title={!isApproved ? "Available after admin approval" : undefined}
+              className={`px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm ${uploading || !isApproved
                 ? "bg-neutral-400 cursor-not-allowed text-white"
                 : "bg-pink-700 hover:bg-pink-800 text-white"
                 }`}>

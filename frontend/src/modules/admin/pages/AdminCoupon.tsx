@@ -126,6 +126,12 @@ export default function AdminCoupon() {
       return;
     }
 
+    // Coupon expiry cannot be a past date (#278/#331)
+    if (formData.couponExpiryDate < new Date().toISOString().split('T')[0]) {
+      setUploadError("Coupon expiry date cannot be in the past");
+      return;
+    }
+
     setUploading(true);
 
     try {
@@ -387,6 +393,7 @@ export default function AdminCoupon() {
                     value={formData.couponExpiryDate}
                     onChange={handleInputChange}
                     required
+                    min={new Date().toISOString().split('T')[0]}
                     className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
                   />
                 </div>
@@ -763,7 +770,7 @@ export default function AdminCoupon() {
 
       {/* Footer */}
       <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <a href="#" className="text-blue-600 hover:underline">
           Hello Local - 10 Minute App
         </a>

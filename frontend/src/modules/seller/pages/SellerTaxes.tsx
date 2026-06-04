@@ -28,7 +28,7 @@ export default function SellerTaxes() {
     }, []);
 
     const filteredTaxes = taxes.filter(tax =>
-        tax.name.toLowerCase().includes(searchTerm.toLowerCase())
+        tax.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
     );
 
     const totalPages = Math.ceil(filteredTaxes.length / rowsPerPage);

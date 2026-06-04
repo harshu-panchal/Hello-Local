@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useToast } from '../../../context/ToastContext';
+import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
 import {
   getSellerWalletBalance,
   getSellerWalletTransactions,
@@ -13,7 +15,9 @@ type Tab = 'transactions' | 'withdrawals' | 'commissions';
 
 export default function SellerWallet() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('transactions');
+  const [hasBankDetails, setHasBankDetails] = useState(true);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
@@ -24,24 +28,38 @@ export default function SellerWallet() {
   const [paymentMethod, setPaymentMethod] = useState<'Bank Transfer' | 'UPI'>('Bank Transfer');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const MIN_WITHDRAWAL = 100;
+
   useEffect(() => {
     fetchWalletData();
   }, []);
 
+  // Lock background scroll while the withdrawal modal is open
+  useEffect(() => {
+    document.body.style.overflow = showWithdrawModal ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showWithdrawModal]);
+
   const fetchWalletData = async () => {
     try {
       setLoading(true);
-      const [balanceRes, transactionsRes, withdrawalsRes, commissionsRes] = await Promise.all([
+      const [balanceRes, transactionsRes, withdrawalsRes, commissionsRes, profileRes] = await Promise.all([
         getSellerWalletBalance(),
         getSellerWalletTransactions(),
         getSellerWithdrawals(),
         getSellerCommissions(),
+        getSellerProfile(),
       ]);
 
       if (balanceRes.success) setBalance(balanceRes.data.balance);
       if (transactionsRes.success) setTransactions(transactionsRes.data.transactions || []);
       if (withdrawalsRes.success) setWithdrawals(withdrawalsRes.data || []);
       if (commissionsRes.success) setCommissions(commissionsRes.data);
+      if (profileRes.success) {
+        // Bank details are required before a withdrawal can be requested (#257)
+        const p = profileRes.data || {};
+        setHasBankDetails(Boolean(p.accountNumber && p.ifsc));
+      }
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to load wallet data', 'error');
     } finally {
@@ -54,6 +72,11 @@ export default function SellerWallet() {
       const amount = parseFloat(withdrawAmount);
       if (isNaN(amount) || amount <= 0) {
         showToast('Please enter a valid amount', 'error');
+        return;
+      }
+
+      if (amount < MIN_WITHDRAWAL) {
+        showToast(`Minimum withdrawal amount is ₹${MIN_WITHDRAWAL}`, 'error');
         return;
       }
 
@@ -103,7 +126,15 @@ export default function SellerWallet() {
         <p className="text-sm opacity-90 mb-1">Wallet Balance</p>
         <h1 className="text-4xl font-bold mb-4">₹{balance.toFixed(2)}</h1>
         <button
-          onClick={() => setShowWithdrawModal(true)}
+          onClick={() => {
+            // Require bank details before allowing a withdrawal request (#257)
+            if (!hasBankDetails) {
+              showToast('Please add your bank details before requesting a withdrawal', 'error');
+              navigate('/seller/account-settings');
+              return;
+            }
+            setShowWithdrawModal(true);
+          }}
           className="bg-white text-blue-600 px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-50 transition-all shadow-md"
         >
           Request Withdrawal
@@ -296,7 +327,7 @@ export default function SellerWallet() {
                     step="0.01"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Available: ₹{balance.toFixed(2)}</p>
+                <p className="text-xs text-gray-500 mt-1">Available: ₹{balance.toFixed(2)} · Min: ₹{MIN_WITHDRAWAL}</p>
               </div>
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>

@@ -1,5 +1,6 @@
 import { useDeliveryStatus } from '../context/DeliveryStatusContext';
 import { useDeliveryUser } from '../context/DeliveryUserContext';
+import { useAuth } from '../../../context/AuthContext';
 
 interface DeliveryHeaderProps {
   userName?: string;
@@ -8,6 +9,9 @@ interface DeliveryHeaderProps {
 export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
   const { isOnline, setIsOnline } = useDeliveryStatus();
   const { userName: contextUserName } = useDeliveryUser();
+  const { user } = useAuth();
+  // Unapproved partners cannot go online (#98/#140)
+  const isPendingApproval = ((user as any)?.status ?? 'Active') === 'Inactive';
   const displayName = userName || contextUserName;
 
   return (
@@ -44,10 +48,12 @@ export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
             </div>
           </div>
 
-          {/* Toggle Switch */}
+          {/* Toggle Switch — disabled until admin approval (#98/#140) */}
           <button
-            onClick={() => setIsOnline(!isOnline)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${isOnline ? 'bg-rose-600' : 'bg-neutral-300'
+            onClick={() => { if (!isPendingApproval) setIsOnline(!isOnline); }}
+            disabled={isPendingApproval}
+            title={isPendingApproval ? 'Available after admin approval' : undefined}
+            className={`relative w-12 h-6 rounded-full transition-colors ${isPendingApproval ? 'bg-neutral-200 cursor-not-allowed opacity-60' : isOnline ? 'bg-rose-600' : 'bg-neutral-300'
               }`}
           >
             <div

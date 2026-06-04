@@ -559,10 +559,10 @@ export default function AdminCashCollection() {
                       {collection.orderId}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      ?{collection.total.toFixed(2)}
+                      ₹{collection.total.toFixed(2)}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                      ?{collection.amount.toFixed(2)}
+                      ₹{collection.amount.toFixed(2)}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
                       {collection.remark || '-'}
@@ -639,7 +639,7 @@ export default function AdminCashCollection() {
 
       {/* Footer */}
       <div className="bg-neutral-800 text-white text-center text-sm py-4">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <a href="#" className="text-blue-400 hover:text-blue-300">
           Hello Local - 10 Minute App
         </a>

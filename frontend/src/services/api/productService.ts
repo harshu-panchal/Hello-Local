@@ -49,6 +49,7 @@ export interface Product {
   maxReturnDays?: number;
   totalAllowedQuantity: number;
   fssaiLicNo?: string;
+  foodType?: "Veg" | "Non-Veg" | "None";
   mainImageUrl?: string;
   mainImage?: string; // Mapped directly from Product model
   galleryImageUrls: string[];
@@ -90,6 +91,7 @@ export interface CreateProductData {
   maxReturnDays?: number;
   totalAllowedQuantity: number;
   fssaiLicNo?: string;
+  foodType?: "Veg" | "Non-Veg" | "None";
   mainImageUrl?: string;
   galleryImageUrls?: string[];
   variations: ProductVariation[];

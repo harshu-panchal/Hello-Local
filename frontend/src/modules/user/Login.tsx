@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { sendOTP, verifyOTP } from '../../services/api/auth/customerAuthService';
 import { useAuth } from '../../context/AuthContext';
 import OTPInput from '../../components/OTPInput';
+import { normalizeMobile } from '../../utils/phone';
 import Lottie from 'lottie-react';
 import groceryAnimation from '../../../assets/animation/Grocery-animation.json';
 import { useThemeContext } from '../../context/ThemeContext';
@@ -122,7 +123,7 @@ export default function Login() {
                 <input
                   type="tel"
                   value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => setMobileNumber(normalizeMobile(e.target.value))}
                   className="block w-full pl-14 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-medium text-neutral-900 placeholder-neutral-400 focus:outline-none transition-all"
                   style={{ focusRingColor: currentTheme.accentColor, borderColor: mobileNumber.length > 0 ? currentTheme.accentColor : '#e5e5e5' } as any}
                   placeholder="Enter mobile number"
@@ -196,11 +197,17 @@ export default function Login() {
             </div>
           )}
 
-          <div className="mt-8 text-center">
-            <p className="text-xs text-neutral-400">
-              By continuing, you agree to our <a href="#" className="hover:underline" style={{ color: currentTheme.accentColor }}>Terms of Service</a> & <a href="#" className="hover:underline" style={{ color: currentTheme.accentColor }}>Privacy Policy</a>
-            </p>
-          </div>
+          {/* Terms/Privacy: shown only on the mobile-entry step, not on the OTP page (#159/#189) */}
+          {!showOTP && (
+            <div className="mt-8 text-center">
+              <p className="text-xs text-neutral-400">
+                By continuing, you agree to our{' '}
+                <button type="button" onClick={() => navigate('/about-us')} className="hover:underline" style={{ color: currentTheme.accentColor }}>Terms of Service</button>
+                {' '}&{' '}
+                <button type="button" onClick={() => navigate('/about-us')} className="hover:underline" style={{ color: currentTheme.accentColor }}>Privacy Policy</button>
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

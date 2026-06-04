@@ -4,10 +4,13 @@ import DeliveryHeader from '../components/DeliveryHeader';
 import DeliveryBottomNav from '../components/DeliveryBottomNav';
 import { getSellersInRadius } from '../../../services/api/delivery/deliveryService';
 import { useDeliveryStatus } from '../context/DeliveryStatusContext';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function DeliverySellersInRange() {
   const navigate = useNavigate();
   const { isOnline, sellersInRange, isLoadingSellers, locationError } = useDeliveryStatus();
+  const { user } = useAuth();
+  const isPendingApproval = ((user as any)?.status ?? 'Active') === 'Inactive';
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -15,6 +18,25 @@ export default function DeliverySellersInRange() {
       setError(locationError);
     }
   }, [locationError]);
+
+  // Unapproved partners must not see sellers in range (#142)
+  if (isPendingApproval) {
+    return (
+      <div className="min-h-screen bg-neutral-100 flex flex-col items-center justify-center pb-20 px-4 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-neutral-200">
+          <h2 className="text-xl font-bold text-neutral-900 mb-2">Pending Admin Approval</h2>
+          <p className="text-neutral-500 mb-6">You can view sellers in range once an admin approves your account.</p>
+          <button
+            onClick={() => navigate('/delivery')}
+            className="w-full bg-teal-600 text-white py-3 rounded-xl font-semibold hover:bg-teal-700 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+        <DeliveryBottomNav />
+      </div>
+    );
+  }
 
   if (!isOnline) {
     return (

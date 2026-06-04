@@ -1038,7 +1038,7 @@ export default function AdminShopByStore() {
 
       {/* Footer */}
       <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <a href="#" className="text-rose-700 hover:text-rose-800">
           Hello Local - 10 Minute App
         </a>

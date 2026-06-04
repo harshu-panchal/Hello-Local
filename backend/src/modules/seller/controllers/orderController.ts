@@ -93,6 +93,18 @@ export const getOrders = asyncHandler(
     // Get total count for pagination
     const total = await Order.countDocuments(query);
 
+    // Compute each order's amount for THIS seller = sum of the seller's own items.
+    // The order's `total` includes other sellers' items + shipping/fees, so showing it
+    // would not match the seller's invoice (which only lists this seller's items). (#22/286)
+    const pageOrderIds = orders.map(o => o._id);
+    const sellerTotals = await OrderItem.aggregate([
+      { $match: { order: { $in: pageOrderIds }, seller: new mongoose.Types.ObjectId(sellerId) } },
+      { $group: { _id: "$order", amount: { $sum: "$total" } } },
+    ]);
+    const sellerAmountByOrder = new Map<string, number>(
+      sellerTotals.map((r: any) => [r._id.toString(), r.amount])
+    );
+
     // Format response for frontend
     const formattedOrders = orders.map(order => ({
       id: order._id,
@@ -102,7 +114,7 @@ export const getOrders = asyncHandler(
         : order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
       orderDate: order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
       status: order.status === 'Out for Delivery' ? 'On the way' : order.status,
-      amount: order.total,
+      amount: sellerAmountByOrder.get((order._id as any).toString()) ?? order.total,
       customerName: (order.customer as any)?.name || order.customerName || '',
       customerPhone: (order.customer as any)?.phone || order.customerPhone || '',
       deliveryBoyName: (order.deliveryBoy as any)?.name || '',
@@ -215,6 +227,12 @@ export const getOrderById = asyncHandler(
       };
     });
 
+    // Seller-specific totals (sum of THIS seller's items only) so the invoice
+    // header matches the line items and the order list amount. (#22/286)
+    const sellerSubtotal = formattedItems.reduce((sum, i) => sum + (i.subtotal || 0), 0);
+    const sellerTax = formattedItems.reduce((sum, i) => sum + (i.tax || 0), 0);
+    const sellerGrandTotal = sellerSubtotal + sellerTax;
+
     // Format order data for frontend
     const orderDetail = {
       id: order._id,
@@ -229,9 +247,9 @@ export const getOrderById = asyncHandler(
       deliveryBoyName: (order.deliveryBoy as any)?.name || '',
       deliveryBoyPhone: (order.deliveryBoy as any)?.mobile || '',
       items: formattedItems,
-      subtotal: order.subtotal || 0,
-      tax: order.tax || 0,
-      grandTotal: order.total || 0,
+      subtotal: sellerSubtotal,
+      tax: sellerTax,
+      grandTotal: sellerGrandTotal,
       paymentMethod: order.paymentMethod || 'N/A',
       paymentStatus: order.paymentStatus || 'Pending',
       deliveryAddress: order.deliveryAddress || {},

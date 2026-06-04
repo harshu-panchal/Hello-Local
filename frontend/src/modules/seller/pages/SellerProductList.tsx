@@ -244,6 +244,25 @@ export default function SellerProductList() {
     ? filteredVariations
     : filteredVariations.slice(startIndex, endIndex);
 
+  // Collapse multi-variation products into a single row by default (show the first
+  // variation; reveal the rest only when expanded). This keeps the visible row
+  // count aligned with the actual number of PRODUCTS — so it matches the
+  // dashboard "Total Product" instead of counting every variation as an entry.
+  const visibleVariations = displayedVariations.filter((variation, index) => {
+    const isFirstOfProduct =
+      index === 0 ||
+      displayedVariations[index - 1].productId !== variation.productId;
+    return isFirstOfProduct || expandedProducts.has(variation.productId);
+  });
+
+  // Distinct product count (for the "entries" footer)
+  const productCount = new Set(filteredVariations.map((v) => v.productId)).size;
+  const footerTotal = useServerPagination && paginationInfo ? paginationInfo.total : productCount;
+  const footerStart = footerTotal === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
+  const footerEnd = useServerPagination
+    ? endIndex
+    : Math.min(currentPage * rowsPerPage, productCount);
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -289,7 +308,7 @@ export default function SellerProductList() {
       </div>
 
       {/* Content Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col">
+      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="p-4 border-b border-neutral-100 font-medium text-neutral-700">
           View Product List
         </div>
@@ -354,7 +373,9 @@ export default function SellerProductList() {
               </select>
             </div>
             <button
+              disabled={filteredVariations.length === 0}
               onClick={() => {
+                if (filteredVariations.length === 0) return; // nothing to export (#17)
                 const headers = [
                   "Product Id",
                   "Variation Id",
@@ -382,7 +403,8 @@ export default function SellerProductList() {
                     ].join(",")
                   ),
                 ].join("\n");
-                const blob = new Blob([csvContent], {
+                // UTF-8 BOM so Excel reads special characters correctly (#31/63)
+                const blob = new Blob(['﻿' + csvContent], {
                   type: "text/csv;charset=utf-8;",
                 });
                 const link = document.createElement("a");
@@ -462,7 +484,7 @@ export default function SellerProductList() {
 
         {/* Table */}
         {!loading && !error && (
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto flex-1 min-w-0">
             <table className="w-full text-left border-collapse border border-neutral-200">
               <thead>
                 <tr className="bg-neutral-50 text-xs font-bold text-neutral-800">
@@ -545,10 +567,10 @@ export default function SellerProductList() {
                 </tr>
               </thead>
               <tbody>
-                {displayedVariations.map((variation, index) => {
+                {visibleVariations.map((variation, index) => {
                   const isFirstVariation =
                     index === 0 ||
-                    displayedVariations[index - 1].productId !==
+                    visibleVariations[index - 1].productId !==
                     variation.productId;
                   const product = products.find(
                     (p) => p._id === variation.productId
@@ -673,7 +695,7 @@ export default function SellerProductList() {
                     </tr>
                   );
                 })}
-                {displayedVariations.length === 0 && (
+                {visibleVariations.length === 0 && (
                   <tr>
                     <td
                       colSpan={12}
@@ -691,11 +713,7 @@ export default function SellerProductList() {
         {!loading && !error && (
           <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
             <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {startIndex + 1} to {endIndex} of{" "}
-              {useServerPagination && paginationInfo
-                ? paginationInfo.total
-                : filteredVariations.length}{" "}
-              entries
+              Showing {footerStart} to {footerEnd} of {footerTotal} entries
             </div>
             <div className="flex items-center gap-2">
               <button

@@ -333,22 +333,21 @@ export default function SellerOrderDetail() {
     }
   };
 
-  const formatUnit = (unit: string, qty: number) => {
+  const formatUnit = (unit: string) => {
     if (!unit || unit === 'N/A') return 'N/A';
 
-    // improved regex to handle decimals and various spacing
+    // Show the pack unit as-is (e.g. "500g"). Quantity is shown separately in the
+    // Qty column, so the unit must NOT be multiplied by quantity. (#28/#210)
     const match = unit.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)$/);
     if (match) {
       const val = parseFloat(match[1]);
       const u = match[2];
-      // check if val is a valid number
       if (!isNaN(val)) {
-        const total = val * qty;
-        // Format to remove trailing zeros if integer (e.g. 1.0 -> 1)
-        return `${parseFloat(total.toFixed(2))}${u}`;
+        // Normalise formatting (e.g. "1.0kg" -> "1kg"), keep the unit value itself
+        return `${parseFloat(val.toFixed(2))}${u}`;
       }
     }
-    return `${unit} x ${qty}`;
+    return unit;
   };
 
   return (
@@ -502,7 +501,7 @@ export default function SellerOrderDetail() {
                   <tr key={item.srNo}>
                     <td className="px-4 py-3 text-sm text-neutral-900">{item.srNo}</td>
                     <td className="px-4 py-3 text-sm text-neutral-900">{item.product}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900">{formatUnit(item.unit, item.qty)}</td>
+                    <td className="px-4 py-3 text-sm text-neutral-900">{formatUnit(item.unit)}</td>
                     <td className="px-4 py-3 text-sm text-neutral-900">₹{item.price.toFixed(2)}</td>
                     <td className="px-4 py-3 text-sm text-neutral-600">
                       {item.tax.toFixed(2)} ({item.taxPercent.toFixed(2)}%)
