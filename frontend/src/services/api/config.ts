@@ -26,6 +26,9 @@ export const getSocketBaseURL = (): string => {
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  // Image uploads / product creation can be slow on poor connections, so allow a
+  // generous window before giving up rather than hanging indefinitely.
+  timeout: 60000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -51,6 +54,19 @@ api.interceptors.response.use(
     return response;
   },
   (error: any) => {
+    // Normalise connection-level failures (no HTTP response) into a clear,
+    // user-friendly message so the UI shows "network error" with context
+    // instead of axios's raw "Network Error" / "timeout of 60000ms exceeded".
+    if (!error.response) {
+      if (error.code === "ECONNABORTED") {
+        error.friendlyMessage =
+          "The request timed out. Please check your connection and try again.";
+      } else {
+        error.friendlyMessage =
+          "Unable to reach the server. Please check your internet connection and try again.";
+      }
+    }
+
     // Only handle 401 (Unauthorized) for auto-logout
     // 403 (Forbidden) means user is authenticated but doesn't have permission - DO NOT LOGOUT
     if (error.response?.status === 401) {

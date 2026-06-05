@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getCategories, Category } from '../../../services/api/categoryService';
+import { exportToCsv } from '../../../utils/exportCsv';
 
 export default function SellerCategory() {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -87,25 +88,15 @@ export default function SellerCategory() {
                             disabled={filteredCategories.length === 0}
                             onClick={() => {
                                 if (filteredCategories.length === 0) return; // nothing to export (#17)
-                                const headers = ['ID', 'Category Name', 'Total Subcategory'];
-                                const csvContent = [
-                                    headers.join(','),
-                                    ...filteredCategories.map(cat => [
+                                exportToCsv(
+                                    ['ID', 'Category Name', 'Total Subcategory'],
+                                    filteredCategories.map(cat => [
                                         cat._id,
-                                        `"${cat.name}"`,
-                                        cat.totalSubcategory
-                                    ].join(','))
-                                ].join('\n');
-                                // UTF-8 BOM so Excel reads special characters correctly (#31/63)
-                                const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                                const link = document.createElement('a');
-                                const url = URL.createObjectURL(blob);
-                                link.setAttribute('href', url);
-                                link.setAttribute('download', `categories_${new Date().toISOString().split('T')[0]}.csv`);
-                                link.style.visibility = 'hidden';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
+                                        cat.name,
+                                        cat.totalSubcategory,
+                                    ]),
+                                    'categories'
+                                );
                             }}
                             className="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
                         >

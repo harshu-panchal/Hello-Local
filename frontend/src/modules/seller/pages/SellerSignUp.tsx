@@ -8,6 +8,7 @@ import { getHeaderCategoriesPublic, HeaderCategory } from '../../../services/api
 import LocationPickerMap from '../../../components/LocationPickerMap';
 import { normalizeMobile } from '../../../utils/phone';
 import { useEffect } from 'react';
+import LegalPolicyModal, { PolicyTab } from '../../../components/LegalPolicyModal';
 
 export default function SellerSignUp() {
   const navigate = useNavigate();
@@ -39,6 +40,7 @@ export default function SellerSignUp() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<HeaderCategory[]>([]);
+  const [policyTab, setPolicyTab] = useState<PolicyTab | null>(null);
 
   // Per-field validation. Returns an error message, or '' when the value is valid.
   const validateField = (name: string, value: string): string => {
@@ -309,7 +311,9 @@ export default function SellerSignUp() {
                       onChange={handleInputChange}
                       placeholder="Enter mobile number"
                       required
-                      maxLength={10}
+                      // Allow a leading country code (e.g. "91...") to be typed/pasted so
+                      // normalizeMobile can strip it down to the 10-digit number.
+                      maxLength={13}
                       className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
                       disabled={loading}
                     />
@@ -485,7 +489,7 @@ export default function SellerSignUp() {
                         }}
                       />
                       <p className="mt-1 text-xs text-neutral-500 text-center">
-                        Selected Coordinates: {formData.latitude}, {formData.longitude}
+                        Selected Location: {formData.searchLocation || `${formData.latitude}, ${formData.longitude}`}
                       </p>
                     </div>
                   ) : (
@@ -699,8 +703,29 @@ export default function SellerSignUp() {
 
       {/* Footer Text */}
       <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
-        By continuing, you agree to Hello Local's Terms of Service and Privacy Policy
+        By continuing, you agree to Hello Local's{' '}
+        <button
+          type="button"
+          onClick={() => setPolicyTab('terms')}
+          className="text-pink-600 hover:text-pink-700 font-semibold underline"
+        >
+          Terms of Service
+        </button>{' '}
+        and{' '}
+        <button
+          type="button"
+          onClick={() => setPolicyTab('privacy')}
+          className="text-pink-600 hover:text-pink-700 font-semibold underline"
+        >
+          Privacy Policy
+        </button>
       </p>
+
+      <LegalPolicyModal
+        open={policyTab !== null}
+        initialTab={policyTab ?? 'terms'}
+        onClose={() => setPolicyTab(null)}
+      />
     </div>
   );
 }

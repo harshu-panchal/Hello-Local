@@ -11,6 +11,7 @@ import {
   Category as apiCategory,
 } from "../../../services/api/categoryService";
 import { useAuth } from "../../../context/AuthContext";
+import { exportToCsv } from "../../../utils/exportCsv";
 
 // ... (interfaces remain same)
 
@@ -284,6 +285,11 @@ export default function SellerProductList() {
     });
   };
 
+  // Mongo ObjectIds are 24 chars and dominate the table — show a short tail and
+  // expose the full id on hover. Full ids are still used for actions and export.
+  const shortId = (id: string) =>
+    id && id.length > 10 ? `…${id.slice(-6)}` : id;
+
   const SortIcon = ({ column }: { column: string }) => (
     <span className="text-neutral-300 text-[10px]">
       {sortColumn === column ? (sortDirection === "asc" ? "↑" : "↓") : "⇅"}
@@ -359,7 +365,7 @@ export default function SellerProductList() {
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm text-neutral-600">Show</span>
               <select
@@ -376,48 +382,31 @@ export default function SellerProductList() {
               disabled={filteredVariations.length === 0}
               onClick={() => {
                 if (filteredVariations.length === 0) return; // nothing to export (#17)
-                const headers = [
-                  "Product Id",
-                  "Variation Id",
-                  "Product Name",
-                  "Seller Name",
-                  "Brand Name",
-                  "Category",
-                  "Price",
-                  "Disc Price",
-                  "Variation",
-                ];
-                const csvContent = [
-                  headers.join(","),
-                  ...filteredVariations.map((v) =>
-                    [
-                      v.productId,
-                      v.variationId,
-                      `"${v.productName}"`,
-                      `"${v.sellerName}"`,
-                      `"${v.brandName}"`,
-                      `"${v.category}"`,
-                      v.price,
-                      v.discPrice,
-                      `"${v.variation}"`,
-                    ].join(",")
-                  ),
-                ].join("\n");
-                // UTF-8 BOM so Excel reads special characters correctly (#31/63)
-                const blob = new Blob(['﻿' + csvContent], {
-                  type: "text/csv;charset=utf-8;",
-                });
-                const link = document.createElement("a");
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute(
-                  "download",
-                  `products_${new Date().toISOString().split("T")[0]}.csv`
+                exportToCsv(
+                  [
+                    "Product Id",
+                    "Variation Id",
+                    "Product Name",
+                    "Seller Name",
+                    "Brand Name",
+                    "Category",
+                    "Price",
+                    "Disc Price",
+                    "Variation",
+                  ],
+                  filteredVariations.map((v) => [
+                    v.productId,
+                    v.variationId,
+                    v.productName,
+                    v.sellerName,
+                    v.brandName,
+                    v.category,
+                    v.price,
+                    v.discPrice,
+                    v.variation,
+                  ]),
+                  "products"
                 );
-                link.style.visibility = "hidden";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
               }}
               className="bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors">
               <svg
@@ -447,13 +436,13 @@ export default function SellerProductList() {
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
-            <div className="relative">
+            <div className="relative flex-1 min-w-0 sm:flex-none">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">
                 Search:
               </span>
               <input
                 type="text"
-                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-48"
+                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-full sm:w-48 max-w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder=""
@@ -606,11 +595,15 @@ export default function SellerProductList() {
                               </svg>
                             </button>
                           )}
-                          <span>{variation.productId}</span>
+                          <span title={variation.productId} className="font-mono text-xs">
+                            {shortId(variation.productId)}
+                          </span>
                         </div>
                       </td>
                       <td className="p-4 align-middle border border-neutral-200">
-                        {variation.variationId}
+                        <span title={variation.variationId} className="font-mono text-xs">
+                          {shortId(variation.variationId)}
+                        </span>
                       </td>
                       <td className="p-4 align-middle border border-neutral-200">
                         <div className="flex flex-col gap-1">

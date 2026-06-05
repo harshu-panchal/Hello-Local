@@ -3,6 +3,8 @@ import SellerHeader from './SellerHeader';
 import SellerSidebar from './SellerSidebar';
 import { useSellerSocketContext, SellerNotification } from '../../../context/SellerSocketContext';
 import SellerNotificationAlert from './SellerNotificationAlert';
+import { useAuth } from '../../../context/AuthContext';
+import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
 
 interface SellerLayoutProps {
   children: ReactNode;
@@ -15,6 +17,31 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
   // Consume shared socket context (single connection for the whole seller panel)
   const { lastNotification, clearNotification } = useSellerSocketContext();
 
+  // Refresh the seller's approval status on panel load so that a seller approved
+  // by admin while logged in becomes unblocked (e.g. can add products) without a
+  // manual re-login. (#admin-approval)
+  const { user, updateUser } = useAuth();
+  useEffect(() => {
+    let active = true;
+    getSellerProfile()
+      .then((res) => {
+        if (
+          active &&
+          res?.success &&
+          res.data?.status &&
+          (user as any)?.status !== res.data.status
+        ) {
+          updateUser({ ...(user as any), status: res.data.status });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Show popup whenever a new notification arrives
   useEffect(() => {
     if (lastNotification) {
@@ -22,11 +49,30 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
     }
   }, [lastNotification]);
 
-  // Lock background scroll while the mobile sidebar drawer is open
+  // Lock background scroll while the mobile sidebar drawer is open.
+  // `overflow: hidden` alone doesn't stop touch/momentum scroll on iOS Safari,
+  // so we freeze the page with position: fixed and restore the scroll position
+  // on close. (Desktop keeps scrolling — the sidebar isn't an overlay there.)
   useEffect(() => {
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
-    document.body.style.overflow = isSidebarOpen && isMobile ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    if (!(isSidebarOpen && isMobile)) return;
+
+    const scrollY = window.scrollY;
+    const { body } = document;
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+
+    return () => {
+      body.style.position = '';
+      body.style.top = '';
+      body.style.left = '';
+      body.style.right = '';
+      body.style.width = '';
+      window.scrollTo(0, scrollY);
+    };
   }, [isSidebarOpen]);
 
   const toggleSidebar = () => setIsSidebarOpen(prev => !prev);

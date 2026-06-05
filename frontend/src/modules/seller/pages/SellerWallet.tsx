@@ -91,6 +91,8 @@ export default function SellerWallet() {
         showToast('Withdrawal request submitted successfully', 'success');
         setShowWithdrawModal(false);
         setWithdrawAmount('');
+        // Switch to the Withdrawals tab so the new request is immediately visible
+        setActiveTab('withdrawals');
         fetchWalletData();
       }
     } catch (error: any) {

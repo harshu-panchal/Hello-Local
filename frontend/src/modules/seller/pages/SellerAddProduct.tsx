@@ -43,7 +43,7 @@ export default function SellerAddProduct() {
     category: "",
     subcategory: "",
     subSubCategory: "",
-    publish: "No",
+    publish: "",
     popular: "No",
     dealOfDay: "No",
     brand: "",
@@ -416,6 +416,12 @@ export default function SellerAddProduct() {
       return;
     }
 
+    // Product status must be explicitly chosen (no default selection). (#44)
+    if (!formData.publish) {
+      setUploadError("Please select a product status (Published or Unpublished).");
+      return;
+    }
+
     // Only validate categories if NOT shop by store only
     if (formData.isShopByStoreOnly !== "Yes") {
       if (!formData.headerCategory) {
@@ -550,7 +556,7 @@ export default function SellerAddProduct() {
               category: "",
               subcategory: "",
               subSubCategory: "",
-              publish: "No",
+              publish: "",
               popular: "No",
               dealOfDay: "No",
               brand: "",
@@ -590,6 +596,7 @@ export default function SellerAddProduct() {
     } catch (error: any) {
       setUploadError(
         error.response?.data?.message ||
+        error.friendlyMessage ||
         error.message ||
         "Failed to upload images. Please try again."
       );
@@ -758,8 +765,9 @@ export default function SellerAddProduct() {
                     value={formData.publish}
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">Unpublished</option>
-                    <option value="Yes">Published</option>
+                    <option value="">Select Status</option>
+                    <option value="Yes">Published (visible to customers)</option>
+                    <option value="No">Unpublished (hidden)</option>
                   </select>
                 </div>
                 <div>
@@ -838,67 +846,6 @@ export default function SellerAddProduct() {
             </div>
           </div>
 
-          {/* SEO Content Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">SEO Content</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  name="seoTitle"
-                  value={formData.seoTitle}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Title"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Keywords
-                </label>
-                <input
-                  type="text"
-                  name="seoKeywords"
-                  value={formData.seoKeywords}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Keywords"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Image Alt Text
-                </label>
-                <input
-                  type="text"
-                  name="seoImageAlt"
-                  value={formData.seoImageAlt}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Image Alt Text"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Description
-                </label>
-                <textarea
-                  name="seoDescription"
-                  value={formData.seoDescription}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Description"
-                  rows={4}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 resize-none"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Add Variation Section */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
             <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
@@ -965,12 +912,13 @@ export default function SellerAddProduct() {
                   <input
                     type="number"
                     value={variationForm.discPrice}
-                    onChange={(e) =>
-                      setVariationForm({
-                        ...variationForm,
-                        discPrice: e.target.value,
-                      })
-                    }
+                    onChange={(e) => {
+                      // Drop a leading "0" so the default value disappears the moment a
+                      // real digit is typed (e.g. "0" + "8" -> "8", not "08").
+                      let v = e.target.value;
+                      if (/^0\d/.test(v)) v = v.replace(/^0+/, "");
+                      setVariationForm({ ...variationForm, discPrice: v });
+                    }}
                     onFocus={(e) => {
                       // Auto-clear the default "0" so the seller can type a value cleanly
                       if (e.target.value === "0") {
@@ -983,7 +931,7 @@ export default function SellerAddProduct() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Stock (0 = Unlimited)
+                    Stock
                   </label>
                   <input
                     type="number"
@@ -1028,10 +976,10 @@ export default function SellerAddProduct() {
                             </span>
                           )}
                           <span className="ml-4 text-sm text-neutral-600">
-                            Stock:{" "}
-                            {variation.stock === 0
-                              ? "Unlimited"
-                              : variation.stock}{" "}
+                            Stock: {variation.stock}
+                            {variation.stock === 0 && (
+                              <span className="text-red-500"> (Out of stock)</span>
+                            )}{" "}
                             | Status: {variation.status}
                           </span>
                         </div>
@@ -1136,17 +1084,44 @@ export default function SellerAddProduct() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Veg / Non-Veg
+                    Food Type (Veg / Non-Veg)
                   </label>
-                  <select
-                    name="foodType"
-                    value={formData.foodType}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="None">Not Applicable (non-food)</option>
-                    <option value="Veg">Veg</option>
-                    <option value="Non-Veg">Non-Veg</option>
-                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "Veg", label: "Veg", color: "green" },
+                      { value: "Non-Veg", label: "Non-Veg", color: "red" },
+                      { value: "None", label: "Not Applicable", color: "neutral" },
+                    ].map((opt) => {
+                      const selected = formData.foodType === opt.value;
+                      return (
+                        <button
+                          type="button"
+                          key={opt.value}
+                          onClick={() =>
+                            setFormData((prev) => ({ ...prev, foodType: opt.value }))
+                          }
+                          className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                            selected
+                              ? "border-pink-600 bg-pink-50 text-pink-700"
+                              : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                          }`}>
+                          {opt.value !== "None" && (
+                            <span
+                              className={`w-4 h-4 border-2 flex items-center justify-center ${
+                                opt.color === "green" ? "border-green-600" : "border-red-600"
+                              }`}>
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  opt.color === "green" ? "bg-green-600" : "bg-red-600"
+                                }`}
+                              />
+                            </span>
+                          )}
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
@@ -1170,7 +1145,13 @@ export default function SellerAddProduct() {
                     name="totalAllowedQuantity"
                     value={formData.totalAllowedQuantity}
                     onChange={handleChange}
-                    placeholder="Enter Total allowed quantit"
+                    onFocus={(e) => {
+                      // On mobile the on-screen keyboard can cover this near-bottom
+                      // field; scroll it into view once the keyboard has opened.
+                      const el = e.currentTarget;
+                      setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+                    }}
+                    placeholder="Enter Total allowed quantity"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
                   />
                   <p className="text-xs text-neutral-500 mt-1">
@@ -1249,7 +1230,7 @@ export default function SellerAddProduct() {
                   )}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
                     onChange={handleMainImageChange}
                     className="hidden"
                     disabled={uploading}
@@ -1346,7 +1327,7 @@ export default function SellerAddProduct() {
                   <input
                     id="gallery-image-upload"
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
                     multiple
                     onChange={handleGalleryImagesChange}
                     className="hidden"

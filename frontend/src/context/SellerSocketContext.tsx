@@ -77,6 +77,10 @@ export function SellerSocketProvider({ children }: { children: ReactNode }) {
         socketRef.current = null;
         setIsConnected(false);
       }
+      // Clear any notification from a previous session so a fresh login (or a
+      // different seller on the same SPA session) doesn't see a stale
+      // accept/reject popup. (#first-login-notification)
+      setLastNotification(null);
       return;
     }
 

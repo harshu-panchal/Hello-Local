@@ -395,7 +395,9 @@ export default function DeliverySignUp() {
                       onChange={handleInputChange}
                       placeholder="Enter mobile number"
                       required
-                      maxLength={10}
+                      // Allow a leading country code (e.g. "91...") to be typed/pasted so
+                      // normalizeMobile can strip it down to the 10-digit number.
+                      maxLength={13}
                       className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
                       disabled={loading}
                     />

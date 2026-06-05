@@ -510,7 +510,7 @@ export default function SellerAdRequests() {
                                             )}
                                         </div>
                                     )}
-                                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                                    <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={handleImageUpload} />
                                 </div>
 
                                 {/* Shop Name */}

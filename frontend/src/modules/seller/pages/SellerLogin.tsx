@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sendOTP, verifyOTP } from '../../../services/api/auth/sellerAuthService';
 import OTPInput from '../../../components/OTPInput';
 import { useAuth } from '../../../context/AuthContext';
 import { normalizeMobile } from '../../../utils/phone';
+import LegalPolicyModal, { PolicyTab } from '../../../components/LegalPolicyModal';
 
 export default function SellerLogin() {
   const navigate = useNavigate();
@@ -12,6 +13,17 @@ export default function SellerLogin() {
   const [showOTP, setShowOTP] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [policyTab, setPolicyTab] = useState<PolicyTab | null>(null);
+  const [resendTimer, setResendTimer] = useState(0);
+
+  const RESEND_SECONDS = 30;
+
+  // Countdown for the "Resend OTP" button
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const id = setInterval(() => setResendTimer((t) => (t <= 1 ? 0 : t - 1)), 1000);
+    return () => clearInterval(id);
+  }, [resendTimer]);
 
   const handleMobileLogin = async () => {
     if (mobileNumber.length !== 10) return;
@@ -24,6 +36,7 @@ export default function SellerLogin() {
       if (response.success) {
         // Only show OTP screen on success
         setShowOTP(true);
+        setResendTimer(RESEND_SECONDS); // start resend cooldown
         setError(''); // Clear any previous errors
       } else {
         // If not successful, show error and stay on page
@@ -82,17 +95,6 @@ export default function SellerLogin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-pink-50 flex flex-col items-center px-4 py-8">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-neutral-50 transition-colors"
-        aria-label="Back"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-
       {/* Login Card */}
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header Section */}
@@ -127,7 +129,9 @@ export default function SellerLogin() {
                     onChange={(e) => setMobileNumber(normalizeMobile(e.target.value))}
                     placeholder="Enter mobile number"
                     className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
-                    maxLength={10}
+                    // Allow the country code (e.g. "91...") to be entered/pasted so
+                    // normalizeMobile can strip it; it still normalizes to 10 digits.
+                    maxLength={13}
                     disabled={loading}
                   />
                 </div>
@@ -181,12 +185,14 @@ export default function SellerLogin() {
                 </button>
                 <button
                   onClick={async () => {
+                    if (resendTimer > 0) return;
                     setLoading(true);
                     setError('');
                     try {
                       const response = await sendOTP(mobileNumber);
                       if (response.success) {
-                        // OTP resent successfully, clear any previous errors
+                        // OTP resent successfully, restart cooldown and clear errors
+                        setResendTimer(RESEND_SECONDS);
                         setError('');
                       } else {
                         // Show error but stay on page
@@ -199,10 +205,10 @@ export default function SellerLogin() {
                       setLoading(false);
                     }
                   }}
-                  disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-pink-600 text-white hover:bg-pink-700 transition-colors"
+                  disabled={loading || resendTimer > 0}
+                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-pink-600 text-white hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Sending...' : 'Resend OTP'}
+                  {loading ? 'Sending...' : resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
                 </button>
               </div>
             </div>
@@ -227,10 +233,33 @@ export default function SellerLogin() {
         </div>
       </div>
 
-      {/* Footer Text */}
-      <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
-        By continuing, you agree to Hello Local's Terms of Service and Privacy Policy
-      </p>
+      {/* Footer Text — hidden on the OTP step (#otp-page-no-policy) */}
+      {!showOTP && (
+        <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
+          By continuing, you agree to Hello Local's{' '}
+          <button
+            type="button"
+            onClick={() => setPolicyTab('terms')}
+            className="text-pink-600 hover:text-pink-700 font-semibold underline"
+          >
+            Terms of Service
+          </button>{' '}
+          and{' '}
+          <button
+            type="button"
+            onClick={() => setPolicyTab('privacy')}
+            className="text-pink-600 hover:text-pink-700 font-semibold underline"
+          >
+            Privacy Policy
+          </button>
+        </p>
+      )}
+
+      <LegalPolicyModal
+        open={policyTab !== null}
+        initialTab={policyTab ?? 'terms'}
+        onClose={() => setPolicyTab(null)}
+      />
     </div>
   );
 }

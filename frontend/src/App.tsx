@@ -90,6 +90,7 @@ const SellerWallet = lazy(() => import("./modules/seller/pages/SellerWallet"));
 const SellerSalesReport = lazy(() => import("./modules/seller/pages/SellerSalesReport"));
 const SellerReturnRequest = lazy(() => import("./modules/seller/pages/SellerReturnRequest"));
 const SellerAccountSettings = lazy(() => import("./modules/seller/pages/SellerAccountSettings"));
+const SellerProfile = lazy(() => import("./modules/seller/pages/SellerProfile"));
 const SellerLogin = lazy(() => import("./modules/seller/pages/SellerLogin"));
 const SellerSignUp = lazy(() => import("./modules/seller/pages/SellerSignUp"));
 
@@ -312,6 +313,7 @@ function App() {
                                 <Route path="wallet" element={<SellerWallet />} />
                                 <Route path="reports/sales" element={<SellerSalesReport />} />
                                 <Route path="account-settings" element={<SellerAccountSettings />} />
+                                <Route path="profile" element={<SellerProfile />} />
                                 <Route path="ad-requests" element={<SellerAdRequests />} />
                                 </Routes>
                               </SellerLayout>

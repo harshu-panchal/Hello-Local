@@ -123,6 +123,7 @@ export default function SellerSalesReport() {
                                 value={fromDate}
                                 max={toDate || undefined}
                                 onChange={(e) => { setFromDate(e.target.value); setCurrentPage(1); }}
+                                onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                                 className="px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                             />
                             <label className="text-sm text-neutral-600 whitespace-nowrap">To:</label>
@@ -131,6 +132,7 @@ export default function SellerSalesReport() {
                                 value={toDate}
                                 min={fromDate || undefined}
                                 onChange={(e) => { setToDate(e.target.value); setCurrentPage(1); }}
+                                onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                                 className="px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
                             />
                             <button
@@ -363,7 +365,7 @@ export default function SellerSalesReport() {
             {/* Footer */}
             <footer className="px-4 sm:px-6 py-4 text-center bg-white border-t border-neutral-200">
                 <p className="text-xs sm:text-sm text-neutral-600">
-                    Copyright © 2025. Developed By{' '}
+                    Copyright © 2026. Developed By{' '}
                     <span className="font-semibold text-pink-700">Hello Local - 10 Minute App</span>
                 </p>
             </footer>

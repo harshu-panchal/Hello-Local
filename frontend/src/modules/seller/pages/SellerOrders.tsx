@@ -247,6 +247,7 @@ export default function SellerOrders() {
                     value={dateFrom}
                     max={dateTo || undefined}
                     onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     className="text-xs sm:text-sm text-neutral-700 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
                   />
                   <span className="text-neutral-400 text-xs">-</span>
@@ -255,6 +256,7 @@ export default function SellerOrders() {
                     value={dateTo}
                     min={dateFrom || undefined}
                     onChange={e => { setDateTo(e.target.value); setCurrentPage(1); }}
+                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     className="text-xs sm:text-sm text-neutral-700 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
                   />
                   {(dateFrom || dateTo) && (
@@ -314,7 +316,9 @@ export default function SellerOrders() {
               <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                 <button
                   onClick={handleExport}
-                  className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
+                  disabled={orders.length === 0}
+                  title={orders.length === 0 ? 'No data to export' : 'Export orders to CSV'}
+                  className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                     <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15M7 10L12 15M12 15L17 10M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -344,6 +348,9 @@ export default function SellerOrders() {
               <table className="w-full min-w-[600px]">
                 <thead className="bg-neutral-50 border-b border-neutral-200">
                   <tr>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                      S No
+                    </th>
                     {(['orderId', 'deliveryDate', 'orderDate', 'status', 'amount'] as SortField[]).map((field) => (
                       <th key={field} className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
                         <button onClick={() => handleSort(field)} className="flex items-center gap-2 hover:text-neutral-900 transition-colors">
@@ -362,13 +369,14 @@ export default function SellerOrders() {
                 <tbody className="bg-white divide-y divide-neutral-200">
                   {orders.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 sm:px-4 md:px-6 py-8 sm:py-12 text-center text-xs sm:text-sm text-neutral-500">
+                      <td colSpan={7} className="px-3 sm:px-4 md:px-6 py-8 sm:py-12 text-center text-xs sm:text-sm text-neutral-500">
                         No data available in table
                       </td>
                     </tr>
                   ) : (
-                    orders.map((order) => (
+                    orders.map((order, index) => (
                       <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
+                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{startEntry + index}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">{order.orderId}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.deliveryDate}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.orderDate}</td>
@@ -490,7 +498,7 @@ export default function SellerOrders() {
       {/* Footer */}
       <footer className="px-3 sm:px-4 md:px-6 text-center py-4 sm:py-6">
         <p className="text-xs sm:text-sm text-neutral-600">
-          Copyright © 2025. Developed By{' '}
+          Copyright © 2026. Developed By{' '}
           <Link to="/seller" className="text-blue-600 hover:text-blue-700">Hello Local</Link>
         </p>
       </footer>

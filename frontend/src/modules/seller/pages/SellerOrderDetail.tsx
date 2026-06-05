@@ -170,9 +170,11 @@ export default function SellerOrderDetail() {
     doc.text(`Invoice #${orderDetail.invoiceNumber}`, rightX, yPos - 20, { align: 'right' });
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Order ID: ${orderDetail.id}`, rightX, yPos - 14, { align: 'right' });
+    doc.text(`Order ID: ${orderDetail.orderNumber}`, rightX, yPos - 14, { align: 'right' });
     doc.text(`Delivery Date: ${formatDate(orderDetail.deliveryDate)}`, rightX, yPos - 8, { align: 'right' });
-    doc.text(`Time Slot: ${orderDetail.timeSlot}`, rightX, yPos - 2, { align: 'right' });
+    if (orderDetail.timeSlot && orderDetail.timeSlot !== 'N/A') {
+      doc.text(`Time Slot: ${orderDetail.timeSlot}`, rightX, yPos - 2, { align: 'right' });
+    }
 
     // Status badge
     const statusWidth = doc.getTextWidth(orderStatus) + 8;
@@ -205,7 +207,7 @@ export default function SellerOrderDetail() {
     ];
 
     let xPos = margin;
-    const headers = ['Sr. No.', 'Product', 'Price', 'Tax ₹ (%)', 'Qty', 'Subtotal'];
+    const headers = ['Sr. No.', 'Product', 'Price', 'Tax Rs. (%)', 'Qty', 'Subtotal'];
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
@@ -301,7 +303,7 @@ export default function SellerOrderDetail() {
     yPos += 8;
 
     doc.setFontSize(8);
-    doc.text('Copyright © 2025. Developed By Hello Local - 10 Minute App', pageWidth / 2, yPos, { align: 'center' });
+    doc.text('Copyright © 2026. Developed By Hello Local - 10 Minute App', pageWidth / 2, yPos, { align: 'center' });
 
     // Save the PDF
     const fileName = `Invoice_${orderDetail.invoiceNumber}_${orderDetail.id}.pdf`;
@@ -332,6 +334,10 @@ export default function SellerOrderDetail() {
         return 'bg-gray-50 text-gray-600 border border-gray-200';
     }
   };
+
+  // Show a short tail for long ids (full value on hover).
+  const shortId = (id?: string) =>
+    id && id.length > 10 ? `…${id.slice(-6)}` : id || '';
 
   const formatUnit = (unit: string) => {
     if (!unit || unit === 'N/A') return 'N/A';
@@ -463,16 +469,20 @@ export default function SellerOrderDetail() {
               <div className="text-sm text-neutral-600 mb-4">
                 <span className="font-medium">Date:</span> {formatDate(orderDetail.orderDate)}
               </div>
-              <div className="text-lg font-semibold text-neutral-900 mb-1">Invoice #{orderDetail.invoiceNumber}</div>
+              <div className="text-lg font-semibold text-neutral-900 mb-1">
+                Invoice #<span title={orderDetail.invoiceNumber}>{shortId(orderDetail.invoiceNumber)}</span>
+              </div>
               <div className="text-sm text-neutral-600 mb-1">
-                <span className="font-medium">Order ID:</span> {orderDetail.id}
+                <span className="font-medium">Order ID:</span> {orderDetail.orderNumber}
               </div>
               <div className="text-sm text-neutral-600 mb-1">
                 <span className="font-medium">Delivery Date:</span> {formatDate(orderDetail.deliveryDate)}
               </div>
-              <div className="text-sm text-neutral-600 mb-3">
-                <span className="font-medium">Time Slot:</span> {orderDetail.timeSlot}
-              </div>
+              {orderDetail.timeSlot && orderDetail.timeSlot !== 'N/A' && (
+                <div className="text-sm text-neutral-600 mb-3">
+                  <span className="font-medium">Time Slot:</span> {orderDetail.timeSlot}
+                </div>
+              )}
               <div className="flex items-center gap-2 lg:justify-end">
                 <span className="text-sm font-medium text-neutral-700">Order Status:</span>
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(orderStatus)}`}>
@@ -526,7 +536,7 @@ export default function SellerOrderDetail() {
       {/* Footer */}
       <footer className="mt-6 px-4 sm:px-6 text-center py-4 bg-neutral-100 rounded-lg">
         <p className="text-xs sm:text-sm text-neutral-600">
-          Copyright © 2025. Developed By{' '}
+          Copyright © 2026. Developed By{' '}
           <span className="font-semibold text-pink-700">Hello Local - 10 Minute App</span>
         </p>
       </footer>
