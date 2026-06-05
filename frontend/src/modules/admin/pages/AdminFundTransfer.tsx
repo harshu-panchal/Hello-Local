@@ -346,9 +346,9 @@ export default function AdminFundTransfer() {
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">{transfer.id}</td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">{transfer.name}</td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">{transfer.mobile}</td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">?{transfer.openingBalance.toFixed(2)}</td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">?{transfer.closingBalance.toFixed(2)}</td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">?{transfer.amount.toFixed(2)}</td>
+                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">₹{transfer.openingBalance.toFixed(2)}</td>
+                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">₹{transfer.closingBalance.toFixed(2)}</td>
+                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">₹{transfer.amount.toFixed(2)}</td>
                     <td className="px-4 sm:px-6 py-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${transfer.type === 'Credit'
                           ? 'bg-rose-100 text-rose-900'
@@ -404,7 +404,7 @@ export default function AdminFundTransfer() {
 
       {/* Footer */}
       <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2025. Developed By{' '}
+        Copyright © 2026. Developed By{' '}
         <a href="#" className="text-rose-700 hover:text-rose-800">
           Hello Local - 10 Minute App
         </a>

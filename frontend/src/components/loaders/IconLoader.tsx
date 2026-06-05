@@ -66,8 +66,13 @@ const items = [
 ];
 
 const IconLoader: React.FC<IconLoaderProps> = ({ forceShow = false, isLoading = false }) => {
-  const { isRouteLoading, isLoading: contextIsLoading } = useLoading();
-  const show = isRouteLoading || contextIsLoading || forceShow || isLoading;
+  const { isRouteLoading } = useLoading();
+  // NOTE: intentionally NOT driven by the axios "isLoading" flag. Showing a
+  // full-screen overlay on every API request caused the loader to flash again
+  // and again during normal use. Per-request loading is handled inline by each
+  // page; the full-screen loader is reserved for initial load, Suspense
+  // fallbacks (forceShow), and explicit opt-in via the isLoading prop.
+  const show = isRouteLoading || forceShow || isLoading;
 
   let currentTheme;
   try {

@@ -801,7 +801,7 @@ export default function AdminAllOrders() {
                         </span>
                       </td>
                       <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                        ?{order.total?.toFixed(2) || "0.00"}
+                        ₹{order.total?.toFixed(2) || "0.00"}
                       </td>
                       <td className="px-4 sm:px-6 py-3">
                         <Link to={`/admin/orders/${order._id}`}>
@@ -897,7 +897,7 @@ export default function AdminAllOrders() {
 
       {/* Footer */}
       <div className="text-center py-4 text-xs sm:text-sm text-neutral-600">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <Link to="/" className="text-blue-600 hover:text-blue-700">
           Hello Local - 10 Minute App
         </Link>

@@ -341,9 +341,9 @@ export default function AdminUsers() {
                                                 </span>
                                             </td>
                                             <td className="p-4 align-middle">{user.refCode || '-'}</td>
-                                            <td className="p-4 align-middle">?{user.walletAmount.toFixed(2)}</td>
+                                            <td className="p-4 align-middle">₹{user.walletAmount.toFixed(2)}</td>
                                             <td className="p-4 align-middle">{user.totalOrders}</td>
-                                            <td className="p-4 align-middle">?{user.totalSpent.toFixed(2)}</td>
+                                            <td className="p-4 align-middle">₹{user.totalSpent.toFixed(2)}</td>
                                             <td className="p-4 align-middle">
                                                 <div className="flex items-center gap-2">
                                                     <button
@@ -464,7 +464,7 @@ export default function AdminUsers() {
 
             {/* Footer */}
             <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
-                Copyright © 2025. Developed By{' '}
+                Copyright © 2026. Developed By{' '}
                 <a href="#" className="text-blue-600 hover:underline">Hello Local - 10 Minute App</a>
             </footer>
         </div>

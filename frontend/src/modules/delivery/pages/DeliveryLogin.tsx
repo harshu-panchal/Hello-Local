@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { sendOTP, verifyOTP } from '../../../services/api/auth/deliveryAuthService';
 import OTPInput from '../../../components/OTPInput';
 import { useAuth } from '../../../context/AuthContext';
+import { normalizeMobile } from '../../../utils/phone';
 
 export default function DeliveryLogin() {
   const navigate = useNavigate();
@@ -70,16 +71,7 @@ export default function DeliveryLogin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center px-4 py-8">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-neutral-50 transition-colors"
-        aria-label="Back"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+      {/* Back arrow removed (#126) */}
 
       {/* Login Card */}
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -112,7 +104,7 @@ export default function DeliveryLogin() {
                   <input
                     type="tel"
                     value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setMobileNumber(normalizeMobile(e.target.value))}
                     placeholder="Enter mobile number"
                     className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
                     maxLength={10}
@@ -203,10 +195,15 @@ export default function DeliveryLogin() {
         </div>
       </div>
 
-      {/* Footer Text */}
-      <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
-        By continuing, you agree to Hello Local's Terms of Service and Privacy Policy
-      </p>
+      {/* Footer Text — clickable terms, hidden on the OTP step (#127, #183) */}
+      {!showOTP && (
+        <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
+          By continuing, you agree to Hello Local's{' '}
+          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline">Terms of Service</button>
+          {' '}and{' '}
+          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline">Privacy Policy</button>
+        </p>
+      )}
     </div>
   );
 }

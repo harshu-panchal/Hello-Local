@@ -119,7 +119,9 @@ export default function DeliverySettings() {
             <h3 className="text-neutral-900 font-semibold">Other</h3>
           </div>
           <div className="divide-y divide-neutral-200">
-            <button className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+            <button
+              onClick={() => alert('Only English is currently available.')}
+              className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
               <div className="flex-1 text-left">
                 <p className="text-neutral-900 text-sm font-medium">Language</p>
                 <p className="text-neutral-500 text-xs mt-1">English</p>
@@ -135,7 +137,9 @@ export default function DeliverySettings() {
                 />
               </svg>
             </button>
-            <button className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+            <button
+              onClick={() => navigate('/delivery/about')}
+              className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
               <div className="flex-1 text-left">
                 <p className="text-neutral-900 text-sm font-medium">Privacy Policy</p>
               </div>
@@ -150,7 +154,9 @@ export default function DeliverySettings() {
                 />
               </svg>
             </button>
-            <button className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+            <button
+              onClick={() => navigate('/delivery/about')}
+              className="w-full p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
               <div className="flex-1 text-left">
                 <p className="text-neutral-900 text-sm font-medium">Terms & Conditions</p>
               </div>

@@ -51,6 +51,7 @@ export interface IProduct extends Document {
   madeIn?: string;
   tax?: mongoose.Types.ObjectId;
   fssaiLicNo?: string;
+  foodType?: "Veg" | "Non-Veg" | "None";
   totalAllowedQuantity?: number;
 
   // Return Policy
@@ -247,6 +248,11 @@ const ProductSchema = new Schema<IProduct>(
     fssaiLicNo: {
       type: String,
       trim: true,
+    },
+    foodType: {
+      type: String,
+      enum: ["Veg", "Non-Veg", "None"],
+      default: "None",
     },
     totalAllowedQuantity: {
       type: Number,

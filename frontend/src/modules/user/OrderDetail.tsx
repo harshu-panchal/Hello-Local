@@ -6,6 +6,7 @@ import { useOrders } from "../../hooks/useOrders";
 import { OrderStatus } from "../../types/order";
 import GoogleMapsTracking from "../../components/GoogleMapsTracking";
 import { useDeliveryTracking } from "../../hooks/useDeliveryTracking";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import DeliveryPartnerCard from "../../components/DeliveryPartnerCard";
 import { cancelOrder, updateOrderNotes, getSellerLocationsForOrder, refreshDeliveryOtp } from "../../services/api/customerOrderService";
 
@@ -402,6 +403,8 @@ export default function OrderDetail() {
   const [showItemsModal, setShowItemsModal] = useState(false);
   const [showSpecialRequestsModal, setShowSpecialRequestsModal] =
     useState(false);
+  // Lock background scroll while any order modal/sheet is open (#205)
+  useBodyScrollLock(showCancelModal || showInstructionsModal || showItemsModal || showSpecialRequestsModal);
 
   // Form states
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
@@ -461,6 +464,7 @@ export default function OrderDetail() {
       const shouldFetch = order.status &&
         order.status !== 'Delivered' &&
         order.status !== 'Cancelled' &&
+        order.status !== 'Rejected' &&
         order.status !== 'Picked up' &&
         order.status !== 'Out for Delivery';
 
@@ -709,6 +713,11 @@ export default function OrderDetail() {
       subtitle: "This order has been cancelled",
       color: "bg-red-600",
     },
+    Rejected: {
+      title: "Order rejected",
+      subtitle: "The store rejected this order",
+      color: "bg-red-600",
+    },
     Returned: {
       title: "Order returned",
       subtitle: "This order has been returned",
@@ -717,6 +726,10 @@ export default function OrderDetail() {
   };
 
   const currentStatus = statusConfig[orderStatus] || statusConfig["Received"];
+
+  // Terminal orders (delivered/cancelled/rejected/returned) should not show the
+  // "in-progress" action rows (delivery instructions, special requests, safety). (#224, #245-247)
+  const isTerminalOrder = ['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(orderStatus);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -821,7 +834,7 @@ export default function OrderDetail() {
       </motion.div>
 
       {/* Map Section */}
-      {!showConfirmation && !['Delivered', 'Cancelled', 'Returned'].includes(order?.status) && (
+      {!showConfirmation && !['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(order?.status) && (
         <GoogleMapsTracking
           sellerLocations={sellerLocations.map(s => ({
             lat: s.latitude,
@@ -897,12 +910,10 @@ export default function OrderDetail() {
       {/* Scrollable Content */}
       <div className="px-4 py-4 space-y-4 pb-24">
 
-
-        {/* Promo Carousel */}
-        <PromoCarousel />
-
-        {/* Delivery Partner Assignment - Only show if no partner assigned yet */}
-        {!order?.deliveryPartner && (
+        {/* Delivery Partner Assignment - hide once partner assigned or order is in a
+            terminal state (delivered/cancelled/rejected/returned) so it no longer
+            shows "Preparing your order". (#225, #244) */}
+        {!order?.deliveryPartner && !['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(order?.status as string) && (
           <motion.div
             className="bg-white rounded-xl p-4 shadow-sm"
             initial={{ opacity: 0, y: 20 }}
@@ -923,7 +934,8 @@ export default function OrderDetail() {
 
 
 
-        {/* Delivery Partner Safety */}
+        {/* Delivery Partner Safety - hidden for terminal orders (#224, #245) */}
+        {!isTerminalOrder && (
         <motion.button
           className="w-full bg-white rounded-xl p-4 shadow-sm flex items-center gap-3"
           initial={{ opacity: 0, y: 20 }}
@@ -936,6 +948,7 @@ export default function OrderDetail() {
           </span>
           <ChevronRightIcon className="w-5 h-5 text-gray-400" />
         </motion.button>
+        )}
 
         {/* Delivery Details Banner */}
         <motion.div
@@ -969,12 +982,14 @@ export default function OrderDetail() {
                 : "Add delivery address"
             }
           />
-          <SectionItem
-            icon={MessageSquareIcon}
-            title="Add delivery instructions"
-            subtitle=""
-            onClick={() => setShowInstructionsModal(true)}
-          />
+          {!isTerminalOrder && (
+            <SectionItem
+              icon={MessageSquareIcon}
+              title="Add delivery instructions"
+              subtitle=""
+              onClick={() => setShowInstructionsModal(true)}
+            />
+          )}
         </motion.div>
 
         {/* Store Section */}
@@ -1032,12 +1047,14 @@ export default function OrderDetail() {
             </div>
           </div>
 
-          <SectionItem
-            icon={ChefHatIcon}
-            title="Add special requests"
-            subtitle=""
-            onClick={() => setShowSpecialRequestsModal(true)}
-          />
+          {!isTerminalOrder && (
+            <SectionItem
+              icon={ChefHatIcon}
+              title="Add special requests"
+              subtitle=""
+              onClick={() => setShowSpecialRequestsModal(true)}
+            />
+          )}
         </motion.div>
 
         {/* Help Section */}
@@ -1061,12 +1078,6 @@ export default function OrderDetail() {
             </div>
             <ChevronRightIcon className="w-5 h-5 text-gray-400" />
           </div>
-          <SectionItem
-            icon={CircleSlashIcon}
-            title="Cancel order"
-            subtitle=""
-            onClick={() => setShowCancelModal(true)}
-          />
         </motion.div>
 
         {/* Quick Actions */}
@@ -1076,12 +1087,12 @@ export default function OrderDetail() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.85 }}>
           {order?.invoiceEnabled ? (
-            <Link to={`/user/orders/${id}/invoice`} className="flex-1">
+            <Link to={`/invoice/${id}`} className="flex-1">
               <Button className="w-full bg-[#FF2E7A] text-white hover:opacity-90">
                 View Invoice
               </Button>
             </Link>
-          ) : (
+          ) : !['Cancelled', 'Rejected'].includes(orderStatus) ? (
             <div className="flex-1">
               <Button
                 className="w-full bg-gray-400 cursor-not-allowed text-white"
@@ -1090,7 +1101,7 @@ export default function OrderDetail() {
                 Invoice Unavailable
               </Button>
             </div>
-          )}
+          ) : null}
           <Link to="/orders" className="flex-1">
             <Button variant="outline" className="w-full border-gray-300">
               All Orders

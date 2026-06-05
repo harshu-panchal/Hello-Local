@@ -254,14 +254,19 @@ export const capturePayment = async (
             if (io) {
                 try {
                     const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
-                    // Run in background
-                    Order.findById(id).lean().then(leanOrder => {
+                    // Atomically claim the one-time notify flag so only one path
+                    // (capturePayment vs webhook) actually notifies the seller. (#dup-notification)
+                    Order.findOneAndUpdate(
+                        { _id: id, sellerNotified: { $ne: true } },
+                        { $set: { sellerNotified: true } },
+                        { new: true }
+                    ).lean().then(leanOrder => {
                         if (leanOrder) {
                             return notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER').then(() => {
                                 console.log(`📤 Seller notified for paid order ${leanOrder.orderNumber}`);
                             });
                         }
-                        return undefined;
+                        return undefined; // already notified by the other path
                     }).catch(notifyError => {
                         console.error('Failed to notify sellers after payment:', notifyError);
                     });
@@ -508,10 +513,15 @@ const handlePaymentCaptured = async (payload: any, io?: any) => {
             if (io && order) {
                 try {
                     const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
-                    const leanOrder = await Order.findById(order._id).lean();
-                    if (leanOrder) {
-                        await notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER');
-                        console.log(`📤 Webhook: seller notified for paid order ${leanOrder.orderNumber}`);
+                    // Atomically claim the one-time notify flag (see capturePayment). (#dup-notification)
+                    const claimed = await Order.findOneAndUpdate(
+                        { _id: order._id, sellerNotified: { $ne: true } },
+                        { $set: { sellerNotified: true } },
+                        { new: true }
+                    ).lean();
+                    if (claimed) {
+                        await notifySellersOfOrderUpdate(io, claimed, 'NEW_ORDER');
+                        console.log(`📤 Webhook: seller notified for paid order ${claimed.orderNumber}`);
                     }
                 } catch (notifyError) {
                     console.error('Failed to notify sellers after payment webhook:', notifyError);

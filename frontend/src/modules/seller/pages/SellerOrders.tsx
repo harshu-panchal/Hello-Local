@@ -15,10 +15,12 @@ export default function SellerOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [newOrderBadge, setNewOrderBadge] = useState(false); // ← blinking new-order indicator
-  const [dateRange, setDateRange] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [status, setStatus] = useState(() => searchParams.get('status') || 'All Status');
   const [entriesPerPage, setEntriesPerPage] = useState('10');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');        // ← immediate input value
+  const [debouncedSearch, setDebouncedSearch] = useState(''); // ← used for fetching
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -40,15 +42,12 @@ export default function SellerOrders() {
         sortOrder: sortDirection,
       };
 
-      if (dateRange) {
-        const [startDate, endDate] = dateRange.split(' - ');
-        if (startDate && endDate) {
-          params.dateFrom = startDate;
-          params.dateTo = endDate;
-        }
+      if (dateFrom && dateTo) {
+        params.dateFrom = dateFrom;
+        params.dateTo = dateTo;
       }
       if (status !== 'All Status') params.status = status;
-      if (searchQuery) params.search = searchQuery;
+      if (debouncedSearch) params.search = debouncedSearch;
 
       const response = await getOrders(params);
       if (response.success && response.data) {
@@ -64,12 +63,21 @@ export default function SellerOrders() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, status, entriesPerPage, searchQuery, currentPage, sortField, sortDirection]);
+  }, [dateFrom, dateTo, status, entriesPerPage, debouncedSearch, currentPage, sortField, sortDirection]);
 
   // Initial fetch + re-fetch on filter/page change
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Debounce the search box so typing doesn't refetch on every keystroke
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   // ─── Real-time: new order via socket ──────────────────────────────────────
   // When seller gets a NEW_ORDER notification, refresh the orders list so the
@@ -96,7 +104,8 @@ export default function SellerOrders() {
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleClearDate = () => {
-    setDateRange('');
+    setDateFrom('');
+    setDateTo('');
     setCurrentPage(1);
   };
 
@@ -134,6 +143,7 @@ export default function SellerOrders() {
   };
 
   const handleExport = () => {
+    if (orders.length === 0) return; // nothing to export (#17)
     const headers = ['Order ID', 'Delivery Date', 'Order Date', 'Status', 'Amount'];
     const csvContent = [
       headers.join(','),
@@ -141,7 +151,8 @@ export default function SellerOrders() {
         [order.orderId, order.deliveryDate, order.orderDate, order.status, order.amount].join(',')
       ),
     ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Prepend UTF-8 BOM so Excel opens special characters (₹, etc.) correctly (#31/63)
+    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `orders_${new Date().toISOString().split('T')[0]}.csv`;
@@ -230,19 +241,26 @@ export default function SellerOrders() {
               {/* Date range */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
                 <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">From - To Order Date</label>
-                <div className="flex items-center gap-2 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 w-full sm:w-auto">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-neutral-500 flex-shrink-0">
-                    <path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <input
-                    type="text"
-                    value={dateRange}
-                    onChange={e => { setDateRange(e.target.value); setCurrentPage(1); }}
-                    className="flex-1 sm:w-48 text-xs sm:text-sm text-neutral-600 bg-transparent focus:outline-none placeholder:text-neutral-400"
-                    placeholder="MM/DD/YYYY - MM/DD/YYYY"
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                    className="text-xs sm:text-sm text-neutral-700 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
                   />
-                  {dateRange && (
-                    <button onClick={handleClearDate} className="ml-2 px-2 py-1 text-xs font-medium text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded transition-colors flex-shrink-0">
+                  <span className="text-neutral-400 text-xs">-</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={e => { setDateTo(e.target.value); setCurrentPage(1); }}
+                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                    className="text-xs sm:text-sm text-neutral-700 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                  />
+                  {(dateFrom || dateTo) && (
+                    <button onClick={handleClearDate} className="px-2 py-1 text-xs font-medium text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded transition-colors flex-shrink-0">
                       Clear
                     </button>
                   )}
@@ -288,7 +306,7 @@ export default function SellerOrders() {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  onChange={e => setSearchQuery(e.target.value)}
                   className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
                   placeholder="Search by Order ID, Status, or Amount"
                 />
@@ -298,7 +316,9 @@ export default function SellerOrders() {
               <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                 <button
                   onClick={handleExport}
-                  className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
+                  disabled={orders.length === 0}
+                  title={orders.length === 0 ? 'No data to export' : 'Export orders to CSV'}
+                  className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                     <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15M7 10L12 15M12 15L17 10M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -328,10 +348,13 @@ export default function SellerOrders() {
               <table className="w-full min-w-[600px]">
                 <thead className="bg-neutral-50 border-b border-neutral-200">
                   <tr>
+                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
+                      S No
+                    </th>
                     {(['orderId', 'deliveryDate', 'orderDate', 'status', 'amount'] as SortField[]).map((field) => (
                       <th key={field} className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
                         <button onClick={() => handleSort(field)} className="flex items-center gap-2 hover:text-neutral-900 transition-colors">
-                          {field === 'orderId' ? 'O. Id' : field === 'deliveryDate' ? 'D. Date' : field === 'orderDate' ? 'O. Date' : field.charAt(0).toUpperCase() + field.slice(1)}
+                          {field === 'orderId' ? 'Order Id' : field === 'deliveryDate' ? 'Delivery Date' : field === 'orderDate' ? 'Order Date' : field.charAt(0).toUpperCase() + field.slice(1)}
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`cursor-pointer ${sortField === field ? 'text-pink-600' : 'text-neutral-400'}`}>
                             <path d={sortIcon(field)} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
@@ -346,13 +369,14 @@ export default function SellerOrders() {
                 <tbody className="bg-white divide-y divide-neutral-200">
                   {orders.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 sm:px-4 md:px-6 py-8 sm:py-12 text-center text-xs sm:text-sm text-neutral-500">
+                      <td colSpan={7} className="px-3 sm:px-4 md:px-6 py-8 sm:py-12 text-center text-xs sm:text-sm text-neutral-500">
                         No data available in table
                       </td>
                     </tr>
                   ) : (
-                    orders.map((order) => (
+                    orders.map((order, index) => (
                       <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
+                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{startEntry + index}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">{order.orderId}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.deliveryDate}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.orderDate}</td>
@@ -474,7 +498,7 @@ export default function SellerOrders() {
       {/* Footer */}
       <footer className="px-3 sm:px-4 md:px-6 text-center py-4 sm:py-6">
         <p className="text-xs sm:text-sm text-neutral-600">
-          Copyright © 2025. Developed By{' '}
+          Copyright © 2026. Developed By{' '}
           <Link to="/seller" className="text-blue-600 hover:text-blue-700">Hello Local</Link>
         </p>
       </footer>
