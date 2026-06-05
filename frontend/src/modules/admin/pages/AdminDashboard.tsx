@@ -464,60 +464,70 @@ export default function AdminDashboard() {
           title="Total User"
           value={stats.totalUser}
           accentColor="#3b82f6"
+          onClick={() => navigate("/admin/users")}
         />
         <DashboardCard
           icon={categoryIcon}
           title="Total Category"
           value={stats.totalCategory}
           accentColor="#eab308"
+          onClick={() => navigate("/admin/category")}
         />
         <DashboardCard
           icon={subcategoryIcon}
           title="Total Subcategory"
           value={stats.totalSubcategory ?? 0}
           accentColor="#ec4899"
+          onClick={() => navigate("/admin/subcategory")}
         />
         <DashboardCard
           icon={productIcon}
           title="Total Product"
           value={stats.totalProduct}
           accentColor="#ef4444"
+          onClick={() => navigate("/admin/product/list")}
         />
         <DashboardCard
           icon={ordersIcon}
           title="Total Orders"
           value={stats.totalOrders}
           accentColor="#3b82f6"
+          onClick={() => navigate("/admin/orders/all")}
         />
         <DashboardCard
           icon={completedOrdersIcon}
           title="Completed Orders"
           value={stats.completedOrders}
           accentColor="#16a34a"
+          onClick={() => navigate("/admin/orders/delivered")}
         />
         <DashboardCard
           icon={pendingOrdersIcon}
           title="Pending Orders"
           value={stats.pendingOrders}
           accentColor="#a855f7"
+          onClick={() => navigate("/admin/orders/pending")}
         />
         <DashboardCard
           icon={cancelledOrdersIcon}
           title="Cancelled Orders"
           value={stats.cancelledOrders}
           accentColor="#ef4444"
+          onClick={() => navigate("/admin/orders/cancelled")}
         />
         <DashboardCard
           icon={soldOutIcon}
           title="Product Sold Out"
           value={stats.soldOutProducts}
           accentColor="#ec4899"
+          onClick={() => navigate("/admin/product/list")}
         />
         <DashboardCard
           icon={lowStockIcon}
           title="Product low on Stock"
           value={stats.lowStockProducts}
           accentColor="#eab308"
+          onClick={() => navigate("/admin/product/list")}
         />
         <DashboardCard
           icon={adsIcon}
@@ -537,16 +547,16 @@ export default function AdminDashboard() {
           </h3>
           <div className="mb-4">
             <p className="text-3xl font-bold text-neutral-900">
-              ?{salesToday.toFixed(2)}
+              ₹{salesToday.toFixed(2)}
             </p>
             {salesDifference >= 0 ? (
               <p className="text-sm text-rose-700 mt-1">
-                ▲ ?{Math.abs(salesDifference).toFixed(2)} (+{salesPercentChange}%)
+                ▲ ₹{Math.abs(salesDifference).toFixed(2)} (+{salesPercentChange}%)
                 vs same day last week
               </p>
             ) : (
               <p className="text-sm text-red-600 mt-1">
-                ▼ ?{Math.abs(salesDifference).toFixed(2)} ({salesPercentChange}%)
+                ▼ ₹{Math.abs(salesDifference).toFixed(2)} ({salesPercentChange}%)
                 vs same day last week
               </p>
             )}
@@ -575,7 +585,7 @@ export default function AdminDashboard() {
                       {location.location}
                     </span>
                     <span className="text-sm font-semibold text-neutral-900">
-                      ?{(location.amount / 1000).toFixed(1)}K
+                      ₹{(location.amount / 1000).toFixed(1)}K
                     </span>
                   </div>
                 ))
@@ -765,10 +775,11 @@ export default function AdminDashboard() {
                         </span>
                       </td>
                       <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                        ? {order.amount.toFixed(2)}
+                        ₹{order.amount.toFixed(2)}
                       </td>
                       <td className="px-4 sm:px-6 py-3">
                         <button
+                          onClick={() => navigate(`/admin/orders/${order.id}`)}
                           className="bg-rose-700 hover:bg-rose-800 text-white p-2 rounded transition-colors"
                           aria-label="View order">
                           <svg
@@ -966,7 +977,7 @@ export default function AdminDashboard() {
                         {seller.storeName}
                       </td>
                       <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                        ? {seller.totalRevenue.toFixed(2)}
+                        ₹{seller.totalRevenue.toFixed(2)}
                       </td>
                       <td className="px-4 sm:px-6 py-3">
                         <button
@@ -1071,7 +1082,7 @@ export default function AdminDashboard() {
 
       {/* Footer */}
       <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <a href="#" className="text-rose-600 hover:text-rose-700">
           Hello Local - 10 Minute App
         </a>

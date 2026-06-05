@@ -112,6 +112,30 @@ const SellerAccountSettings = () => {
                 return;
             }
 
+            // Validate bank / tax fields (only when provided)
+            const failValidation = (msg: string) => {
+                setError(msg);
+                setSaveLoading(false);
+            };
+            if (sellerData.accountName?.trim() && !/^[A-Za-z\s]+$/.test(sellerData.accountName.trim())) {
+                return failValidation('Account holder name should contain only alphabets.');
+            }
+            if (sellerData.bankName?.trim() && !/^[A-Za-z\s]+$/.test(sellerData.bankName.trim())) {
+                return failValidation('Bank name should contain only alphabets.');
+            }
+            if (sellerData.accountNumber?.trim() && !/^\d{9,18}$/.test(sellerData.accountNumber.trim())) {
+                return failValidation('Account number should be 9 to 18 digits.');
+            }
+            if (sellerData.ifsc?.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(sellerData.ifsc.trim())) {
+                return failValidation('Please enter a valid IFSC code (e.g. SBIN0000456).');
+            }
+            if (sellerData.panCard?.trim() && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(sellerData.panCard.trim())) {
+                return failValidation('Please enter a valid PAN number (e.g. ASEFG1234D).');
+            }
+            if (sellerData.taxNumber?.trim() && !/^\d{10,20}$/.test(sellerData.taxNumber.trim())) {
+                return failValidation('Tax number should be 10 to 20 digits.');
+            }
+
             const updateData = {
                 ...sellerData,
                 serviceRadiusKm: radius,

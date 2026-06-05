@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { sendOTP, verifyOTP } from '../../../services/api/auth/adminAuthService';
 import OTPInput from '../../../components/OTPInput';
 import { useAuth } from '../../../context/AuthContext';
+import { normalizeMobile } from '../../../utils/phone';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -121,11 +122,7 @@ export default function AdminLogin() {
                   <input
                     type="tel"
                     value={mobileNumber}
-                    onChange={(e) =>
-                      setMobileNumber(
-                        e.target.value.replace(/\D/g, "").slice(0, 10)
-                      )
-                    }
+                    onChange={(e) => setMobileNumber(normalizeMobile(e.target.value))}
                     placeholder="Enter mobile number"
                     className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
                     maxLength={10}

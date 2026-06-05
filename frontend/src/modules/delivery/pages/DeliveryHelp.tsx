@@ -72,13 +72,21 @@ export default function DeliveryHelp() {
           </div>
           <div className="divide-y divide-neutral-200">
             {contacts.map((option, index) => (
-              <div key={index} className="p-4 flex items-center justify-between">
+              <button
+                key={index}
+                onClick={() => {
+                  // Make support contacts actionable (#100-103)
+                  if (option.icon === 'phone') window.location.href = `tel:${option.value}`;
+                  else if (option.icon === 'email') window.location.href = `mailto:${option.value}`;
+                  else if (option.value) window.open(option.value, '_blank');
+                }}
+                className="w-full p-4 flex items-center justify-between text-left hover:bg-neutral-50 transition-colors">
                 <div>
                   <p className="text-neutral-900 text-sm font-medium mb-1">{option.label}</p>
                   <p className="text-neutral-500 text-xs">{option.value}</p>
                 </div>
                 <div className="text-2xl">{getIcon(option.icon)}</div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -99,7 +107,14 @@ export default function DeliveryHelp() {
         </div>
 
         {/* Support Button */}
-        <button className="w-full mt-4 bg-orange-500 text-white rounded-xl py-3 font-semibold hover:bg-orange-600 transition-colors shadow-md active:scale-[0.98]">
+        <button
+          onClick={() => {
+            const phone = contacts.find((c) => c.icon === 'phone');
+            const email = contacts.find((c) => c.icon === 'email');
+            if (phone) window.location.href = `tel:${phone.value}`;
+            else if (email) window.location.href = `mailto:${email.value}`;
+          }}
+          className="w-full mt-4 bg-orange-500 text-white rounded-xl py-3 font-semibold hover:bg-orange-600 transition-colors shadow-md active:scale-[0.98]">
           Contact Support
         </button>
       </div>

@@ -42,6 +42,10 @@ export interface IOrder extends Document {
   paymentStatus: "Pending" | "Paid" | "Failed" | "Refunded";
   paymentId?: string;
 
+  // Guard so the "new order" seller notification is sent only once, even when
+  // both capturePayment and the Razorpay webhook fire for the same order.
+  sellerNotified?: boolean;
+
   // Order Status
   status:
   | "Received"
@@ -241,6 +245,10 @@ const OrderSchema = new Schema<IOrder>(
     paymentId: {
       type: String,
       trim: true,
+    },
+    sellerNotified: {
+      type: Boolean,
+      default: false,
     },
 
     // Order Status

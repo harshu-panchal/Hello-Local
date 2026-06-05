@@ -13,9 +13,11 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
   const location = useLocation();
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const { user, logout } = useAuth();
   const settingsRef = useRef<HTMLDivElement>(null);
   const locationRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname.includes(path);
 
@@ -27,6 +29,9 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
       }
       if (locationRef.current && !locationRef.current.contains(event.target as Node)) {
         setShowLocationDropdown(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
       }
     };
 
@@ -44,12 +49,26 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
   const handleSettingsClick = () => {
     setShowSettingsDropdown(!showSettingsDropdown);
     setShowLocationDropdown(false);
+    setShowProfileDropdown(false);
   };
 
   const handleLocationClick = () => {
     setShowLocationDropdown(!showLocationDropdown);
     setShowSettingsDropdown(false);
+    setShowProfileDropdown(false);
   };
+
+  const handleProfileClick = () => {
+    setShowProfileDropdown(!showProfileDropdown);
+    setShowSettingsDropdown(false);
+    setShowLocationDropdown(false);
+  };
+
+  // Display helpers for the profile dropdown
+  const displayName = user?.storeName || user?.name || user?.ownerName || 'Seller';
+  const displayEmail = user?.email || '';
+  const displayPhone = user?.mobile || user?.phone || '';
+  const initial = displayName.trim().charAt(0).toUpperCase() || 'S';
 
 
   return (
@@ -89,7 +108,7 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
           {/* Mobile Profile and Logout Buttons - Only visible on mobile */}
           <div className="ml-auto flex items-center sm:hidden">
             <button
-              onClick={() => navigate('/seller/account-settings')}
+              onClick={() => navigate('/seller/profile')}
               className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
               aria-label="Profile"
             >
@@ -143,6 +162,73 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
 
         {/* Action Icons */}
         <div className="hidden sm:flex items-center gap-2 md:gap-4 relative">
+          {/* Profile Button with Dropdown */}
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={handleProfileClick}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold transition-colors"
+              aria-label="Profile"
+              title="Profile"
+            >
+              {initial}
+            </button>
+            {showProfileDropdown && (
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-neutral-200 py-2 z-50">
+                {/* Profile summary */}
+                <div className="px-4 py-3 border-b border-neutral-200 flex items-center gap-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-pink-600 text-white text-base font-semibold flex-shrink-0">
+                    {initial}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-neutral-900 truncate">{displayName}</p>
+                    {displayEmail && <p className="text-xs text-neutral-500 truncate">{displayEmail}</p>}
+                    {displayPhone && <p className="text-xs text-neutral-500 truncate">{displayPhone}</p>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    navigate('/seller/profile');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  My Profile
+                </button>
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    navigate('/seller/wallet');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 12a2 2 0 0 0 0 4h4v-4h-4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Wallet
+                </button>
+                <div className="border-t border-neutral-200 my-1" />
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    handleLogout();
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9M16 17L21 12M21 12L16 7M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Settings Button with Dropdown */}
           <div className="relative" ref={settingsRef}>
             <button

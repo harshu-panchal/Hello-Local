@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getCategories, Category } from '../../../services/api/categoryService';
+import { exportToCsv } from '../../../utils/exportCsv';
 
 export default function SellerCategory() {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -7,6 +8,7 @@ export default function SellerCategory() {
     const [error, setError] = useState<string>('');
     const [searchTerm, setSearchTerm] = useState('');
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Fetch categories from API
     useEffect(() => {
@@ -15,8 +17,8 @@ export default function SellerCategory() {
             setError('');
             try {
                 const params: any = {};
-                if (searchTerm) {
-                    params.search = searchTerm;
+                if (searchTerm.trim()) {
+                    params.search = searchTerm.trim();
                 }
 
                 const response = await getCategories(params);
@@ -37,8 +39,21 @@ export default function SellerCategory() {
 
     // Client-side filtering for display (API handles search, but we can filter further if needed)
     const filteredCategories = categories.filter(cat =>
-        cat.name.toLowerCase().includes(searchTerm.toLowerCase())
+        cat.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
     );
+
+    // Apply the "Show entries" limit (this control previously did nothing)
+    const totalPages = Math.max(1, Math.ceil(filteredCategories.length / rowsPerPage));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginatedCategories = filteredCategories.slice(
+        (safePage - 1) * rowsPerPage,
+        safePage * rowsPerPage
+    );
+
+    // Reset to first page whenever the filter/page-size changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, rowsPerPage]);
 
     return (
         <div className="flex flex-col h-full">
@@ -62,7 +77,7 @@ export default function SellerCategory() {
                         <select
                             value={rowsPerPage}
                             onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                            className="bg-neutral-100 border-none rounded py-1.5 px-3text-sm focus:ring-0 cursor-pointer"
+                            className="bg-neutral-100 border-none rounded py-1.5 px-3 text-sm focus:ring-0 cursor-pointer"
                         >
                             <option value={10}>10</option>
                             <option value={20}>20</option>
@@ -70,25 +85,18 @@ export default function SellerCategory() {
                         </select>
 
                         <button
+                            disabled={filteredCategories.length === 0}
                             onClick={() => {
-                                const headers = ['ID', 'Category Name', 'Total Subcategory'];
-                                const csvContent = [
-                                    headers.join(','),
-                                    ...filteredCategories.map(cat => [
+                                if (filteredCategories.length === 0) return; // nothing to export (#17)
+                                exportToCsv(
+                                    ['ID', 'Category Name', 'Total Subcategory'],
+                                    filteredCategories.map(cat => [
                                         cat._id,
-                                        `"${cat.name}"`,
-                                        cat.totalSubcategory
-                                    ].join(','))
-                                ].join('\n');
-                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                                const link = document.createElement('a');
-                                const url = URL.createObjectURL(blob);
-                                link.setAttribute('href', url);
-                                link.setAttribute('download', `categories_${new Date().toISOString().split('T')[0]}.csv`);
-                                link.style.visibility = 'hidden';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
+                                        cat.name,
+                                        cat.totalSubcategory,
+                                    ]),
+                                    'categories'
+                                );
                             }}
                             className="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
                         >
@@ -142,7 +150,7 @@ export default function SellerCategory() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredCategories.map((category) => (
+                                {paginatedCategories.map((category) => (
                                     <tr key={category._id} className="hover:bg-neutral-50 transition-colors text-sm text-neutral-700">
                                         <td className="p-4 align-middle border border-neutral-200">{category._id}</td>
                                         <td className="p-4 align-middle border border-neutral-200">{category.name}</td>
@@ -161,7 +169,7 @@ export default function SellerCategory() {
                                         <td className="p-4 align-middle border border-neutral-200">{category.totalSubcategory || 0}</td>
                                     </tr>
                                 ))}
-                                {filteredCategories.length === 0 && (
+                                {paginatedCategories.length === 0 && (
                                     <tr>
                                         <td colSpan={4} className="p-8 text-center text-neutral-400 border border-neutral-200">
                                             No categories found.
@@ -173,10 +181,31 @@ export default function SellerCategory() {
                     </div>
                 )}
 
-                {/* Pagination (Visual only mostly for now as per image doesn't show bottom) */}
-                <div className="p-4 border-t border-neutral-100 mt-auto">
-                    {/* Placeholder for potential pagination info if needed, or left empty as strictly per image top part */}
-                </div>
+                {/* Pagination */}
+                {!loading && !error && filteredCategories.length > 0 && (
+                    <div className="p-4 border-t border-neutral-100 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="text-sm text-neutral-600">
+                            Showing {(safePage - 1) * rowsPerPage + 1} to {Math.min(safePage * rowsPerPage, filteredCategories.length)} of {filteredCategories.length} entries
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={safePage === 1}
+                                className="px-3 py-1.5 text-sm border border-neutral-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-50 transition-colors"
+                            >
+                                Prev
+                            </button>
+                            <span className="text-sm text-neutral-600">{safePage} / {totalPages}</span>
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={safePage >= totalPages}
+                                className="px-3 py-1.5 text-sm border border-neutral-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-50 transition-colors"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

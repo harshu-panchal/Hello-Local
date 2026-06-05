@@ -8,6 +8,7 @@ import {
   Category as ApiCategory,
 } from "../../services/api/customerProductService";
 import { useLocation as useLocationContext } from "../../hooks/useLocation";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 export default function CategoryPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,7 @@ export default function CategoryPage() {
   const [subcategories, setSubcategories] = useState<ApiCategory[]>([]);
   const [selectedSubcategory, setSelectedSubcategory] = useState("all");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  useBodyScrollLock(isFiltersOpen); // lock background scroll while filters open (#273)
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [filterSearchQuery, setFilterSearchQuery] = useState("");
   const [selectedFilterCategory, setSelectedFilterCategory] = useState("Type");

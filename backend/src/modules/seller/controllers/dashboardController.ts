@@ -20,6 +20,15 @@ export const getDashboardStats = asyncHandler(
         // 1. KPI Metrics
         const sellerObjectIds = sellerOrderIds.map(id => new mongoose.Types.ObjectId(id));
 
+        // Orders that are actually Delivered. Revenue is based on the ORDER's final
+        // status, not the order-item status — items aren't always synced to
+        // "Delivered" when a delivery partner/admin marks the order delivered, which
+        // previously made revenue show ₹0. (#252)
+        const deliveredOrderIds = await Order.find({
+            _id: { $in: sellerOrderIds },
+            status: "Delivered",
+        }).distinct("_id");
+
         const [
             totalOrders,
             completedOrders,
@@ -43,9 +52,10 @@ export const getDashboardStats = asyncHandler(
             Product.distinct("category", { seller: sellerId }).then(ids => ids.length),
             Product.distinct("subcategory", { seller: sellerId }).then(ids => ids.length),
             Order.distinct("customer", { _id: { $in: sellerOrderIds } }).then(ids => ids.length),
-            // Total revenue = sum of seller's order items for delivered+paid orders
+            // Total revenue = sum of this seller's items across the seller's
+            // Delivered orders (based on order status, not item status). (#252)
             OrderItem.aggregate([
-                { $match: { seller: sellerId, status: { $in: ["Delivered", "Completed"] } } },
+                { $match: { seller: sellerId, order: { $in: deliveredOrderIds } } },
                 { $group: { _id: null, total: { $sum: "$total" } } }
             ]).catch(() => []),
         ]);

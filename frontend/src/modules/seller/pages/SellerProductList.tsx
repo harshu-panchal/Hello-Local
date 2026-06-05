@@ -11,6 +11,7 @@ import {
   Category as apiCategory,
 } from "../../../services/api/categoryService";
 import { useAuth } from "../../../context/AuthContext";
+import { exportToCsv } from "../../../utils/exportCsv";
 
 // ... (interfaces remain same)
 
@@ -244,6 +245,25 @@ export default function SellerProductList() {
     ? filteredVariations
     : filteredVariations.slice(startIndex, endIndex);
 
+  // Collapse multi-variation products into a single row by default (show the first
+  // variation; reveal the rest only when expanded). This keeps the visible row
+  // count aligned with the actual number of PRODUCTS — so it matches the
+  // dashboard "Total Product" instead of counting every variation as an entry.
+  const visibleVariations = displayedVariations.filter((variation, index) => {
+    const isFirstOfProduct =
+      index === 0 ||
+      displayedVariations[index - 1].productId !== variation.productId;
+    return isFirstOfProduct || expandedProducts.has(variation.productId);
+  });
+
+  // Distinct product count (for the "entries" footer)
+  const productCount = new Set(filteredVariations.map((v) => v.productId)).size;
+  const footerTotal = useServerPagination && paginationInfo ? paginationInfo.total : productCount;
+  const footerStart = footerTotal === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
+  const footerEnd = useServerPagination
+    ? endIndex
+    : Math.min(currentPage * rowsPerPage, productCount);
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -264,6 +284,11 @@ export default function SellerProductList() {
       return newSet;
     });
   };
+
+  // Mongo ObjectIds are 24 chars and dominate the table — show a short tail and
+  // expose the full id on hover. Full ids are still used for actions and export.
+  const shortId = (id: string) =>
+    id && id.length > 10 ? `…${id.slice(-6)}` : id;
 
   const SortIcon = ({ column }: { column: string }) => (
     <span className="text-neutral-300 text-[10px]">
@@ -289,7 +314,7 @@ export default function SellerProductList() {
       </div>
 
       {/* Content Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col">
+      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="p-4 border-b border-neutral-100 font-medium text-neutral-700">
           View Product List
         </div>
@@ -340,7 +365,7 @@ export default function SellerProductList() {
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm text-neutral-600">Show</span>
               <select
@@ -354,48 +379,34 @@ export default function SellerProductList() {
               </select>
             </div>
             <button
+              disabled={filteredVariations.length === 0}
               onClick={() => {
-                const headers = [
-                  "Product Id",
-                  "Variation Id",
-                  "Product Name",
-                  "Seller Name",
-                  "Brand Name",
-                  "Category",
-                  "Price",
-                  "Disc Price",
-                  "Variation",
-                ];
-                const csvContent = [
-                  headers.join(","),
-                  ...filteredVariations.map((v) =>
-                    [
-                      v.productId,
-                      v.variationId,
-                      `"${v.productName}"`,
-                      `"${v.sellerName}"`,
-                      `"${v.brandName}"`,
-                      `"${v.category}"`,
-                      v.price,
-                      v.discPrice,
-                      `"${v.variation}"`,
-                    ].join(",")
-                  ),
-                ].join("\n");
-                const blob = new Blob([csvContent], {
-                  type: "text/csv;charset=utf-8;",
-                });
-                const link = document.createElement("a");
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute(
-                  "download",
-                  `products_${new Date().toISOString().split("T")[0]}.csv`
+                if (filteredVariations.length === 0) return; // nothing to export (#17)
+                exportToCsv(
+                  [
+                    "Product Id",
+                    "Variation Id",
+                    "Product Name",
+                    "Seller Name",
+                    "Brand Name",
+                    "Category",
+                    "Price",
+                    "Disc Price",
+                    "Variation",
+                  ],
+                  filteredVariations.map((v) => [
+                    v.productId,
+                    v.variationId,
+                    v.productName,
+                    v.sellerName,
+                    v.brandName,
+                    v.category,
+                    v.price,
+                    v.discPrice,
+                    v.variation,
+                  ]),
+                  "products"
                 );
-                link.style.visibility = "hidden";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
               }}
               className="bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors">
               <svg
@@ -425,13 +436,13 @@ export default function SellerProductList() {
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
-            <div className="relative">
+            <div className="relative flex-1 min-w-0 sm:flex-none">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">
                 Search:
               </span>
               <input
                 type="text"
-                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-48"
+                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-full sm:w-48 max-w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder=""
@@ -462,7 +473,7 @@ export default function SellerProductList() {
 
         {/* Table */}
         {!loading && !error && (
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto flex-1 min-w-0">
             <table className="w-full text-left border-collapse border border-neutral-200">
               <thead>
                 <tr className="bg-neutral-50 text-xs font-bold text-neutral-800">
@@ -545,10 +556,10 @@ export default function SellerProductList() {
                 </tr>
               </thead>
               <tbody>
-                {displayedVariations.map((variation, index) => {
+                {visibleVariations.map((variation, index) => {
                   const isFirstVariation =
                     index === 0 ||
-                    displayedVariations[index - 1].productId !==
+                    visibleVariations[index - 1].productId !==
                     variation.productId;
                   const product = products.find(
                     (p) => p._id === variation.productId
@@ -584,11 +595,15 @@ export default function SellerProductList() {
                               </svg>
                             </button>
                           )}
-                          <span>{variation.productId}</span>
+                          <span title={variation.productId} className="font-mono text-xs">
+                            {shortId(variation.productId)}
+                          </span>
                         </div>
                       </td>
                       <td className="p-4 align-middle border border-neutral-200">
-                        {variation.variationId}
+                        <span title={variation.variationId} className="font-mono text-xs">
+                          {shortId(variation.variationId)}
+                        </span>
                       </td>
                       <td className="p-4 align-middle border border-neutral-200">
                         <div className="flex flex-col gap-1">
@@ -673,7 +688,7 @@ export default function SellerProductList() {
                     </tr>
                   );
                 })}
-                {displayedVariations.length === 0 && (
+                {visibleVariations.length === 0 && (
                   <tr>
                     <td
                       colSpan={12}
@@ -691,11 +706,7 @@ export default function SellerProductList() {
         {!loading && !error && (
           <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
             <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {startIndex + 1} to {endIndex} of{" "}
-              {useServerPagination && paginationInfo
-                ? paginationInfo.total
-                : filteredVariations.length}{" "}
-              entries
+              Showing {footerStart} to {footerEnd} of {footerTotal} entries
             </div>
             <div className="flex items-center gap-2">
               <button
