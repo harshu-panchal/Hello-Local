@@ -13,7 +13,9 @@
     padding-bottom: env(safe-area-inset-bottom);
     width: 100%;
     overflow-x: hidden;
-    font-family: 'Outfit', sans-serif;
+    /* 'Outfit' has no ₹ (U+20B9) glyph; fall back to fonts that do so the
+       Rupee sign never renders as "?" on Android webviews / older devices. */
+    font-family: 'Outfit', 'Segoe UI', 'Roboto', 'Noto Sans', Arial, sans-serif;
   }
 
   html {

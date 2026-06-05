@@ -298,8 +298,9 @@ export const createWithdrawalRequest = async (
       throw new Error("User not found");
     }
 
-    // Create account details string
-    const accountDetails = `${user.bankName} - ${user.accountNumber} (${user.ifscCode})`;
+    // Create account details string (Seller model stores IFSC as `ifsc`; Delivery may use `ifscCode`)
+    const ifsc = (user as any).ifsc || (user as any).ifscCode;
+    const accountDetails = `${user.bankName} - ${user.accountNumber} (${ifsc})`;
 
     // Create withdrawal request
     const withdrawRequest = new WithdrawRequest({

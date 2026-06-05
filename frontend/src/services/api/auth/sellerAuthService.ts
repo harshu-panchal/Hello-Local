@@ -1,10 +1,11 @@
 import api, { setAuthToken, removeAuthToken } from '../config';
 
 const handleApiError = (error: any) => {
-  if (error.response && error.response.data && error.response.data.message) {
-    throw new Error(error.response.data.message);
-  }
-  throw new Error(error.message || 'An unexpected error occurred');
+  // Re-throw the ORIGINAL error so callers can still branch on `error.response`
+  // (status codes like 409 duplicate) and `error.friendlyMessage` (network/timeout).
+  // Throwing a fresh Error here would drop `.response` and make accurate,
+  // context-specific messaging impossible. (#seller-register)
+  throw error;
 };
 
 export interface SendOTPResponse {

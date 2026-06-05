@@ -43,6 +43,7 @@ export interface DeliveryAddress {
 
 export interface OrderDetail {
   id: string;
+  orderNumber: string;
   invoiceNumber: string;
   orderDate: string;
   deliveryDate: string;

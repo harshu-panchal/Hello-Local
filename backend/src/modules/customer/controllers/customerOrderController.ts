@@ -296,6 +296,12 @@ export const createOrder = async (req: Request, res: Response) => {
                 commissionRate: commRate,
                 commissionAmount: commAmount,
                 variation: variationValue,
+                // Snapshot the human-readable variation label (e.g. "500g") so the
+                // order/invoice always shows the correct unit, even if `variation`
+                // stored an id. (#order-unit)
+                variantTitle: selectedVariation
+                    ? ((selectedVariation as any).value || (selectedVariation as any).title || (selectedVariation as any).pack || '')
+                    : '',
                 status: 'Pending'
             };
 

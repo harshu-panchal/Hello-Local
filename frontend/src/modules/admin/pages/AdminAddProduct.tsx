@@ -917,6 +917,7 @@ export default function AdminAddProduct() {
                       })
                     }
                     placeholder="100"
+                    min="0"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
                   />
                 </div>
@@ -934,6 +935,7 @@ export default function AdminAddProduct() {
                       })
                     }
                     placeholder="80"
+                    min="0"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
                   />
                 </div>
@@ -951,6 +953,7 @@ export default function AdminAddProduct() {
                       })
                     }
                     placeholder="0"
+                    min="0"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
                   />
                 </div>
@@ -1078,6 +1081,7 @@ export default function AdminAddProduct() {
                     value={formData.maxReturnDays}
                     onChange={handleChange}
                     placeholder="Enter Max Return Days"
+                    min="0"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
                   />
                 </div>
@@ -1104,6 +1108,7 @@ export default function AdminAddProduct() {
                     value={formData.totalAllowedQuantity}
                     onChange={handleChange}
                     placeholder="Enter Total allowed quantit"
+                    min="0"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
                   />
                   <p className="text-xs text-neutral-500 mt-1">

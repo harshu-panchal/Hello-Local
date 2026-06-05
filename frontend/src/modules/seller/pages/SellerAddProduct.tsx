@@ -28,17 +28,22 @@ import {
   getHeaderCategoriesPublic,
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
+import { useAuth } from "../../../context/AuthContext";
 
 export default function SellerAddProduct() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  // Pending/Rejected sellers cannot add or edit products (#148/#306).
+  // Backend enforces this too; this just blocks the UI early.
+  const isApproved = ((user as any)?.status ?? "Approved") === "Approved";
   const [formData, setFormData] = useState({
     productName: "",
     headerCategory: "",
     category: "",
     subcategory: "",
     subSubCategory: "",
-    publish: "No",
+    publish: "",
     popular: "No",
     dealOfDay: "No",
     brand: "",
@@ -55,6 +60,7 @@ export default function SellerAddProduct() {
     isReturnable: "No",
     maxReturnDays: "",
     fssaiLicNo: "",
+    foodType: "None",
     totalAllowedQuantity: "10",
     mainImageUrl: "",
     galleryImageUrls: [] as string[],
@@ -184,6 +190,7 @@ export default function SellerAddProduct() {
               isReturnable: product.isReturnable ? "Yes" : "No",
               maxReturnDays: product.maxReturnDays?.toString() || "",
               fssaiLicNo: product.fssaiLicNo || "",
+              foodType: (product as any).foodType || "None",
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
@@ -397,9 +404,21 @@ export default function SellerAddProduct() {
     e.preventDefault();
     setUploadError("");
 
+    // Block unapproved sellers (#148/#306)
+    if (!isApproved) {
+      setUploadError("Your seller account is awaiting admin approval. You can add products once approved.");
+      return;
+    }
+
     // Basic validation
     if (!formData.productName.trim()) {
       setUploadError("Please enter a product name.");
+      return;
+    }
+
+    // Product status must be explicitly chosen (no default selection). (#44)
+    if (!formData.publish) {
+      setUploadError("Please select a product status (Published or Unpublished).");
       return;
     }
 
@@ -413,6 +432,24 @@ export default function SellerAddProduct() {
         setUploadError("Please select a category.");
         return;
       }
+    }
+
+    // Product main image is required (label is marked * but was never enforced)
+    if (!mainImageFile && !formData.mainImageUrl) {
+      setUploadError("Please add a product main image.");
+      return;
+    }
+
+    // Made In should only contain alphabets and spaces (when provided)
+    if (formData.madeIn.trim() && !/^[A-Za-z\s]+$/.test(formData.madeIn.trim())) {
+      setUploadError("Made In should contain only alphabets.");
+      return;
+    }
+
+    // FSSAI Lic. No. should be in a valid format (digits/slashes only) when provided
+    if (formData.fssaiLicNo.trim() && !/^[0-9/]{8,}$/.test(formData.fssaiLicNo.trim())) {
+      setUploadError("Please enter a valid FSSAI Lic. No. (e.g. 21/001/00012345).");
+      return;
     }
 
     setUploading(true);
@@ -489,6 +526,7 @@ export default function SellerAddProduct() {
           : undefined,
         totalAllowedQuantity: parseInt(formData.totalAllowedQuantity || "10"),
         fssaiLicNo: formData.fssaiLicNo || undefined,
+        foodType: (formData.foodType || "None") as "Veg" | "Non-Veg" | "None",
         mainImageUrl: mainImageUrl || undefined,
         galleryImageUrls,
         variations: variations,
@@ -518,7 +556,7 @@ export default function SellerAddProduct() {
               category: "",
               subcategory: "",
               subSubCategory: "",
-              publish: "No",
+              publish: "",
               popular: "No",
               dealOfDay: "No",
               brand: "",
@@ -535,6 +573,7 @@ export default function SellerAddProduct() {
               isReturnable: "No",
               maxReturnDays: "",
               fssaiLicNo: "",
+              foodType: "None",
               totalAllowedQuantity: "10",
               mainImageUrl: "",
               galleryImageUrls: [],
@@ -557,6 +596,7 @@ export default function SellerAddProduct() {
     } catch (error: any) {
       setUploadError(
         error.response?.data?.message ||
+        error.friendlyMessage ||
         error.message ||
         "Failed to upload images. Please try again."
       );
@@ -570,6 +610,14 @@ export default function SellerAddProduct() {
       {/* Main Content */}
       <div className="flex-1">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Pending-approval banner (#148/#306) */}
+          {!isApproved && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg text-sm">
+              Your seller account is <span className="font-semibold">awaiting admin approval</span>.
+              You can browse the panel, but adding or editing products is disabled until your account is approved.
+            </div>
+          )}
+
           {/* Product Section */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
             <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
@@ -717,8 +765,9 @@ export default function SellerAddProduct() {
                     value={formData.publish}
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">Unpublished</option>
-                    <option value="Yes">Published</option>
+                    <option value="">Select Status</option>
+                    <option value="Yes">Published (visible to customers)</option>
+                    <option value="No">Unpublished (hidden)</option>
                   </select>
                 </div>
                 <div>
@@ -797,67 +846,6 @@ export default function SellerAddProduct() {
             </div>
           </div>
 
-          {/* SEO Content Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">SEO Content</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  name="seoTitle"
-                  value={formData.seoTitle}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Title"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Keywords
-                </label>
-                <input
-                  type="text"
-                  name="seoKeywords"
-                  value={formData.seoKeywords}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Keywords"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Image Alt Text
-                </label>
-                <input
-                  type="text"
-                  name="seoImageAlt"
-                  value={formData.seoImageAlt}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Image Alt Text"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Description
-                </label>
-                <textarea
-                  name="seoDescription"
-                  value={formData.seoDescription}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Description"
-                  rows={4}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 resize-none"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Add Variation Section */}
           <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
             <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
@@ -924,19 +912,26 @@ export default function SellerAddProduct() {
                   <input
                     type="number"
                     value={variationForm.discPrice}
-                    onChange={(e) =>
-                      setVariationForm({
-                        ...variationForm,
-                        discPrice: e.target.value,
-                      })
-                    }
+                    onChange={(e) => {
+                      // Drop a leading "0" so the default value disappears the moment a
+                      // real digit is typed (e.g. "0" + "8" -> "8", not "08").
+                      let v = e.target.value;
+                      if (/^0\d/.test(v)) v = v.replace(/^0+/, "");
+                      setVariationForm({ ...variationForm, discPrice: v });
+                    }}
+                    onFocus={(e) => {
+                      // Auto-clear the default "0" so the seller can type a value cleanly
+                      if (e.target.value === "0") {
+                        setVariationForm((prev) => ({ ...prev, discPrice: "" }));
+                      }
+                    }}
                     placeholder="80"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Stock (0 = Unlimited)
+                    Stock
                   </label>
                   <input
                     type="number"
@@ -981,10 +976,10 @@ export default function SellerAddProduct() {
                             </span>
                           )}
                           <span className="ml-4 text-sm text-neutral-600">
-                            Stock:{" "}
-                            {variation.stock === 0
-                              ? "Unlimited"
-                              : variation.stock}{" "}
+                            Stock: {variation.stock}
+                            {variation.stock === 0 && (
+                              <span className="text-red-500"> (Out of stock)</span>
+                            )}{" "}
                             | Status: {variation.status}
                           </span>
                         </div>
@@ -1059,7 +1054,15 @@ export default function SellerAddProduct() {
                   <select
                     name="isReturnable"
                     value={formData.isReturnable}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        isReturnable: value,
+                        // Clear return days when the product is not returnable
+                        maxReturnDays: value === "Yes" ? prev.maxReturnDays : "",
+                      }));
+                    }}
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
                     <option value="No">No</option>
                     <option value="Yes">Yes</option>
@@ -1074,9 +1077,51 @@ export default function SellerAddProduct() {
                     name="maxReturnDays"
                     value={formData.maxReturnDays}
                     onChange={handleChange}
-                    placeholder="Enter Max Return Days"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
+                    disabled={formData.isReturnable !== "Yes"}
+                    placeholder={formData.isReturnable === "Yes" ? "Enter Max Return Days" : "Not returnable"}
+                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 disabled:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                    Food Type (Veg / Non-Veg)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "Veg", label: "Veg", color: "green" },
+                      { value: "Non-Veg", label: "Non-Veg", color: "red" },
+                      { value: "None", label: "Not Applicable", color: "neutral" },
+                    ].map((opt) => {
+                      const selected = formData.foodType === opt.value;
+                      return (
+                        <button
+                          type="button"
+                          key={opt.value}
+                          onClick={() =>
+                            setFormData((prev) => ({ ...prev, foodType: opt.value }))
+                          }
+                          className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                            selected
+                              ? "border-pink-600 bg-pink-50 text-pink-700"
+                              : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                          }`}>
+                          {opt.value !== "None" && (
+                            <span
+                              className={`w-4 h-4 border-2 flex items-center justify-center ${
+                                opt.color === "green" ? "border-green-600" : "border-red-600"
+                              }`}>
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  opt.color === "green" ? "bg-green-600" : "bg-red-600"
+                                }`}
+                              />
+                            </span>
+                          )}
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
@@ -1100,7 +1145,13 @@ export default function SellerAddProduct() {
                     name="totalAllowedQuantity"
                     value={formData.totalAllowedQuantity}
                     onChange={handleChange}
-                    placeholder="Enter Total allowed quantit"
+                    onFocus={(e) => {
+                      // On mobile the on-screen keyboard can cover this near-bottom
+                      // field; scroll it into view once the keyboard has opened.
+                      const el = e.currentTarget;
+                      setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+                    }}
+                    placeholder="Enter Total allowed quantity"
                     className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
                   />
                   <p className="text-xs text-neutral-500 mt-1">
@@ -1179,7 +1230,7 @@ export default function SellerAddProduct() {
                   )}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
                     onChange={handleMainImageChange}
                     className="hidden"
                     disabled={uploading}
@@ -1276,7 +1327,7 @@ export default function SellerAddProduct() {
                   <input
                     id="gallery-image-upload"
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
                     multiple
                     onChange={handleGalleryImagesChange}
                     className="hidden"
@@ -1345,8 +1396,9 @@ export default function SellerAddProduct() {
           <div className="flex justify-end pb-6">
             <button
               type="submit"
-              disabled={uploading}
-              className={`px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm ${uploading
+              disabled={uploading || !isApproved}
+              title={!isApproved ? "Available after admin approval" : undefined}
+              className={`px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm ${uploading || !isApproved
                 ? "bg-neutral-400 cursor-not-allowed text-white"
                 : "bg-pink-700 hover:bg-pink-800 text-white"
                 }`}>

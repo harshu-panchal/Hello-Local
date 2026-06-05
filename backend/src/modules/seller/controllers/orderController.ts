@@ -44,7 +44,11 @@ export const getOrders = asyncHandler(
         query.orderDate.$gte = new Date(dateFrom as string);
       }
       if (dateTo) {
-        query.orderDate.$lte = new Date(dateTo as string);
+        // Include the entire "To" day — a bare date parses to 00:00, which would
+        // otherwise exclude every order placed later that same day. (#orders-filter)
+        const end = new Date(dateTo as string);
+        end.setHours(23, 59, 59, 999);
+        query.orderDate.$lte = end;
       }
     }
 
@@ -63,13 +67,14 @@ export const getOrders = asyncHandler(
       query.status = statusMapping[status as string] || status;
     }
 
-    // Search filter
+    // Search filter — match Order ID, invoice, customer, or status.
     if (search) {
       query.$or = [
         { orderNumber: { $regex: search, $options: "i" } },
         { invoiceNumber: { $regex: search, $options: "i" } },
         { customerName: { $regex: search, $options: "i" } },
         { customerPhone: { $regex: search, $options: "i" } },
+        { status: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -78,9 +83,19 @@ export const getOrders = asyncHandler(
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
-    // Sort
+    // Sort — map the frontend's column keys to the real DB fields. Without this,
+    // sorting by Order Id / Delivery Date / Amount targets non-existent fields
+    // (orderId / deliveryDate / amount) and silently does nothing. (#orders-sort)
+    const sortFieldMap: Record<string, string> = {
+      orderId: "orderNumber",
+      deliveryDate: "estimatedDeliveryDate",
+      orderDate: "orderDate",
+      status: "status",
+      amount: "total",
+    };
+    const sortKey = sortFieldMap[sortBy as string] || "orderDate";
     const sort: any = {};
-    sort[sortBy as string] = sortOrder === "asc" ? 1 : -1;
+    sort[sortKey] = sortOrder === "asc" ? 1 : -1;
 
     // Get orders with populated customer and delivery info
     const orders = await Order.find(query)
@@ -93,6 +108,18 @@ export const getOrders = asyncHandler(
     // Get total count for pagination
     const total = await Order.countDocuments(query);
 
+    // Compute each order's amount for THIS seller = sum of the seller's own items.
+    // The order's `total` includes other sellers' items + shipping/fees, so showing it
+    // would not match the seller's invoice (which only lists this seller's items). (#22/286)
+    const pageOrderIds = orders.map(o => o._id);
+    const sellerTotals = await OrderItem.aggregate([
+      { $match: { order: { $in: pageOrderIds }, seller: new mongoose.Types.ObjectId(sellerId) } },
+      { $group: { _id: "$order", amount: { $sum: "$total" } } },
+    ]);
+    const sellerAmountByOrder = new Map<string, number>(
+      sellerTotals.map((r: any) => [r._id.toString(), r.amount])
+    );
+
     // Format response for frontend
     const formattedOrders = orders.map(order => ({
       id: order._id,
@@ -102,7 +129,7 @@ export const getOrders = asyncHandler(
         : order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
       orderDate: order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
       status: order.status === 'Out for Delivery' ? 'On the way' : order.status,
-      amount: order.total,
+      amount: sellerAmountByOrder.get((order._id as any).toString()) ?? order.total,
       customerName: (order.customer as any)?.name || order.customerName || '',
       customerPhone: (order.customer as any)?.phone || order.customerPhone || '',
       deliveryBoyName: (order.deliveryBoy as any)?.name || '',
@@ -167,39 +194,38 @@ export const getOrderById = asyncHandler(
     // Format order items for frontend
     // Format order items for frontend
     const formattedItems = orderItems.map(item => {
-      let unit = item.variation || 'N/A';
-      let variationMatched = false;
+      // Readable label for a variation, trying each possible field. (#order-unit)
+      const label = (v: any) => v && (v.value || v.title || v.pack);
 
-      // Try to resolve variation value from product if it exists
-      // item.product is populated now
+      // 0. Prefer the snapshot stored at order time (most reliable).
+      let unit = (item as any).variantTitle || '';
+
       const product = item.product as any;
-      if (product && product.variations && Array.isArray(product.variations)) {
-        // 1. Try to match by ID or Value if validation is present
+      if (!unit && product && Array.isArray(product.variations) && product.variations.length) {
+        // 1. Match the stored variation by id OR readable value/title/pack.
+        let match: any = null;
         if (item.variation) {
-          const variationById = product.variations.find((v: any) => v._id.toString() === item.variation);
-          if (variationById) {
-            unit = variationById.value;
-            variationMatched = true;
-          } else {
-            const variationByValue = product.variations.find((v: any) => v.value === item.variation);
-            if (variationByValue) {
-              unit = variationByValue.value;
-              variationMatched = true;
-            }
-          }
+          match = product.variations.find((v: any) =>
+            (v._id && v._id.toString() === item.variation) ||
+            v.value === item.variation ||
+            v.title === item.variation ||
+            v.pack === item.variation
+          );
         }
+        // 2. Fallback: match by price; or if there's only one variation, use it.
+        if (!match) {
+          match =
+            product.variations.find((v: any) => v.price === item.unitPrice || v.discPrice === item.unitPrice) ||
+            (product.variations.length === 1 ? product.variations[0] : null);
+        }
+        if (match) unit = label(match) || '';
+      }
 
-        // 2. Fallback: If not matched yet (even if we have a value like '250'), try to recover
-        if (!variationMatched) {
-          const variationByPrice = product.variations.find((v: any) => v.price === item.unitPrice || v.discPrice === item.unitPrice);
-          if (variationByPrice) {
-            unit = variationByPrice.value;
-            variationMatched = true;
-          } else if (product.variations.length === 1) {
-            // 3. Last Resort: If there is only one variation, assume it's that one
-            unit = product.variations[0].value;
-          }
-        }
+      // 3. If the stored variation is a readable string (not an ObjectId), use it;
+      //    otherwise show N/A rather than leaking a raw id.
+      if (!unit) {
+        const v = item.variation || '';
+        unit = /^[0-9a-fA-F]{24}$/.test(v) ? 'N/A' : (v || 'N/A');
       }
 
       return {
@@ -215,9 +241,16 @@ export const getOrderById = asyncHandler(
       };
     });
 
+    // Seller-specific totals (sum of THIS seller's items only) so the invoice
+    // header matches the line items and the order list amount. (#22/286)
+    const sellerSubtotal = formattedItems.reduce((sum, i) => sum + (i.subtotal || 0), 0);
+    const sellerTax = formattedItems.reduce((sum, i) => sum + (i.tax || 0), 0);
+    const sellerGrandTotal = sellerSubtotal + sellerTax;
+
     // Format order data for frontend
     const orderDetail = {
       id: order._id,
+      orderNumber: order.orderNumber || 'N/A',
       invoiceNumber: order.invoiceNumber || order.orderNumber || 'N/A',
       orderDate: order.orderDate ? order.orderDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       deliveryDate: order.estimatedDeliveryDate ? order.estimatedDeliveryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -229,9 +262,9 @@ export const getOrderById = asyncHandler(
       deliveryBoyName: (order.deliveryBoy as any)?.name || '',
       deliveryBoyPhone: (order.deliveryBoy as any)?.mobile || '',
       items: formattedItems,
-      subtotal: order.subtotal || 0,
-      tax: order.tax || 0,
-      grandTotal: order.total || 0,
+      subtotal: sellerSubtotal,
+      tax: sellerTax,
+      grandTotal: sellerGrandTotal,
       paymentMethod: order.paymentMethod || 'N/A',
       paymentStatus: order.paymentStatus || 'Pending',
       deliveryAddress: order.deliveryAddress || {},

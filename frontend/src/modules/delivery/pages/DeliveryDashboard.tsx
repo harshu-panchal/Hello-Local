@@ -6,10 +6,14 @@ import DashboardCard from "../components/DashboardCard";
 import DeliveryBottomNav from "../components/DeliveryBottomNav";
 import { getDashboardStats } from "../../../services/api/delivery/deliveryService";
 import { useDeliveryStatus } from "../context/DeliveryStatusContext";
+import { useAuth } from "../../../context/AuthContext";
 
 export default function DeliveryDashboard() {
   const navigate = useNavigate();
   const { isOnline, sellersInRangeCount, locationError } = useDeliveryStatus();
+  const { user } = useAuth();
+  // New partners start "Inactive" until an admin approves them. (#98/#139)
+  const isPendingApproval = ((user as any)?.status ?? "Active") === "Inactive";
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -275,6 +279,14 @@ export default function DeliveryDashboard() {
     <div className="min-h-screen bg-neutral-100 pb-20">
       {/* Header */}
       <DeliveryHeader />
+
+      {/* Pending admin approval banner (#139) */}
+      {isPendingApproval && (
+        <div className="mx-4 mt-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg text-sm">
+          <span className="font-semibold">Pending for Admin Approval.</span>{' '}
+          Your account is under review. Some features stay disabled until an admin approves you.
+        </div>
+      )}
 
       <div className="px-4 py-4 space-y-4">
         {/* Daily Collection & Cash Balance Bar */}

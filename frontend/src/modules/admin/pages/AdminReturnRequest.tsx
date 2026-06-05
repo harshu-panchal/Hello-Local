@@ -659,16 +659,16 @@ export default function AdminReturnRequest() {
                       {request.variant || "-"}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      ?{request.price.toFixed(2)}
+                      ₹{request.price.toFixed(2)}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      ?{(request.discountedPrice || request.price).toFixed(2)}
+                      ₹{(request.discountedPrice || request.price).toFixed(2)}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
                       {request.quantity}
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                      ?{request.total.toFixed(2)}
+                      ₹{request.total.toFixed(2)}
                     </td>
                     <td className="px-4 sm:px-6 py-3">
                       <span
@@ -804,7 +804,7 @@ export default function AdminReturnRequest() {
 
       {/* Footer */}
       <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2025. Developed By{" "}
+        Copyright © 2026. Developed By{" "}
         <a href="#" className="text-rose-700 hover:text-rose-800">
           Hello Local - 10 Minute App
         </a>

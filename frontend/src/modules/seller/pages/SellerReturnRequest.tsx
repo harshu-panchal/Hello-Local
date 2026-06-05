@@ -417,7 +417,7 @@ export default function SellerReturnRequest() {
             {/* Footer */}
             <footer className="px-4 sm:px-6 py-4 text-center bg-white border-t border-neutral-200">
                 <p className="text-xs sm:text-sm text-neutral-600">
-                    Copyright © 2025. Developed By{' '}
+                    Copyright © 2026. Developed By{' '}
                     <span className="font-semibold text-pink-700">Hello Local - 10 Minute App</span>
                 </p>
             </footer>

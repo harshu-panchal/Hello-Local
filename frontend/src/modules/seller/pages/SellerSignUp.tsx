@@ -6,7 +6,9 @@ import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 import { useAuth } from '../../../context/AuthContext';
 import { getHeaderCategoriesPublic, HeaderCategory } from '../../../services/api/headerCategoryService';
 import LocationPickerMap from '../../../components/LocationPickerMap';
+import { normalizeMobile } from '../../../utils/phone';
 import { useEffect } from 'react';
+import LegalPolicyModal, { PolicyTab } from '../../../components/LegalPolicyModal';
 
 export default function SellerSignUp() {
   const navigate = useNavigate();
@@ -36,7 +38,52 @@ export default function SellerSignUp() {
   const [showOTP, setShowOTP] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<HeaderCategory[]>([]);
+  const [policyTab, setPolicyTab] = useState<PolicyTab | null>(null);
+
+  // Per-field validation. Returns an error message, or '' when the value is valid.
+  const validateField = (name: string, value: string): string => {
+    const v = (value || '').trim();
+    switch (name) {
+      case 'sellerName':
+        if (!v) return 'Seller name is required';
+        if (!/^[A-Za-z\s]+$/.test(v)) return 'Name should contain only alphabets';
+        return '';
+      case 'mobile':
+        if (!v) return 'Mobile number is required';
+        if (!/^\d{10}$/.test(v)) return 'Enter a valid 10-digit mobile number';
+        return '';
+      case 'email':
+        if (!v) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Enter a valid email address';
+        return '';
+      case 'storeName':
+        if (!v) return 'Store name is required';
+        return '';
+      case 'city':
+        if (!v) return 'City is required';
+        if (!/^[A-Za-z\s]+$/.test(v)) return 'City should contain only alphabets';
+        return '';
+      case 'serviceRadiusKm': {
+        const radius = parseFloat(v);
+        if (!v) return 'Service radius is required';
+        if (isNaN(radius) || radius < 0.1 || radius > 100) return 'Radius must be between 0.1 and 100 km';
+        return '';
+      }
+      case 'panCard':
+        if (v && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(v)) return 'Invalid PAN (e.g. ASEFG1234D)';
+        return '';
+      case 'taxNumber':
+        if (v && !/^\d{10,20}$/.test(v)) return 'Tax number should be 10 to 20 digits';
+        return '';
+      case 'ifsc':
+        if (v && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(v)) return 'Invalid IFSC (e.g. SBIN0000456)';
+        return '';
+      default:
+        return '';
+    }
+  };
 
   useEffect(() => {
     const fetchCats = async () => {
@@ -55,28 +102,26 @@ export default function SellerSignUp() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    let finalValue = value;
+
     if (name === 'mobile') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value.replace(/\D/g, '').slice(0, 10),
-      }));
+      finalValue = normalizeMobile(value);
     } else if (name === 'serviceRadiusKm') {
       // Allow only numbers and a single decimal point
       const cleanedValue = value.replace(/[^0-9.]/g, '');
-      // Ensure only one decimal point
       const parts = cleanedValue.split('.');
-      const finalValue = parts.length > 2 ? `${parts[0]}.${parts[1]}` : cleanedValue;
-
-      setFormData(prev => ({
-        ...prev,
-        [name]: finalValue,
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
+      finalValue = parts.length > 2 ? `${parts[0]}.${parts[1]}` : cleanedValue;
+    } else if (name === 'panCard' || name === 'ifsc') {
+      // Bank/tax identifiers are stored uppercase
+      finalValue = value.toUpperCase();
+    } else if (name === 'taxNumber') {
+      finalValue = value.replace(/\D/g, '');
     }
+
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
+
+    // Live per-field validation
+    setFieldErrors(prev => ({ ...prev, [name]: validateField(name, finalValue) }));
   };
 
   const toggleCategory = (cat: string) => {
@@ -96,56 +141,28 @@ export default function SellerSignUp() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate required fields (password removed - not needed during signup)
-    if (!formData.sellerName) {
-      setError('Please enter your name');
-      return;
-    }
-    if (!formData.mobile) {
-      setError('Please enter your mobile number');
-      return;
-    }
-    if (!formData.email) {
-      setError('Please enter your email address');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (!formData.storeName) {
-      setError('Please enter your store name');
-      return;
-    }
-    if (formData.categories.length === 0) {
-      setError('Please select at least one category');
-      return;
-    }
-    if (!formData.address && !formData.searchLocation) {
-      setError('Please select your store location');
-      return;
-    }
-    if (!formData.city) {
-      setError('Please enter your city');
+    // Validate every field via the shared per-field validator
+    const fieldsToValidate = ['sellerName', 'mobile', 'email', 'storeName', 'city', 'serviceRadiusKm', 'panCard', 'taxNumber', 'ifsc'];
+    const newErrors: Record<string, string> = {};
+    fieldsToValidate.forEach((name) => {
+      const msg = validateField(name, (formData as any)[name]);
+      if (msg) newErrors[name] = msg;
+    });
+    setFieldErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      setError('Please fix the highlighted fields before continuing');
       return;
     }
 
-    if (formData.mobile.length !== 10) {
-      setError('Please enter a valid 10-digit mobile number');
+    if (formData.categories.length === 0) {
+      setError('Please select at least one category');
       return;
     }
 
     // Validate location BEFORE setting loading (prevents spinner getting stuck)
     if (!formData.searchLocation || !formData.latitude || !formData.longitude) {
       setError('Please select your store location using the location search');
-      return;
-    }
-
-    // Validate service radius BEFORE setting loading
-    const radius = parseFloat(formData.serviceRadiusKm);
-    if (isNaN(radius) || radius < 0.1 || radius > 100) {
-      setError('Service radius must be between 0.1 and 100 kilometers');
       return;
     }
 
@@ -182,7 +199,16 @@ export default function SellerSignUp() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      if (!err.response) {
+        // No server response = network/timeout. The account may actually have been
+        // created server-side, so don't claim a hard failure. (#128)
+        setError('Network issue while creating your account. It may have been created — please try logging in. If your account is not found, sign up again.');
+      } else if (err.response.status === 409) {
+        // Duplicate: the seller already exists
+        setError(err.response?.data?.message || 'An account already exists with this mobile or email. Please log in instead.');
+      } else {
+        setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -264,9 +290,10 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter your name"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                    className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.sellerName ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                     disabled={loading}
                   />
+                  {fieldErrors.sellerName && <p className="text-xs text-red-600 mt-1">{fieldErrors.sellerName}</p>}
                 </div>
 
                 <div>
@@ -284,11 +311,14 @@ export default function SellerSignUp() {
                       onChange={handleInputChange}
                       placeholder="Enter mobile number"
                       required
-                      maxLength={10}
+                      // Allow a leading country code (e.g. "91...") to be typed/pasted so
+                      // normalizeMobile can strip it down to the 10-digit number.
+                      maxLength={13}
                       className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
                       disabled={loading}
                     />
                   </div>
+                  {fieldErrors.mobile && <p className="text-xs text-red-600 mt-1">{fieldErrors.mobile}</p>}
                 </div>
 
                 <div>
@@ -302,9 +332,10 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter email address"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                    className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.email ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                     disabled={loading}
                   />
+                  {fieldErrors.email && <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>}
                 </div>
 
                 <div>
@@ -318,9 +349,10 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter store name"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                    className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.storeName ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                     disabled={loading}
                   />
+                  {fieldErrors.storeName && <p className="text-xs text-red-600 mt-1">{fieldErrors.storeName}</p>}
                 </div>
 
                 <div>
@@ -384,16 +416,38 @@ export default function SellerSignUp() {
                         if (navigator.geolocation) {
                           setLoading(true);
                           navigator.geolocation.getCurrentPosition(
-                            (position) => {
+                            async (position) => {
                               const lat = position.coords.latitude;
                               const lng = position.coords.longitude;
-                              const locationStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                              const coordsStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+                              // Reverse-geocode so the field shows a readable area name
+                              // instead of raw coordinates. Falls back to coords on failure.
+                              let readableAddress = coordsStr;
+                              let detectedCity = '';
+                              try {
+                                const resp = await fetch(
+                                  `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+                                );
+                                const data = await resp.json();
+                                if (data.status === 'OK' && data.results?.[0]) {
+                                  readableAddress = data.results[0].formatted_address || coordsStr;
+                                  const cityComp = data.results[0].address_components?.find((c: any) =>
+                                    c.types.includes('locality') || c.types.includes('administrative_area_level_2')
+                                  );
+                                  detectedCity = cityComp?.long_name || '';
+                                }
+                              } catch (geoErr) {
+                                console.error('Reverse geocoding failed:', geoErr);
+                              }
+
                               setFormData(prev => ({
                                 ...prev,
                                 latitude: lat.toString(),
                                 longitude: lng.toString(),
-                                searchLocation: locationStr,
-                                address: prev.address || locationStr // Ensure address is not empty
+                                searchLocation: readableAddress,
+                                address: readableAddress,
+                                city: detectedCity || prev.city,
                               }));
                               setLoading(false);
                             },
@@ -435,7 +489,7 @@ export default function SellerSignUp() {
                         }}
                       />
                       <p className="mt-1 text-xs text-neutral-500 text-center">
-                        Selected Coordinates: {formData.latitude}, {formData.longitude}
+                        Selected Location: {formData.searchLocation || `${formData.latitude}, ${formData.longitude}`}
                       </p>
                     </div>
                   ) : (
@@ -465,9 +519,10 @@ export default function SellerSignUp() {
                     min="0.1"
                     max="100"
                     step="0.1"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                    className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.serviceRadiusKm ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                     disabled={loading}
                   />
+                  {fieldErrors.serviceRadiusKm && <p className="text-xs text-red-600 mt-1">{fieldErrors.serviceRadiusKm}</p>}
                   <p className="mt-1 text-xs text-neutral-500">
                     Only customers within this radius can see and order your products
                   </p>
@@ -484,9 +539,10 @@ export default function SellerSignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter city"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                    className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.city ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                     disabled={loading}
                   />
+                  {fieldErrors.city && <p className="text-xs text-red-600 mt-1">{fieldErrors.city}</p>}
                 </div>
 
                 {/* Hidden fields for coordinates */}
@@ -509,10 +565,12 @@ export default function SellerSignUp() {
                       name="panCard"
                       value={formData.panCard}
                       onChange={handleInputChange}
-                      placeholder="PAN Card Number"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                      placeholder="PAN Card Number (e.g. ASEFG1234D)"
+                      maxLength={10}
+                      className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.panCard ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                       disabled={loading}
                     />
+                    {fieldErrors.panCard && <p className="text-xs text-red-600 mt-1">{fieldErrors.panCard}</p>}
                   </div>
 
                   <div>
@@ -535,10 +593,12 @@ export default function SellerSignUp() {
                       name="taxNumber"
                       value={formData.taxNumber}
                       onChange={handleInputChange}
-                      placeholder="Tax Number"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                      placeholder="Tax Number (10-20 digits)"
+                      maxLength={20}
+                      className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.taxNumber ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                       disabled={loading}
                     />
+                    {fieldErrors.taxNumber && <p className="text-xs text-red-600 mt-1">{fieldErrors.taxNumber}</p>}
                   </div>
 
                   <div>
@@ -548,10 +608,12 @@ export default function SellerSignUp() {
                       name="ifsc"
                       value={formData.ifsc}
                       onChange={handleInputChange}
-                      placeholder="IFSC Code"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                      placeholder="IFSC Code (e.g. SBIN0000456)"
+                      maxLength={11}
+                      className={`w-full px-3 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${fieldErrors.ifsc ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-neutral-300 focus:border-pink-500 focus:ring-pink-200'}`}
                       disabled={loading}
                     />
+                    {fieldErrors.ifsc && <p className="text-xs text-red-600 mt-1">{fieldErrors.ifsc}</p>}
                   </div>
                 </div>
               </div>
@@ -641,8 +703,29 @@ export default function SellerSignUp() {
 
       {/* Footer Text */}
       <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
-        By continuing, you agree to Hello Local's Terms of Service and Privacy Policy
+        By continuing, you agree to Hello Local's{' '}
+        <button
+          type="button"
+          onClick={() => setPolicyTab('terms')}
+          className="text-pink-600 hover:text-pink-700 font-semibold underline"
+        >
+          Terms of Service
+        </button>{' '}
+        and{' '}
+        <button
+          type="button"
+          onClick={() => setPolicyTab('privacy')}
+          className="text-pink-600 hover:text-pink-700 font-semibold underline"
+        >
+          Privacy Policy
+        </button>
       </p>
+
+      <LegalPolicyModal
+        open={policyTab !== null}
+        initialTab={policyTab ?? 'terms'}
+        onClose={() => setPolicyTab(null)}
+      />
     </div>
   );
 }

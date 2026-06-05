@@ -209,7 +209,7 @@ export default function SellerStockManagement() {
             </div>
 
             {/* Content Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col">
+            <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col min-w-0 overflow-hidden">
                 <div className="p-4 border-b border-neutral-100 font-medium text-neutral-700">
                     View Stock Management
                 </div>
@@ -321,7 +321,7 @@ export default function SellerStockManagement() {
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto flex-1">
+                <div className="overflow-x-auto flex-1 min-w-0">
                     <table className="w-full text-left border-collapse border border-neutral-200">
                         <thead>
                             <tr className="bg-neutral-50 text-xs font-bold text-neutral-800">

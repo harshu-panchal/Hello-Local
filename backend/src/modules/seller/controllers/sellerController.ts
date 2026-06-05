@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import Seller from "../../../models/Seller";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import { sendNotification } from "../../../services/notificationService";
+import { sendNotificationToUser } from "../../../services/firebaseAdmin";
 
 /**
  * Get all sellers (Admin only)
@@ -74,17 +76,49 @@ export const updateSellerStatus = asyncHandler(
       });
     }
 
-    const seller = await Seller.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true, runValidators: true }
-    ).select("-password");
+    const seller = await Seller.findById(id).select("-password");
 
     if (!seller) {
       return res.status(404).json({
         success: false,
         message: "Seller not found",
       });
+    }
+
+    const previousStatus = seller.status;
+    seller.status = status;
+    await seller.save();
+
+    // Notify the seller when their account is approved or rejected (#admin-approval).
+    // Notifications must never break the status update, so each is wrapped in try/catch.
+    if (status !== previousStatus && (status === "Approved" || status === "Rejected")) {
+      const title =
+        status === "Approved" ? "Account Approved 🎉" : "Account Application Update";
+      const message =
+        status === "Approved"
+          ? "Congratulations! Your seller account has been approved. You can now add products and start selling."
+          : "Your seller account application was not approved. Please contact support for more information.";
+
+      // In-app notification (persisted, shown in the seller's notification list)
+      try {
+        await sendNotification("Seller", seller._id.toString(), title, message, {
+          type: status === "Approved" ? "Success" : "Error",
+          priority: "High",
+        });
+      } catch (err) {
+        console.error("Failed to create seller status notification:", err);
+      }
+
+      // Push notification (FCM) for background/closed app
+      try {
+        await sendNotificationToUser(seller._id.toString(), "Seller", {
+          title,
+          body: message,
+          data: { type: "ACCOUNT_STATUS", status },
+        });
+      } catch (err) {
+        console.error("Failed to push seller status notification:", err);
+      }
     }
 
     return res.status(200).json({

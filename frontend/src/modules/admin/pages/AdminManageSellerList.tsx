@@ -686,7 +686,7 @@ export default function AdminManageSellerList() {
 
             {/* Footer */}
             <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
-                Copyright © 2025. Developed By{' '}
+                Copyright © 2026. Developed By{' '}
                 <a href="#" className="text-blue-600 hover:underline">Hello Local - 10 Minute App</a>
             </footer>
 
@@ -1017,7 +1017,7 @@ export default function AdminManageSellerList() {
                                         </div>
                                         <div>
                                             <label className="text-xs text-neutral-500">Balance</label>
-                                            <p className="text-sm font-medium text-neutral-900">?{editingSeller.balance.toFixed(2)}</p>
+                                            <p className="text-sm font-medium text-neutral-900">₹{editingSeller.balance.toFixed(2)}</p>
                                         </div>
                                         <div>
                                             <label className="text-xs text-neutral-500">Categories Count</label>

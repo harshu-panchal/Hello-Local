@@ -2,7 +2,22 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Product from "../../../models/Product";
 import Shop from "../../../models/Shop";
+import Seller from "../../../models/Seller";
 import { asyncHandler } from "../../../utils/asyncHandler";
+
+/**
+ * Ensure the authenticated seller's account is approved before allowing
+ * write operations. Pending/Rejected sellers must not be able to add or
+ * modify products. (#148/#306)
+ */
+async function ensureSellerApproved(sellerId: string): Promise<string | null> {
+  const seller = await Seller.findById(sellerId).select("status");
+  if (!seller) return "Seller account not found.";
+  if (seller.status !== "Approved") {
+    return "Your seller account is awaiting admin approval. You can add products once approved.";
+  }
+  return null;
+}
 
 /**
  * Create a new product
@@ -11,6 +26,12 @@ export const createProduct = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
     const productData = req.body;
+
+    // Block pending/rejected sellers from creating products (#148/#306)
+    const approvalError = await ensureSellerApproved(sellerId);
+    if (approvalError) {
+      return res.status(403).json({ success: false, message: approvalError });
+    }
 
     // Ensure sellerId matches authenticated seller
     if (productData.sellerId && productData.sellerId !== sellerId) {
@@ -274,6 +295,12 @@ export const updateProduct = asyncHandler(
         success: false,
         message: "Invalid Product ID format",
       });
+    }
+
+    // Block pending/rejected sellers from modifying products (#148/#306)
+    const approvalError = await ensureSellerApproved(sellerId);
+    if (approvalError) {
+      return res.status(403).json({ success: false, message: approvalError });
     }
 
     // Remove sellerId from update data if present (cannot change owner)

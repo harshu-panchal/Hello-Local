@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../../context/CartContext";
 import { useOrders } from "../../hooks/useOrders";
 import { useLocation as useLocationContext } from "../../hooks/useLocation";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
 
@@ -112,6 +113,9 @@ export default function Checkout() {
   // Razorpay Payment State
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [showRazorpayCheckout, setShowRazorpayCheckout] = useState(false);
+
+  // Lock background scroll while any bottom-sheet/modal is open (#240, #267, etc.)
+  useBodyScrollLock(showCouponSheet || showGstinSheet || showCancellationPolicy || showProfileModal || showMapPicker);
 
   // Check if user has placeholder data (needs profile completion)
   const isPlaceholderUser =
@@ -2132,11 +2136,14 @@ export default function Checkout() {
             </div>
             <button
               onClick={() => {
-                if (gstin.length === 15) {
-                  setShowGstinSheet(false);
-                } else {
-                  alert("Please enter a valid 15-character GSTIN");
+                // Validate proper GSTIN format e.g. 27AAAAA0000A1Z5 (#268)
+                const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+                if (!gstRegex.test(gstin)) {
+                  showGlobalToast("Please enter a valid GSTIN (e.g. 27AAAAA0000A1Z5)", "error");
+                  return;
                 }
+                setShowGstinSheet(false);
+                showGlobalToast("GST details saved", "success"); // confirmation popup (#269)
               }}
               className="w-full bg-[#FF2E7A] text-white py-3 px-4 font-bold text-sm uppercase tracking-wide hover:opacity-90 transition-opacity rounded-lg">
               Save GSTIN
