@@ -1,7 +1,60 @@
 import { Request, Response } from 'express';
 import WithdrawRequest from '../../../models/WithdrawRequest';
 import { debitWallet } from '../../../services/walletManagementService';
+import { sendNotification } from '../../../services/notificationService';
+import { sendNotificationToUser } from '../../../services/firebaseAdmin';
 import mongoose from 'mongoose';
+
+/**
+ * Notify a seller (in-app + push) when their withdrawal status changes.
+ * Never throws — notification failures must not fail the admin action. (#withdrawal-notification)
+ */
+const notifyWithdrawalStatus = async (
+    request: any,
+    status: 'Approved' | 'Rejected' | 'Completed'
+) => {
+    if (request.userType !== 'SELLER') return;
+    const sellerId = request.userId?.toString();
+    if (!sellerId) return;
+
+    const amount = request.amount;
+    const map: Record<string, { title: string; message: string; type: 'Success' | 'Error' }> = {
+        Approved: {
+            title: 'Withdrawal Approved',
+            message: `Your withdrawal request of Rs.${amount} has been approved and is being processed.`,
+            type: 'Success',
+        },
+        Rejected: {
+            title: 'Withdrawal Rejected',
+            message: `Your withdrawal request of Rs.${amount} was rejected.${request.remarks ? ' Reason: ' + request.remarks : ''}`,
+            type: 'Error',
+        },
+        Completed: {
+            title: 'Withdrawal Completed',
+            message: `Your withdrawal of Rs.${amount} has been completed and transferred to your account.`,
+            type: 'Success',
+        },
+    };
+    const info = map[status];
+
+    try {
+        await sendNotification('Seller', sellerId, info.title, info.message, {
+            type: info.type,
+            priority: 'High',
+        });
+    } catch (err) {
+        console.error('Withdrawal in-app notification failed:', err);
+    }
+    try {
+        await sendNotificationToUser(sellerId, 'Seller', {
+            title: info.title,
+            body: info.message,
+            data: { type: 'WITHDRAWAL_STATUS', status },
+        });
+    } catch (err) {
+        console.error('Withdrawal push notification failed:', err);
+    }
+};
 
 /**
  * Get all withdrawal requests
@@ -74,6 +127,8 @@ export const approveWithdrawal = async (req: Request, res: Response) => {
         request.processedAt = new Date();
         await request.save();
 
+        await notifyWithdrawalStatus(request, 'Approved');
+
         return res.status(200).json({
             success: true,
             message: 'Withdrawal request approved successfully',
@@ -117,6 +172,8 @@ export const rejectWithdrawal = async (req: Request, res: Response) => {
         request.processedAt = new Date();
         if (remarks) request.remarks = remarks;
         await request.save();
+
+        await notifyWithdrawalStatus(request, 'Rejected');
 
         return res.status(200).json({
             success: true,
@@ -191,6 +248,8 @@ export const completeWithdrawal = async (req: Request, res: Response) => {
         await request.save({ session });
 
         await session.commitTransaction();
+
+        await notifyWithdrawalStatus(request, 'Completed');
 
         return res.status(200).json({
             success: true,

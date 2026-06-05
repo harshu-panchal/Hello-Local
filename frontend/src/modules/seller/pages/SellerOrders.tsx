@@ -377,7 +377,11 @@ export default function SellerOrders() {
                     orders.map((order, index) => (
                       <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{startEntry + index}</td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">{order.orderId}</td>
+                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">
+                          <span title={order.orderId} className="font-mono">
+                            {order.orderId && order.orderId.length > 10 ? `…${order.orderId.slice(-8)}` : order.orderId}
+                          </span>
+                        </td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.deliveryDate}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.orderDate}</td>
                         <td className="px-3 sm:px-4 md:px-6 py-3">

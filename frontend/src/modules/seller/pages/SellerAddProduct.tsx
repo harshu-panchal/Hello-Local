@@ -1230,7 +1230,7 @@ export default function SellerAddProduct() {
                   )}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    accept="image/*"
                     onChange={handleMainImageChange}
                     className="hidden"
                     disabled={uploading}
@@ -1327,7 +1327,7 @@ export default function SellerAddProduct() {
                   <input
                     id="gallery-image-upload"
                     type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    accept="image/*"
                     multiple
                     onChange={handleGalleryImagesChange}
                     className="hidden"

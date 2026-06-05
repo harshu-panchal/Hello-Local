@@ -1,4 +1,5 @@
 import { ReactNode, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SellerHeader from './SellerHeader';
 import SellerSidebar from './SellerSidebar';
 import { useSellerSocketContext, SellerNotification } from '../../../context/SellerSocketContext';
@@ -20,7 +21,8 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
   // Refresh the seller's approval status on panel load so that a seller approved
   // by admin while logged in becomes unblocked (e.g. can add products) without a
   // manual re-login. (#admin-approval)
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
   useEffect(() => {
     let active = true;
     getSellerProfile()
@@ -81,6 +83,50 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
     setActiveNotification(null);
     clearNotification(); // also clear from context so SellerOrders picks it up cleanly
   };
+
+  // Gate the whole panel until the seller is approved. A Pending/Rejected seller
+  // sees a blocking notice instead of any functional page. (#pending-disable)
+  // Default to approved when status is missing so we never lock out valid sellers.
+  const status = (user as any)?.status;
+  const isApproved = !status || status === 'Approved';
+
+  if (!isApproved) {
+    const rejected = status === 'Rejected';
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-4 text-center">
+        <div className="bg-white rounded-2xl shadow-xl border border-neutral-200 max-w-md w-full p-8">
+          <img src="/logo.png?v=4" alt="Hello Local" className="h-16 w-auto mx-auto mb-4 object-contain" />
+          <div className={`mx-auto mb-4 w-14 h-14 rounded-full flex items-center justify-center ${rejected ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {rejected ? <><path d="M18 6 6 18M6 6l12 12" /></> : <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-neutral-900 mb-2">
+            {rejected ? 'Account Not Approved' : 'Awaiting Admin Approval'}
+          </h1>
+          <p className="text-sm text-neutral-600 mb-6">
+            {rejected
+              ? 'Your seller account application was not approved. Please contact support for assistance.'
+              : 'Your seller account is under review. All features will be enabled once an admin approves your account.'}
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2.5 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold transition-colors"
+            >
+              Check Again
+            </button>
+            <button
+              onClick={() => { logout(); navigate('/seller/login'); }}
+              className="w-full py-2.5 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm font-semibold transition-colors"
+            >
+              Log Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-neutral-50">

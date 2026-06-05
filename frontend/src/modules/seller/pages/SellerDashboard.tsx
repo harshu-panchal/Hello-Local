@@ -412,11 +412,11 @@ export default function SellerDashboard() {
             <thead className="bg-neutral-50 border-b border-neutral-200">
               <tr>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  ID
+                  Order ID
                 </th>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
-                    O. Date
+                    Order Date
                     <svg
                       width="12"
                       height="12"

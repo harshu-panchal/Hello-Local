@@ -152,7 +152,11 @@ export default function SellerCategory() {
                             <tbody>
                                 {paginatedCategories.map((category) => (
                                     <tr key={category._id} className="hover:bg-neutral-50 transition-colors text-sm text-neutral-700">
-                                        <td className="p-4 align-middle border border-neutral-200">{category._id}</td>
+                                        <td className="p-4 align-middle border border-neutral-200">
+                                            <span title={category._id} className="font-mono text-xs">
+                                                {category._id && category._id.length > 10 ? `…${category._id.slice(-6)}` : category._id}
+                                            </span>
+                                        </td>
                                         <td className="p-4 align-middle border border-neutral-200">{category.name}</td>
                                         <td className="p-4 border border-neutral-200">
                                             <div className="w-16 h-12 bg-white border border-neutral-200 rounded p-1 flex items-center justify-center mx-auto">

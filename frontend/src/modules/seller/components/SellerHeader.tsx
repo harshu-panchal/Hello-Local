@@ -2,6 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../../../context/AuthContext';
+import {
+  getSellerNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  SellerNotificationItem,
+} from '../../../services/api/sellerNotificationService';
 
 interface SellerHeaderProps {
   onMenuClick: () => void;
@@ -14,10 +20,14 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [notifications, setNotifications] = useState<SellerNotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
   const settingsRef = useRef<HTMLDivElement>(null);
   const locationRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname.includes(path);
 
@@ -33,6 +43,9 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfileDropdown(false);
       }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -40,6 +53,56 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Load notifications on mount and poll periodically so the unread badge stays fresh.
+  const fetchNotifications = async () => {
+    try {
+      const res = await getSellerNotifications();
+      if (res?.success) {
+        setNotifications(res.data.notifications || []);
+        setUnreadCount(res.data.unreadCount || 0);
+      }
+    } catch {
+      /* silent — header must not break if notifications fail */
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const id = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleNotifClick = () => {
+    const opening = !showNotifDropdown;
+    setShowNotifDropdown(opening);
+    setShowSettingsDropdown(false);
+    setShowLocationDropdown(false);
+    setShowProfileDropdown(false);
+    if (opening) fetchNotifications();
+  };
+
+  const handleNotificationItemClick = async (n: SellerNotificationItem) => {
+    if (!n.isRead) {
+      try {
+        await markNotificationRead(n._id);
+        setNotifications((prev) => prev.map((x) => (x._id === n._id ? { ...x, isRead: true } : x)));
+        setUnreadCount((c) => Math.max(0, c - 1));
+      } catch { /* ignore */ }
+    }
+    if (n.link) {
+      setShowNotifDropdown(false);
+      navigate(n.link);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((x) => ({ ...x, isRead: true })));
+      setUnreadCount(0);
+    } catch { /* ignore */ }
+  };
 
   const handleLogout = () => {
     logout();
@@ -162,6 +225,62 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
 
         {/* Action Icons */}
         <div className="hidden sm:flex items-center gap-2 md:gap-4 relative">
+          {/* Notification Bell with Dropdown */}
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={handleNotifClick}
+              className="relative p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-pink-600 text-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {showNotifDropdown && (
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-neutral-200 z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-200">
+                  <span className="text-sm font-semibold text-neutral-900">Notifications</span>
+                  {unreadCount > 0 && (
+                    <button onClick={handleMarkAllRead} className="text-xs text-pink-600 hover:text-pink-700 font-medium">
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-neutral-400">No notifications</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <button
+                        key={n._id}
+                        onClick={() => handleNotificationItemClick(n)}
+                        className={`w-full text-left px-4 py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors ${n.isRead ? '' : 'bg-pink-50/50'}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {!n.isRead && <span className="mt-1.5 w-2 h-2 rounded-full bg-pink-600 flex-shrink-0" />}
+                          <div className={`min-w-0 ${n.isRead ? 'pl-4' : ''}`}>
+                            <p className="text-sm font-medium text-neutral-900 truncate">{n.title}</p>
+                            <p className="text-xs text-neutral-600 line-clamp-2">{n.message}</p>
+                            <p className="text-[10px] text-neutral-400 mt-1">
+                              {new Date(n.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Profile Button with Dropdown */}
           <div className="relative" ref={profileRef}>
             <button
