@@ -76,7 +76,23 @@ export const updateSellerStatus = asyncHandler(
       });
     }
 
-    const seller = await Seller.findById(id).select("-password");
+    // Read the previous status first so we can decide whether to notify, then use
+    // an atomic update (validates ONLY the status field) — using .save() would
+    // re-validate the whole document and could reject sellers with legacy data.
+    const existing = await Seller.findById(id).select("status");
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Seller not found",
+      });
+    }
+    const previousStatus = existing.status;
+
+    const seller = await Seller.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    ).select("-password");
 
     if (!seller) {
       return res.status(404).json({
@@ -84,10 +100,6 @@ export const updateSellerStatus = asyncHandler(
         message: "Seller not found",
       });
     }
-
-    const previousStatus = seller.status;
-    seller.status = status;
-    await seller.save();
 
     // Notify the seller when their account is approved or rejected (#admin-approval).
     // Notifications must never break the status update, so each is wrapped in try/catch.
