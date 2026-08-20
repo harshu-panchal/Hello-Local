@@ -597,7 +597,7 @@ export default function OrderChart({ title, data, maxValue, height = 400 }: Orde
         {/* Tooltip */}
         {hoveredIndex !== null && tooltipPosition && (
           <div
-            className="absolute bg-white text-neutral-900 text-sm rounded-lg px-5 py-4 shadow-2xl pointer-events-none z-10 whitespace-nowrap border-2 border-neutral-200"
+            className="absolute bg-white text-neutral-900 text-sm rounded-xl px-4 py-3 shadow-2xl pointer-events-none z-10 whitespace-nowrap border border-neutral-200"
             style={{
               left: `${tooltipPosition.x}px`,
               top: `${tooltipPosition.y}px`,
@@ -605,17 +605,17 @@ export default function OrderChart({ title, data, maxValue, height = 400 }: Orde
               animation: 'fadeIn 0.2s ease',
             }}
           >
-            <div className="font-bold mb-2 text-neutral-900 text-base">{data[hoveredIndex]?.date}</div>
+            <div className="font-bold mb-1 text-neutral-900 text-sm">{data[hoveredIndex]?.date}</div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-pink-700"></div>
-              <span className="text-neutral-700 font-semibold">Orders: <span className="text-pink-700 font-bold">{data[hoveredIndex]?.value}</span></span>
+              <div className="w-2.5 h-2.5 rounded-full bg-purple-600"></div>
+              <span className="text-neutral-700 font-semibold text-xs">Orders: <span className="text-purple-600 font-black">{data[hoveredIndex]?.value}</span></span>
             </div>
           </div>
         )}
 
         {/* Zoom Indicator */}
         {zoom > 1 && (
-          <div className="absolute top-2 right-2 bg-pink-700 text-white text-xs px-2 py-1 rounded-full font-medium">
+          <div className="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold shadow-xs">
             {Math.round(zoom * 100)}%
           </div>
         )}

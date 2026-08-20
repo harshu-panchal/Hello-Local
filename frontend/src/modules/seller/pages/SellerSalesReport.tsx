@@ -1,377 +1,290 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { getSalesReport, SalesReport } from '../../../services/api/reportService';
+import { SellerPageHeader } from '../components/common/SellerPageHeader';
+import { SellerTabs } from '../components/common/SellerTabs';
+import { SellerFilterBar } from '../components/common/SellerFilterBar';
+import { SellerDataTable, ColumnDef } from '../components/common/SellerDataTable';
 
 export default function SellerSalesReport() {
-    const [reports, setReports] = useState<SalesReport[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [fromDate, setFromDate] = useState('');
-    const [toDate, setToDate] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [sortColumn, setSortColumn] = useState<string>('createdAt');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-    const [pagination, setPagination] = useState({
-        total: 0,
-        pages: 0
+  const [reports, setReports] = useState<SalesReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [channel, setChannel] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
+  const [paymentMethod, setPaymentMethod] = useState<string>('All');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortColumn, setSortColumn] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pages: 0,
+  });
+
+  const fetchReports = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await getSalesReport({
+        channel: channel === 'ALL' ? undefined : channel,
+        paymentMethod: paymentMethod === 'All' ? undefined : paymentMethod,
+        fromDate,
+        toDate,
+        search: searchTerm,
+        page: currentPage,
+        limit: rowsPerPage,
+        sortBy: sortColumn,
+        sortOrder: sortDirection,
+      });
+
+      if (response.success) {
+        setReports(response.data);
+        setPagination({
+          total: response.pagination.total,
+          pages: response.pagination.pages,
+        });
+      } else {
+        setError(response.message || 'Failed to fetch sales reports');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error loading sales reports');
+    } finally {
+      setLoading(false);
+    }
+  }, [channel, paymentMethod, fromDate, toDate, searchTerm, currentPage, rowsPerPage, sortColumn, sortDirection]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchReports();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [fetchReports]);
+
+  const handleSort = (column: string) => {
+    const columnMap: Record<string, string> = {
+      orderId: 'orderId',
+      orderItemId: '_id',
+      product: 'productName',
+      variant: 'variantTitle',
+      total: 'subtotal',
+      date: 'createdAt',
+    };
+
+    const backendColumn = columnMap[column] || column;
+
+    if (sortColumn === backendColumn) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(backendColumn);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setFromDate('');
+    setToDate('');
+    setSearchTerm('');
+    setChannel('ALL');
+    setPaymentMethod('All');
+    setCurrentPage(1);
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
+  };
 
-    const fetchReports = useCallback(async () => {
-        try {
-            setLoading(true);
-            const response = await getSalesReport({
-                fromDate,
-                toDate,
-                search: searchTerm,
-                page: currentPage,
-                limit: rowsPerPage,
-                sortBy: sortColumn,
-                sortOrder: sortDirection,
-            });
-
-            if (response.success) {
-                setReports(response.data);
-                setPagination({
-                    total: response.pagination.total,
-                    pages: response.pagination.pages
-                });
-            } else {
-                setError(response.message || 'Failed to fetch sales reports');
-            }
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Error loading sales reports');
-        } finally {
-            setLoading(false);
-        }
-    }, [fromDate, toDate, searchTerm, currentPage, rowsPerPage, sortColumn, sortDirection]);
-
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            fetchReports();
-        }, 500); // Debounce search
-
-        return () => clearTimeout(timeoutId);
-    }, [fetchReports]);
-
-    const handleSort = (column: string) => {
-        // Map frontend table column names to backend model fields if necessary
-        const columnMap: Record<string, string> = {
-            'orderId': 'orderId',
-            'orderItemId': '_id',
-            'product': 'productName',
-            'variant': 'variantTitle',
-            'total': 'subtotal',
-            'date': 'createdAt'
-        };
-
-        const backendColumn = columnMap[column] || column;
-
-        if (sortColumn === backendColumn) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortColumn(backendColumn);
-            setSortDirection('asc');
-        }
-        setCurrentPage(1);
-    };
-
-
-    const SortIcon = ({ column }: { column: string }) => (
-        <span className="text-neutral-300 text-[10px]">
-            {sortColumn === column ? (sortDirection === 'asc' ? '↑' : '↓') : '⇅'}
-        </span>
-    );
-
-    const handleClearDates = () => {
-        setFromDate('');
-        setToDate('');
-    };
-
-    return (
-        <div className="flex flex-col h-full min-h-screen bg-neutral-50">
-            {/* Top Navigation/Header */}
-            <div className="bg-white border-b border-neutral-200 px-4 sm:px-6 py-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h1 className="text-2xl font-semibold text-neutral-900">Sales Report</h1>
-                    <div className="flex items-center gap-2 text-sm">
-                        <Link to="/seller" className="text-blue-600 hover:text-blue-700">
-                            Home
-                        </Link>
-                        <span className="text-neutral-400">/</span>
-                        <span className="text-neutral-900">Sales Report</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Content Card */}
-            <div className="flex-1 p-4 sm:p-6">
-                <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex flex-col">
-                    {/* Section Header */}
-                    <div className="bg-pink-700 text-white px-4 sm:px-6 py-3 rounded-t-lg">
-                        <h2 className="text-lg sm:text-xl font-semibold">View Sales Report</h2>
-                    </div>
-
-                    {/* Controls Panel */}
-                    <div className="p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-neutral-100">
-                        {/* Left Side: Date Range Filter */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            <label className="text-sm text-neutral-600 whitespace-nowrap">From:</label>
-                            <input
-                                type="date"
-                                value={fromDate}
-                                max={toDate || undefined}
-                                onChange={(e) => { setFromDate(e.target.value); setCurrentPage(1); }}
-                                onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                                className="px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
-                            />
-                            <label className="text-sm text-neutral-600 whitespace-nowrap">To:</label>
-                            <input
-                                type="date"
-                                value={toDate}
-                                min={fromDate || undefined}
-                                onChange={(e) => { setToDate(e.target.value); setCurrentPage(1); }}
-                                onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                                className="px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
-                            />
-                            <button
-                                onClick={handleClearDates}
-                                className="px-3 py-2 bg-neutral-700 hover:bg-neutral-800 text-white text-sm rounded transition-colors"
-                            >
-                                Clear
-                            </button>
-                        </div>
-
-                        {/* Right Side: Per Page, Export, Search */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                            {/* Per Page */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm text-neutral-600">Per Page:</span>
-                                <select
-                                    value={rowsPerPage}
-                                    onChange={(e) => {
-                                        setRowsPerPage(Number(e.target.value));
-                                        setCurrentPage(1);
-                                    }}
-                                    className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer"
-                                >
-                                    <option value={10}>10</option>
-                                    <option value={20}>20</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                            </div>
-
-                            {/* Export Button */}
-                            <button
-                                disabled={reports.length === 0}
-                                onClick={() => {
-                                    if (reports.length === 0) return; // nothing to export (#17)
-                                    const headers = ['Order Id', 'Order Item Id', 'Product', 'Variant', 'Total', 'Date'];
-                                    const csvContent = [
-                                        headers.join(','),
-                                        ...reports.map(report => [
-                                            report.orderId,
-                                            report.orderItemId,
-                                            `"${report.product}"`,
-                                            `"${report.variant}"`,
-                                            report.total,
-                                            report.date
-                                        ].join(','))
-                                    ].join('\n');
-                                    // UTF-8 BOM so Excel reads special characters correctly (#31/63)
-                                    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                                    const link = document.createElement('a');
-                                    const url = URL.createObjectURL(blob);
-                                    link.setAttribute('href', url);
-                                    link.setAttribute('download', `sales_report_${new Date().toISOString().split('T')[0]}.csv`);
-                                    link.style.visibility = 'hidden';
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                }}
-                                className="bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="7 10 12 15 17 10"></polyline>
-                                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                                </svg>
-                                Export
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-1">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </button>
-
-                            {/* Search */}
-                            <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">Search:</span>
-                                <input
-                                    type="text"
-                                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-full sm:w-48"
-                                    value={searchTerm}
-                                    onChange={(e) => {
-                                        setSearchTerm(e.target.value);
-                                        setCurrentPage(1);
-                                    }}
-                                    placeholder=""
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Table */}
-                    <div className="overflow-x-auto min-h-[400px]">
-                        {loading ? (
-                            <div className="flex items-center justify-center p-20">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-700"></div>
-                            </div>
-                        ) : error ? (
-                            <div className="p-8 text-center text-red-500">{error}</div>
-                        ) : (
-                            <table className="w-full text-left border-collapse border border-neutral-200">
-                                <thead>
-                                    <tr className="bg-neutral-50 text-xs font-bold text-neutral-800">
-                                        <th
-                                            className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('orderId')}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                Order Id
-                                                <SortIcon column="orderId" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('orderItemId')}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                Order Item Id
-                                                <SortIcon column="orderItemId" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('product')}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                Product
-                                                <SortIcon column="product" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('variant')}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                Variant
-                                                <SortIcon column="variant" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('total')}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                Total
-                                                <SortIcon column="total" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('date')}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                Date
-                                                <SortIcon column="date" />
-                                            </div>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {reports.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="p-8 text-center text-neutral-500">
-                                                No data available in table
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        reports.map((report, index) => (
-                                            <tr key={index} className="hover:bg-neutral-50">
-                                                <td className="p-4 border border-neutral-200 text-sm">
-                                                    <span className="text-blue-600 hover:text-blue-700 font-medium">
-                                                        {report.orderId}
-                                                    </span>
-                                                </td>
-                                                <td className="p-4 border border-neutral-200 text-sm text-neutral-900">{report.orderItemId}</td>
-                                                <td className="p-4 border border-neutral-200 text-sm text-neutral-900">{report.product}</td>
-                                                <td className="p-4 border border-neutral-200 text-sm text-neutral-900">{report.variant}</td>
-                                                <td className="p-4 border border-neutral-200 text-sm text-neutral-900">{report.total.toFixed(2)}</td>
-                                                <td className="p-4 border border-neutral-200 text-sm text-neutral-900">{report.date}</td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-
-                    {/* Pagination Footer */}
-                    <div className="p-4 border-t border-neutral-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div className="text-sm text-neutral-600">
-                            Showing {reports.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1} to {Math.min(currentPage * rowsPerPage, pagination.total)} of {pagination.total} entries
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                disabled={currentPage === 1 || pagination.pages === 0}
-                                className="w-8 h-8 flex items-center justify-center border border-pink-300 rounded hover:bg-pink-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                            </button>
-                            {pagination.pages > 0 && Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                                // Simple pagination logic for showing first few pages
-                                const pageNum = i + 1;
-                                return (
-                                    <button
-                                        key={pageNum}
-                                        onClick={() => setCurrentPage(pageNum)}
-                                        className={`w-8 h-8 flex items-center justify-center border rounded transition-colors ${currentPage === pageNum
-                                                ? 'border-pink-700 bg-pink-700 text-white'
-                                                : 'border-pink-300 hover:bg-pink-50 text-neutral-900'
-                                            }`}
-                                    >
-                                        {pageNum}
-                                    </button>
-                                );
-                            })}
-                            <button
-                                onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
-                                disabled={currentPage === pagination.pages || pagination.pages === 0}
-                                className="w-8 h-8 flex items-center justify-center border border-pink-300 rounded hover:bg-pink-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Footer */}
-            <footer className="px-4 sm:px-6 py-4 text-center bg-white border-t border-neutral-200">
-                <p className="text-xs sm:text-sm text-neutral-600">
-                    Copyright © 2026. Developed By{' '}
-                    <span className="font-semibold text-pink-700">Hello Local - 10 Minute App</span>
-                </p>
-            </footer>
+  const columns: ColumnDef<SalesReport>[] = [
+    {
+      key: 'orderId',
+      header: 'Order / Bill #',
+      sortable: true,
+      sortKey: 'orderId',
+      render: (r) => (
+        <div>
+          <span className="font-bold text-purple-700 block text-xs sm:text-sm">
+            #{(r as any).orderNumber || r.billNumber || r.orderId?.slice(-6).toUpperCase()}
+          </span>
+          <span className="text-[10px] text-slate-400 block">{formatDate(r.date)}</span>
         </div>
-    );
+      ),
+    },
+    {
+      key: 'channel',
+      header: 'Channel',
+      render: (r) => (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            r.channel === 'OFFLINE'
+              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+              : 'bg-sky-100 text-sky-800 border border-sky-200'
+          }`}
+        >
+          {r.channel === 'OFFLINE' ? 'Offline (POS)' : 'Online Order'}
+        </span>
+      ),
+    },
+    {
+      key: 'product',
+      header: 'Product & Variant',
+      sortable: true,
+      sortKey: 'product',
+      render: (r) => (
+        <div>
+          <span className="font-bold text-slate-900 block text-xs sm:text-sm">{r.product || (r as any).productName}</span>
+          {(r.variant || (r as any).variantTitle) && (
+            <span className="text-[10px] text-slate-500 font-semibold block">{r.variant || (r as any).variantTitle}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      header: 'Qty',
+      align: 'center',
+      render: (r) => <span className="font-black text-slate-900 text-xs">{r.quantity || 1}</span>,
+    },
+    {
+      key: 'total',
+      header: 'Total (₹)',
+      align: 'right',
+      sortable: true,
+      sortKey: 'total',
+      render: (r) => (
+        <div>
+          <span className="font-black text-slate-900 text-xs sm:text-sm block">
+            ₹{(r.total || (r as any).subtotal || 0).toFixed(2)}
+          </span>
+          <span className="text-[10px] text-slate-400 block">{r.paymentMethod || 'Cash'}</span>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <SellerPageHeader
+        title="Sales & Revenue Reports"
+        subtitle="Analyze detailed product sales performance across Online and Offline POS channels."
+        breadcrumbs={[{ label: "Sales Report" }]}
+      />
+
+      {/* Channel Switcher Tabs & Filters */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SellerTabs
+            tabs={[
+              { id: 'ALL', label: 'All Channels' },
+              { id: 'OFFLINE', label: 'POS In-Store' },
+              { id: 'ONLINE', label: 'Online App Orders' },
+            ]}
+            activeTab={channel}
+            onChange={(c) => {
+              setChannel(c as any);
+              setCurrentPage(1);
+            }}
+          />
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-bold">Payment:</span>
+            <select
+              value={paymentMethod}
+              onChange={(e) => {
+                setPaymentMethod(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[36px]"
+            >
+              <option value="All">All Modes</option>
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
+              <option value="COD">COD</option>
+              <option value="Razorpay">Razorpay</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Date Filter & Search Row */}
+        <SellerFilterBar
+          searchQuery={searchTerm}
+          onSearchChange={(q) => setSearchTerm(q)}
+          searchPlaceholder="Search by Order #, product name, or variant..."
+          dateRange={{ startDate: fromDate, endDate: toDate }}
+          onDateRangeChange={(r) => {
+            setFromDate(r.startDate);
+            setToDate(r.endDate);
+            setCurrentPage(1);
+          }}
+          onClear={fromDate || toDate || searchTerm || channel !== 'ALL' || paymentMethod !== 'All' ? handleClearFilters : undefined}
+          hasActiveFilters={Boolean(fromDate || toDate || searchTerm || channel !== 'ALL' || paymentMethod !== 'All')}
+        />
+      </div>
+
+      {/* Sales Report Table with Mobile Card View */}
+      <SellerDataTable
+        data={reports}
+        columns={columns}
+        keyExtractor={(r, i) => r.orderItemId || i.toString()}
+        isLoading={loading}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        currentPage={currentPage}
+        totalPages={pagination.pages}
+        totalEntries={pagination.total}
+        entriesPerPage={rowsPerPage}
+        onPageChange={(p) => setCurrentPage(p)}
+        onEntriesPerPageChange={(s) => {
+          setRowsPerPage(s);
+          setCurrentPage(1);
+        }}
+        emptyTitle="No sales records found"
+        emptyDescription={error || "There are no completed sales transactions matching your selected criteria."}
+        renderMobileCard={(r) => (
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-bold text-purple-700 text-xs sm:text-sm block">
+                  #{(r as any).orderNumber || r.billNumber || r.orderId?.slice(-6).toUpperCase()}
+                </span>
+                <span className="text-[10px] text-slate-400">{formatDate(r.date)}</span>
+              </div>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  r.channel === 'OFFLINE' ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'
+                }`}
+              >
+                {r.channel === 'OFFLINE' ? 'POS' : 'Online'}
+              </span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-start justify-between gap-3 text-xs">
+              <div className="min-w-0">
+                <h4 className="font-bold text-slate-900 truncate">{r.product || (r as any).productName}</h4>
+                {(r.variant || (r as any).variantTitle) && <p className="text-slate-500 truncate">{r.variant || (r as any).variantTitle}</p>}
+                <p className="text-[11px] text-slate-400 mt-0.5">Mode: {r.paymentMethod || 'Cash'}</p>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-black text-slate-900">₹{(r.total || (r as any).subtotal || 0).toFixed(2)}</p>
+                <p className="text-[11px] text-slate-500 font-bold">{r.quantity || 1} {(r.quantity || 1) === 1 ? 'Unit' : 'Units'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      />
+    </div>
+  );
 }
-
-
-

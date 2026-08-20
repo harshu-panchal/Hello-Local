@@ -1,19 +1,27 @@
-import { ReactNode, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { ReactNode, useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import SellerHeader from './SellerHeader';
 import SellerSidebar from './SellerSidebar';
 import { useSellerSocketContext, SellerNotification } from '../../../context/SellerSocketContext';
 import SellerNotificationAlert from './SellerNotificationAlert';
 import { useAuth } from '../../../context/AuthContext';
 import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
+import { SELLER_BOTTOM_NAV_ITEMS } from '../config/sellerNavigation';
+import '../styles/sellerTokens.css';
 
 interface SellerLayoutProps {
   children: ReactNode;
 }
 
 export default function SellerLayout({ children }: SellerLayoutProps) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024;
+    }
+    return false;
+  });
   const [activeNotification, setActiveNotification] = useState<SellerNotification | null>(null);
+  const location = useLocation();
 
   // Consume shared socket context (single connection for the whole seller panel)
   const { lastNotification, clearNotification } = useSellerSocketContext();
@@ -112,13 +120,13 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
           <div className="flex flex-col gap-2">
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-2.5 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold transition-colors"
+              className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold transition-colors shadow-xs touch-target-44"
             >
               Check Again
             </button>
             <button
               onClick={() => { logout(); navigate('/seller/login'); }}
-              className="w-full py-2.5 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm font-semibold transition-colors"
+              className="w-full py-2.5 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm font-semibold transition-colors touch-target-44"
             >
               Log Out
             </button>
@@ -129,7 +137,7 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-neutral-50">
+    <div className="flex min-h-screen bg-neutral-50 seller-panel-root">
       {/* Real-time Notification Alert (popup) */}
       <SellerNotificationAlert
         notification={activeNotification}
@@ -139,14 +147,17 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
       {/* Mobile sidebar overlay */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden transition-opacity"
           onClick={toggleSidebar}
         />
       )}
 
       {/* Sidebar – fixed */}
       <div
-        className={`fixed left-0 top-0 h-screen z-50 transition-transform duration-300 ease-in-out ${
+        data-lenis-prevent="true"
+        data-lenis-prevent-wheel="true"
+        data-lenis-prevent-touch="true"
+        className={`fixed left-0 top-0 h-screen h-[100dvh] w-64 z-50 transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -155,15 +166,50 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
 
       {/* Main content */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-300 w-full ${
+        className={`flex-1 flex flex-col transition-all duration-300 w-full min-w-0 ${
           isSidebarOpen ? 'ml-64' : 'ml-0'
         }`}
       >
         <SellerHeader onMenuClick={toggleSidebar} isSidebarOpen={isSidebarOpen} />
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-neutral-50">
+        <main
+          data-lenis-prevent="true"
+          data-lenis-prevent-wheel="true"
+          data-lenis-prevent-touch="true"
+          className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] lg:pb-6 bg-neutral-50"
+        >
           {children}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation — hidden on desktop (lg+) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 flex items-stretch h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] shadow-lg">
+        {SELLER_BOTTOM_NAV_ITEMS.map((item) => {
+          const active = item.isActive(location.pathname);
+          const handleClick = () => {
+            if (item.isAction) {
+              toggleSidebar();
+            } else {
+              navigate(item.path);
+            }
+          };
+
+          return (
+            <button
+              key={item.path}
+              onClick={handleClick}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors min-h-[44px] ${
+                active ? 'text-purple-600' : 'text-neutral-400 active:text-neutral-700'
+              }`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+              {active && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-purple-600 rounded-t-full" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }

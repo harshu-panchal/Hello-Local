@@ -1,0 +1,84 @@
+/* ==========================================================================
+   HelloLocal Seller Panel - Consolidated Design Tokens
+   Aligns with existing brand colors (#2D1B69, #4F39F6, hl-purple)
+   ========================================================================== */
+
+:root {
+  /* Core Royal Purple Brand Identity */
+  --seller-purple-dark: #2D1B69;    /* Royal Purple (Sidebar, Hero Cards, Accents) */
+  --seller-purple-deep: #1F104F;    /* Deep Purple (Active sidebar items, Dark borders) */
+  --seller-purple-primary: #4F39F6; /* Electric Violet (Interactive CTAs, Focus Rings, Links) */
+  --seller-purple-hover: #432FE0;   /* Interactive Hover State */
+  --seller-purple-light: #F5F3FF;   /* Soft Purple Surface (Selected items, Light Badges) */
+  --seller-purple-subtle: #EDE9FE;  /* Badge Backgrounds, Accent Borders */
+
+  /* Neutral Surface Palette */
+  --seller-bg-app: #F8FAFC;         /* Slate 50 (Main App Canvas) */
+  --seller-card-bg: #FFFFFF;        /* Pure White Card Surface */
+  --seller-surface-subtle: #F1F5F9; /* Slate 100 (Table Headers, Inactive Pills) */
+  --seller-border: #E2E8F0;         /* Slate 200 (Card & Input Borders) */
+  --seller-border-subtle: #F8FAFC;  /* Subtle Table Row Dividers */
+
+  /* Typography Scale Colors */
+  --seller-text-primary: #0F172A;   /* Slate 900 (Headings, Primary Text) */
+  --seller-text-secondary: #475569; /* Slate 600 (Labels, Subheadings, Body) */
+  --seller-text-muted: #94A3B8;     /* Slate 400 (Placeholders, Minor Meta) */
+
+  /* Status Colors */
+  --seller-success: #10B981;
+  --seller-success-bg: #ECFDF5;
+  --seller-success-text: #065F46;
+
+  --seller-warning: #F59E0B;
+  --seller-warning-bg: #FFFBEB;
+  --seller-warning-text: #92400E;
+
+  --seller-danger: #EF4444;
+  --seller-danger-bg: #FEF2F2;
+  --seller-danger-text: #991B1B;
+
+  --seller-info: #0284C7;
+  --seller-info-bg: #F0F9FF;
+  --seller-info-text: #075985;
+
+  /* Shadows */
+  --seller-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --seller-shadow-elevated: 0 10px 25px -3px rgba(45, 27, 105, 0.12), 0 4px 6px -4px rgba(45, 27, 105, 0.08);
+  --seller-shadow-glow: 0 0 20px 0 rgba(79, 57, 246, 0.25);
+
+  /* Radii */
+  --seller-radius-sm: 8px;
+  --seller-radius-md: 12px;
+  --seller-radius-lg: 16px;
+  --seller-radius-xl: 24px;
+}
+
+/* Base utility classes for Seller Panel components */
+.seller-panel-root {
+  background-color: var(--seller-bg-app);
+  color: var(--seller-text-primary);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Custom Scrollbar for seller navigation and scrollable panels */
+.seller-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.seller-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.seller-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.seller-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+/* Safe touch target utility */
+.touch-target-44 {
+  min-height: 44px;
+  min-width: 44px;
+}

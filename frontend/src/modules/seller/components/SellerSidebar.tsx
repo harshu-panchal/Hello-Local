@@ -1,196 +1,50 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-
-interface SubMenuItem {
-  label: string;
-  path: string;
-  icon: JSX.Element;
-}
-
-interface MenuItem {
-  label: string;
-  path: string;
-  hasSubmenu?: boolean;
-  submenuItems?: SubMenuItem[];
-  icon?: JSX.Element;
-}
+import {
+  SELLER_NAV_ITEMS,
+  isNavItemActive,
+  isSubmenuActive,
+} from "../config/sellerNavigation";
 
 interface SellerSidebarProps {
   onClose?: () => void;
 }
 
-const menuItems: MenuItem[] = [
-  { label: "Dashboard", path: "/seller" },
-  { label: "Orders", path: "/seller/orders" },
-  { label: "Category", path: "/seller/category" },
-  { label: "SubCategory", path: "/seller/subcategory" },
-  {
-    label: "Product",
-    path: "/seller/product",
-    hasSubmenu: true,
-    submenuItems: [
-      {
-        label: "Add new Product",
-        path: "/seller/product/add",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-            <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            <line x1="16" y1="12" x2="8" y2="12"></line>
-            <line x1="12" y1="16" x2="12" y2="8"></line>
-          </svg>
-        ),
-      },
-      {
-        label: "Taxes",
-        path: "/seller/product/taxes",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            {/* Three stacked coin piles */}
-            <ellipse cx="12" cy="18" rx="4" ry="2"></ellipse>
-            <ellipse cx="12" cy="14" rx="3.5" ry="1.8"></ellipse>
-            <ellipse cx="12" cy="10" rx="3" ry="1.5"></ellipse>
-            {/* Percentage sign on top pile */}
-            <circle cx="9" cy="9" r="1" fill="currentColor"></circle>
-            <line x1="7" y1="7" x2="11" y2="11" strokeWidth="2"></line>
-            <circle cx="15" cy="11" r="1" fill="currentColor"></circle>
-          </svg>
-        ),
-      },
-      {
-        label: "Product List",
-        path: "/seller/product/list",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            {/* Two checkmarks */}
-            <polyline points="9 12 11 14 15 10"></polyline>
-            <polyline points="9 16 11 18 15 14"></polyline>
-          </svg>
-        ),
-      },
-      {
-        label: "Stock Management",
-        path: "/seller/product/stock",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-            <line x1="12" y1="22.08" x2="12" y2="12"></line>
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
-    label: "Wallet",
-    path: "/seller/wallet",
-  },
-  {
-    label: "Reports",
-    path: "/seller/reports",
-    hasSubmenu: true,
-    submenuItems: [
-      {
-        label: "Sales Report",
-        path: "/seller/reports/sales",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-            <line x1="12" y1="22.08" x2="12" y2="12"></line>
-          </svg>
-        ),
-      },
-    ],
-  },
-  { label: "Return", path: "/seller/return" },
-  {
-    label: "Advertise / Ads",
-    path: "/seller/ad-requests",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-        <path d="M6 12v5c3 3 9 3 12 0v-5" />
-      </svg>
-    ),
-  },
-  {
-    label: "Account Settings",
-    path: "/seller/account-settings",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-        <circle cx="12" cy="7" r="4"></circle>
-      </svg>
-    ),
-  },
-];
-
 export default function SellerSidebar({ onClose }: SellerSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(["/seller/product"]));
+  const navRef = useRef<HTMLElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
 
-  const isActive = (path: string) => {
-    if (path === "/seller") {
-      return (
-        location.pathname === "/seller" || location.pathname === "/seller/"
-      );
-    }
-    return location.pathname.startsWith(path);
-  };
+  // Wheel listener to guarantee smooth trackpad, touchpad gestures, and mousewheel scrolling
+  // and prevent external scroll libraries (e.g. Lenis) from intercepting gesture events.
+  useEffect(() => {
+    const nav = navRef.current;
+    const aside = asideRef.current;
+    if (!nav || !aside) return;
 
-  const isSubmenuActive = (submenuItems?: SubMenuItem[]) => {
-    if (!submenuItems) return false;
-    return submenuItems.some(
-      (item) =>
-        location.pathname === item.path ||
-        location.pathname.startsWith(item.path + "/")
-    );
-  };
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent parent / window scroll-hijacking libraries from preventing this event
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // If wheel occurred over the aside (such as header) outside nav, manually scroll nav
+      if (!nav.contains(e.target as Node) && e.deltaY !== 0) {
+        nav.scrollTop += e.deltaY;
+      }
+    };
+
+    aside.addEventListener("wheel", handleWheel, { capture: true, passive: true });
+
+    return () => {
+      aside.removeEventListener("wheel", handleWheel, { capture: true });
+    };
+  }, []);
+
+  // Touch drag state to ensure touch screen and touchpad gesture compatibility
+  const touchStartY = useRef<number | null>(null);
+  const touchStartScrollTop = useRef<number>(0);
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -216,22 +70,61 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
     return (
       expandedMenus.has(path) ||
       isSubmenuActive(
-        menuItems.find((item) => item.path === path)?.submenuItems
+        location.pathname,
+        SELLER_NAV_ITEMS.find((item) => item.path === path)?.submenuItems
       )
     );
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    if (e.touches.length === 1 && navRef.current) {
+      touchStartY.current = e.touches[0].clientY;
+      touchStartScrollTop.current = navRef.current.scrollTop;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    if (touchStartY.current !== null && navRef.current && e.touches.length === 1) {
+      const deltaY = touchStartY.current - e.touches[0].clientY;
+      navRef.current.scrollTop = touchStartScrollTop.current + deltaY;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartY.current = null;
+  };
+
   return (
-    <aside className="w-64 bg-pink-700 h-screen flex flex-col">
-      {/* Close button - only show on mobile */}
-      <div className="flex justify-end p-4 border-b border-pink-600 lg:hidden">
+    <aside
+      ref={asideRef}
+      data-lenis-prevent="true"
+      data-lenis-prevent-wheel="true"
+      data-lenis-prevent-touch="true"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ touchAction: "pan-y" }}
+      className="w-64 bg-[#2D1B69] border-r border-[#1F104F] h-full max-h-screen flex flex-col shadow-xl overflow-hidden"
+    >
+      {/* Brand Header */}
+      <div className="flex items-center justify-between px-4 py-4 border-b border-purple-900/60 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 to-indigo-400 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+            HL
+          </div>
+          <div className="flex flex-col">
+            <span className="text-white font-bold text-base tracking-tight leading-none">Seller Panel</span>
+            <span className="text-[10px] text-purple-300 font-medium tracking-wide uppercase mt-1">Hello Local</span>
+          </div>
+        </div>
+        {/* Close button - only show on mobile */}
         <button
           onClick={onClose}
-          className="p-2 text-pink-100 hover:text-white transition-colors"
+          className="p-2 text-purple-200 hover:text-white transition-colors lg:hidden rounded-lg hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
           aria-label="Close menu">
           <svg
-            width="24"
-            height="24"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg">
@@ -245,16 +138,56 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
           </svg>
         </button>
       </div>
-      <nav className="flex-1 py-4 sm:py-6 overflow-y-auto">
-        <ul className="space-y-1 px-2 sm:px-4">
-          {menuItems.map((item) => {
+
+      {/* Navigation Scrollable Menu */}
+      <nav
+        ref={navRef}
+        data-lenis-prevent="true"
+        data-lenis-prevent-wheel="true"
+        data-lenis-prevent-touch="true"
+        style={{
+          touchAction: "pan-y",
+          WebkitOverflowScrolling: "touch",
+        }}
+        className="flex-1 min-h-0 py-3 overflow-y-auto overflow-x-hidden seller-sidebar-nav"
+      >
+        <style>{`
+          .seller-sidebar-nav {
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: auto;
+          }
+          .seller-sidebar-nav::-webkit-scrollbar {
+            width: 6px;
+          }
+          .seller-sidebar-nav::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.15);
+          }
+          .seller-sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.35);
+            border-radius: 9999px;
+          }
+          .seller-sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.6);
+          }
+          /* For Firefox */
+          .seller-sidebar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.35) rgba(0, 0, 0, 0.15);
+          }
+        `}</style>
+
+        <ul className="space-y-1 px-2.5 sm:px-3 pb-24" style={{ touchAction: "pan-y" }}>
+          {SELLER_NAV_ITEMS.map((item) => {
             const expanded = isExpanded(item.path);
             const active =
-              isActive(item.path) || isSubmenuActive(item.submenuItems);
+              isNavItemActive(location.pathname, item.path) ||
+              isSubmenuActive(location.pathname, item.submenuItems);
 
             return (
-              <li key={item.path}>
+              <li key={item.path} style={{ touchAction: "pan-y" }}>
                 <button
+                  style={{ touchAction: "pan-y" }}
                   onClick={() => {
                     if (item.hasSubmenu && item.submenuItems) {
                       toggleMenu(item.path);
@@ -262,15 +195,17 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
                       handleNavigation(item.path);
                     }
                   }}
-                  className={`w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-left transition-colors ${active
-                    ? "bg-pink-600 text-white"
-                    : "text-pink-100 hover:bg-pink-600/50 hover:text-white"
-                    }`}>
-                  <div className="flex items-center gap-2">
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all min-h-[44px] ${
+                    active
+                      ? "bg-purple-600 text-white shadow-sm font-semibold"
+                      : "text-purple-100/90 hover:bg-white/10 hover:text-white active:bg-white/15"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
                     {item.icon && (
-                      <span className="flex-shrink-0">{item.icon}</span>
+                      <span className={`flex-shrink-0 ${active ? "text-white" : "text-purple-300"}`}>{item.icon}</span>
                     )}
-                    <span className="text-xs sm:text-sm font-medium">
+                    <span className="text-xs sm:text-sm truncate">
                       {item.label}
                     </span>
                   </div>
@@ -281,8 +216,10 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
                       viewBox="0 0 24 24"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
-                      className={`transition-transform ${expanded ? "rotate-180" : ""
-                        } ${active ? "text-white" : "text-pink-200"}`}>
+                      className={`transition-transform flex-shrink-0 ml-2 ${
+                        expanded ? "rotate-180" : ""
+                      } ${active ? "text-white" : "text-purple-300"}`}
+                    >
                       <path
                         d="M6 9L12 15L18 9"
                         stroke="currentColor"
@@ -294,23 +231,26 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
                   )}
                 </button>
                 {item.hasSubmenu && item.submenuItems && expanded && (
-                  <ul className="mt-1 space-y-1 ml-4">
+                  <ul className="mt-1 space-y-1 ml-4 border-l border-purple-500/30 pl-2" style={{ touchAction: "pan-y" }}>
                     {item.submenuItems.map((subItem) => {
                       const subActive =
                         location.pathname === subItem.path ||
                         location.pathname.startsWith(subItem.path + "/");
                       return (
-                        <li key={subItem.path}>
+                        <li key={subItem.path} style={{ touchAction: "pan-y" }}>
                           <button
+                            style={{ touchAction: "pan-y" }}
                             onClick={() => handleNavigation(subItem.path)}
-                            className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-left transition-colors ${subActive
-                              ? "bg-pink-500 text-white"
-                              : "text-pink-100 hover:bg-pink-600/50 hover:text-white"
-                              }`}>
+                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all min-h-[40px] ${
+                              subActive
+                                ? "bg-purple-500/80 text-white font-medium shadow-xs"
+                                : "text-purple-200/80 hover:bg-white/10 hover:text-white active:bg-white/15"
+                            }`}
+                          >
                             <span className="flex-shrink-0">
                               {subItem.icon}
                             </span>
-                            <span className="text-xs sm:text-sm font-medium">
+                            <span className="text-xs sm:text-sm">
                               {subItem.label}
                             </span>
                           </button>

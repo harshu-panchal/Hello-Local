@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { useToast } from '../../../context/ToastContext';
 import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
 import {
@@ -10,6 +9,14 @@ import {
   getSellerWithdrawals,
   getSellerCommissions,
 } from '../../../services/api/sellerWalletService';
+import { SellerPageHeader } from '../components/common/SellerPageHeader';
+import { SellerStatCard } from '../components/common/SellerStatCard';
+import { SellerTabs } from '../components/common/SellerTabs';
+import { SellerDataTable, ColumnDef } from '../components/common/SellerDataTable';
+import { SellerButton } from '../components/common/SellerButton';
+import { SellerModal } from '../components/common/SellerModal';
+import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
+import { SellerFormField } from '../components/common/SellerFormField';
 
 type Tab = 'transactions' | 'withdrawals' | 'commissions';
 
@@ -34,12 +41,6 @@ export default function SellerWallet() {
     fetchWalletData();
   }, []);
 
-  // Lock background scroll while the withdrawal modal is open
-  useEffect(() => {
-    document.body.style.overflow = showWithdrawModal ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [showWithdrawModal]);
-
   const fetchWalletData = async () => {
     try {
       setLoading(true);
@@ -56,7 +57,6 @@ export default function SellerWallet() {
       if (withdrawalsRes.success) setWithdrawals(withdrawalsRes.data || []);
       if (commissionsRes.success) setCommissions(commissionsRes.data);
       if (profileRes.success) {
-        // Bank details are required before a withdrawal can be requested (#257)
         const p = profileRes.data || {};
         setHasBankDetails(Boolean(p.accountNumber && p.ifsc));
       }
@@ -91,7 +91,6 @@ export default function SellerWallet() {
         showToast('Withdrawal request submitted successfully', 'success');
         setShowWithdrawModal(false);
         setWithdrawAmount('');
-        // Switch to the Withdrawals tab so the new request is immediately visible
         setActiveTab('withdrawals');
         fetchWalletData();
       }
@@ -102,270 +101,359 @@ export default function SellerWallet() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // 1. Transaction Columns
+  const transactionColumns: ColumnDef<any>[] = [
+    {
+      key: 'type',
+      header: 'Type',
+      render: (tx) => (
+        <span
+          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+            tx.type === 'credit'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-rose-50 text-rose-700 border border-rose-200'
+          }`}
+        >
+          {tx.type === 'credit' ? '↓ Credit' : '↑ Debit'}
+        </span>
+      ),
+    },
+    {
+      key: 'description',
+      header: 'Description',
+      render: (tx) => (
+        <div>
+          <span className="font-bold text-slate-900 block text-xs sm:text-sm">{tx.description}</span>
+          <span className="text-[10px] text-slate-400 block">{formatDate(tx.createdAt)}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      align: 'right',
+      render: (tx) => (
+        <span
+          className={`font-black text-xs sm:text-sm ${
+            tx.type === 'credit' ? 'text-emerald-600' : 'text-rose-600'
+          }`}
+        >
+          {tx.type === 'credit' ? '+' : '-'}₹{tx.amount?.toFixed(2)}
+        </span>
+      ),
+    },
+  ];
+
+  // 2. Withdrawal Columns
+  const withdrawalColumns: ColumnDef<any>[] = [
+    {
+      key: 'amount',
+      header: 'Withdrawal Amount',
+      render: (w) => (
+        <div>
+          <span className="font-black text-slate-900 text-sm block">₹{w.amount?.toFixed(2)}</span>
+          <span className="text-[10px] text-slate-400 block">{formatDate(w.createdAt)}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'paymentMethod',
+      header: 'Method',
+      render: (w) => (
+        <span className="text-xs font-bold text-slate-700">{w.paymentMethod || 'Bank Transfer'}</span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      align: 'right',
+      render: (w) => <SellerStatusBadge status={w.status} size="sm" />,
+    },
+  ];
+
+  // 3. Commission Columns
+  const commissionColumns: ColumnDef<any>[] = [
+    {
+      key: 'orderId',
+      header: 'Order Reference',
+      render: (c) => (
+        <div>
+          <span className="font-bold text-purple-700 block text-xs sm:text-sm">
+            #{c.orderId?.orderNumber || c.orderId?._id?.slice(-6).toUpperCase() || 'Order'}
+          </span>
+          <span className="text-[10px] text-slate-400 block">{formatDate(c.createdAt)}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'orderAmount',
+      header: 'Order Amount',
+      render: (c) => <span className="text-xs text-slate-700 font-bold">₹{c.orderAmount?.toFixed(2)}</span>,
+    },
+    {
+      key: 'commissionAmount',
+      header: 'Admin Fee',
+      render: (c) => (
+        <span className="font-bold text-rose-600 text-xs sm:text-sm">₹{c.commissionAmount?.toFixed(2)}</span>
+      ),
+    },
+    {
+      key: 'sellerAmount',
+      header: 'Net Earning',
+      render: (c) => (
+        <span className="font-black text-emerald-600 text-xs sm:text-sm">₹{c.sellerAmount?.toFixed(2)}</span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      align: 'right',
+      render: (c) => <SellerStatusBadge status={c.status || 'Paid'} size="sm" />,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="px-4 py-3">
-          <h1 className="text-xl font-bold text-gray-900">Wallet</h1>
-        </div>
-      </div>
-
-      {/* Balance Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="m-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg"
-      >
-        <p className="text-sm opacity-90 mb-1">Wallet Balance</p>
-        <h1 className="text-4xl font-bold mb-4">₹{balance.toFixed(2)}</h1>
-        <button
-          onClick={() => {
-            // Require bank details before allowing a withdrawal request (#257)
-            if (!hasBankDetails) {
-              showToast('Please add your bank details before requesting a withdrawal', 'error');
-              navigate('/seller/account-settings');
-              return;
+      <SellerPageHeader
+        title="Seller Wallet & Payouts"
+        subtitle="Manage earnings, track admin commissions, and request bank payouts."
+        breadcrumbs={[{ label: "Wallet" }]}
+        action={
+          <SellerButton
+            variant="primary"
+            size="md"
+            onClick={() => {
+              if (!hasBankDetails) {
+                showToast('Please add bank details in Profile Settings before withdrawing', 'error');
+                navigate('/seller/profile');
+                return;
+              }
+              setShowWithdrawModal(true);
+            }}
+            disabled={balance < MIN_WITHDRAWAL}
+            icon={
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
             }
-            setShowWithdrawModal(true);
-          }}
-          className="bg-white text-blue-600 px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-50 transition-all shadow-md"
-        >
-          Request Withdrawal
-        </button>
-      </motion.div>
-
-
-      {/* Tabs */}
-      <div className="bg-white mx-4 rounded-xl shadow-sm overflow-hidden">
-        <div className="flex border-b">
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'transactions'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-600'
-              }`}
           >
-            Transactions
-          </button>
-          <button
-            onClick={() => setActiveTab('withdrawals')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'withdrawals'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-600'
-              }`}
-          >
-            Withdrawals
-          </button>
-          <button
-            onClick={() => setActiveTab('commissions')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'commissions'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-600'
-              }`}
-          >
-            Commissions
-          </button>
-        </div>
+            Request Payout
+          </SellerButton>
+        }
+      />
 
-        <div className="p-4">
-          {/* Transactions Tab */}
-          {activeTab === 'transactions' && (
-            <div className="space-y-3">
-              {(() => {
-                // Combine transactions and pending commissions
-                const allItems = [
-                  ...transactions.map((t: any) => ({ ...t, source: 'transaction' })),
-                  ...(commissions.commissions || [])
-                    .filter((c: any) => c.status === 'Pending')
-                    .map((c: any) => ({
-                      _id: c.id || c._id,
-                      description: `Order #${c.orderId?.substring(0, 8) || 'Unknown'} (Pending)`,
-                      amount: c.orderAmount - c.amount, // Calculate Net Earning: Order Amount - Commission Fee
-                      type: 'Credit',
-                      createdAt: c.createdAt,
-                      status: 'Pending',
-                      source: 'commission'
-                    }))
-                ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-                if (allItems.length === 0) {
-                  return <p className="text-center text-gray-500 py-8">No transactions yet</p>;
-                }
-
-                return allItems.map((item: any) => (
-                  <div key={item._id} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900">{item.description}</p>
-                        {item.status === 'Pending' && (
-                          <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">
-                            Pending
-                          </span>
-                        )}
-                        {item.status === 'Completed' && (
-                          <span className="bg-pink-100 text-pink-800 text-xs px-2 py-0.5 rounded-full font-medium">
-                            Success
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(item.createdAt).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
-                    <p className={`font-bold text-lg ${item.type === 'Credit' ? 'text-pink-700' : 'text-red-600'} ${item.status === 'Pending' ? 'opacity-60' : ''}`}>
-                      {item.type === 'Credit' ? '+' : '-'}₹{item.amount.toFixed(2)}
-                    </p>
-                  </div>
-                ));
-              })()}
-            </div>
-          )}
-
-          {/* Withdrawals Tab */}
-          {activeTab === 'withdrawals' && (
-            <div className="space-y-3">
-              {withdrawals.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No withdrawal requests yet</p>
-              ) : (
-                withdrawals.map((withdrawal: any) => (
-                  <div key={withdrawal._id} className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-bold text-gray-900">₹{withdrawal.amount.toFixed(2)}</p>
-                        <p className="text-xs text-gray-600">{withdrawal.paymentMethod}</p>
-                      </div>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-semibold ${withdrawal.status === 'Completed'
-                          ? 'bg-pink-100 text-pink-800'
-                          : withdrawal.status === 'Approved'
-                            ? 'bg-blue-100 text-blue-700'
-                            : withdrawal.status === 'Rejected'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-yellow-100 text-yellow-700'
-                          }`}
-                      >
-                        {withdrawal.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {new Date(withdrawal.createdAt).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </p>
-                    {withdrawal.remarks && (
-                      <p className="text-xs text-gray-600 mt-2 italic">{withdrawal.remarks}</p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* Commissions Tab */}
-          {activeTab === 'commissions' && (
-            <div className="space-y-3">
-              {commissions.commissions?.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No commissions yet</p>
-              ) : (
-                commissions.commissions?.map((comm: any) => (
-                  <div key={comm.id} className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-medium text-gray-900">Order Commission</p>
-                        <p className="text-xs text-gray-600">Rate: {comm.rate}%</p>
-                      </div>
-                      <p className="font-bold text-pink-700">₹{comm.amount.toFixed(2)}</p>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>Order Amount: ₹{comm.orderAmount.toFixed(2)}</span>
-                      <span>{new Date(comm.createdAt).toLocaleDateString('en-IN')}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <SellerStatCard
+          label="Available Balance"
+          value={`₹${balance.toFixed(2)}`}
+          variant="purple"
+          subtext={`Min payout: ₹${MIN_WITHDRAWAL}`}
+        />
+        <SellerStatCard
+          label="Total Commissions"
+          value={`₹${(commissions.total || 0).toFixed(2)}`}
+          variant="default"
+        />
+        <SellerStatCard
+          label="Paid to Platform"
+          value={`₹${(commissions.paid || 0).toFixed(2)}`}
+          variant="emerald"
+        />
+        <SellerStatCard
+          label="Pending Platform Fee"
+          value={`₹${(commissions.pending || 0).toFixed(2)}`}
+          variant="default"
+        />
       </div>
 
-      {/* Withdrawal Modal */}
-      {
-        showWithdrawModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl p-6 max-w-md w-full"
-            >
-              <h2 className="text-2xl font-bold mb-4">Request Withdrawal</h2>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
-                  <input
-                    type="number"
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg pl-8 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter amount"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Available: ₹{balance.toFixed(2)} · Min: ₹{MIN_WITHDRAWAL}</p>
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="UPI">UPI</option>
-                </select>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowWithdrawModal(false);
-                    setWithdrawAmount('');
-                  }}
-                  className="flex-1 border border-gray-300 rounded-lg py-2.5 font-semibold hover:bg-gray-50 transition"
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleWithdrawRequest}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </motion.div>
+      {/* Bank Details Missing Alert */}
+      {!hasBankDetails && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span>⚠️</span>
+            <span>Bank details not linked. Please update your account details to enable withdrawals.</span>
           </div>
-        )
-      }
-    </div >
+          <SellerButton
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate('/seller/profile')}
+            className="flex-shrink-0"
+          >
+            Update Bank Info
+          </SellerButton>
+        </div>
+      )}
+
+      {/* Wallet Tabs */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-2 sm:p-3 shadow-xs">
+        <SellerTabs
+          tabs={[
+            { id: 'transactions', label: 'Wallet Transactions' },
+            { id: 'withdrawals', label: 'Payout Requests' },
+            { id: 'commissions', label: 'Commissions Breakdown' },
+          ]}
+          activeTab={activeTab}
+          onChange={(t) => setActiveTab(t as Tab)}
+        />
+      </div>
+
+      {/* Tab Contents */}
+      {activeTab === 'transactions' && (
+        <SellerDataTable
+          data={transactions}
+          columns={transactionColumns}
+          keyExtractor={(tx, i) => tx._id || i.toString()}
+          isLoading={loading}
+          emptyTitle="No transactions yet"
+          emptyDescription="Your wallet activity and order credits will appear here."
+          renderMobileCard={(tx) => (
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
+              <div>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                    tx.type === 'credit' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                  }`}
+                >
+                  {tx.type === 'credit' ? 'Credit' : 'Debit'}
+                </span>
+                <h4 className="font-bold text-slate-900 text-xs sm:text-sm mt-1">{tx.description}</h4>
+                <p className="text-[10px] text-slate-400">{formatDate(tx.createdAt)}</p>
+              </div>
+              <span
+                className={`font-black text-sm ${
+                  tx.type === 'credit' ? 'text-emerald-600' : 'text-rose-600'
+                }`}
+              >
+                {tx.type === 'credit' ? '+' : '-'}₹{tx.amount?.toFixed(2)}
+              </span>
+            </div>
+          )}
+        />
+      )}
+
+      {activeTab === 'withdrawals' && (
+        <SellerDataTable
+          data={withdrawals}
+          columns={withdrawalColumns}
+          keyExtractor={(w, i) => w._id || i.toString()}
+          isLoading={loading}
+          emptyTitle="No payout requests"
+          emptyDescription="You have not requested any wallet withdrawals yet."
+          renderMobileCard={(w) => (
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-slate-900">₹{w.amount?.toFixed(2)}</p>
+                <p className="text-xs text-slate-500">{w.paymentMethod || 'Bank Transfer'}</p>
+                <p className="text-[10px] text-slate-400">{formatDate(w.createdAt)}</p>
+              </div>
+              <SellerStatusBadge status={w.status} size="sm" />
+            </div>
+          )}
+        />
+      )}
+
+      {activeTab === 'commissions' && (
+        <SellerDataTable
+          data={commissions.commissions || []}
+          columns={commissionColumns}
+          keyExtractor={(c, i) => c._id || i.toString()}
+          isLoading={loading}
+          emptyTitle="No commission entries"
+          emptyDescription="Platform fees associated with online orders will be tracked here."
+          renderMobileCard={(c) => (
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-purple-700 text-xs">
+                  #{c.orderId?.orderNumber || c.orderId?._id?.slice(-6).toUpperCase() || 'Order'}
+                </span>
+                <SellerStatusBadge status={c.status || 'Paid'} size="sm" />
+              </div>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                <span className="text-slate-500">Order: ₹{c.orderAmount?.toFixed(2)}</span>
+                <span className="text-rose-600 font-bold">Fee: ₹{c.commissionAmount?.toFixed(2)}</span>
+                <span className="text-emerald-600 font-black">Net: ₹{c.sellerAmount?.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+        />
+      )}
+
+      {/* Withdrawal Request Modal */}
+      <SellerModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        title="Request Wallet Payout"
+        description={`Available balance: ₹${balance.toFixed(2)} • Minimum: ₹${MIN_WITHDRAWAL}`}
+        size="md"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => setShowWithdrawModal(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={handleWithdrawRequest}
+              isLoading={isSubmitting}
+              disabled={!withdrawAmount || parseFloat(withdrawAmount) < MIN_WITHDRAWAL || parseFloat(withdrawAmount) > balance}
+            >
+              Submit Request
+            </SellerButton>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <SellerFormField label="Withdrawal Amount (₹)" required>
+            <input
+              type="number"
+              min={MIN_WITHDRAWAL}
+              max={balance}
+              value={withdrawAmount}
+              onChange={(e) => setWithdrawAmount(e.target.value)}
+              placeholder={`Enter amount (min ₹${MIN_WITHDRAWAL})`}
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
+            />
+          </SellerFormField>
+
+          <SellerFormField label="Payout Method">
+            <div className="grid grid-cols-2 gap-3">
+              {(['Bank Transfer', 'UPI'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPaymentMethod(m)}
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all min-h-[44px] ${
+                    paymentMethod === m
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </SellerFormField>
+        </div>
+      </SellerModal>
+    </div>
   );
 }
-

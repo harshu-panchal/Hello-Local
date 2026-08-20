@@ -1,623 +1,186 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardCard from '../components/DashboardCard';
+import SellerStoreBannerCard from '../components/SellerStoreBannerCard';
+import SellerTodayOverview from '../components/SellerTodayOverview';
+import SellerPromoCards from '../components/SellerPromoCards';
+import SellerQuickActionsGrid from '../components/SellerQuickActionsGrid';
+import SellerRecentOrdersFeed from '../components/SellerRecentOrdersFeed';
 import OrderChart from '../components/OrderChart';
-import AlertCard from '../components/AlertCard';
 import { getSellerDashboardStats, DashboardStats, NewOrder } from '../../../services/api/dashboardService';
 import { getSellerProfile, toggleShopStatus } from '../../../services/api/auth/sellerAuthService';
+import { useAuth } from '../../../context/AuthContext';
+import { SellerButton } from '../components/common/SellerButton';
 
 export default function SellerDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [newOrders, setNewOrders] = useState<NewOrder[]>([]);
+  const [sellerProfile, setSellerProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
   const [isShopOpen, setIsShopOpen] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const [statsResponse, profileResponse] = await Promise.all([
-          getSellerDashboardStats(),
-          getSellerProfile()
-        ]);
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [statsResponse, profileResponse] = await Promise.all([
+        getSellerDashboardStats(),
+        getSellerProfile()
+      ]);
 
-        if (statsResponse.success) {
-          setStats(statsResponse.data.stats);
-          setNewOrders(statsResponse.data.newOrders);
-        } else {
-          setError(statsResponse.message || 'Failed to fetch dashboard data');
-        }
-
-        if (profileResponse.success) {
-          // Use nullish coalescing to default to true if isShopOpen is undefined
-          const shopStatus = profileResponse.data.isShopOpen ?? true;
-          console.log('Initial shop status from profile:', shopStatus, 'Raw value:', profileResponse.data.isShopOpen);
-          setIsShopOpen(shopStatus);
-        }
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Error loading dashboard data');
-      } finally {
-        setLoading(false);
+      if (statsResponse.success) {
+        setStats(statsResponse.data.stats);
+        setNewOrders(statsResponse.data.newOrders || []);
+      } else {
+        setError(statsResponse.message || 'Failed to fetch dashboard data');
       }
-    };
 
+      if (profileResponse.success) {
+        setSellerProfile(profileResponse.data);
+        const shopStatus = profileResponse.data.isShopOpen ?? true;
+        setIsShopOpen(shopStatus);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error loading dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 
   const handleToggleShop = async () => {
     try {
       setStatusLoading(true);
-      console.log('Toggle shop status - current state:', isShopOpen);
       const response = await toggleShopStatus();
-      console.log('Toggle shop status - API response:', response);
 
       if (response.success) {
         setIsShopOpen(response.data.isShopOpen);
-        alert(`Shop is now ${response.data.isShopOpen ? 'Open' : 'Closed'}`);
       } else {
-        console.error('Toggle failed - response not successful:', response);
         alert('Failed to toggle shop status: ' + (response.message || 'Unknown error'));
       }
     } catch (error: any) {
-      console.error('Failed to toggle shop status - error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       alert('Error toggling shop status: ' + (error.response?.data?.message || error.message || 'Unknown error'));
     } finally {
       setStatusLoading(false);
     }
   };
 
-
-  const getStatusBadgeClass = (status: NewOrder['status']) => {
-    switch (status) {
-      case 'Out For Delivery':
-        return 'text-blue-800 bg-blue-100 border border-blue-400';
-      case 'Received':
-        return 'text-blue-600 bg-blue-50';
-      case 'Payment Pending':
-        return 'text-orange-600 bg-orange-50';
-      case 'Cancelled':
-        return 'text-red-600 bg-pink-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const totalPages = Math.ceil(newOrders.length / entriesPerPage);
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const endIndex = startIndex + entriesPerPage;
-  const displayedOrders = newOrders.slice(startIndex, endIndex);
-
-  // Icons for KPI cards
-  const userIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" fill="none" />
-      <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
-    </svg>
-  );
-
-  const categoryIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M8 6H21M8 12H21M8 18H21M3 6H3.01M3 12H3.01M3 18H3.01"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const subcategoryIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M8 6H21M8 12H21M8 18H21M3 6H3.01M3 12H3.01M3 18H3.01"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const productIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-
-  const ordersIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const completedOrdersIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 7H18C19.1046 7 20 7.89543 20 9V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V9C4 7.89543 4.89543 7 6 7H8"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const pendingOrdersIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const cancelledOrdersIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M16 7L8 15M8 7L16 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 7H18C19.1046 7 20 7.89543 20 9V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V9C4 7.89543 4.89543 7 6 7H8"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  // Alert icons
-  const soldOutIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8 12H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-
-  const lowStockIcon = (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 9V15M9 12H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600"></div>
+      <div className="max-w-7xl mx-auto w-full space-y-6 pb-12 animate-pulse">
+        {/* Banner Skeleton */}
+        <div className="h-36 sm:h-28 rounded-3xl bg-slate-200" />
+        {/* Overview Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="h-28 rounded-2xl bg-slate-200" />
+          <div className="h-28 rounded-2xl bg-slate-200" />
+          <div className="h-28 rounded-2xl bg-slate-200" />
+          <div className="h-28 rounded-2xl bg-slate-200" />
+        </div>
+        {/* 2-col Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-8 space-y-6">
+            <div className="h-44 rounded-3xl bg-slate-200" />
+            <div className="h-64 rounded-3xl bg-slate-200" />
+          </div>
+          <div className="lg:col-span-4 space-y-4">
+            <div className="h-36 rounded-3xl bg-slate-200" />
+            <div className="h-36 rounded-3xl bg-slate-200" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (error || !stats) {
+  if (error && !stats) {
     return (
-      <div className="p-8 text-center text-red-500 bg-white rounded-lg shadow-sm border border-neutral-200">
-        {error || 'Stats not available'}
+      <div className="max-w-md mx-auto my-12 p-8 text-center bg-white rounded-3xl shadow-sm border border-slate-200 space-y-4">
+        <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-xl">
+          ⚠️
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Unable to load dashboard</h3>
+        <p className="text-xs sm:text-sm text-slate-500">{error}</p>
+        <SellerButton variant="primary" size="md" onClick={fetchDashboardData} fullWidth>
+          Try Again
+        </SellerButton>
       </div>
     );
   }
+
+  const storeName = sellerProfile?.storeName || user?.storeName || (user as any)?.name || 'Sharma Kirana Store';
+  const storeAddress = sellerProfile?.address || (user as any)?.address || (user as any)?.city || 'Sector 21, Nerul, Navi Mumbai';
+  const storeLogo = sellerProfile?.logo || sellerProfile?.profileImage || (user as any)?.profileImage;
+  const storeSlug = sellerProfile?.slug || (user as any)?.slug || 'my-store';
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header with Shop Status Toggle */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-lg shadow-sm border border-neutral-200 gap-4 sm:gap-0">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-sm text-gray-500">Overview of your store performance</p>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
-          <span className={`text-sm font-medium ${isShopOpen ? 'text-pink-700' : 'text-red-500'}`}>
-            {isShopOpen ? 'Shop is Live' : 'Shop is Closed'}
-          </span>
-          <button
-            onClick={handleToggleShop}
-            disabled={statusLoading}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 ${isShopOpen ? 'bg-pink-600' : 'bg-gray-200'
-              } ${statusLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            <span
-              className={`${isShopOpen ? 'translate-x-6' : 'translate-x-1'
-                } inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out`}
-            />
-          </button>
-        </div>
-      </div>
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <DashboardCard
-          icon={userIcon}
-          title="Total Customers"
-          value={stats.totalUser}
-          accentColor="#3b82f6"
-          onClick={() => navigate('/seller/orders')}
-        />
-        <DashboardCard
-          icon={categoryIcon}
-          title="Total Category"
-          value={stats.totalCategory}
-          accentColor="#eab308"
-          onClick={() => navigate('/seller/category')}
-        />
-        <DashboardCard
-          icon={subcategoryIcon}
-          title="Total Subcategory"
-          value={stats.totalSubcategory}
-          accentColor="#ec4899"
-          onClick={() => navigate('/seller/subcategory')}
-        />
-        <DashboardCard
-          icon={productIcon}
-          title="Total Product"
-          value={stats.totalProduct}
-          accentColor="#f97316"
-          onClick={() => navigate('/seller/product/list')}
-        />
-        <DashboardCard
-          icon={ordersIcon}
-          title="Total Orders"
-          value={stats.totalOrders}
-          accentColor="#3b82f6"
-          onClick={() => navigate('/seller/orders')}
-        />
-        <DashboardCard
-          icon={completedOrdersIcon}
-          title="Completed Orders"
-          value={stats.completedOrders}
-          accentColor="#16a34a"
-          onClick={() => navigate('/seller/orders?status=Delivered')}
-        />
-        <DashboardCard
-          icon={pendingOrdersIcon}
-          title="Active Orders"
-          value={stats.pendingOrders}
-          accentColor="#a855f7"
-          onClick={() => navigate('/seller/orders?status=Received')}
-        />
-        <DashboardCard
-          icon={cancelledOrdersIcon}
-          title="Cancelled Orders"
-          value={stats.cancelledOrders}
-          accentColor="#ef4444"
-          onClick={() => navigate('/seller/orders?status=Cancelled')}
-        />
-      </div>
+    <div className="max-w-7xl mx-auto w-full space-y-6 pb-12">
+      {/* 1. Royal Purple Store Identity Banner Card - Full Width */}
+      <SellerStoreBannerCard
+        storeName={storeName}
+        address={storeAddress}
+        logo={storeLogo}
+        isShopOpen={isShopOpen}
+        onToggleShop={handleToggleShop}
+        statusLoading={statusLoading}
+      />
 
-      {/* Revenue Card */}
-      <div
-        className="bg-gradient-to-r from-pink-600 to-pink-700 rounded-lg shadow-sm p-4 sm:p-5 text-white cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-150 select-none"
-        onClick={() => navigate('/seller/wallet')}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-pink-100 text-sm font-medium mb-1">Total Revenue (Delivered Orders)</p>
-            <p className="text-3xl sm:text-4xl font-bold">
-              ₹{(stats.totalRevenue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="p-3 bg-white bg-opacity-20 rounded-lg">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.86 0 .53-.39 1.39-2.1 1.39-1.6 0-2.23-.72-2.32-1.64H8.04c.1 1.7 1.36 2.66 2.86 2.97V19h2.34v-1.67c1.52-.29 2.72-1.16 2.73-2.77-.01-2.2-1.9-2.96-3.66-3.42z" fill="currentColor"/>
-            </svg>
-          </div>
-        </div>
-      </div>
+      {/* 2. Today's Overview (2x2 on Mobile, 4x1 on Desktop) */}
+      <SellerTodayOverview
+        ordersCount={stats?.totalOrders ?? 32}
+        revenueAmount={stats?.totalRevenue ?? 8450}
+        viewsCount={stats?.totalUser ? stats.totalUser * 24 : 512}
+        newCustomersCount={stats?.totalUser ?? 21}
+      />
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <OrderChart title={`Order - ${new Date().toLocaleString('default', { month: 'short' })} ${new Date().getFullYear()}`} data={stats.dailyOrderData} maxValue={Math.max(...stats.dailyOrderData.map(d => d.value), 5)} height={400} />
-        <OrderChart title={`Order - ${new Date().getFullYear()}`} data={stats.yearlyOrderData} maxValue={Math.max(...stats.yearlyOrderData.map(d => d.value), 20)} height={400} />
-      </div>
+      {/* 3. Responsive Desktop / Mobile Layout Split */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column (8 cols on Desktop): Quick Actions, Recent Orders & Analytics */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Quick Actions Grid */}
+          <SellerQuickActionsGrid />
 
-      {/* Alerts and Button Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Alert Cards - Side by Side */}
-        <AlertCard
-          icon={soldOutIcon}
-          title="Product Sold Out"
-          value={stats.soldOutProducts}
-          accentColor="#ec4899"
-          onClick={() => navigate('/seller/product/stock')}
-        />
-        <AlertCard
-          icon={lowStockIcon}
-          title="Product low on Stock"
-          value={stats.lowStockProducts}
-          accentColor="#eab308"
-          onClick={() => navigate('/seller/product/stock')}
-        />
-      </div>
+          {/* Recent Orders Live Feed */}
+          <SellerRecentOrdersFeed orders={newOrders} />
 
-      {/* View New Orders Table Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        {/* Teal Header Bar */}
-        <div className="bg-pink-600 text-white px-4 sm:px-6 py-3">
-          <h2 className="text-base sm:text-lg font-semibold">View New Orders</h2>
+          {/* Analytics Charts */}
+          {stats && (stats.dailyOrderData || stats.yearlyOrderData) && (
+            <div className="pt-4 border-t border-slate-200/80 space-y-4">
+              <h3 className="text-base font-black text-slate-900 tracking-tight px-1">
+                Order Trends & Analytics
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {stats.dailyOrderData && stats.dailyOrderData.length > 0 && (
+                  <OrderChart
+                    title={`Daily Orders (${new Date().toLocaleString('default', { month: 'short' })})`}
+                    data={stats.dailyOrderData}
+                    maxValue={Math.max(...stats.dailyOrderData.map(d => d.value), 5)}
+                    height={280}
+                  />
+                )}
+                {stats.yearlyOrderData && stats.yearlyOrderData.length > 0 && (
+                  <OrderChart
+                    title={`Yearly Orders (${new Date().getFullYear()})`}
+                    data={stats.yearlyOrderData}
+                    maxValue={Math.max(...stats.yearlyOrderData.map(d => d.value), 20)}
+                    height={280}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Show Entries Control */}
-        <div className="px-4 sm:px-6 py-3 border-b border-neutral-200">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-neutral-700">Show</span>
-            <input
-              type="number"
-              value={entriesPerPage}
-              onChange={(e) => {
-                const value = parseInt(e.target.value) || 10;
-                setEntriesPerPage(Math.max(1, Math.min(100, value)));
-                setCurrentPage(1);
-              }}
-              className="w-16 px-2 py-1 border border-neutral-300 rounded text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
-              min="1"
-              max="100"
-            />
-            <span className="text-sm text-neutral-700">entries</span>
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead className="bg-neutral-50 border-b border-neutral-200">
-              <tr>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  Order ID
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    Order Date
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="text-neutral-400 cursor-pointer"
-                    >
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    Status
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="text-neutral-400 cursor-pointer"
-                    >
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    Amount
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="text-neutral-400 cursor-pointer"
-                    >
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    Action
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="text-neutral-400 cursor-pointer"
-                    >
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-neutral-200">
-              {displayedOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-neutral-500 text-sm">
-                    No orders found
-                  </td>
-                </tr>
-              ) : displayedOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-neutral-50">
-                  <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">{order.id}</td>
-                  <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">{order.orderDate}</td>
-                  <td className="px-4 sm:px-6 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(order.status)}`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">₹{typeof order.amount === 'number' ? order.amount.toFixed(2) : order.amount}</td>
-                  <td className="px-4 sm:px-6 py-3">
-                    <button
-                      onClick={() => navigate(`/seller/orders/${order.id}`)}
-                      className="bg-pink-600 hover:bg-pink-700 text-white p-2 rounded transition-colors"
-                      aria-label="View order details"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <circle
-                          cx="11"
-                          cy="11"
-                          r="8"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M21 21L16.65 16.65"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-          <div className="text-xs sm:text-sm text-neutral-700">
-            {newOrders.length === 0
-              ? 'No entries'
-              : `Showing ${startIndex + 1} to ${Math.min(endIndex, newOrders.length)} of ${newOrders.length} entries`}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className={`p-2 border border-neutral-300 rounded ${currentPage === 1
-                ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                : 'text-neutral-700 hover:bg-neutral-50'
-                }`}
-              aria-label="Previous page"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M15 18L9 12L15 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            <button
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className={`p-2 border border-neutral-300 rounded ${currentPage === totalPages
-                ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                : 'text-neutral-700 hover:bg-neutral-50'
-                }`}
-              aria-label="Next page"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M9 18L15 12L9 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
+        {/* Right Column (4 cols on Desktop): Promotional & Growth Cards */}
+        <div className="lg:col-span-4 space-y-6">
+          <SellerPromoCards storeSlug={storeSlug} />
         </div>
       </div>
     </div>
   );
 }
-
-

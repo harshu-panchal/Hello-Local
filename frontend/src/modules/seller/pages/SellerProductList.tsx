@@ -1,19 +1,16 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  getProducts,
-  deleteProduct,
-  Product,
-  ProductVariation,
-} from "../../../services/api/productService";
+import { getProducts, deleteProduct, Product } from "../../../services/api/productService";
 import {
   getCategories,
   Category as apiCategory,
 } from "../../../services/api/categoryService";
 import { useAuth } from "../../../context/AuthContext";
 import { exportToCsv } from "../../../utils/exportCsv";
-
-// ... (interfaces remain same)
+import { SellerPageHeader } from "../components/common/SellerPageHeader";
+import { SellerDataTable, ColumnDef } from "../components/common/SellerDataTable";
+import { SellerButton } from "../components/common/SellerButton";
+import { SellerModal } from "../components/common/SellerModal";
 
 export default function SellerProductList() {
   const navigate = useNavigate();
@@ -26,20 +23,16 @@ export default function SellerProductList() {
   const [stockFilter, setStockFilter] = useState("All Products");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(
-    new Set()
-  );
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [totalPages, setTotalPages] = useState(1);
-  const [paginationInfo, setPaginationInfo] = useState<{
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  } | null>(null);
   const [allCategories, setAllCategories] = useState<apiCategory[]>([]);
   const { user } = useAuth();
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch categories
   useEffect(() => {
@@ -88,14 +81,10 @@ export default function SellerProductList() {
       const response = await getProducts(params);
       if (response.success && response.data) {
         setProducts(response.data);
-        // Extract pagination info if available
         if (response.pagination) {
           setTotalPages(response.pagination.pages);
-          setPaginationInfo(response.pagination);
         } else {
-          // Fallback: calculate pages from data length if pagination not available
           setTotalPages(Math.ceil(response.data.length / rowsPerPage));
-          setPaginationInfo(null);
         }
       } else {
         setError(response.message || "Failed to fetch products");
@@ -122,9 +111,6 @@ export default function SellerProductList() {
     sortDirection,
   ]);
 
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<string | null>(null);
-
   const handleDeleteClick = (productId: string) => {
     setProductToDelete(productId);
     setDeleteModalOpen(true);
@@ -133,6 +119,7 @@ export default function SellerProductList() {
   const confirmDelete = async () => {
     if (!productToDelete) return;
 
+    setDeleting(true);
     try {
       const response = await deleteProduct(productToDelete);
       if (
@@ -143,10 +130,12 @@ export default function SellerProductList() {
         setDeleteModalOpen(false);
         setProductToDelete(null);
       } else {
-        console.error("Failed to delete product");
+        alert(response.message || "Failed to delete product");
       }
-    } catch (error) {
-      console.error("Error deleting product:", error);
+    } catch (error: any) {
+      alert(error.response?.data?.message || error.message || "Error deleting product");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -154,12 +143,8 @@ export default function SellerProductList() {
     navigate(`/seller/product/edit/${productId}`);
   };
 
-  // ... (rest of logic: flatten, filter, sort)
-
   // Flatten products with variations for display
-  // Handle products with no variations by creating a default variation entry
   const allVariations = products.flatMap((product) => {
-    // If product has no variations, create a default one
     if (!product.variations || product.variations.length === 0) {
       return [{
         variationId: `${product._id}-default`,
@@ -179,7 +164,6 @@ export default function SellerProductList() {
         productId: product._id,
       }];
     }
-    // If product has variations, map them
     return product.variations.map((variation, index) => ({
       variationId: variation._id || `${product._id}-${index}`,
       productName: product.productName,
@@ -200,14 +184,8 @@ export default function SellerProductList() {
     }));
   });
 
-  // Filter variations
-  // Since we are using server-side filtering (triggered by useEffect dependencies), 
-  // the 'products' array is already filtered by the backend.
-  // We should not filter again on the client side as it may hide valid results 
-  // (e.g., if backend search matches fields not available in the frontend model).
-  let filteredVariations = allVariations;
+  const filteredVariations = allVariations;
 
-  // Sort variations
   if (sortColumn) {
     filteredVariations.sort((a, b) => {
       let aVal: any = a[sortColumn as keyof typeof a];
@@ -224,46 +202,6 @@ export default function SellerProductList() {
     });
   }
 
-  // When using API pagination, don't do client-side pagination on already-paginated results
-  // The API already returns the correct page of products, so we use all filtered variations
-  // Only do client-side pagination if we don't have server-side pagination info
-  const useServerPagination = totalPages > 1 && paginationInfo !== null;
-  const displayTotalPages = useServerPagination
-    ? totalPages
-    : Math.ceil(filteredVariations.length / rowsPerPage);
-
-  // Calculate start and end indices for display
-  const startIndex = useServerPagination
-    ? (paginationInfo!.page - 1) * paginationInfo!.limit
-    : (currentPage - 1) * rowsPerPage;
-  const endIndex = useServerPagination
-    ? Math.min(startIndex + paginationInfo!.limit, paginationInfo!.total)
-    : Math.min(currentPage * rowsPerPage, filteredVariations.length);
-
-  // Only slice if NOT using server pagination (i.e., all data is loaded)
-  const displayedVariations = useServerPagination
-    ? filteredVariations
-    : filteredVariations.slice(startIndex, endIndex);
-
-  // Collapse multi-variation products into a single row by default (show the first
-  // variation; reveal the rest only when expanded). This keeps the visible row
-  // count aligned with the actual number of PRODUCTS — so it matches the
-  // dashboard "Total Product" instead of counting every variation as an entry.
-  const visibleVariations = displayedVariations.filter((variation, index) => {
-    const isFirstOfProduct =
-      index === 0 ||
-      displayedVariations[index - 1].productId !== variation.productId;
-    return isFirstOfProduct || expandedProducts.has(variation.productId);
-  });
-
-  // Distinct product count (for the "entries" footer)
-  const productCount = new Set(filteredVariations.map((v) => v.productId)).size;
-  const footerTotal = useServerPagination && paginationInfo ? paginationInfo.total : productCount;
-  const footerStart = footerTotal === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
-  const footerEnd = useServerPagination
-    ? endIndex
-    : Math.min(currentPage * rowsPerPage, productCount);
-
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -273,594 +211,327 @@ export default function SellerProductList() {
     }
   };
 
-  const toggleProduct = (productId: string) => {
-    setExpandedProducts((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(productId)) {
-        newSet.delete(productId);
-      } else {
-        newSet.add(productId);
-      }
-      return newSet;
-    });
+  const handleExport = () => {
+    if (filteredVariations.length === 0) return;
+    exportToCsv(
+      ["Product Name", "Category", "SubCategory", "Price", "Discount Price", "Variation"],
+      filteredVariations.map((v) => [
+        v.productName,
+        v.category,
+        v.subCategory,
+        v.price,
+        v.discPrice,
+        v.variation,
+      ]),
+      "products"
+    );
   };
 
-  // Mongo ObjectIds are 24 chars and dominate the table — show a short tail and
-  // expose the full id on hover. Full ids are still used for actions and export.
-  const shortId = (id: string) =>
-    id && id.length > 10 ? `…${id.slice(-6)}` : id;
-
-  const SortIcon = ({ column }: { column: string }) => (
-    <span className="text-neutral-300 text-[10px]">
-      {sortColumn === column ? (sortDirection === "asc" ? "↑" : "↓") : "⇅"}
-    </span>
-  );
-
-  // Get unique categories for filter
-  const categories = allCategories.map((cat) => cat.name);
+  const columns: ColumnDef<any>[] = [
+    {
+      key: "productImage",
+      header: "Product",
+      render: (v) => (
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+            {v.productImage ? (
+              <img src={v.productImage} alt={v.productName} className="w-full h-full object-contain p-1" />
+            ) : (
+              <span className="text-slate-400 text-xs font-bold">📦</span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <span className="font-bold text-slate-900 block text-xs sm:text-sm truncate">
+              {v.productName}
+            </span>
+            <span className="text-[10px] text-slate-400 block truncate">
+              {v.brandName !== "-" ? `Brand: ${v.brandName}` : `Var: ${v.variation}`}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      render: (v) => (
+        <div>
+          <span className="text-xs font-bold text-slate-700 block">{v.category}</span>
+          {v.subCategory !== "-" && (
+            <span className="text-[10px] text-slate-400 block">{v.subCategory}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "price",
+      header: "Price",
+      sortable: true,
+      sortKey: "price",
+      render: (v) => (
+        <div>
+          <span className="font-black text-slate-900 text-xs sm:text-sm block">
+            ₹{Number(v.discPrice > 0 ? v.discPrice : v.price).toFixed(2)}
+          </span>
+          {v.discPrice > 0 && (
+            <span className="text-[10px] text-slate-400 line-through block">
+              ₹{Number(v.price).toFixed(2)}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "variation",
+      header: "Variant",
+      render: (v) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+          {v.variation}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      render: (v) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => handleEdit(v.productId)}
+            className="p-1.5 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            title="Edit Product"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => handleDeleteClick(v.productId)}
+            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            title="Delete Product"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-neutral-800">
-          Product List
-        </h1>
-        <div className="text-sm text-blue-500">
-          <span className="cursor-pointer hover:underline">Home</span>{" "}
-          <span className="text-neutral-400">/</span>{" "}
-          <span className="text-neutral-600">Dashboard</span>
-        </div>
-      </div>
-
-      {/* Content Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="p-4 border-b border-neutral-100 font-medium text-neutral-700">
-          View Product List
-        </div>
-
-        {/* Filters and Controls */}
-        <div className="p-4 flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center justify-between border-b border-neutral-100">
-          <div className="flex flex-wrap gap-3">
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">
-                Filter By Category
-              </label>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer">
-                <option value="">All Category</option>
-                {allCategories.map((cat) => (
-                  <option key={cat._id} value={cat._id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">
-                Filter by Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer">
-                <option value="All Products">All Products</option>
-                <option value="Published">Published</option>
-                <option value="Unpublished">Unpublished</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">
-                Filter by Stock
-              </label>
-              <select
-                value={stockFilter}
-                onChange={(e) => setStockFilter(e.target.value)}
-                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer">
-                <option value="All Products">All Products</option>
-                <option value="In Stock">In Stock</option>
-                <option value="Out of Stock">Out of Stock</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-neutral-600">Show</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-pink-600 focus:outline-none cursor-pointer">
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
-            <button
+    <div className="space-y-6">
+      {/* Header */}
+      <SellerPageHeader
+        title="Products Catalog"
+        subtitle="Manage product listings, variations, pricing, and availability."
+        breadcrumbs={[{ label: "Products List" }]}
+        action={
+          <div className="flex items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={handleExport}
               disabled={filteredVariations.length === 0}
-              onClick={() => {
-                if (filteredVariations.length === 0) return; // nothing to export (#17)
-                exportToCsv(
-                  [
-                    "Product Id",
-                    "Variation Id",
-                    "Product Name",
-                    "Seller Name",
-                    "Brand Name",
-                    "Category",
-                    "Price",
-                    "Disc Price",
-                    "Variation",
-                  ],
-                  filteredVariations.map((v) => [
-                    v.productId,
-                    v.variationId,
-                    v.productName,
-                    v.sellerName,
-                    v.brandName,
-                    v.category,
-                    v.price,
-                    v.discPrice,
-                    v.variation,
-                  ]),
-                  "products"
-                );
-              }}
-              className="bg-pink-700 hover:bg-pink-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+              }
+            >
               Export
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="ml-1">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>
-            <div className="relative flex-1 min-w-0 sm:flex-none">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">
-                Search:
-              </span>
-              <input
-                type="text"
-                className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-pink-600 w-full sm:w-48 max-w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder=""
-              />
-            </div>
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={() => navigate("/seller/product/add")}
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              }
+            >
+              + Add Product
+            </SellerButton>
+          </div>
+        }
+      />
+
+      {/* Filters Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {/* Search Input */}
+          <div className="sm:col-span-2">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Search product title, SKU, or brand..."
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-purple-600 min-h-[40px]"
+            />
+          </div>
+
+          {/* Category Dropdown */}
+          <div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[40px]"
+            >
+              <option value="">All Categories</option>
+              {allCategories.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Stock Filter */}
+          <div>
+            <select
+              value={stockFilter}
+              onChange={(e) => {
+                setStockFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[40px]"
+            >
+              <option value="All Products">All Stock</option>
+              <option value="In Stock">In Stock</option>
+              <option value="Out of Stock">Out of Stock</option>
+            </select>
           </div>
         </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="p-8 text-center text-neutral-400">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-700 mx-auto mb-2"></div>
-            Loading products...
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && !loading && (
-          <div className="p-8 text-center text-red-600">
-            <p>{error}</p>
-            <button
-              onClick={fetchProducts}
-              className="mt-4 px-4 py-2 bg-pink-700 text-white rounded hover:bg-pink-800">
-              Retry
-            </button>
-          </div>
-        )}
-
-        {/* Table */}
-        {!loading && !error && (
-          <div className="overflow-x-auto flex-1 min-w-0">
-            <table className="w-full text-left border-collapse border border-neutral-200">
-              <thead>
-                <tr className="bg-neutral-50 text-xs font-bold text-neutral-800">
-                  <th className="p-4 w-16 border border-neutral-200">
-                    <div className="flex items-center justify-between">
-                      Product Id
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("variationId")}>
-                    <div className="flex items-center justify-between">
-                      Variation Id <SortIcon column="variationId" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("productName")}>
-                    <div className="flex items-center justify-between">
-                      Product Name <SortIcon column="productName" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("sellerName")}>
-                    <div className="flex items-center justify-between">
-                      Seller Name <SortIcon column="sellerName" />
-                    </div>
-                  </th>
-                  <th className="p-4 border border-neutral-200">
-                    <div className="flex items-center justify-between">
-                      product Image
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("brandName")}>
-                    <div className="flex items-center justify-between">
-                      Brand Name <SortIcon column="brandName" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("category")}>
-                    <div className="flex items-center justify-between">
-                      Category <SortIcon column="category" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("subCategory")}>
-                    <div className="flex items-center justify-between">
-                      SubCategory <SortIcon column="subCategory" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("price")}>
-                    <div className="flex items-center justify-between">
-                      Price <SortIcon column="price" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("discPrice")}>
-                    <div className="flex items-center justify-between">
-                      Disc Price <SortIcon column="discPrice" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 border border-neutral-200 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("variation")}>
-                    <div className="flex items-center justify-between">
-                      Variation <SortIcon column="variation" />
-                    </div>
-                  </th>
-                  <th className="p-4 border border-neutral-200">
-                    <div className="flex items-center justify-center">Action</div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleVariations.map((variation, index) => {
-                  const isFirstVariation =
-                    index === 0 ||
-                    visibleVariations[index - 1].productId !==
-                    variation.productId;
-                  const product = products.find(
-                    (p) => p._id === variation.productId
-                  );
-                  const hasMultipleVariations =
-                    product && product.variations.length > 1;
-                  const isExpanded = expandedProducts.has(variation.productId);
-
-                  return (
-                    <tr
-                      key={`${variation.productId}-${variation.variationId}`}
-                      className="hover:bg-neutral-50 transition-colors text-sm text-neutral-700">
-                      <td className="p-4 align-middle border border-neutral-200">
-                        <div className="flex items-center gap-2">
-                          {isFirstVariation && hasMultipleVariations && (
-                            <button
-                              onClick={() => toggleProduct(variation.productId)}
-                              className="text-blue-600 hover:text-blue-700">
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round">
-                                {isExpanded ? (
-                                  <polyline points="6 9 12 15 18 9"></polyline>
-                                ) : (
-                                  <polyline points="9 18 15 12 9 6"></polyline>
-                                )}
-                              </svg>
-                            </button>
-                          )}
-                          <span title={variation.productId} className="font-mono text-xs">
-                            {shortId(variation.productId)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        <span title={variation.variationId} className="font-mono text-xs">
-                          {shortId(variation.variationId)}
-                        </span>
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        <div className="flex flex-col gap-1">
-                          <span>{variation.productName}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        {variation.sellerName}
-                      </td>
-                      <td className="p-4 border border-neutral-200">
-                        <div className="w-16 h-12 bg-white border border-neutral-200 rounded p-1 flex items-center justify-center mx-auto">
-                          <img
-                            src={variation.productImage}
-                            alt={variation.productName}
-                            className="max-w-full max-h-full object-contain"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                "https://placehold.co/60x40?text=Img";
-                            }}
-                          />
-                        </div>
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        {variation.brandName || "-"}
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        {variation.category}
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        {variation.subCategory}
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        ₹{variation.price.toFixed(2)}
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        {variation.discPrice > 0
-                          ? `₹${variation.discPrice.toFixed(2)}`
-                          : "-"}
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        {variation.variation}
-                      </td>
-                      <td className="p-4 align-middle border border-neutral-200">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleEdit(variation.productId)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Edit Product">
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round">
-                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(variation.productId)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Delete Product">
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              <line x1="10" y1="11" x2="10" y2="17"></line>
-                              <line x1="14" y1="11" x2="14" y2="17"></line>
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {visibleVariations.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={12}
-                      className="p-8 text-center text-neutral-400 border border-neutral-200">
-                      No products found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination Footer */}
-        {!loading && !error && (
-          <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-            <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {footerStart} to {footerEnd} of {footerTotal} entries
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className={`min-w-[36px] h-[36px] flex items-center justify-center border border-pink-700 rounded transition-colors ${currentPage === 1
-                  ? "text-neutral-300 border-neutral-200 cursor-not-allowed"
-                  : "text-pink-700 hover:bg-pink-50"
-                  }`}
-                aria-label="Previous page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M15 18L9 12L15 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              <div className="flex gap-2">
-                {(() => {
-                  const pages = [];
-                  const maxVisiblePages = 5;
-
-                  if (displayTotalPages <= maxVisiblePages) {
-                    for (let i = 1; i <= displayTotalPages; i++) {
-                      pages.push(i);
-                    }
-                  } else {
-                    if (currentPage <= 3) {
-                      for (let i = 1; i <= 4; i++) pages.push(i);
-                      pages.push("...");
-                      pages.push(displayTotalPages);
-                    } else if (currentPage >= displayTotalPages - 2) {
-                      pages.push(1);
-                      pages.push("...");
-                      for (let i = displayTotalPages - 3; i <= displayTotalPages; i++) pages.push(i);
-                    } else {
-                      pages.push(1);
-                      pages.push("...");
-                      pages.push(currentPage - 1);
-                      pages.push(currentPage);
-                      pages.push(currentPage + 1);
-                      pages.push("...");
-                      pages.push(displayTotalPages);
-                    }
-                  }
-
-                  return pages.map((page, idx) => {
-                    if (page === "...") {
-                      return (
-                        <span key={`ellipsis-${idx}`} className="flex items-end justify-center px-1 text-neutral-400">
-                          ...
-                        </span>
-                      );
-                    }
-
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(Number(page))}
-                        className={`min-w-[36px] h-[36px] flex items-center justify-center border rounded text-sm font-medium transition-colors ${currentPage === page
-                          ? "bg-pink-700 border-pink-700 text-white"
-                          : "border-pink-700 text-pink-700 hover:bg-pink-50"
-                          }`}>
-                        {page}
-                      </button>
-                    );
-                  });
-                })()}
-              </div>
-              <button
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(displayTotalPages, prev + 1))
-                }
-                disabled={currentPage === displayTotalPages}
-                className={`min-w-[36px] h-[36px] flex items-center justify-center border border-pink-700 rounded transition-colors ${currentPage === displayTotalPages
-                  ? "text-neutral-300 border-neutral-200 cursor-not-allowed"
-                  : "text-pink-700 hover:bg-pink-50"
-                  }`}
-                aria-label="Next page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M9 18L15 12L9 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden transform transition-all scale-100 opacity-100">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-red-600">
-                  <path d="M3 6h18"></path>
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                  <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
+      {/* Products Data Table with Mobile Card View */}
+      <SellerDataTable
+        data={filteredVariations}
+        columns={columns}
+        keyExtractor={(v) => v.variationId}
+        isLoading={loading}
+        sortColumn={sortColumn || undefined}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalEntries={filteredVariations.length}
+        entriesPerPage={rowsPerPage}
+        onPageChange={(p) => setCurrentPage(p)}
+        onEntriesPerPageChange={(s) => {
+          setRowsPerPage(s);
+          setCurrentPage(1);
+        }}
+        emptyTitle="No products found"
+        emptyDescription="Try adjusting your filters or click '+ Add Product' to create a new item."
+        renderMobileCard={(v) => (
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+                  {v.productImage ? (
+                    <img src={v.productImage} alt={v.productName} className="w-full h-full object-contain p-1" />
+                  ) : (
+                    <span className="text-slate-400 text-base">📦</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-slate-900 text-sm truncate">{v.productName}</h4>
+                  <p className="text-xs text-slate-500 truncate">{v.category}</p>
+                  <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700">
+                    Var: {v.variation}
+                  </span>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-neutral-900 mb-2">
-                Delete Product?
-              </h3>
-              <p className="text-neutral-600 mb-6">
-                Are you sure you want to delete this product? This action cannot be
-                undone.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="px-5 py-2.5 rounded-lg border border-neutral-300 text-neutral-700 font-medium hover:bg-neutral-50 transition-colors">
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-5 py-2.5 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors shadow-sm">
-                  Delete Product
-                </button>
+
+              <div className="text-right flex-shrink-0">
+                <p className="font-black text-slate-900 text-sm">
+                  ₹{Number(v.discPrice > 0 ? v.discPrice : v.price).toFixed(2)}
+                </p>
+                {v.discPrice > 0 && (
+                  <p className="text-[10px] text-slate-400 line-through">
+                    ₹{Number(v.price).toFixed(2)}
+                  </p>
+                )}
               </div>
             </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <SellerButton
+                variant="outline"
+                size="sm"
+                fullWidth
+                onClick={() => handleEdit(v.productId)}
+                icon={
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                }
+              >
+                Edit
+              </SellerButton>
+              <SellerButton
+                variant="danger"
+                size="sm"
+                fullWidth
+                onClick={() => handleDeleteClick(v.productId)}
+                icon={
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                }
+              >
+                Delete
+              </SellerButton>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      />
+
+      {/* Delete Product Confirmation Modal */}
+      <SellerModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Confirm Delete Product"
+        description="Are you sure you want to delete this product? This action cannot be undone."
+        size="sm"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </SellerButton>
+            <SellerButton
+              variant="danger"
+              size="md"
+              onClick={confirmDelete}
+              isLoading={deleting}
+            >
+              Delete Product
+            </SellerButton>
+          </div>
+        }
+      >
+        <p className="text-xs sm:text-sm text-slate-600">
+          The product will be removed from your catalog and will no longer be visible to customers on HelloLocal.
+        </p>
+      </SellerModal>
     </div>
   );
 }
-

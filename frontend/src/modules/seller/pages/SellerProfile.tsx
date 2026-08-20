@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
+import { SellerPageHeader } from '../components/common/SellerPageHeader';
+import { SellerCard } from '../components/common/SellerCard';
+import { SellerButton } from '../components/common/SellerButton';
+import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
 
 export default function SellerProfile() {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,91 +30,120 @@ export default function SellerProfile() {
     return () => { active = false; };
   }, []);
 
-  const statusBadge = (status?: string) => {
-    switch (status) {
-      case 'Approved': return 'bg-green-100 text-green-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-yellow-100 text-yellow-800';
-    }
-  };
-
   const maskAccount = (acc?: string) =>
-    acc && acc.length > 4 ? `••••••${acc.slice(-4)}` : acc || '—';
+    acc && acc.length > 4 ? `••••••••${acc.slice(-4)}` : acc || '—';
 
-  const Row = ({ label, value }: { label: string; value?: any }) => (
-    <div className="flex flex-col sm:flex-row sm:items-center py-3 border-b border-neutral-100 last:border-0">
-      <span className="w-full sm:w-56 text-sm font-medium text-neutral-500">{label}</span>
-      <span className="text-sm text-neutral-900 break-words">{value || '—'}</span>
+  const InfoRow = ({ label, value }: { label: string; value?: any }) => (
+    <div className="flex flex-col sm:flex-row sm:items-center py-2.5 border-b border-slate-100 last:border-0 gap-1 sm:gap-4">
+      <span className="w-full sm:w-48 text-xs font-bold text-slate-500">{label}</span>
+      <span className="text-xs sm:text-sm font-semibold text-slate-900 break-words">{value || '—'}</span>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-neutral-800">My Profile</h1>
-        <div className="text-sm">
-          <Link to="/seller" className="text-blue-600 hover:underline">Home</Link>
-          <span className="text-neutral-400"> / </span>
-          <span className="text-neutral-600">Profile</span>
-        </div>
-      </div>
+    <div className="space-y-6 pb-12">
+      {/* Header */}
+      <SellerPageHeader
+        title="Seller Store Profile"
+        subtitle="Manage your business information, public store profile, and payout details."
+        breadcrumbs={[{ label: "Profile" }]}
+        action={
+          <SellerButton
+            variant="primary"
+            size="md"
+            onClick={() => navigate('/seller/account-settings')}
+            icon={
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            }
+          >
+            Edit Settings
+          </SellerButton>
+        }
+      />
 
       {loading && (
-        <div className="flex items-center justify-center p-12">
-          <div className="w-8 h-8 border-2 border-pink-600 border-t-transparent rounded-full animate-spin" />
+        <div className="space-y-4 animate-pulse">
+          <div className="h-28 bg-slate-200 rounded-3xl" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-64 bg-slate-200 rounded-3xl" />
+            <div className="h-64 bg-slate-200 rounded-3xl" />
+          </div>
         </div>
       )}
 
       {error && !loading && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs sm:text-sm font-bold">
+          {error}
+        </div>
       )}
 
       {!loading && !error && profile && (
         <div className="space-y-6">
-          {/* Summary card */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-6 flex items-center gap-4">
-            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-pink-600 text-white text-2xl font-bold flex-shrink-0">
-              {(profile.storeName || profile.sellerName || 'S').trim().charAt(0).toUpperCase()}
+          {/* Identity Summary Card */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#2D1B69] via-purple-700 to-indigo-600 text-white text-2xl font-black flex items-center justify-center flex-shrink-0 shadow-sm border border-purple-300/30">
+                {(profile.storeName || profile.sellerName || 'S').trim().charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg sm:text-xl font-black text-slate-900 truncate">
+                    {profile.storeName || profile.sellerName}
+                  </h2>
+                  <SellerStatusBadge status={profile.status || 'Approved'} size="sm" />
+                </div>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium truncate">{profile.email}</p>
+                <p className="text-xs text-purple-700 font-bold mt-0.5">📞 {profile.mobile || '—'}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold text-neutral-900 truncate">{profile.storeName || profile.sellerName}</h2>
-              <p className="text-sm text-neutral-500 truncate">{profile.email}</p>
-              <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadge(profile.status)}`}>
-                {profile.status || 'Pending'}
-              </span>
-            </div>
-            <Link
-              to="/seller/account-settings"
-              className="ml-auto px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => navigate('/seller/account-settings')}
+              className="w-full sm:w-auto"
             >
-              Edit Profile
-            </Link>
+              Account Settings
+            </SellerButton>
           </div>
 
-          {/* Store details */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-neutral-50 px-6 py-3 border-b border-neutral-100 font-medium text-neutral-700">Store Information</div>
-            <div className="px-6 py-2">
-              <Row label="Store Name" value={profile.storeName} />
-              <Row label="Seller Name" value={profile.sellerName} />
-              <Row label="Email" value={profile.email} />
-              <Row label="Mobile" value={profile.mobile} />
-              <Row label="Categories" value={Array.isArray(profile.categories) ? profile.categories.join(', ') : profile.category} />
-              <Row label="Address" value={profile.address} />
-              <Row label="City" value={profile.city} />
-              <Row label="Service Radius" value={profile.serviceRadiusKm ? `${profile.serviceRadiusKm} km` : undefined} />
-            </div>
-          </div>
+          {/* Details Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Store Information */}
+            <SellerCard title="Store Details">
+              <div className="space-y-0.5">
+                <InfoRow label="Store Name" value={profile.storeName} />
+                <InfoRow label="Seller / Owner Name" value={profile.sellerName} />
+                <InfoRow label="Business Email" value={profile.email} />
+                <InfoRow label="Registered Mobile" value={profile.mobile} />
+                <InfoRow label="Product Categories" value={Array.isArray(profile.categories) ? profile.categories.join(', ') : profile.category} />
+                <InfoRow label="Full Address" value={profile.address} />
+                <InfoRow label="City & State" value={`${profile.city || ''} ${profile.state || ''}`.trim()} />
+                <InfoRow label="Pincode" value={profile.pincode} />
+              </div>
+            </SellerCard>
 
-          {/* Bank details */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-neutral-50 px-6 py-3 border-b border-neutral-100 font-medium text-neutral-700">Bank Details</div>
-            <div className="px-6 py-2">
-              <Row label="Account Holder" value={profile.accountName} />
-              <Row label="Bank Name" value={profile.bankName} />
-              <Row label="Account Number" value={maskAccount(profile.accountNumber)} />
-              <Row label="IFSC" value={profile.ifsc} />
+            {/* Bank & Tax Information */}
+            <div className="space-y-6">
+              <SellerCard title="Bank & Payout Information">
+                <div className="space-y-0.5">
+                  <InfoRow label="Bank Name" value={profile.bankName} />
+                  <InfoRow label="Account Holder" value={profile.accountHolderName} />
+                  <InfoRow label="Account Number" value={maskAccount(profile.accountNumber)} />
+                  <InfoRow label="IFSC Code" value={profile.ifsc} />
+                </div>
+              </SellerCard>
+
+              <SellerCard title="Tax & Business Compliance">
+                <div className="space-y-0.5">
+                  <InfoRow label="GSTIN Number" value={profile.gstin} />
+                  <InfoRow label="PAN Number" value={profile.panNumber} />
+                  <InfoRow label="FSSAI License" value={profile.fssaiLicNo} />
+                </div>
+              </SellerCard>
             </div>
           </div>
         </div>

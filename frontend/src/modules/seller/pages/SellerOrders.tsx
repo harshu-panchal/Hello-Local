@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getOrders, updateOrderStatus, Order, GetOrdersParams } from '../../../services/api/orderService';
 import { useSellerSocketContext } from '../../../context/SellerSocketContext';
+import { SellerPageHeader } from '../components/common/SellerPageHeader';
+import { SellerTabs } from '../components/common/SellerTabs';
+import { SellerDataTable, ColumnDef } from '../components/common/SellerDataTable';
+import { SellerFilterBar } from '../components/common/SellerFilterBar';
+import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
+import { SellerButton } from '../components/common/SellerButton';
+import { SellerSelect } from '../components/common/SellerSelect';
 
 type SortField = 'orderId' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -10,17 +17,17 @@ export default function SellerOrders() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [totalOrders, setTotalOrders] = useState(0);         // ← true total from API
+  const [totalOrders, setTotalOrders] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [newOrderBadge, setNewOrderBadge] = useState(false); // ← blinking new-order indicator
+  const [newOrderBadge, setNewOrderBadge] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [status, setStatus] = useState(() => searchParams.get('status') || 'All Status');
   const [entriesPerPage, setEntriesPerPage] = useState('10');
-  const [searchQuery, setSearchQuery] = useState('');        // ← immediate input value
-  const [debouncedSearch, setDebouncedSearch] = useState(''); // ← used for fetching
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -30,7 +37,6 @@ export default function SellerOrders() {
   const { lastNotification } = useSellerSocketContext();
 
   // ─── Fetch orders ──────────────────────────────────────────────────────────
-
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -52,7 +58,6 @@ export default function SellerOrders() {
       const response = await getOrders(params);
       if (response.success && response.data) {
         setOrders(response.data);
-        // Use real totals from API — NOT orders.length
         setTotalOrders(response.pagination?.total ?? response.data.length);
         setTotalPages(response.pagination?.pages ?? Math.ceil((response.pagination?.total ?? response.data.length) / parseInt(entriesPerPage)));
       } else {
@@ -70,7 +75,7 @@ export default function SellerOrders() {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Debounce the search box so typing doesn't refetch on every keystroke
+  // Debounce the search box
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setDebouncedSearch(searchQuery);
@@ -79,29 +84,50 @@ export default function SellerOrders() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // ─── Real-time: new order via socket ──────────────────────────────────────
-  // When seller gets a NEW_ORDER notification, refresh the orders list so the
-  // new order appears immediately without a manual page reload.
+  // Real-time: new order via socket
   const prevNotificationRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!lastNotification) return;
     if (lastNotification.type !== 'NEW_ORDER') return;
-    // Avoid re-running for the same notification reference
     if (prevNotificationRef.current === lastNotification.orderId) return;
     prevNotificationRef.current = lastNotification.orderId;
 
-    // Show badge if not on page 1 (so user knows there's a new order)
     if (currentPage !== 1) {
       setNewOrderBadge(true);
     } else {
-      // On page 1: go back to top and re-fetch
       setCurrentPage(1);
       fetchOrders();
     }
-  }, [lastNotification]);
+  }, [lastNotification, currentPage, fetchOrders]);
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
+  const handleSort = (field: string) => {
+    const f = field as SortField;
+    if (sortField === f) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(f);
+      setSortDirection('asc');
+    }
+  };
+
+  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
+    setUpdatingId(orderId);
+    try {
+      const response = await updateOrderStatus(orderId, { status: newStatus as any });
+      if (response.success) {
+        setOrders(prev =>
+          prev.map(o => (o.id === orderId ? { ...o, status: newStatus as any } : o))
+        );
+      } else {
+        alert(response.message || 'Failed to update order status');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to update order status');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const handleClearDate = () => {
     setDateFrom('');
@@ -109,41 +135,8 @@ export default function SellerOrders() {
     setCurrentPage(1);
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-    setCurrentPage(1);
-  };
-
-  const handleQuickStatus = async (
-    orderId: string,
-    newStatus: 'Accepted' | 'Rejected' | 'Processed',
-    label: string
-  ) => {
-    if (!window.confirm(`Are you sure you want to mark this order as "${label}"?`)) return;
-    setUpdatingId(orderId);
-    try {
-      const res = await updateOrderStatus(orderId, { status: newStatus });
-      if (res.success) {
-        setOrders(prev =>
-          prev.map(o => (o.id === orderId ? { ...o, status: newStatus } : o))
-        );
-      } else {
-        alert(res.message || 'Failed to update status');
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to update status');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
   const handleExport = () => {
-    if (orders.length === 0) return; // nothing to export (#17)
+    if (orders.length === 0) return;
     const headers = ['Order ID', 'Delivery Date', 'Order Date', 'Status', 'Amount'];
     const csvContent = [
       headers.join(','),
@@ -151,8 +144,7 @@ export default function SellerOrders() {
         [order.orderId, order.deliveryDate, order.orderDate, order.status, order.amount].join(',')
       ),
     ].join('\n');
-    // Prepend UTF-8 BOM so Excel opens special characters (₹, etc.) correctly (#31/63)
-    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `orders_${new Date().toISOString().split('T')[0]}.csv`;
@@ -167,345 +159,244 @@ export default function SellerOrders() {
     setCurrentPage(1);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Received':    return 'bg-yellow-100 text-yellow-800';
-      case 'Accepted':    return 'bg-blue-100 text-blue-800';
-      case 'Processed':   return 'bg-indigo-100 text-indigo-800';
-      case 'On the way':  return 'bg-purple-100 text-purple-800';
-      case 'Delivered':   return 'bg-green-100 text-green-800';
-      case 'Rejected':    return 'bg-red-100 text-red-800';
-      case 'Cancelled':   return 'bg-orange-100 text-orange-800';
-      default:            return 'bg-neutral-100 text-neutral-800';
-    }
-  };
+  // Status Tab options
+  const statusTabs = [
+    { id: 'All Status', label: 'All Orders' },
+    { id: 'Received', label: 'Received' },
+    { id: 'Accepted', label: 'Accepted' },
+    { id: 'Processed', label: 'Processed' },
+    { id: 'On the way', label: 'On the way' },
+    { id: 'Delivered', label: 'Delivered' },
+    { id: 'Cancelled', label: 'Cancelled' },
+  ];
 
-  const sortIcon = (field: SortField) => {
-    if (sortField === field && sortDirection === 'asc')  return 'M7 14L12 9L17 14';
-    if (sortField === field && sortDirection === 'desc') return 'M7 10L12 15L17 10';
-    return 'M7 10L12 5L17 10M7 14L12 19L17 14';
-  };
-
-  // Pagination display values (API already paginates — orders IS the current page)
-  const entriesPerPageNum = parseInt(entriesPerPage);
-  const startEntry = totalOrders === 0 ? 0 : (currentPage - 1) * entriesPerPageNum + 1;
-  const endEntry   = Math.min(currentPage * entriesPerPageNum, totalOrders);
+  // Table Columns Definition
+  const columns: ColumnDef<Order>[] = [
+    {
+      key: 'orderId',
+      header: 'Order ID',
+      sortable: true,
+      sortKey: 'orderId',
+      render: (order) => (
+        <div>
+          <span
+            onClick={() => navigate(`/seller/orders/${order.id}`)}
+            className="font-bold text-purple-700 hover:text-purple-900 cursor-pointer block text-xs sm:text-sm"
+          >
+            {order.orderId}
+          </span>
+          <span className="text-[10px] text-slate-400 block">{order.orderDate}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'deliveryDate',
+      header: 'Delivery Date',
+      sortable: true,
+      sortKey: 'deliveryDate',
+      render: (order) => (
+        <span className="text-xs text-slate-700 font-medium">
+          {order.deliveryDate || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      sortKey: 'status',
+      render: (order) => <SellerStatusBadge status={order.status} size="sm" />,
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      sortable: true,
+      sortKey: 'amount',
+      render: (order) => (
+        <span className="font-black text-slate-900 text-xs sm:text-sm">
+          ₹{order.amount.toFixed(2)}
+        </span>
+      ),
+    },
+    {
+      key: 'statusUpdate',
+      header: 'Update Status',
+      render: (order) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <select
+            value={order.status}
+            disabled={updatingId === order.id}
+            onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+            className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 disabled:opacity-50 min-h-[36px]"
+          >
+            <option value="Received">Received</option>
+            <option value="Accepted">Accepted</option>
+            <option value="Processed">Processed</option>
+            <option value="On the way">On the way</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+          {updatingId === order.id && (
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Action',
+      align: 'right',
+      render: (order) => (
+        <SellerButton
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(`/seller/orders/${order.id}`)}
+          className="min-h-[34px] px-3"
+        >
+          View Details
+        </SellerButton>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-4 sm:space-y-6 -mx-3 sm:-mx-4 md:-mx-6 -mt-3 sm:-mt-4 md:-mt-6">
-
-      {/* ── New-order badge banner ── */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* ── New-order badge floating alert ── */}
       {newOrderBadge && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-pink-700 text-white px-5 py-3 rounded-xl shadow-lg animate-bounce">
-          <span className="text-lg">📦</span>
-          <span className="font-semibold">New order received!</span>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#2D1B69] text-white px-5 py-3 rounded-2xl shadow-2xl animate-bounce border border-purple-400/40">
+          <span className="text-xl">📦</span>
+          <span className="font-bold text-sm">New order received!</span>
           <button
             onClick={handleJumpToNewOrder}
-            className="ml-2 underline text-pink-100 hover:text-white text-sm"
+            className="ml-2 underline text-amber-300 hover:text-white text-xs font-black uppercase tracking-wider"
           >
-            View
+            View Now
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-neutral-200 px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Orders List</h1>
-          <div className="flex items-center gap-2 text-xs sm:text-sm">
-            <Link to="/seller" className="text-blue-600 hover:text-blue-700">Home</Link>
-            <span className="text-neutral-500">/</span>
-            <span className="text-neutral-700">Orders List</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="px-3 sm:px-4 md:px-6">
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-
-          {/* Banner */}
-          <div className="bg-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-t-lg flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-semibold">View Order List</h2>
-            {/* Live-connection dot */}
-            <span className="flex items-center gap-1.5 text-xs opacity-80">
-              <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse inline-block" />
-              Live
+      <SellerPageHeader
+        title="Orders List"
+        subtitle="Track incoming online orders, assign fulfillment statuses, and export reports."
+        breadcrumbs={[{ label: "Orders List" }]}
+        action={
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Orders
             </span>
           </div>
+        }
+      />
 
-          {/* Filters */}
-          <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-neutral-200">
-            <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
-
-              {/* Date range */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">From - To Order Date</label>
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    max={dateTo || undefined}
-                    onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                    className="text-xs sm:text-sm text-neutral-700 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
-                  />
-                  <span className="text-neutral-400 text-xs">-</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    min={dateFrom || undefined}
-                    onChange={e => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    onClick={e => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                    className="text-xs sm:text-sm text-neutral-700 bg-neutral-100 border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
-                  />
-                  {(dateFrom || dateTo) && (
-                    <button onClick={handleClearDate} className="px-2 py-1 text-xs font-medium text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded transition-colors flex-shrink-0">
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Status */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">Status</label>
-                <select
-                  value={status}
-                  onChange={e => { setStatus(e.target.value); setCurrentPage(1); }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
-                >
-                  <option>All Status</option>
-                  <option>Received</option>
-                  <option>Accepted</option>
-                  <option>Processed</option>
-                  <option>On the way</option>
-                  <option>Delivered</option>
-                  <option>Rejected</option>
-                  <option>Cancelled</option>
-                </select>
-              </div>
-
-              {/* Entries per page */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                <select
-                  value={entriesPerPage}
-                  onChange={e => { setEntriesPerPage(e.target.value); setCurrentPage(1); }}
-                  className="w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
-                >
-                  <option>10</option>
-                  <option>25</option>
-                  <option>50</option>
-                  <option>100</option>
-                </select>
-              </div>
-
-              {/* Search */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto sm:flex-1">
-                <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">Search:</label>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
-                  placeholder="Search by Order ID, Status, or Amount"
-                />
-              </div>
-
-              {/* Export */}
-              <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
-                <button
-                  onClick={handleExport}
-                  disabled={orders.length === 0}
-                  title={orders.length === 0 ? 'No data to export' : 'Export orders to CSV'}
-                  className="flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors w-full sm:w-auto"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                    <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15M7 10L12 15M12 15L17 10M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span className="hidden sm:inline">Export</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Loading / Error */}
-          {loading && (
-            <div className="flex items-center justify-center p-8">
-              <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mr-3" />
-              <span className="text-neutral-500 text-sm">Loading orders...</span>
-            </div>
-          )}
-          {error && !loading && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg m-4 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Table */}
-          {!loading && !error && (
-            <div className="overflow-x-auto -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6">
-              <table className="w-full min-w-[600px]">
-                <thead className="bg-neutral-50 border-b border-neutral-200">
-                  <tr>
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      S No
-                    </th>
-                    {(['orderId', 'deliveryDate', 'orderDate', 'status', 'amount'] as SortField[]).map((field) => (
-                      <th key={field} className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                        <button onClick={() => handleSort(field)} className="flex items-center gap-2 hover:text-neutral-900 transition-colors">
-                          {field === 'orderId' ? 'Order Id' : field === 'deliveryDate' ? 'Delivery Date' : field === 'orderDate' ? 'Order Date' : field.charAt(0).toUpperCase() + field.slice(1)}
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`cursor-pointer ${sortField === field ? 'text-pink-600' : 'text-neutral-400'}`}>
-                            <path d={sortIcon(field)} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </button>
-                      </th>
-                    ))}
-                    <th className="px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-neutral-200">
-                  {orders.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-3 sm:px-4 md:px-6 py-8 sm:py-12 text-center text-xs sm:text-sm text-neutral-500">
-                        No data available in table
-                      </td>
-                    </tr>
-                  ) : (
-                    orders.map((order, index) => (
-                      <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{startEntry + index}</td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900">
-                          <span title={order.orderId} className="font-mono">
-                            {order.orderId && order.orderId.length > 10 ? `…${order.orderId.slice(-8)}` : order.orderId}
-                          </span>
-                        </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.deliveryDate}</td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-700">{order.orderDate}</td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3 text-xs sm:text-sm text-neutral-900 font-medium">
-                          ₹{order.amount.toFixed(2)}
-                        </td>
-                        <td className="px-3 sm:px-4 md:px-6 py-3">
-                          <div className="flex items-center gap-1.5">
-                            {/* View */}
-                            <button
-                              onClick={() => navigate(`/seller/orders/${order.id}`)}
-                              title="View order details"
-                              className="inline-flex items-center justify-center w-8 h-8 rounded bg-pink-600 hover:bg-pink-700 text-white transition-colors flex-shrink-0"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
-                            </button>
-
-                            {/* Accept – Received orders only */}
-                            {order.status === 'Received' && (
-                              <button
-                                onClick={() => handleQuickStatus(order.id, 'Accepted', 'Accepted')}
-                                disabled={updatingId === order.id}
-                                title="Accept order"
-                                className="inline-flex items-center justify-center w-8 h-8 rounded bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white transition-colors flex-shrink-0"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </button>
-                            )}
-
-                            {/* Reject – Received orders only */}
-                            {order.status === 'Received' && (
-                              <button
-                                onClick={() => handleQuickStatus(order.id, 'Rejected', 'Rejected')}
-                                disabled={updatingId === order.id}
-                                title="Reject order"
-                                className="inline-flex items-center justify-center w-8 h-8 rounded bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white transition-colors flex-shrink-0"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </button>
-                            )}
-
-                            {/* Processed – Accepted orders only */}
-                            {order.status === 'Accepted' && (
-                              <button
-                                onClick={() => handleQuickStatus(order.id, 'Processed', 'Processed')}
-                                disabled={updatingId === order.id}
-                                title="Mark as Processed (Ready for pickup)"
-                                className="inline-flex items-center justify-center w-8 h-8 rounded bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white transition-colors flex-shrink-0"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </button>
-                            )}
-
-                            {/* Spinner while updating */}
-                            {updatingId === order.id && (
-                              <div className="w-4 h-4 border-2 border-pink-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination — uses real API totals */}
-          <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-            <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {startEntry} to {endEntry} of {totalOrders} entries
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className={`p-2 border border-neutral-300 rounded transition-colors ${currentPage === 1 ? 'text-neutral-400 cursor-not-allowed bg-neutral-50' : 'text-neutral-700 hover:bg-neutral-50'}`}
-                aria-label="Previous page"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-
-              <span className="text-xs text-neutral-600 px-2">
-                {currentPage} / {totalPages}
-              </span>
-
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-                className={`p-2 border border-neutral-300 rounded transition-colors ${currentPage >= totalPages ? 'text-neutral-400 cursor-not-allowed bg-neutral-50' : 'text-neutral-700 hover:bg-neutral-50'}`}
-                aria-label="Next page"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-        </div>
+      {/* Status Filter Tabs */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-2 sm:p-3 shadow-xs">
+        <SellerTabs
+          tabs={statusTabs}
+          activeTab={status}
+          onChange={(newTab) => {
+            setStatus(newTab);
+            setCurrentPage(1);
+          }}
+        />
       </div>
 
-      {/* Footer */}
-      <footer className="px-3 sm:px-4 md:px-6 text-center py-4 sm:py-6">
-        <p className="text-xs sm:text-sm text-neutral-600">
-          Copyright © 2026. Developed By{' '}
-          <Link to="/seller" className="text-blue-600 hover:text-blue-700">Hello Local</Link>
-        </p>
-      </footer>
+      {/* Filters Toolbar */}
+      <SellerFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={(q) => setSearchQuery(q)}
+        searchPlaceholder="Search by Order ID or Status..."
+        dateRange={{ startDate: dateFrom, endDate: dateTo }}
+        onDateRangeChange={(r) => {
+          setDateFrom(r.startDate);
+          setDateTo(r.endDate);
+          setCurrentPage(1);
+        }}
+        onClear={dateFrom || dateTo || searchQuery || status !== 'All Status' ? () => {
+          setDateFrom('');
+          setDateTo('');
+          setSearchQuery('');
+          setStatus('All Status');
+          setCurrentPage(1);
+        } : undefined}
+        hasActiveFilters={Boolean(dateFrom || dateTo || searchQuery || status !== 'All Status')}
+        onExport={handleExport}
+        exportLabel="Export CSV"
+      />
+
+      {/* Orders Data Table with Mobile Card View */}
+      <SellerDataTable
+        data={orders}
+        columns={columns}
+        keyExtractor={(order) => order.id}
+        isLoading={loading}
+        sortColumn={sortField || undefined}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalEntries={totalOrders}
+        entriesPerPage={parseInt(entriesPerPage)}
+        onPageChange={(p) => setCurrentPage(p)}
+        onEntriesPerPageChange={(s) => {
+          setEntriesPerPage(s.toString());
+          setCurrentPage(1);
+        }}
+        emptyTitle="No orders found"
+        emptyDescription="There are no customer orders matching your current filter criteria."
+        renderMobileCard={(order) => (
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-bold text-purple-700 text-sm block">
+                  {order.orderId}
+                </span>
+                <span className="text-[10px] text-slate-400">{order.orderDate}</span>
+              </div>
+              <SellerStatusBadge status={order.status} size="sm" />
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+              <div>
+                <p className="text-slate-500">Delivery Date</p>
+                <p className="font-bold text-slate-900">{order.deliveryDate || '—'}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-slate-500">Total Amount</p>
+                <p className="text-sm font-black text-slate-900">₹{order.amount.toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <select
+                value={order.status}
+                disabled={updatingId === order.id}
+                onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                className="flex-1 rounded-xl border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
+              >
+                <option value="Received">Received</option>
+                <option value="Accepted">Accepted</option>
+                <option value="Processed">Processed</option>
+                <option value="On the way">On the way</option>
+                <option value="Delivered">Delivered</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+
+              <SellerButton
+                variant="primary"
+                size="sm"
+                onClick={() => navigate(`/seller/orders/${order.id}`)}
+                className="min-h-[44px] px-4"
+              >
+                Details
+              </SellerButton>
+            </div>
+          </div>
+        )}
+      />
     </div>
   );
 }

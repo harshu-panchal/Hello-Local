@@ -2,6 +2,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getOrderById, updateOrderStatus, OrderDetail } from '../../../services/api/orderService';
 import jsPDF from 'jspdf';
+import { SellerPageHeader } from '../components/common/SellerPageHeader';
+import { SellerCard } from '../components/common/SellerCard';
+import { SellerButton } from '../components/common/SellerButton';
+import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
+import { SellerSelect } from '../components/common/SellerSelect';
 
 export default function SellerOrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +15,7 @@ export default function SellerOrderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [orderStatus, setOrderStatus] = useState<string>('');
+  const [updating, setUpdating] = useState(false);
 
   // Fetch order detail from API
   useEffect(() => {
@@ -40,6 +46,7 @@ export default function SellerOrderDetail() {
   const handleStatusUpdate = async (newStatus: string) => {
     if (!orderDetail) return;
 
+    setUpdating(true);
     try {
       const response = await updateOrderStatus(orderDetail.id, { status: newStatus as any });
       if (response.success) {
@@ -52,54 +59,14 @@ export default function SellerOrderDetail() {
       console.error('Error updating order status:', err);
       const errorMessage = err.response?.data?.message || err.message || 'Failed to update order status';
       alert(errorMessage);
+    } finally {
+      setUpdating(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-neutral-500">Loading order details...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-neutral-900 mb-4">Error</h2>
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={() => navigate('/seller/orders')}
-            className="bg-pink-700 hover:bg-pink-800 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            Back to Orders
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!orderDetail) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-neutral-900 mb-4">Order Not Found</h2>
-          <button
-            onClick={() => navigate('/seller/orders')}
-            className="bg-pink-700 hover:bg-pink-800 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            Back to Orders
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString.includes('T') ? dateString : dateString + 'T00:00:00');
     const day = date.getDate();
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = monthNames[date.getMonth()];
@@ -121,7 +88,6 @@ export default function SellerOrderDetail() {
     const contentWidth = pageWidth - 2 * margin;
     let yPos = margin;
 
-    // Helper function to add a new page if needed
     const checkPageBreak = (requiredHeight: number) => {
       if (yPos + requiredHeight > pageHeight - margin) {
         doc.addPage();
@@ -132,7 +98,7 @@ export default function SellerOrderDetail() {
     };
 
     // Header - Company Info
-    doc.setFillColor(22, 163, 74); // Green color
+    doc.setFillColor(79, 57, 246); // Purple color
     doc.rect(margin, yPos, contentWidth, 15, 'F');
 
     doc.setTextColor(255, 255, 255);
@@ -160,7 +126,7 @@ export default function SellerOrderDetail() {
     doc.text('Website: https://Hello Local.com', margin, yPos);
     yPos += 12;
 
-    // Invoice Details (Right aligned)
+    // Invoice Details
     const rightX = pageWidth - margin;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
@@ -176,18 +142,7 @@ export default function SellerOrderDetail() {
       doc.text(`Time Slot: ${orderDetail.timeSlot}`, rightX, yPos - 2, { align: 'right' });
     }
 
-    // Status badge
-    const statusWidth = doc.getTextWidth(orderStatus) + 8;
-    doc.setFillColor(59, 130, 246); // Blue for status
-    doc.roundedRect(rightX - statusWidth, yPos + 2, statusWidth, 6, 1, 1, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.text(orderStatus, rightX - statusWidth / 2, yPos + 5.5, { align: 'center' });
-
     yPos += 15;
-    doc.setTextColor(0, 0, 0);
-
-    // Draw a line
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, yPos, pageWidth - margin, yPos);
     yPos += 10;
@@ -198,12 +153,12 @@ export default function SellerOrderDetail() {
     doc.rect(margin, yPos, contentWidth, 10, 'F');
 
     const colWidths = [
-      contentWidth * 0.08,  // Sr. No.
-      contentWidth * 0.40,  // Product
-      contentWidth * 0.15,  // Price
-      contentWidth * 0.15,  // Tax
-      contentWidth * 0.10,  // Qty
-      contentWidth * 0.12,  // Subtotal
+      contentWidth * 0.08,
+      contentWidth * 0.40,
+      contentWidth * 0.15,
+      contentWidth * 0.15,
+      contentWidth * 0.10,
+      contentWidth * 0.12,
     ];
 
     let xPos = margin;
@@ -223,7 +178,6 @@ export default function SellerOrderDetail() {
     // Table Rows
     orderDetail.items.forEach((item) => {
       checkPageBreak(15);
-
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(0, 0, 0);
@@ -239,11 +193,9 @@ export default function SellerOrderDetail() {
       ];
 
       rowData.forEach((data, index) => {
-        // Truncate long text
         const maxWidth = colWidths[index] - 4;
         let text = data;
         if (doc.getTextWidth(text) > maxWidth && index === 1) {
-          // Truncate product name if too long
           while (doc.getTextWidth(text + '...') > maxWidth && text.length > 0) {
             text = text.slice(0, -1);
           }
@@ -253,14 +205,12 @@ export default function SellerOrderDetail() {
         xPos += colWidths[index];
       });
 
-      // Draw row separator
       doc.setDrawColor(220, 220, 220);
       doc.line(margin, yPos + 8, pageWidth - margin, yPos + 8);
-
       yPos += 10;
     });
 
-    // Calculate totals
+    // Totals
     const totalSubtotal = orderDetail.items.reduce((sum, item) => sum + item.subtotal, 0);
     const totalTax = orderDetail.items.reduce((sum, item) => sum + item.tax, 0);
     const grandTotal = totalSubtotal + totalTax;
@@ -268,7 +218,6 @@ export default function SellerOrderDetail() {
     yPos += 5;
     checkPageBreak(30);
 
-    // Totals Section
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, yPos, pageWidth - margin, yPos);
     yPos += 8;
@@ -289,355 +238,244 @@ export default function SellerOrderDetail() {
     doc.text(`Rs.${grandTotal.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
     yPos += 15;
 
-    // Footer
-    checkPageBreak(20);
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.5);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
-    yPos += 8;
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text('Bill Generated by Hello Local - 10 Minute App', pageWidth / 2, yPos, { align: 'center' });
-    yPos += 8;
-
-    doc.setFontSize(8);
-    doc.text('Copyright © 2026. Developed By Hello Local - 10 Minute App', pageWidth / 2, yPos, { align: 'center' });
-
-    // Save the PDF
-    const fileName = `Invoice_${orderDetail.invoiceNumber}_${orderDetail.id}.pdf`;
-    doc.save(fileName);
+    doc.save(`invoice_${orderDetail.invoiceNumber}.pdf`);
   };
 
   const handlePrint = () => {
-    if (!orderDetail) return;
+    window.print();
+  };
 
-    // Build a clean, self-contained invoice document and print just that —
-    // window.print() on the page would include the sidebar/header chrome. (#print-invoice)
-    const esc = (s: any) =>
-      String(s ?? '').replace(/[&<>"]/g, (c) =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)
-      );
+  const shortId = (val?: string) => {
+    if (!val) return '—';
+    if (val.length <= 10) return val;
+    return `${val.slice(0, 6)}...${val.slice(-4)}`;
+  };
 
-    const addr = orderDetail.deliveryAddress || ({} as any);
-    const rows = orderDetail.items
-      .map(
-        (it, i) => `
-          <tr>
-            <td>${i + 1}</td>
-            <td>${esc(it.product)}</td>
-            <td>${esc(formatUnit(it.unit))}</td>
-            <td>Rs.${it.price.toFixed(2)}</td>
-            <td>${it.qty}</td>
-            <td>Rs.${it.subtotal.toFixed(2)}</td>
-          </tr>`
-      )
-      .join('');
+  const formatUnit = (unitStr?: string) => {
+    if (!unitStr) return '1 Unit';
+    return unitStr;
+  };
 
-    const timeSlotRow =
-      orderDetail.timeSlot && orderDetail.timeSlot !== 'N/A'
-        ? `<div><strong>Time Slot:</strong> ${esc(orderDetail.timeSlot)}</div>`
-        : '';
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"/>
-      <title>Invoice ${esc(orderDetail.invoiceNumber)}</title>
-      <style>
-        * { font-family: Arial, Helvetica, sans-serif; box-sizing: border-box; }
-        body { margin: 24px; color: #1f2937; }
-        .head { display:flex; justify-content:space-between; border-bottom:2px solid #db2777; padding-bottom:12px; margin-bottom:16px; }
-        .brand { font-size:20px; font-weight:bold; color:#db2777; }
-        .muted { color:#6b7280; font-size:12px; }
-        .right { text-align:right; }
-        h2 { font-size:14px; margin:16px 0 8px; }
-        table { width:100%; border-collapse:collapse; margin-top:8px; }
-        th, td { border:1px solid #e5e7eb; padding:8px; font-size:12px; text-align:left; }
-        th { background:#f9fafb; }
-        .totals { margin-top:12px; width:260px; margin-left:auto; }
-        .totals div { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
-        .totals .grand { border-top:2px solid #e5e7eb; font-weight:bold; font-size:15px; margin-top:6px; padding-top:8px; }
-        .foot { margin-top:24px; text-align:center; color:#9ca3af; font-size:11px; }
-      </style></head><body>
-      <div class="head">
-        <div>
-          <div class="brand">Hello Local - 10 Minute App</div>
-          <div class="muted">Email: info@hellolocal.com · Website: https://hellolocal.com</div>
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-12 bg-slate-200 rounded-2xl w-1/3" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="h-44 bg-slate-200 rounded-2xl" />
+          <div className="h-44 bg-slate-200 rounded-2xl" />
+          <div className="h-44 bg-slate-200 rounded-2xl" />
         </div>
-        <div class="right">
-          <div><strong>Invoice #${esc(orderDetail.invoiceNumber)}</strong></div>
-          <div class="muted">Order ID: ${esc(orderDetail.orderNumber)}</div>
-          <div class="muted">Date: ${esc(formatDate(orderDetail.orderDate))}</div>
-          <div class="muted">Status: ${esc(orderStatus)}</div>
+        <div className="h-64 bg-slate-200 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (error || !orderDetail) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 text-center bg-white rounded-3xl border border-slate-200 space-y-4">
+        <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-xl font-bold">
+          !
         </div>
+        <h2 className="text-lg font-bold text-slate-900">Error Loading Order</h2>
+        <p className="text-xs sm:text-sm text-slate-600">{error || "Order not found"}</p>
+        <SellerButton variant="primary" size="md" onClick={() => navigate('/seller/orders')} fullWidth>
+          Back to Orders
+        </SellerButton>
       </div>
-
-      <h2>Customer</h2>
-      <div class="muted">${esc(orderDetail.customerName)} · ${esc(orderDetail.customerPhone)}</div>
-      <div class="muted">${esc([addr.address, addr.city, addr.state, addr.pincode].filter(Boolean).join(', '))}</div>
-      <div class="muted"><strong>Delivery Date:</strong> ${esc(formatDate(orderDetail.deliveryDate))}</div>
-      ${timeSlotRow}
-
-      <h2>Items</h2>
-      <table>
-        <thead><tr><th>Sr.</th><th>Product</th><th>Unit</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-
-      <div class="totals">
-        <div><span>Subtotal</span><span>Rs.${orderDetail.subtotal.toFixed(2)}</span></div>
-        <div><span>Tax</span><span>Rs.${orderDetail.tax.toFixed(2)}</span></div>
-        <div class="grand"><span>Grand Total</span><span>Rs.${orderDetail.grandTotal.toFixed(2)}</span></div>
-      </div>
-
-      <div class="foot">Bill generated by Hello Local - 10 Minute App</div>
-    </body></html>`;
-
-    const win = window.open('', '_blank', 'width=900,height=650');
-    if (!win) {
-      // Popup blocked — fall back to printing the page.
-      window.print();
-      return;
-    }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    // Give the new document a moment to render before printing.
-    setTimeout(() => {
-      win.print();
-      win.close();
-    }, 300);
-  };
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'Accepted':
-        return 'bg-blue-100 text-blue-800 border border-blue-400';
-      case 'On the way':
-        return 'bg-purple-100 text-purple-800 border border-purple-400';
-      case 'Delivered':
-        return 'bg-pink-100 text-pink-800 border border-pink-500';
-      case 'Cancelled':
-        return 'bg-red-100 text-red-800 border border-red-400';
-      case 'Out For Delivery':
-        return 'bg-blue-600 text-white border border-blue-700';
-      case 'Received':
-        return 'bg-blue-50 text-blue-600 border border-blue-200';
-      case 'Payment Pending':
-        return 'bg-orange-50 text-orange-600 border border-orange-200';
-      default:
-        return 'bg-gray-50 text-gray-600 border border-gray-200';
-    }
-  };
-
-  // Show a short tail for long ids (full value on hover).
-  const shortId = (id?: string) =>
-    id && id.length > 10 ? `…${id.slice(-6)}` : id || '';
-
-  const formatUnit = (unit: string) => {
-    if (!unit || unit === 'N/A') return 'N/A';
-
-    // Show the pack unit as-is (e.g. "500g"). Quantity is shown separately in the
-    // Qty column, so the unit must NOT be multiplied by quantity. (#28/#210)
-    const match = unit.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)$/);
-    if (match) {
-      const val = parseFloat(match[1]);
-      const u = match[2];
-      if (!isNaN(val)) {
-        // Normalise formatting (e.g. "1.0kg" -> "1kg"), keep the unit value itself
-        return `${parseFloat(val.toFixed(2))}${u}`;
-      }
-    }
-    return unit;
-  };
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-8">
-      {/* Order Action Section */}
-      <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-          <h2 className="text-base sm:text-lg font-semibold">Order Action Section</h2>
-        </div>
-        <div className="bg-neutral-50 px-4 sm:px-6 py-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex-1 w-full sm:w-auto">
-              {orderStatus === 'Received' ? (
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleStatusUpdate('Accepted')}
-                    className="flex-1 bg-pink-700 hover:bg-pink-800 text-white px-6 py-2 rounded-lg transition-colors font-medium shadow-sm"
-                  >
-                    Accept Order
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to reject this order? This cannot be undone.')) {
-                        handleStatusUpdate('Rejected');
-                      }
-                    }}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors font-medium shadow-sm"
-                  >
-                    Reject Order
-                  </button>
-                </div>
-              ) : (
+    <div className="space-y-6">
+      {/* Header */}
+      <SellerPageHeader
+        title={`Order ${orderDetail.orderNumber}`}
+        subtitle={`Placed on ${formatDate(orderDetail.orderDate)}`}
+        breadcrumbs={[
+          { label: "Orders", path: "/seller/orders" },
+          { label: orderDetail.orderNumber },
+        ]}
+        action={
+          <div className="flex items-center gap-2 flex-wrap">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={handleExportPDF}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              }
+            >
+              Export PDF
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={handlePrint}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+              }
+            >
+              Print Invoice
+            </SellerButton>
+          </div>
+        }
+      />
+
+      {/* 3-Column Order Summary & Status Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 1. Order Status Card */}
+        <SellerCard title="Fulfillment Status">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500 font-medium">Current Status:</span>
+              <SellerStatusBadge status={orderStatus} size="md" />
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">Change Status:</label>
+              <div className="flex items-center gap-2">
                 <select
                   value={orderStatus}
+                  disabled={updating}
                   onChange={(e) => handleStatusUpdate(e.target.value)}
-                  className="w-full sm:w-64 px-4 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 bg-white focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  disabled={orderStatus === 'Rejected' || orderStatus === 'Cancelled' || orderStatus === 'Delivered'}
+                  className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-purple-600 min-h-[44px]"
                 >
+                  <option value="Received">Received</option>
                   <option value="Accepted">Accepted</option>
+                  <option value="Processed">Processed</option>
                   <option value="On the way">On the way</option>
                   <option value="Delivered">Delivered</option>
+                  <option value="Rejected">Rejected</option>
                   <option value="Cancelled">Cancelled</option>
-                  {orderStatus === 'Rejected' && <option value="Rejected">Rejected</option>}
                 </select>
-              )}
-            </div>
-            <button
-              onClick={handleExportPDF}
-              className="flex items-center gap-2 bg-pink-700 hover:bg-pink-800 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-              Export Invoice PDF
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 bg-pink-700 hover:bg-pink-800 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-              Print Invoice
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* View Order Details Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-          <h2 className="text-base sm:text-lg font-semibold">View Order Details</h2>
-        </div>
-        <div className="bg-white px-4 sm:px-6 py-6">
-          {/* Header Section */}
-          <div className="flex flex-col lg:flex-row justify-between gap-6 mb-6">
-            {/* Left: Company Info */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 bg-pink-700 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">A</span>
-                </div>
-                <div>
-                  <div className="text-xs text-pink-700 font-semibold">Hello Local</div>
-                  <div className="text-[10px] text-pink-700">in 10 Minutes</div>
-                </div>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 mb-2">Hello Local - 10 Minute App</h1>
-              <div className="text-sm text-neutral-600 mb-1">
-                <span className="font-medium">From:</span> Hello Local - 10 Minute App
-              </div>
-              <div className="text-sm text-neutral-600 space-y-1">
-                <div>
-                  <span className="font-medium">Phone:</span> 8956656429
-                </div>
-                <div>
-                  <span className="font-medium">Email:</span> info@Hello Local.com
-                </div>
-                <div>
-                  <span className="font-medium">Website:</span> https://Hello Local.com
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Invoice Details */}
-            <div className="flex-1 lg:text-right">
-              <div className="text-sm text-neutral-600 mb-4">
-                <span className="font-medium">Date:</span> {formatDate(orderDetail.orderDate)}
-              </div>
-              <div className="text-lg font-semibold text-neutral-900 mb-1">
-                Invoice #<span title={orderDetail.invoiceNumber}>{shortId(orderDetail.invoiceNumber)}</span>
-              </div>
-              <div className="text-sm text-neutral-600 mb-1">
-                <span className="font-medium">Order ID:</span> {orderDetail.orderNumber}
-              </div>
-              <div className="text-sm text-neutral-600 mb-1">
-                <span className="font-medium">Delivery Date:</span> {formatDate(orderDetail.deliveryDate)}
-              </div>
-              {orderDetail.timeSlot && orderDetail.timeSlot !== 'N/A' && (
-                <div className="text-sm text-neutral-600 mb-3">
-                  <span className="font-medium">Time Slot:</span> {orderDetail.timeSlot}
-                </div>
-              )}
-              <div className="flex items-center gap-2 lg:justify-end">
-                <span className="text-sm font-medium text-neutral-700">Order Status:</span>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(orderStatus)}`}>
-                  {orderStatus}
-                </span>
+                {updating && (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />
+                )}
               </div>
             </div>
           </div>
+        </SellerCard>
 
-          {/* Product Table */}
-          <div className="overflow-x-auto mb-6">
-            <table className="w-full min-w-[800px]">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Sr. No.</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Product</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Unit</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Price</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tax ₹ (%)</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Qty</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-neutral-200">
-                {orderDetail.items.map((item) => (
-                  <tr key={item.srNo}>
-                    <td className="px-4 py-3 text-sm text-neutral-900">{item.srNo}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900">{item.product}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900">{formatUnit(item.unit)}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900">₹{item.price.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-600">
-                      {item.tax.toFixed(2)} ({item.taxPercent.toFixed(2)}%)
-                    </td>
-                    <td className="px-4 py-3 text-sm text-neutral-900">{item.qty}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-900 font-medium">₹{item.subtotal.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Bill Generation Note */}
-          <div className="border-t border-dashed border-neutral-300 pt-4">
-            <p className="text-sm text-neutral-600 text-center">
-              Bill Generated by Hello Local - 10 Minute App
+        {/* 2. Customer & Address Details */}
+        <SellerCard title="Customer & Delivery">
+          <div className="text-xs space-y-1.5 text-slate-700">
+            <p className="font-bold text-sm text-slate-900">
+              {orderDetail.customerName || (orderDetail as any).customer?.name || "Customer"}
+            </p>
+            {(orderDetail.customerPhone || (orderDetail as any).customer?.phone) && (
+              <p className="text-slate-600">📞 {orderDetail.customerPhone || (orderDetail as any).customer?.phone}</p>
+            )}
+            {orderDetail.deliveryAddress && (
+              <p className="text-slate-600 mt-1 leading-relaxed">
+                📍 {orderDetail.deliveryAddress.address || (orderDetail.deliveryAddress as any).addressLine1 || ""}{" "}
+                {orderDetail.deliveryAddress.city || ""} {orderDetail.deliveryAddress.pincode || ""}
+              </p>
+            )}
+            <p className="text-slate-500 pt-1 text-[11px]">
+              Delivery Date: <strong className="text-slate-800">{formatDate(orderDetail.deliveryDate)}</strong>
             </p>
           </div>
-        </div>
+        </SellerCard>
+
+        {/* 3. Invoice & Payment Summary */}
+        <SellerCard title="Payment & Invoice">
+          <div className="text-xs space-y-1.5 text-slate-700">
+            <p className="text-slate-600">
+              Invoice #{' '}
+              <strong className="text-slate-900" title={orderDetail.invoiceNumber}>
+                {shortId(orderDetail.invoiceNumber)}
+              </strong>
+            </p>
+            <p className="text-slate-600">
+              Payment Method:{' '}
+              <strong className="text-slate-900 capitalize">
+                {orderDetail.paymentMethod || 'Online'}
+              </strong>
+            </p>
+            <p className="text-slate-600">
+              Total Items:{' '}
+              <strong className="text-slate-900">{orderDetail.items.length} items</strong>
+            </p>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="font-bold text-slate-900">Grand Total:</span>
+              <span className="text-base font-black text-purple-700">
+                ₹{orderDetail.items.reduce((s, it) => s + it.subtotal + it.tax, 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </SellerCard>
       </div>
 
-      {/* Footer */}
-      <footer className="mt-6 px-4 sm:px-6 text-center py-4 bg-neutral-100 rounded-lg">
-        <p className="text-xs sm:text-sm text-neutral-600">
-          Copyright © 2026. Developed By{' '}
-          <span className="font-semibold text-pink-700">Hello Local - 10 Minute App</span>
-        </p>
-      </footer>
+      {/* Product Items Table */}
+      <SellerCard title={`Order Line Items (${orderDetail.items.length})`} padding="none">
+        <div data-lenis-prevent="true" className="overflow-x-auto seller-scrollbar">
+          <table className="w-full text-left text-xs min-w-[700px]">
+            <thead className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider">
+              <tr>
+                <th className="px-4 py-3.5 w-12">#</th>
+                <th className="px-4 py-3.5">Product Name</th>
+                <th className="px-4 py-3.5">Unit</th>
+                <th className="px-4 py-3.5 text-right">Price</th>
+                <th className="px-4 py-3.5 text-right">Tax ₹ (%)</th>
+                <th className="px-4 py-3.5 text-center">Qty</th>
+                <th className="px-4 py-3.5 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {orderDetail.items.map((item) => (
+                <tr key={item.srNo} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="px-4 py-3.5 text-slate-400 font-bold">{item.srNo}</td>
+                  <td className="px-4 py-3.5 font-bold text-slate-900">{item.product}</td>
+                  <td className="px-4 py-3.5 text-slate-600">{formatUnit(item.unit)}</td>
+                  <td className="px-4 py-3.5 text-right text-slate-700">₹{item.price.toFixed(2)}</td>
+                  <td className="px-4 py-3.5 text-right text-slate-600">
+                    ₹{item.tax.toFixed(2)} ({item.taxPercent.toFixed(2)}%)
+                  </td>
+                  <td className="px-4 py-3.5 text-center font-black text-slate-900">{item.qty}</td>
+                  <td className="px-4 py-3.5 text-right font-black text-slate-900">₹{item.subtotal.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pricing Summary Footer */}
+        <div className="p-4 bg-slate-50/80 border-t border-slate-200 flex justify-end">
+          <div className="w-72 space-y-2 text-xs">
+            <div className="flex justify-between text-slate-600">
+              <span>Subtotal:</span>
+              <span className="font-bold text-slate-900">
+                ₹{orderDetail.items.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span>Total Tax:</span>
+              <span className="font-bold text-slate-900">
+                ₹{orderDetail.items.reduce((sum, item) => sum + item.tax, 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-black text-slate-900">
+              <span>Grand Total:</span>
+              <span className="text-base text-purple-700">
+                ₹{(
+                  orderDetail.items.reduce((sum, item) => sum + item.subtotal, 0) +
+                  orderDetail.items.reduce((sum, item) => sum + item.tax, 0)
+                ).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </SellerCard>
     </div>
   );
 }
-
-
-
