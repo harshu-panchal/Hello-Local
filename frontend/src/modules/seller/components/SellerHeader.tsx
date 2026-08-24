@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import {
   getSellerNotifications,
   markNotificationRead,
@@ -17,6 +18,7 @@ interface SellerHeaderProps {
 export default function SellerHeader({ onMenuClick }: SellerHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [notifications, setNotifications] = useState<SellerNotificationItem[]>([]);
@@ -87,7 +89,10 @@ export default function SellerHeader({ onMenuClick }: SellerHeaderProps) {
       await markAllNotificationsRead();
       setNotifications((prev) => prev.map((x) => ({ ...x, isRead: true })));
       setUnreadCount(0);
-    } catch { /* ignore */ }
+      showToast('All notifications marked as read', 'success');
+    } catch {
+      showToast('Failed to mark notifications as read', 'error');
+    }
   };
 
   const handleLogout = () => {

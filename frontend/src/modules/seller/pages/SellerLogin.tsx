@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { sendOTP, verifyOTP } from '../../../services/api/auth/sellerAuthService';
 import OTPInput from '../../../components/OTPInput';
 import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import { normalizeMobile } from '../../../utils/phone';
 import LegalPolicyModal, { PolicyTab } from '../../../components/LegalPolicyModal';
 import { SellerButton } from '../components/common/SellerButton';
@@ -11,6 +12,7 @@ import { SellerInput } from '../components/common/SellerInput';
 export default function SellerLogin() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [mobileNumber, setMobileNumber] = useState('');
   const [showOTP, setShowOTP] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,7 +45,11 @@ export default function SellerLogin() {
 
   const handleMobileLogin = async () => {
     const err = validateMobile(mobileNumber);
-    if (err) { setMobileError(err); return; }
+    if (err) {
+      setMobileError(err);
+      showToast(err, 'error');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -54,11 +60,16 @@ export default function SellerLogin() {
         setShowOTP(true);
         setResendTimer(RESEND_SECONDS);
         setError('');
+        showToast('One-time password sent successfully!', 'success');
       } else {
-        setError(response.message || 'Failed to send OTP. Please try again.');
+        const msg = response.message || 'Failed to send OTP. Please try again.';
+        setError(msg);
+        showToast(msg, 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+      const msg = err.response?.data?.message || 'Failed to send OTP. Please try again.';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -71,6 +82,7 @@ export default function SellerLogin() {
     try {
       const response = await verifyOTP(mobileNumber, otp);
       if (response.success && response.data) {
+        showToast('Login successful! Welcome back.', 'success');
         login(response.data.token, {
           id: response.data.user.id,
           name: response.data.user.sellerName,
@@ -84,11 +96,15 @@ export default function SellerLogin() {
         });
         navigate('/seller', { replace: true });
       } else {
-        setError(response.message || 'Login failed. Please try again.');
+        const msg = response.message || 'Login failed. Please try again.';
+        setError(msg);
+        showToast(msg, 'error');
         setLoading(false);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
+      const msg = err.response?.data?.message || 'Invalid OTP. Please try again.';
+      setError(msg);
+      showToast(msg, 'error');
       setLoading(false);
     }
   };
@@ -116,7 +132,7 @@ export default function SellerLogin() {
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">
             {showOTP
-              ? `Enter the 6-digit code sent to +91 ${mobileNumber}`
+              ? `Enter the 4-digit code sent to +91 ${mobileNumber}`
               : 'Log in to manage orders, catalog & in-store billing'}
           </p>
         </div>
@@ -156,6 +172,7 @@ export default function SellerLogin() {
               onClick={handleMobileLogin}
               disabled={loading || mobileNumber.length !== 10 || !!mobileError}
               isLoading={loading}
+              className="min-h-[44px]"
             >
               Send One-Time Password
             </SellerButton>
@@ -170,10 +187,10 @@ export default function SellerLogin() {
             </div>
           </div>
         ) : (
-          /* STEP 2: OTP VERIFICATION */
+          /* STEP 2: OTP VERIFICATION (4 Digits) */
           <div className="space-y-6">
             <div className="flex justify-center py-2">
-              <OTPInput length={6} onComplete={handleOTPComplete} disabled={loading} />
+              <OTPInput length={4} onComplete={handleOTPComplete} disabled={loading} />
             </div>
 
             <div className="flex items-center justify-between text-xs pt-2">

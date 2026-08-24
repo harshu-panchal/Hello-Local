@@ -4,6 +4,7 @@ import { register, sendOTP, verifyOTP } from '../../../services/api/auth/sellerA
 import OTPInput from '../../../components/OTPInput';
 import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import { getHeaderCategoriesPublic, HeaderCategory } from '../../../services/api/headerCategoryService';
 import LocationPickerMap from '../../../components/LocationPickerMap';
 import { normalizeMobile } from '../../../utils/phone';
@@ -15,6 +16,7 @@ import { SellerCard } from '../components/common/SellerCard';
 export default function SellerSignUp() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     sellerName: '',
     mobile: '',
@@ -152,7 +154,9 @@ export default function SellerSignUp() {
 
     if (Object.keys(newErrors).length > 0) {
       setFieldErrors(newErrors);
-      setError('Please fix the errors before proceeding');
+      const msg = 'Please fix highlighted errors before proceeding';
+      setError(msg);
+      showToast(msg, 'error');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -164,11 +168,16 @@ export default function SellerSignUp() {
       const response = await sendOTP(formData.mobile);
       if (response.success) {
         setShowOTP(true);
+        showToast('Verification OTP sent successfully!', 'success');
       } else {
-        setError(response.message || 'Failed to send OTP');
+        const msg = response.message || 'Failed to send OTP';
+        setError(msg);
+        showToast(msg, 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send OTP');
+      const msg = err.response?.data?.message || 'Failed to send OTP';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -187,6 +196,7 @@ export default function SellerSignUp() {
         };
         const regRes = await register(registerPayload);
         if (regRes.success && regRes.data) {
+          showToast('Registration successful! Welcome to HelloLocal.', 'success');
           login(regRes.data.token, {
             id: regRes.data.user.id,
             name: regRes.data.user.sellerName,
@@ -200,13 +210,19 @@ export default function SellerSignUp() {
           });
           navigate('/seller', { replace: true });
         } else {
-          setError(regRes.message || 'Registration failed');
+          const msg = regRes.message || 'Registration failed';
+          setError(msg);
+          showToast(msg, 'error');
         }
       } else {
-        setError(verifyRes.message || 'Invalid OTP code');
+        const msg = verifyRes.message || 'Invalid OTP code';
+        setError(msg);
+        showToast(msg, 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration verification failed');
+      const msg = err.response?.data?.message || 'Registration verification failed';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -224,7 +240,7 @@ export default function SellerSignUp() {
             Hello<span className="text-purple-600">Local</span> Partner
           </span>
         </Link>
-        <Link to="/seller/login" className="text-xs sm:text-sm font-bold text-purple-600 hover:underline">
+        <Link to="/seller/login" className="text-xs sm:text-sm font-bold text-purple-600 hover:underline min-h-[44px] flex items-center">
           Already a seller? Log In
         </Link>
       </div>
@@ -258,7 +274,7 @@ export default function SellerSignUp() {
                     value={formData.sellerName}
                     onChange={handleInputChange}
                     placeholder="e.g. Rajesh Sharma"
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -270,7 +286,7 @@ export default function SellerSignUp() {
                     value={formData.mobile}
                     onChange={handleInputChange}
                     placeholder="10-digit number"
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -282,7 +298,7 @@ export default function SellerSignUp() {
                       value={formData.email}
                       onChange={handleInputChange}
                       placeholder="rajesh.store@gmail.com"
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                     />
                   </SellerFormField>
                 </div>
@@ -300,7 +316,7 @@ export default function SellerSignUp() {
                       value={formData.storeName}
                       onChange={handleInputChange}
                       placeholder="e.g. Sharma Supermarket"
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                     />
                   </SellerFormField>
 
@@ -311,7 +327,7 @@ export default function SellerSignUp() {
                       value={formData.city}
                       onChange={handleInputChange}
                       placeholder="e.g. Navi Mumbai"
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                     />
                   </SellerFormField>
                 </div>
@@ -325,7 +341,7 @@ export default function SellerSignUp() {
                           key={c._id}
                           type="button"
                           onClick={() => handleCategoryToggle(c.name)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[36px] ${
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all min-h-[40px] ${
                             isSelected
                               ? 'bg-purple-600 text-white shadow-xs'
                               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -358,7 +374,7 @@ export default function SellerSignUp() {
                           }));
                         }}
                         placeholder="Search landmark, street, or full shop address..."
-                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                        className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                       />
                     </SellerFormField>
                   </div>
@@ -372,7 +388,7 @@ export default function SellerSignUp() {
                       name="serviceRadiusKm"
                       value={formData.serviceRadiusKm}
                       onChange={handleInputChange}
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                     />
                   </SellerFormField>
                 </div>
@@ -404,29 +420,30 @@ export default function SellerSignUp() {
               fullWidth
               disabled={loading}
               isLoading={loading}
+              className="min-h-[44px]"
             >
               Verify Mobile & Complete Registration
             </SellerButton>
           </form>
         ) : (
-          /* OTP Screen */
+          /* OTP Screen (4-Digit) */
           <div className="space-y-6 py-4 max-w-md mx-auto">
             <div className="text-center space-y-1">
               <h3 className="text-lg font-black text-slate-900">Enter Verification Code</h3>
               <p className="text-xs text-slate-500">
-                We sent a 6-digit OTP code to <strong>+91 {formData.mobile}</strong>
+                We sent a 4-digit OTP code to <strong>+91 {formData.mobile}</strong>
               </p>
             </div>
 
             <div className="flex justify-center py-2">
-              <OTPInput length={6} onComplete={handleOTPComplete} disabled={loading} />
+              <OTPInput length={4} onComplete={handleOTPComplete} disabled={loading} />
             </div>
 
             <div className="flex justify-center">
               <button
                 type="button"
                 onClick={() => setShowOTP(false)}
-                className="text-xs font-bold text-slate-600 hover:underline min-h-[44px]"
+                className="text-xs font-bold text-slate-600 hover:underline min-h-[44px] flex items-center"
               >
                 ← Back to Edit Details
               </button>
