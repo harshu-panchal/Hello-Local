@@ -93,6 +93,10 @@ const PaymentSchema = new Schema<IPayment>(
     razorpayPaymentId: {
       type: String,
       trim: true,
+      // A gateway payment id may only ever be recorded once. Blocks replaying a
+      // captured payment onto a second order. (#C-01)
+      unique: true,
+      sparse: true,
     },
     razorpaySignature: {
       type: String,

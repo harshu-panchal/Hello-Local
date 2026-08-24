@@ -15,13 +15,14 @@ export const getRoadDistance = async (
     destination: LatLng,
     apiKey?: string
 ): Promise<number> => {
+    const key = apiKey || process.env.GOOGLE_MAPS_API_KEY;
     // If no API key or invalid coordinates, fallback to Haversine
-    if (!apiKey || !origin.lat || !origin.lng || !destination.lat || !destination.lng) {
+    if (!key || !origin.lat || !origin.lng || !destination.lat || !destination.lng) {
         return haversineDistance(origin.lat, origin.lng, destination.lat, destination.lng);
     }
 
     try {
-        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&key=${apiKey}`;
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&key=${key}`;
 
         const response = await axios.get(url);
 
@@ -53,16 +54,17 @@ export const getRoadDistances = async (
     destination: LatLng,
     apiKey?: string
 ): Promise<number[]> => {
+    const key = apiKey || process.env.GOOGLE_MAPS_API_KEY;
     if (!origins.length) return [];
 
-    if (!apiKey) {
+    if (!key) {
         return origins.map(org => haversineDistance(org.lat, org.lng, destination.lat, destination.lng));
     }
 
     try {
         const originsStr = origins.map(o => `${o.lat},${o.lng}`).join('|');
         const destinationsStr = `${destination.lat},${destination.lng}`;
-        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originsStr}&destinations=${destinationsStr}&key=${apiKey}`;
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originsStr}&destinations=${destinationsStr}&key=${key}`;
 
         const response = await axios.get(url);
 

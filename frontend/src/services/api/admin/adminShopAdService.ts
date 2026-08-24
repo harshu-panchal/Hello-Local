@@ -33,7 +33,12 @@ const ACTIVE_SHOP_ADS_CACHE_TTL_MS = 30 * 1000;
 /**
  * Get all shop ads (admin)
  */
-export const getAllShopAds = async (params?: { status?: string }) => {
+export const getAllShopAds = async (params?: {
+    status?: string;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+}) => {
     const response = await api.get("/admin/shop-ads", { params });
     return response.data;
 };

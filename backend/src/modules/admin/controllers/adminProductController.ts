@@ -28,10 +28,31 @@ export const createCategory = asyncHandler(
       status = "Active",
     } = req.body;
 
-    if (!name) {
+    const trimmedName = (name || "").trim();
+    if (!trimmedName) {
       return res.status(400).json({
         success: false,
         message: "Category name is required",
+      });
+    }
+
+    if (trimmedName.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Category name must be at least 2 characters",
+      });
+    }
+
+    // Check duplicate name under same parent
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingCategory = await Category.findOne({
+      parentId: parentId || null,
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    });
+    if (existingCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "A category with this name already exists at this level",
       });
     }
 
@@ -117,7 +138,7 @@ export const createCategory = asyncHandler(
     }
 
     const category = await Category.create({
-      name,
+      name: trimmedName,
       image,
       order: finalOrder,
       isBestseller: isBestseller || false,
@@ -155,11 +176,15 @@ export const getCategories = asyncHandler(
       includeChildren = "false",
       status,
       headerCategoryId,
+      page,
+      limit,
+      pagination,
     } = req.query;
 
     const query: any = {};
-    if (search) {
-      query.name = { $regex: search as string, $options: "i" };
+    if (search && typeof search === "string" && search.trim()) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.name = { $regex: escapedSearch, $options: "i" };
     }
     if (parentId !== undefined) {
       if (parentId === "null" || parentId === null || parentId === "") {
@@ -178,38 +203,37 @@ export const getCategories = asyncHandler(
     const sort: any = {};
     sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
 
-    const categories = await Category.find(query)
-      .populate("parentId", "name")
-      .populate("headerCategoryId", "name status")
-      .sort(sort);
-
-    // Count child categories for each category
-    const categoriesWithCounts = await Promise.all(
-      categories.map(async (category) => {
-        const childrenCount = await Category.countDocuments({
-          parentId: category._id,
-        });
-        // Also count old SubCategory model for backward compatibility
-        const subcategoryCount = await SubCategory.countDocuments({
-          category: category._id,
-        });
-        return {
-          ...category.toObject(),
-          childrenCount,
-          totalSubcategories: childrenCount + subcategoryCount,
-        };
-      })
-    );
-
-    // If includeChildren is true, build hierarchical structure
+    // If includeChildren is true, build hierarchical structure (tree mode)
     if (includeChildren === "true") {
-      const buildTree = (parentId: any = null): any[] => {
+      const categories = await Category.find(query)
+        .populate("parentId", "name")
+        .populate("headerCategoryId", "name status")
+        .sort(sort);
+
+      // Count child categories for each category
+      const categoriesWithCounts = await Promise.all(
+        categories.map(async (category) => {
+          const childrenCount = await Category.countDocuments({
+            parentId: category._id,
+          });
+          const subcategoryCount = await SubCategory.countDocuments({
+            category: category._id,
+          });
+          return {
+            ...category.toObject(),
+            childrenCount,
+            totalSubcategories: childrenCount + subcategoryCount,
+          };
+        })
+      );
+
+      const buildTree = (pId: any = null): any[] => {
         return categoriesWithCounts
           .filter((cat) => {
             const catParentId = cat.parentId
               ? cat.parentId._id || cat.parentId
               : null;
-            const parentIdStr = parentId ? parentId.toString() : null;
+            const parentIdStr = pId ? pId.toString() : null;
             const catParentIdStr = catParentId ? catParentId.toString() : null;
             return catParentIdStr === parentIdStr;
           })
@@ -226,6 +250,72 @@ export const getCategories = asyncHandler(
         data: tree,
       });
     }
+
+    // Flat list mode with optional server-side database pagination
+    const isPaginated = pagination !== "false" && (page !== undefined || limit !== undefined);
+
+    if (isPaginated) {
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const limitNum = Math.max(1, parseInt(limit as string, 10) || 10);
+      const skip = (pageNum - 1) * limitNum;
+
+      const total = await Category.countDocuments(query);
+      const categories = await Category.find(query)
+        .populate("parentId", "name")
+        .populate("headerCategoryId", "name status")
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum);
+
+      const categoriesWithCounts = await Promise.all(
+        categories.map(async (category) => {
+          const childrenCount = await Category.countDocuments({
+            parentId: category._id,
+          });
+          const subcategoryCount = await SubCategory.countDocuments({
+            category: category._id,
+          });
+          return {
+            ...category.toObject(),
+            childrenCount,
+            totalSubcategories: childrenCount + subcategoryCount,
+          };
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Categories fetched successfully",
+        data: categoriesWithCounts,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+      });
+    }
+
+    const categories = await Category.find(query)
+      .populate("parentId", "name")
+      .populate("headerCategoryId", "name status")
+      .sort(sort);
+
+    const categoriesWithCounts = await Promise.all(
+      categories.map(async (category) => {
+        const childrenCount = await Category.countDocuments({
+          parentId: category._id,
+        });
+        const subcategoryCount = await SubCategory.countDocuments({
+          category: category._id,
+        });
+        return {
+          ...category.toObject(),
+          childrenCount,
+          totalSubcategories: childrenCount + subcategoryCount,
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
@@ -249,6 +339,33 @@ export const updateCategory = asyncHandler(
         success: false,
         message: "Category not found",
       });
+    }
+
+    if (updateData.name) {
+      const trimmedName = updateData.name.trim();
+      if (trimmedName.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Category name must be at least 2 characters",
+        });
+      }
+      const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const targetParentId =
+        updateData.parentId !== undefined
+          ? updateData.parentId
+          : category.parentId;
+      const duplicate = await Category.findOne({
+        _id: { $ne: id },
+        parentId: targetParentId || null,
+        name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+      });
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message: "A category with this name already exists at this level",
+        });
+      }
+      updateData.name = trimmedName;
     }
 
     // Validate parent change if parentId is being updated
@@ -558,16 +675,37 @@ export const bulkDeleteCategories = asyncHandler(
 export const createSubCategory = asyncHandler(
   async (req: Request, res: Response) => {
     const { name, category, image, order } = req.body;
+    const trimmedName = (name || "").trim();
 
-    if (!name || !category) {
+    if (!trimmedName || !category) {
       return res.status(400).json({
         success: false,
         message: "Subcategory name and category are required",
       });
     }
 
+    if (trimmedName.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Subcategory name must be at least 2 characters",
+      });
+    }
+
+    // Check duplicate subcategory name under same category
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingSub = await SubCategory.findOne({
+      category,
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    });
+    if (existingSub) {
+      return res.status(400).json({
+        success: false,
+        message: "A subcategory with this name already exists in this category",
+      });
+    }
+
     const subcategory = await SubCategory.create({
-      name,
+      name: trimmedName,
       category,
       image,
       order: order || 0,
@@ -596,18 +734,67 @@ export const createSubCategory = asyncHandler(
  */
 export const getSubCategories = asyncHandler(
   async (req: Request, res: Response) => {
-    const { category, search, sortBy = "order", sortOrder = "asc" } = req.query;
+    const {
+      category,
+      search,
+      sortBy = "order",
+      sortOrder = "asc",
+      page,
+      limit,
+      pagination,
+    } = req.query;
 
     const query: any = {};
     if (category) {
       query.category = category;
     }
-    if (search) {
-      query.name = { $regex: search as string, $options: "i" };
+    if (search && typeof search === "string" && search.trim()) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.name = { $regex: escapedSearch, $options: "i" };
     }
 
     const sort: any = {};
     sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
+
+    const isPaginated = pagination !== "false" && (page !== undefined || limit !== undefined);
+
+    if (isPaginated) {
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const limitNum = Math.max(1, parseInt(limit as string, 10) || 10);
+      const skip = (pageNum - 1) * limitNum;
+
+      const total = await SubCategory.countDocuments(query);
+      const subcategories = await SubCategory.find(query)
+        .populate("category", "name")
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum);
+
+      const subcategoriesWithCounts = await Promise.all(
+        subcategories.map(async (subcategory) => {
+          const productCount = await Product.countDocuments({
+            subcategory: subcategory._id,
+          });
+
+          return {
+            ...subcategory.toObject(),
+            totalProduct: productCount,
+          };
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Subcategories fetched successfully",
+        data: subcategoriesWithCounts,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+      });
+    }
 
     const subcategories = await SubCategory.find(query)
       .populate("category", "name")
@@ -641,19 +828,46 @@ export const getSubCategories = asyncHandler(
 export const updateSubCategory = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
 
-    const subcategory = await SubCategory.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    }).populate("category", "name");
-
-    if (!subcategory) {
+    const currentSub = await SubCategory.findById(id);
+    if (!currentSub) {
       return res.status(404).json({
         success: false,
         message: "Subcategory not found",
       });
     }
+
+    if (updateData.name) {
+      const trimmedName = updateData.name.trim();
+      if (trimmedName.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Subcategory name must be at least 2 characters",
+        });
+      }
+      const targetCategory = updateData.category || currentSub.category;
+      if (targetCategory) {
+        const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const duplicate = await SubCategory.findOne({
+          _id: { $ne: id },
+          category: targetCategory,
+          name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+        });
+        if (duplicate) {
+          return res.status(400).json({
+            success: false,
+            message: "A subcategory with this name already exists in this category",
+          });
+        }
+      }
+      updateData.name = trimmedName;
+    }
+
+    const subcategory = await SubCategory.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate("category", "name");
 
     // Invalidate customer category caches so updated subcategory appears immediately
     cache.delete("customer-categories-tree");
@@ -715,15 +929,36 @@ export const deleteSubCategory = asyncHandler(
  */
 export const createBrand = asyncHandler(async (req: Request, res: Response) => {
   const { name, image } = req.body;
+  const trimmedName = (name || "").trim();
 
-  if (!name) {
+  if (!trimmedName) {
     return res.status(400).json({
       success: false,
       message: "Brand name is required",
     });
   }
 
-  const brand = await Brand.create({ name, image });
+  if (trimmedName.length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: "Brand name must be at least 2 characters",
+    });
+  }
+
+  // Check for duplicate brand name (case-insensitive)
+  const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const existingBrand = await Brand.findOne({
+    name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+  });
+
+  if (existingBrand) {
+    return res.status(400).json({
+      success: false,
+      message: "A brand with this name already exists",
+    });
+  }
+
+  const brand = await Brand.create({ name: trimmedName, image });
 
   return res.status(201).json({
     success: true,
@@ -736,14 +971,48 @@ export const createBrand = asyncHandler(async (req: Request, res: Response) => {
  * Get all brands
  */
 export const getBrands = asyncHandler(async (req: Request, res: Response) => {
-  const { search } = req.query;
+  const {
+    search,
+    page,
+    limit,
+    sortBy = "name",
+    sortOrder = "asc",
+    pagination,
+  } = req.query;
 
   const query: any = {};
-  if (search) {
-    query.name = { $regex: search as string, $options: "i" };
+  if (search && typeof search === "string" && search.trim()) {
+    const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    query.name = { $regex: escapedSearch, $options: "i" };
   }
 
-  const brands = await Brand.find(query).sort({ name: 1 });
+  const sort: any = {};
+  sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
+
+  const isPaginated = pagination !== "false" && (page !== undefined || limit !== undefined);
+
+  if (isPaginated) {
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit as string, 10) || 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const total = await Brand.countDocuments(query);
+    const brands = await Brand.find(query).sort(sort).skip(skip).limit(limitNum);
+
+    return res.status(200).json({
+      success: true,
+      message: "Brands fetched successfully",
+      data: brands,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  }
+
+  const brands = await Brand.find(query).sort(sort);
 
   return res.status(200).json({
     success: true,
@@ -757,7 +1026,32 @@ export const getBrands = asyncHandler(async (req: Request, res: Response) => {
  */
 export const updateBrand = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const updateData = req.body;
+  const updateData = { ...req.body };
+
+  if (updateData.name) {
+    const trimmedName = updateData.name.trim();
+    if (trimmedName.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Brand name must be at least 2 characters",
+      });
+    }
+
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingBrand = await Brand.findOne({
+      _id: { $ne: id },
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    });
+
+    if (existingBrand) {
+      return res.status(400).json({
+        success: false,
+        message: "A brand with this name already exists",
+      });
+    }
+
+    updateData.name = trimmedName;
+  }
 
   const brand = await Brand.findByIdAndUpdate(id, updateData, {
     new: true,
@@ -789,7 +1083,7 @@ export const deleteBrand = asyncHandler(async (req: Request, res: Response) => {
   if (productCount > 0) {
     return res.status(400).json({
       success: false,
-      message: "Cannot delete brand with products",
+      message: "Cannot delete brand because it is associated with active products",
     });
   }
 
@@ -824,7 +1118,7 @@ export const createProduct = asyncHandler(
           // Check for existing admin seller by email OR mobile to avoid duplicate key errors
           let adminSeller = await Seller.findOne({
             $or: [
-              { email: "admin-store@dhakadsnazzy.com" },
+              { email: "admin-store@hellolocal.com" },
               { mobile: "9999999999" },
             ],
           });
@@ -832,9 +1126,9 @@ export const createProduct = asyncHandler(
           if (!adminSeller) {
             // Create default admin seller
             adminSeller = await Seller.create({
-              sellerName: "Dhakad Snazzy Admin",
-              storeName: "Dhakad Snazzy Admin Store",
-              email: "admin-store@dhakadsnazzy.com",
+              sellerName: "Hello Local Admin",
+              storeName: "Hello Local Admin Store",
+              email: "admin-store@hellolocal.com",
               mobile: "9999999999",
               password: "AdminStore@123", // Should be hashed by pre-save hook
               address: "",

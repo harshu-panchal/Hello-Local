@@ -29,8 +29,13 @@ export interface BestsellerCardResponse {
 }
 
 // Get all bestseller cards
-export const getBestsellerCards = async (): Promise<BestsellerCardResponse> => {
-    const response = await api.get<BestsellerCardResponse>("/admin/bestseller-cards");
+export const getBestsellerCards = async (params?: {
+    search?: string;
+    isActive?: boolean;
+}): Promise<BestsellerCardResponse> => {
+    const response = await api.get<BestsellerCardResponse>("/admin/bestseller-cards", {
+        params,
+    });
     return response.data;
 };
 

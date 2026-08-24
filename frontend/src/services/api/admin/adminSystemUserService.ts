@@ -8,6 +8,7 @@ export interface SystemUser {
   mobile: string;
   email: string;
   role: "Admin" | "Super Admin";
+  status?: "Active" | "Inactive";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -28,6 +29,7 @@ export interface CreateSystemUserData {
   email: string;
   password: string;
   role?: "Admin" | "Super Admin";
+  status?: "Active" | "Inactive";
 }
 
 export interface UpdateSystemUserData {
@@ -37,6 +39,7 @@ export interface UpdateSystemUserData {
   email?: string;
   password?: string;
   role?: "Admin" | "Super Admin";
+  status?: "Active" | "Inactive";
 }
 
 /**

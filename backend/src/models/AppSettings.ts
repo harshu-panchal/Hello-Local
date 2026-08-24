@@ -58,7 +58,6 @@ export interface IAppSettings extends Document {
   freeDeliveryThreshold?: number;
   deliveryConfig?: {
     isDistanceBased: boolean;
-    googleMapsKey?: string;
     baseCharge: number;
     baseDistance: number;
     kmRate: number;
@@ -269,7 +268,6 @@ const AppSettingsSchema = new Schema<IAppSettings>(
     },
     deliveryConfig: {
       isDistanceBased: { type: Boolean, default: false },
-      googleMapsKey: { type: String, trim: true },
       baseCharge: { type: Number, default: 0 },
       baseDistance: { type: Number, default: 0 },
       kmRate: { type: Number, default: 0 },

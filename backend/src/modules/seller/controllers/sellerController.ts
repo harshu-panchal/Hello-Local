@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import Seller from "../../../models/Seller";
+import Product from "../../../models/Product";
+import Order from "../../../models/Order";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { sendNotification } from "../../../services/notificationService";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
@@ -9,20 +11,48 @@ import { sendNotificationToUser } from "../../../services/firebaseAdmin";
  */
 export const getAllSellers = asyncHandler(
   async (req: Request, res: Response) => {
-    const { status, search } = req.query;
+    const { status, search, page, limit } = req.query;
 
     // Build query
     const query: any = {};
     if (status) {
       query.status = status;
     }
-    if (search) {
+    if (search && typeof search === "string" && search.trim()) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       query.$or = [
-        { sellerName: { $regex: search, $options: "i" } },
-        { storeName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { mobile: { $regex: search, $options: "i" } },
+        { sellerName: { $regex: escapedSearch, $options: "i" } },
+        { storeName: { $regex: escapedSearch, $options: "i" } },
+        { email: { $regex: escapedSearch, $options: "i" } },
+        { mobile: { $regex: escapedSearch, $options: "i" } },
       ];
+    }
+
+    const pageNum = page ? parseInt(page as string, 10) : undefined;
+    const limitNum = limit ? parseInt(limit as string, 10) : undefined;
+
+    if (pageNum && limitNum) {
+      const skip = (pageNum - 1) * limitNum;
+      const [sellers, total] = await Promise.all([
+        Seller.find(query)
+          .select("-password")
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limitNum),
+        Seller.countDocuments(query),
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        message: "Sellers fetched successfully",
+        data: sellers,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+      });
     }
 
     const sellers = await Seller.find(query)
@@ -223,7 +253,7 @@ export const deleteSeller = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    const seller = await Seller.findByIdAndDelete(id);
+    const seller = await Seller.findById(id);
 
     if (!seller) {
       return res.status(404).json({
@@ -231,6 +261,29 @@ export const deleteSeller = asyncHandler(
         message: "Seller not found",
       });
     }
+
+    // Check if seller has active products
+    const productCount = await Product.countDocuments({ seller: id });
+    if (productCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete seller "${seller.storeName}" because they have ${productCount} product(s) listed in catalog. Please delete or reassign their products first.`,
+      });
+    }
+
+    // Check if seller has pending/active orders
+    const activeOrderCount = await Order.countDocuments({
+      "items.seller": id,
+      status: { $in: ["Pending", "Accepted", "Processing", "Out for Delivery"] },
+    });
+    if (activeOrderCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete seller "${seller.storeName}" because they have ${activeOrderCount} in-flight customer order(s) currently in progress.`,
+      });
+    }
+
+    await Seller.findByIdAndDelete(id);
 
     return res.status(200).json({
       success: true,

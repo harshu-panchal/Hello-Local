@@ -3,7 +3,18 @@ import { useState, useEffect } from 'react';
 import { getProfile, CustomerProfile } from '../../services/api/customerService';
 import { useAuth } from '../../context/AuthContext';
 import { useThemeContext } from '../../context/ThemeContext';
-import { getCategoryGradient } from '../../utils/themes';
+import { UserEmptyState } from './components/common';
+import {
+  ArrowLeftIcon,
+  UserNavIcon,
+  OrdersNavIcon,
+  LocationPinIcon,
+  HeartNavIcon,
+  ChevronRightIcon,
+  ShieldCheckIcon,
+  ReceiptIcon,
+  PhoneCallIcon,
+} from './components/common/UserIcons';
 
 export default function Account() {
   const navigate = useNavigate();
@@ -13,7 +24,8 @@ export default function Account() {
   const [error, setError] = useState('');
   const [showGstModal, setShowGstModal] = useState(false);
   const [gstNumber, setGstNumber] = useState('');
-  const { activeCategory, currentTheme } = useThemeContext();
+  const [gstError, setGstError] = useState('');
+  const { currentTheme } = useThemeContext();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -45,9 +57,13 @@ export default function Account() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Not set';
-    const date = new Date(dateString);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+    try {
+      const date = new Date(dateString);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+    } catch {
+      return dateString;
+    }
   };
 
   const handleLogout = () => {
@@ -57,46 +73,41 @@ export default function Account() {
 
   const handleGstSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const gst = gstNumber.trim().toUpperCase();
+    if (!gst) {
+      setGstError('GST number is required');
+      return;
+    }
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gst)) {
+      setGstError('Invalid GST number format (e.g. 22ABCDE1234F1Z5)');
+      return;
+    }
+    setGstError('');
     setShowGstModal(false);
   };
 
-  // Show login/signup prompt for unregistered users
+  // Unauthenticated view
   if (!user) {
     return (
-      <div className="pb-24 md:pb-8 bg-white min-h-screen">
-        <div 
-          className="pb-6 md:pb-8 pt-12 md:pt-16"
-          style={{ background: getCategoryGradient(activeCategory) }}
-        >
-          <div className="px-4 md:px-6 lg:px-8">
-            <button onClick={() => navigate(-1)} className="mb-4 text-neutral-900" aria-label="Back">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <div className="flex flex-col items-center mb-4 md:mb-6">
-              <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-neutral-200 flex items-center justify-center mb-3 md:mb-4 border-2 border-white shadow-sm">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-neutral-500 md:w-12 md:h-12">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">Welcome!</h1>
-              <p className="text-sm md:text-base text-neutral-600 text-center px-4">
-                Login to access your profile, orders, and more
-              </p>
-            </div>
+      <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-8 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl border border-slate-100 p-6 sm:p-8 shadow-2xs text-center">
+          <div className="w-16 h-16 mx-auto mb-3.5 rounded-full bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] shadow-xs">
+            <UserNavIcon size={30} />
           </div>
-        </div>
-
-        <div className="px-4 md:px-6 lg:px-8 mt-6">
-          <div className="max-w-md mx-auto space-y-3">
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full py-3.5 rounded-lg font-semibold text-base text-white transition-all shadow-lg active:scale-95"
-              style={{ background: getCategoryGradient(activeCategory) }}
-            >
-              Login
-            </button>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <span className="text-xl font-bold tracking-tight text-[#FF8A00]">Hello</span>
+            <span className="text-xl font-bold tracking-tight text-[#FF2E7A]">Local</span>
           </div>
+          <p className="text-xs text-slate-500 mb-5 font-medium leading-relaxed">
+            Login with your mobile number to view saved addresses, past orders, and manage your account.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="w-full py-2.5 bg-[#FF2E7A] hover:bg-[#E02269] text-white rounded-full text-xs font-bold uppercase tracking-wider shadow-xs transition-all touch-target-min"
+          >
+            Login / Sign Up
+          </button>
         </div>
       </div>
     );
@@ -104,164 +115,241 @@ export default function Account() {
 
   if (loading) {
     return (
-      <div className="pb-24 md:pb-8 bg-white min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: currentTheme.accentColor }}></div>
-          <p className="text-neutral-600">Loading profile...</p>
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="w-10 h-10 border-3 border-[#FF2E7A] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-bold text-slate-500">Loading profile...</p>
         </div>
       </div>
     );
   }
 
-  if (error && !profile) {
-    return (
-      <div className="pb-24 md:pb-8 bg-white min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <button 
-            onClick={() => navigate(-1)} 
-            className="px-4 py-2 text-white rounded transition-all active:scale-95 shadow-md"
-            style={{ background: getCategoryGradient(activeCategory) }}
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const displayName = profile?.name || user?.name || 'User';
+  const displayName = profile?.name || user?.name || 'Customer';
   const displayPhone = profile?.phone || user?.phone || '';
-  const displayDateOfBirth = profile?.dateOfBirth;
+  const displayEmail = profile?.email || user?.email || '';
 
   return (
-    <div className="pb-24 md:pb-8 bg-white min-h-screen">
-      <div 
-        className="pb-6 md:pb-8 pt-12 md:pt-16"
-        style={{ background: getCategoryGradient(activeCategory) }}
-      >
-        <div className="px-4 md:px-6 lg:px-8">
-          <button onClick={() => navigate(-1)} className="mb-4 text-neutral-900" aria-label="Back">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
-          <div className="flex flex-col items-center mb-4 md:mb-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-neutral-200 flex items-center justify-center mb-3 md:mb-4 border-2 border-white shadow-sm">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-neutral-500 md:w-12 md:h-12">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h1 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">{displayName}</h1>
-            <div className="flex flex-col items-center gap-1.5 md:gap-2 text-xs md:text-sm text-neutral-600">
-              {displayPhone && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  <span>{displayPhone}</span>
-                </div>
-              )}
-              {displayDateOfBirth && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                  <span>{formatDate(displayDateOfBirth)}</span>
-                </div>
-              )}
-            </div>
+    <div className="min-h-screen bg-[#F8FAFC] pb-28 md:pb-16">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full transition-colors touch-target-min"
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon size={18} />
+            </button>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              My Account
+            </h1>
           </div>
         </div>
       </div>
 
-      <div className="px-4 md:px-6 lg:px-8 -mt-4 md:-mt-6 mb-4 md:mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-2.5 md:gap-6 max-w-2xl md:mx-auto">
-          <button onClick={() => navigate('/orders')} className="bg-white rounded-lg border border-neutral-200 p-3 md:p-4 hover:shadow-md transition-shadow text-center outline-none">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mx-auto mb-1.5 md:mb-2 text-neutral-700 md:w-6 md:h-6"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <div className="text-[10px] md:text-xs font-semibold text-neutral-900">Your orders</div>
-          </button>
-          <button
-            onClick={() => navigate('/faq')}
-            className="bg-white rounded-lg border border-neutral-200 p-3 md:p-4 hover:shadow-md transition-shadow text-center outline-none"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mx-auto mb-1.5 md:mb-2 text-neutral-700 md:w-6 md:h-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <div className="text-[10px] md:text-xs font-semibold text-neutral-900">Need help?</div>
-          </button>
-        </div>
-      </div>
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-3.5 md:pt-6">
+        <div className="lg:grid lg:grid-cols-12 lg:gap-6 items-start space-y-3.5 lg:space-y-0">
+          {/* Left Column: Profile Card & Quick Actions */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-3.5">
+            {/* Profile Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xs flex items-center gap-3.5">
+              <div className="w-14 h-14 rounded-full bg-[#FFF1F4] border border-[#FFE4EA] text-[#FF2E7A] flex items-center justify-center text-xl font-bold shadow-2xs flex-shrink-0">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
 
-      <div className="px-4 py-2.5">
-        <h2 className="text-xs font-bold text-neutral-900 mb-2 uppercase tracking-wide">Your information</h2>
-        <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden divide-y divide-neutral-100">
-          <button onClick={() => navigate('/address-book')} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-neutral-500"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <span className="text-[13px] font-medium text-neutral-900">Address Book</span>
-            </div>
-            <span className="text-neutral-400">›</span>
-          </button>
-          <button onClick={() => navigate('/wishlist')} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-neutral-500"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <span className="text-[13px] font-medium text-neutral-900">Your Wishlist</span>
-            </div>
-            <span className="text-neutral-400">›</span>
-          </button>
-          <button onClick={() => setShowGstModal(true)} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-neutral-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <span className="text-[13px] font-medium text-neutral-900">GST Details</span>
-            </div>
-            <span className="text-neutral-400">›</span>
-          </button>
-          <button onClick={() => navigate('/about-us')} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-neutral-500"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><line x1="12" y1="16" x2="12" y2="12" stroke="currentColor" strokeWidth="2" /><line x1="12" y1="8" x2="12.01" y2="8" stroke="currentColor" strokeWidth="2" /></svg>
-              <span className="text-[13px] font-medium text-neutral-900">About Us</span>
-            </div>
-            <span className="text-neutral-400">›</span>
-          </button>
-          <button onClick={handleLogout} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-red-500"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polyline points="16 17 21 12 16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              <span className="text-[13px] font-medium text-red-500">Log Out</span>
-            </div>
-            <span className="text-neutral-400">›</span>
-          </button>
-        </div>
-      </div>
-
-      {showGstModal && (
-        <>
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowGstModal(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom duration-500 ease-out">
-            <div className="bg-white rounded-t-[32px] shadow-2xl max-w-lg mx-auto p-6 pt-10 relative">
-              <button onClick={() => setShowGstModal(false)} className="absolute -top-12 right-4 w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-white"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-              <div className="text-center">
-                <div className="mx-auto mb-6 w-20 h-20 rounded-2xl bg-neutral-50 border border-neutral-100 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-10 h-10 text-neutral-400" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="3" width="14" height="18" rx="2" ry="2" /><line x1="9" y1="7" x2="15" y2="7" /><line x1="9" y1="11" x2="15" y2="11" /><line x1="9" y1="15" x2="13" y2="15" /></svg>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                    {displayName}
+                  </h2>
+                  <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-[#16A34A] border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Active
+                  </span>
                 </div>
-                <h3 className="text-xl font-bold text-neutral-900 mb-2">Add GST Details</h3>
-                <p className="text-[13px] text-neutral-500 mb-8 px-4">Identify your business to get a GST invoice on your business purchases.</p>
-                <form onSubmit={handleGstSubmit} className="space-y-4">
-                  <input 
-                    type="text" 
-                    value={gstNumber} 
-                    onChange={(e) => setGstNumber(e.target.value)} 
-                    placeholder="Enter GST Number" 
-                    className="w-full rounded-xl border border-neutral-200 px-4 py-3.5 text-sm focus:outline-none transition-all" 
-                    style={{ borderColor: currentTheme.accentColor + '20' }}
-                  />
-                  <button 
-                    type="submit" 
-                    disabled={!gstNumber.trim()} 
-                    className="w-full rounded-xl text-black font-bold py-4 disabled:opacity-50 transition-all active:scale-95 shadow-lg uppercase tracking-wider text-sm"
-                    style={{ background: getCategoryGradient(activeCategory) }}
-                  >
-                    Save Details
-                  </button>
-                </form>
-                <p className="mt-6 text-[11px] text-neutral-400">By continuing, you agree to our <span className="underline">Terms & Conditions</span></p>
+
+                {displayPhone && (
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    +91 {displayPhone}
+                  </p>
+                )}
+                {displayEmail && (
+                  <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                    {displayEmail}
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Quick Action Tiles */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate('/orders')}
+                className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs hover:bg-slate-50 text-left transition-colors flex items-center gap-2.5 touch-target-min"
+              >
+                <div className="w-9 h-9 rounded-xl bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] flex-shrink-0">
+                  <OrdersNavIcon size={18} />
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-bold text-slate-900">Your Orders</p>
+                  <p className="text-[10px] text-slate-400 font-medium">Track & review</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/faq')}
+                className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs hover:bg-slate-50 text-left transition-colors flex items-center gap-2.5 touch-target-min"
+              >
+                <div className="w-9 h-9 rounded-xl bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] flex-shrink-0">
+                  <PhoneCallIcon size={18} />
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-bold text-slate-900">Need Help?</p>
+                  <p className="text-[10px] text-slate-400 font-medium">FAQs & support</p>
+                </div>
+              </button>
+            </div>
           </div>
-        </>
+
+          {/* Right Column: Account Menu Options */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-3.5">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-2xs overflow-hidden divide-y divide-slate-100">
+              <button
+                type="button"
+                onClick={() => navigate('/address-book')}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-[#FF2E7A]">
+                    <LocationPinIcon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">Address Book</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Manage saved delivery locations</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-slate-400" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/wishlist')}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-[#FF2E7A]">
+                    <HeartNavIcon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">Your Wishlist</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Shortlisted favorite items</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-slate-400" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowGstModal(true)}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-[#FF2E7A]">
+                    <ReceiptIcon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">GST Details</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Add GSTIN for tax invoice input credit</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-slate-400" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/about-us')}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-[#FF2E7A]">
+                    <ShieldCheckIcon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">About Hello Local</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Terms, policy & brand mission</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-slate-400" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-[#FFF1F4] transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#FFF1F4] flex items-center justify-center text-[#FF2E7A]">
+                    <UserNavIcon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-[#FF2E7A]">Log Out</p>
+                    <p className="text-[10px] text-[#FF2E7A]/70 font-medium">Sign out from this device</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-[#FF2E7A]" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* GST Details Modal */}
+      {showGstModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl border border-slate-100">
+            <h3 className="text-sm font-bold text-slate-900 mb-1">Add GST Details</h3>
+            <p className="text-xs text-slate-500 mb-3.5 font-medium">
+              Identify your business to get a GST invoice on your purchases.
+            </p>
+
+            <form onSubmit={handleGstSubmit} className="space-y-3">
+              <div>
+                <input
+                  type="text"
+                  value={gstNumber}
+                  onChange={(e) => {
+                    setGstNumber(e.target.value.toUpperCase());
+                    if (gstError) setGstError('');
+                  }}
+                  placeholder="e.g. 22ABCDE1234F1Z5"
+                  maxLength={15}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-bold outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 uppercase"
+                />
+                {gstError && <p className="text-[10px] text-rose-500 mt-1 font-bold">{gstError}</p>}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGstModal(false)}
+                  className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!gstNumber.trim()}
+                  className="flex-1 py-2 text-xs font-bold text-white bg-[#FF2E7A] rounded-full shadow-xs hover:bg-[#E02269] transition-colors disabled:opacity-50"
+                >
+                  Save GSTIN
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

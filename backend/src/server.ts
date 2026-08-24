@@ -7,6 +7,8 @@ import connectDB from "./config/db";
 import routes from "./routes";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
+import { clampPagination } from "./middleware/pagination";
+import { generalRateLimiter } from "./middleware/rateLimiter";
 import { ensureDefaultAdmin } from "./utils/ensureDefaultAdmin";
 import { seedHeaderCategories } from "./utils/seedHeaderCategories";
 import { initializeSocket } from "./socket/socketService";
@@ -105,7 +107,11 @@ app.get("/", (_req: Request, res: Response) => {
 
 
 // API Routes
-app.use("/api/v1", routes);
+//
+// `generalRateLimiter` and the pagination clamp were both written but never
+// mounted, so there was no broad abuse protection and `?limit=1000000` reached
+// the database verbatim. (#M-09)
+app.use("/api/v1", generalRateLimiter, clampPagination, routes);
 
 // Error handling middleware (must be last)
 app.use(notFound);

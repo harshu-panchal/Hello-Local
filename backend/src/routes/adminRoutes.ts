@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requireUserType } from "../middleware/auth";
+import { authenticate, requireUserType, authorize } from "../middleware/auth";
 
 // Dashboard Controllers
 import * as dashboardController from "../modules/admin/controllers/adminDashboardController";
@@ -43,7 +43,6 @@ import * as faqController from "../modules/admin/controllers/adminFAQController"
 // Role Controllers - Manage Roles functionality removed
 // import * as roleController from "../modules/admin/controllers/adminRoleController";
 
-import * as paymentController from "../modules/admin/controllers/adminPaymentController";
 import * as policyController from "../modules/admin/controllers/adminPolicyController";
 import * as sellerController from "../modules/admin/controllers/adminSellerController";
 
@@ -80,6 +79,9 @@ import * as shopAdController from "../modules/admin/controllers/adminShopAdContr
 // Contact Controllers
 import * as contactController from "../modules/website/controllers/contactController";
 
+// Review moderation (#H-21)
+import * as reviewController from "../modules/admin/controllers/adminReviewController";
+
 const router = Router();
 
 // All routes require admin authentication
@@ -89,6 +91,7 @@ router.use(requireUserType("Admin"));
 // ==================== Profile Routes ====================
 router.get("/profile", profileController.getProfile);
 router.put("/profile", profileController.updateProfile);
+router.put("/profile/password", profileController.changePassword);
 
 // ==================== Dashboard Routes ====================
 router.get("/dashboard/stats", dashboardController.getDashboardStatsController);
@@ -194,15 +197,6 @@ router.get(
   deliveryController.getDeliveryBoyCashCollections
 );
 
-// ==================== Payment Routes ====================
-router.get("/payment-methods", paymentController.getPaymentMethods);
-router.get("/payment-methods/:id", paymentController.getPaymentMethodById);
-router.put("/payment-methods/:id", paymentController.updatePaymentMethod);
-router.patch(
-  "/payment-methods/:id/status",
-  paymentController.updatePaymentMethodStatus
-);
-
 // ==================== Settings Routes ====================
 router.get("/settings", settingsController.getAppSettings);
 router.put("/settings", settingsController.updateAppSettings);
@@ -210,11 +204,6 @@ router.get("/settings/payment-methods", settingsController.getPaymentMethods);
 router.put(
   "/settings/payment-methods",
   settingsController.updatePaymentMethods
-);
-router.get("/settings/sms-gateway", settingsController.getSMSGatewaySettings);
-router.put(
-  "/settings/sms-gateway",
-  settingsController.updateSMSGatewaySettings
 );
 
 // ==================== Coupon Routes ====================
@@ -246,6 +235,64 @@ router.patch(
 router.get("/financial/dashboard", walletController.getFinancialDashboard);
 router.get("/wallet/earnings", walletController.getAdminEarnings);
 router.get("/wallet/transactions", walletController.getWalletTransactions);
+router.post("/wallet/transfer", walletController.createFundTransfer);
+
+// Commission report for the Payments screen. The frontend has always called
+// this path; the route simply did not exist, so the page 404'd on every
+// load. (#H-28)
+router.get("/wallet/commissions", async (req, res) => {
+  try {
+    const Commission = (await import("../models/Commission")).default;
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const query: Record<string, unknown> = {};
+    if (req.query.status) query.status = req.query.status;
+    if (req.query.type) query.type = req.query.type;
+
+    const [commissions, total, summaryAgg] = await Promise.all([
+      Commission.find(query)
+        .populate("order", "orderNumber total paymentMethod createdAt")
+        .populate("seller", "storeName sellerName")
+        .populate("deliveryBoy", "name mobile")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Commission.countDocuments(query),
+      Commission.aggregate([
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+            amount: { $sum: "$commissionAmount" },
+          },
+        },
+      ]),
+    ]);
+
+    const byStatus = Object.fromEntries(
+      summaryAgg.map((r: any) => [r._id, { count: r.count, amount: r.amount }]),
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        commissions,
+        summary: {
+          totalCommissions: summaryAgg.reduce((s: number, r: any) => s + (r.amount || 0), 0),
+          paidCommissions: byStatus.Paid?.amount || 0,
+          pendingCommissions: byStatus.Pending?.amount || 0,
+          cancelledCommissions: byStatus.Cancelled?.amount || 0,
+          count: total,
+        },
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      },
+    });
+  } catch (error: any) {
+    console.error("Error building commission report:", error?.message || error);
+    return res.status(500).json({ success: false, message: "Failed to load commission report" });
+  }
+});
 router.get("/wallet/seller/:sellerId", walletController.getSellerWalletById);
 router.get("/wallet/withdrawals", withdrawalController.getAllWithdrawals);
 router.post("/wallet/withdrawal/process", walletController.processWithdrawalWrapper);
@@ -324,11 +371,17 @@ router.put("/shop-by-stores/:id", updateShop);
 router.delete("/shop-by-stores/:id", deleteShop);
 
 // ==================== System User Routes ====================
-router.get("/system-users", systemUserController.getAllSystemUsers);
-router.get("/system-users/:id", systemUserController.getSystemUserById);
-router.post("/system-users", systemUserController.createSystemUser);
-router.put("/system-users/:id", systemUserController.updateSystemUser);
-router.delete("/system-users/:id", systemUserController.deleteSystemUser);
+// Managing admin accounts is a Super Admin capability. `authorize` existed but
+// was never mounted anywhere, so any Admin could create a Super Admin, promote
+// themselves, or reset another admin's password. (#C-05 / #H-33)
+const superAdminOnly = authorize("Super Admin");
+
+router.get("/system-users", superAdminOnly, systemUserController.getAllSystemUsers);
+router.get("/system-users/check-existence", superAdminOnly, systemUserController.checkAdminExistence);
+router.get("/system-users/:id", superAdminOnly, systemUserController.getSystemUserById);
+router.post("/system-users", superAdminOnly, systemUserController.createSystemUser);
+router.put("/system-users/:id", superAdminOnly, systemUserController.updateSystemUser);
+router.delete("/system-users/:id", superAdminOnly, systemUserController.deleteSystemUser);
 
 // ==================== Home Section Routes ====================
 router.get("/home-sections", homeSectionController.getHomeSections);
@@ -370,8 +423,51 @@ router.put("/shop-ads/:id", shopAdController.updateShopAd);
 router.delete("/shop-ads/:id", shopAdController.deleteShopAd);
 router.patch("/shop-ads/:id/toggle", shopAdController.toggleShopAdStatus);
 
+// ==================== Review Moderation Routes (#H-21) ====================
+router.get("/reviews", reviewController.getReviews);
+router.patch("/reviews/:id/status", reviewController.moderateReview);
+router.delete("/reviews/:id", reviewController.deleteReview);
+
+// ==================== Refund Routes (#H-06) ====================
+router.get("/refunds", async (req, res) => {
+  try {
+    const { listRefunds } = await import("../services/refundService");
+    const result = await listRefunds({
+      status: req.query.status as string | undefined,
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 20,
+    });
+    return res.status(200).json({ success: true, data: result.refunds, pagination: result.pagination });
+  } catch (error: any) {
+    console.error("Error listing refunds:", error?.message || error);
+    return res.status(500).json({ success: false, message: "Failed to list refunds" });
+  }
+});
+
+router.post("/orders/:id/refund", async (req, res) => {
+  try {
+    const { refundOrder } = await import("../services/refundService");
+    const outcome = await refundOrder(
+      req.params.id,
+      req.body?.reason || "Refunded by admin",
+      req.body?.amount,
+    );
+    return res.status(outcome.refunded ? 200 : 400).json({
+      success: outcome.refunded,
+      message: outcome.refunded
+        ? `Refunded Rs.${outcome.amount}`
+        : outcome.reason || "Refund not issued",
+      data: outcome,
+    });
+  } catch (error: any) {
+    const status = error?.statusCode || 500;
+    return res.status(status).json({ success: false, message: error?.message || "Refund failed" });
+  }
+});
+
 // ==================== Contact Inquiry Routes ====================
 router.get("/contact-inquiries", contactController.getContactInquiries);
 router.post("/contact-inquiries/reply", contactController.replyToContactInquiry);
+router.delete("/contact-inquiries/:id", contactController.deleteContactInquiry);
 
 export default router;

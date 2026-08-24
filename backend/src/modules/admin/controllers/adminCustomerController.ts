@@ -21,11 +21,13 @@ export const getAllCustomers = asyncHandler(
 
     if (status) query.status = status;
     if (search) {
+      // Escaped so a crafted pattern cannot be run as a regex over the collection.
+      const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       query.$or = [
-        { name: { $regex: search as string, $options: "i" } },
-        { email: { $regex: search as string, $options: "i" } },
-        { phone: { $regex: search as string, $options: "i" } },
-        { refCode: { $regex: search as string, $options: "i" } },
+        { name: { $regex: safe, $options: "i" } },
+        { email: { $regex: safe, $options: "i" } },
+        { phone: { $regex: safe, $options: "i" } },
+        { refCode: { $regex: safe, $options: "i" } },
       ];
     }
 
@@ -88,10 +90,11 @@ export const updateCustomerStatus = asyncHandler(
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!["Active", "Inactive"].includes(status)) {
+    const ALLOWED = ["Active", "Inactive", "Suspended"];
+    if (!ALLOWED.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Status must be Active or Inactive",
+        message: `Status must be one of: ${ALLOWED.join(", ")}`,
       });
     }
 

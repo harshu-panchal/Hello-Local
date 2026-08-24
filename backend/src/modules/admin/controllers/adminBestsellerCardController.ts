@@ -4,10 +4,29 @@ import mongoose from "mongoose";
 
 const MAX_ACTIVE_CARDS = 6;
 
-// Get all bestseller cards
-export const getBestsellerCards = async (_req: Request, res: Response) => {
+export const getBestsellerCards = async (req: Request, res: Response) => {
     try {
-        const cards = await BestsellerCard.find()
+        const { search, isActive } = req.query;
+        const query: any = {};
+
+        if (isActive !== undefined) {
+            query.isActive = isActive === "true";
+        }
+
+        if (search && typeof search === "string" && search.trim()) {
+            const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const matchedCategoryIds = await mongoose
+                .model("Category")
+                .find({ name: { $regex: safe, $options: "i" } })
+                .distinct("_id");
+
+            query.$or = [
+                { name: { $regex: safe, $options: "i" } },
+                { category: { $in: matchedCategoryIds } },
+            ];
+        }
+
+        const cards = await BestsellerCard.find(query)
             .populate("category", "name slug image")
             .sort({ order: 1 })
             .lean();

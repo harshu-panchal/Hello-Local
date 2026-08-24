@@ -10,6 +10,7 @@ import {
   removeAuthToken,
   setAuthToken,
 } from "../services/api/config";
+import { getStoredUser, setStoredUser } from "../services/api/session";
 
 interface User {
   id: string;
@@ -32,25 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Initialize state synchronously from localStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const storedToken = getAuthToken();
-    const storedUser = localStorage.getItem("userData");
+    const storedUser = getStoredUser();
     return !!(storedToken && storedUser);
   });
 
-  const [user, setUser] = useState<User | null>(() => {
-    const storedUser = localStorage.getItem("userData");
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        // Ensure userType is set for backward compatibility
-        // If user is authenticated but userType is missing, we'll infer it from context
-        // For now, we'll set it when needed in OrdersContext
-        return userData;
-      } catch (error) {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<User | null>(() => getStoredUser<User>());
 
   const [token, setToken] = useState<string | null>(() => {
     return getAuthToken();
@@ -59,24 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Effect to sync state if localStorage changes externally or on mount validation
   useEffect(() => {
     const storedToken = getAuthToken();
-    const storedUser = localStorage.getItem("userData");
+    const storedUser = getStoredUser<User>();
 
     if (storedToken && storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        // Ensure userType is set for backward compatibility
-        // If missing, we'll let OrdersContext handle it based on context
-        // Only update if state doesn't match to avoid loops
-        if (!isAuthenticated || token !== storedToken) {
-          setToken(storedToken);
-          setUser(userData);
-          setIsAuthenticated(true);
-        }
-      } catch (error) {
-        removeAuthToken();
-        setToken(null);
-        setUser(null);
-        setIsAuthenticated(false);
+      if (!isAuthenticated || token !== storedToken) {
+        setToken(storedToken);
+        setUser(storedUser);
+        setIsAuthenticated(true);
       }
     } else if (isAuthenticated) {
       // Logged out
@@ -91,36 +67,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData);
     setIsAuthenticated(true);
     setAuthToken(newToken);
-    localStorage.setItem("userData", JSON.stringify(userData));
+    setStoredUser(userData);
 
-    // Register FCM token for push notifications after successful login
+    // Register this device for push notifications.
+    //
+    // A debug call to /fcm-tokens/test used to fire here, so every user of every
+    // portal received a "test push notification" on each sign-in. (#H-26)
     import("../services/pushNotificationService").then(({ registerFCMToken }) => {
-      registerFCMToken(true)
-        .then(() => {
-          // Send test notification after successful token registration
-          const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
-
-          fetch(`${apiUrl}/fcm-tokens/test`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${newToken}`,
-              'Content-Type': 'application/json'
-            }
-          })
-            .then(response => response.json())
-            .then(data => {
-              console.log('✅ Test notification sent:', data);
-              if (data.success) {
-                console.log(`📬 Notification sent to ${data.details?.totalTokens} device(s)`);
-              }
-            })
-            .catch(error => {
-              console.error('❌ Failed to send test notification:', error);
-            });
-        })
-        .catch((error) => {
-          console.error("Failed to register FCM token:", error);
-        });
+      registerFCMToken(true).catch((error) => {
+        console.error("Failed to register FCM token:", error);
+      });
     });
   };
 
@@ -140,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUser = (userData: User) => {
     setUser(userData);
-    localStorage.setItem("userData", JSON.stringify(userData));
+    setStoredUser(userData);
   };
 
   return (

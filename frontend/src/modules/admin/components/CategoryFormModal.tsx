@@ -346,7 +346,7 @@ export default function CategoryFormModal({
       if (imageFile) {
         setUploading(true);
         const compressed = await compressImage(imageFile);
-        const imageResult = await uploadImage(compressed, "dhakadsnazzy/categories");
+        const imageResult = await uploadImage(compressed, "hellolocal/categories");
         imageUrl = imageResult.secureUrl;
         setUploading(false);
       }

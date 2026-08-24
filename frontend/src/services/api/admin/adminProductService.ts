@@ -253,6 +253,10 @@ export const getCategories = async (params?: {
   parentId?: string | null;
   includeChildren?: boolean;
   status?: "Active" | "Inactive";
+  headerCategoryId?: string | null;
+  page?: number;
+  limit?: number;
+  pagination?: boolean;
 }): Promise<ApiResponse<Category[]>> => {
   const queryParams: any = { ...params };
   if (params?.includeChildren !== undefined) {
@@ -378,6 +382,9 @@ export const getSubCategories = async (params?: {
   search?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+  pagination?: boolean;
 }): Promise<ApiResponse<SubCategory[]>> => {
   const response = await api.get<ApiResponse<SubCategory[]>>(
     "/admin/subcategories",
@@ -439,6 +446,11 @@ export const createBrand = async (
  */
 export const getBrands = async (params?: {
   search?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+  pagination?: boolean;
 }): Promise<ApiResponse<Brand[]>> => {
   const response = await api.get<ApiResponse<Brand[]>>("/admin/brands", {
     params,

@@ -3,7 +3,11 @@ import mongoose from "mongoose";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import WalletTransaction from "../../../models/WalletTransaction";
+import { validateTransition } from "../../../services/orderStatusService";
+import {
+  reservationsFromOrderItems,
+  releaseMany,
+} from "../../../services/stockService";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import { Server as SocketIOServer } from "socket.io";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
@@ -294,15 +298,6 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Validate allowed status updates for seller
-    const allowedStatuses = ['Accepted', 'Processed', 'On the way', 'Delivered', 'Cancelled', 'Rejected'];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid status. Seller can only update to: ${allowedStatuses.join(', ')}`,
-      });
-    }
-
     // Check if this seller has items in this order
     const sellerItems = await OrderItem.findOne({ order: id, seller: sellerId });
 
@@ -323,16 +318,44 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Check if status is already the same
-    if (order.status === status) {
-      return res.status(400).json({
-        success: false,
-        message: `Order is already ${status}`,
+    // One shared transition table, applied to the actual current state. The
+    // seller path used to accept any of six statuses from ANY state, so an
+    // unpaid order could be jumped straight to Delivered. (#H-05 / #H-37)
+    const check = validateTransition(order.status, status, "seller");
+    if (!check.valid) {
+      return res.status(400).json({ success: false, message: check.message });
+    }
+    const nextStatus = check.status!;
+
+    // In a multi-vendor order one seller must not cancel or reject the whole
+    // order on another seller's behalf. Their own line items are updated, and
+    // the order-level status only follows when they are the only seller. (#H-08)
+    const sellerCountAgg = await OrderItem.distinct("seller", { order: id });
+    const isSoleSeller = sellerCountAgg.length <= 1;
+
+    if (!isSoleSeller && (nextStatus === "Cancelled" || nextStatus === "Rejected")) {
+      await OrderItem.updateMany(
+        { order: id, seller: sellerId },
+        { $set: { status: "Cancelled" } },
+      );
+
+      // Return only this seller's stock to the shelf. (#H-08)
+      const myItems = await OrderItem.find({ order: id, seller: sellerId });
+      const myReservations = await reservationsFromOrderItems(
+        myItems.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
+      );
+      await releaseMany(myReservations);
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Your items were cancelled. Other sellers' items in this order are unaffected.",
+        data: { id: order._id, status: order.status, sellerItemsStatus: "Cancelled" },
       });
     }
 
     const previousStatus = order.status;
-    order.status = status === 'On the way' ? 'Out for Delivery' : status;
+    order.status = nextStatus;
     
     // Update seller's items status in this order if applicable
     const itemStatusMap: Record<string, string> = {
@@ -419,33 +442,46 @@ export const updateOrderStatus = asyncHandler(
       }
     }
 
+    // Cancelling or rejecting returns the committed stock. The seller path used
+    // to leave it permanently decremented. (#H-08)
+    if (nextStatus === 'Cancelled' || nextStatus === 'Rejected') {
+      try {
+        const allItems = await OrderItem.find({ order: id });
+        const allReservations = await reservationsFromOrderItems(
+          allItems.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
+        );
+        await releaseMany(allReservations);
+        await OrderItem.updateMany({ order: id }, { $set: { status: 'Cancelled' } });
+      } catch (stockErr) {
+        console.error(`Failed to restore stock for order ${id}:`, stockErr);
+      }
+    }
+
+    // Cancelling or rejecting must claw back anything already credited. (#H-07)
+    if ((nextStatus === 'Cancelled' || nextStatus === 'Rejected') && previousStatus !== nextStatus) {
+      try {
+        const { reverseCommissions } = await import("../../../services/commissionService");
+        const rev = await reverseCommissions(id);
+        if (!rev.success) {
+          console.error(`Commission reversal failed for order ${id}: ${rev.message}`);
+        }
+      } catch (revErr) {
+        console.error("Error reversing commissions:", revErr);
+      }
+    }
+
     // If order is delivered, trigger the commission flow via processOrderStatusTransition
     if (status === 'Delivered' && previousStatus !== 'Delivered') {
       try {
         const { processOrderStatusTransition } = await import("../../../services/orderService");
         await processOrderStatusTransition(id, 'Delivered', previousStatus);
 
-        // If COD, add a pending WalletTransaction for confirmation
-        if (order.paymentMethod === 'COD') {
-          // Use per-item commission rates snapshotted at order creation (not current seller rate)
-          const sellerOrderItems = await OrderItem.find({ order: id, seller: sellerId });
-          if (sellerOrderItems.length > 0) {
-            const sellerSubtotal = sellerOrderItems.reduce((sum, item) => sum + (item.total || 0), 0);
-            const totalCommission = sellerOrderItems.reduce((sum, item) => sum + ((item as any).commissionAmount || 0), 0);
-            const netEarning = sellerSubtotal - totalCommission;
-
-            await WalletTransaction.create({
-              userId: sellerId,
-              userType: 'SELLER',
-              amount: netEarning,
-              type: 'Credit',
-              description: `Earnings from COD Order #${order.orderNumber} (Pending Settlement)`,
-              reference: `ORD-COD-PEND-${order.orderNumber}-${Date.now()}`,
-              status: 'Pending',
-              relatedOrder: order._id
-            });
-          }
-        }
+        // A duplicate "Pending Settlement" WalletTransaction used to be written
+        // here in addition to the Pending Commission that
+        // processCODOrderDelivery already records, so the same COD earnings
+        // appeared twice in the seller's ledger and the pending row was never
+        // resolved. processPendingCODPayouts writes the single real credit when
+        // the courier settles. (#H-40)
       } catch (transitionError: any) {
         console.error("Error processing order status transition for seller:", transitionError);
       }

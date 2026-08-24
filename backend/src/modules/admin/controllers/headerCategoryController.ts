@@ -1,21 +1,60 @@
 import { Request, Response } from "express";
 import HeaderCategory from "../../../models/HeaderCategory";
+import Category from "../../../models/Category";
+import Product from "../../../models/Product";
 
 // @desc    Get all header categories (Admin)
 // @route   GET /api/v1/header-categories/admin
 // @access  Private/Admin
 export const getAdminHeaderCategories = async (
-  _req: Request,
+  req: Request,
   res: Response
 ) => {
   try {
-    const categories = await HeaderCategory.find().sort({
-      order: 1,
-      createdAt: -1,
-    });
+    const { search, page, limit, sortBy = "order", sortOrder = "asc", pagination } = req.query;
+
+    const query: any = {};
+    if (search && typeof search === "string" && search.trim()) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { name: { $regex: escapedSearch, $options: "i" } },
+        { slug: { $regex: escapedSearch, $options: "i" } },
+        { theme: { $regex: escapedSearch, $options: "i" } },
+      ];
+    }
+
+    const sort: any = {};
+    sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
+    if (sortBy !== "createdAt") {
+      sort.createdAt = -1;
+    }
+
+    const isPaginated = pagination !== "false" && (page !== undefined || limit !== undefined);
+
+    if (isPaginated) {
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const limitNum = Math.max(1, parseInt(limit as string, 10) || 10);
+      const skip = (pageNum - 1) * limitNum;
+
+      const total = await HeaderCategory.countDocuments(query);
+      const categories = await HeaderCategory.find(query).sort(sort).skip(skip).limit(limitNum);
+
+      return res.status(200).json({
+        success: true,
+        data: categories,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+      });
+    }
+
+    const categories = await HeaderCategory.find(query).sort(sort);
     return res.json(categories);
-  } catch (error) {
-    return res.status(500).json({ message: "Server Error", error });
+  } catch (error: any) {
+    return res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
@@ -29,8 +68,8 @@ export const getHeaderCategories = async (_req: Request, res: Response) => {
       createdAt: -1,
     });
     return res.json(categories);
-  } catch (error) {
-    return res.status(500).json({ message: "Server Error", error });
+  } catch (error: any) {
+    return res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
@@ -54,19 +93,35 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       name,
       iconLibrary,
       iconName,
-      theme,    // New: color theme key (e.g. 'grocery', 'beauty')
-      slug: sentSlug, // Deprecated: old clients may send slug=theme, we ignore it now
+      theme,
+      slug: sentSlug,
       relatedCategory,
       status,
       order,
     } = req.body;
 
-    if (!name) {
+    const trimmedName = (name || "").trim();
+    if (!trimmedName) {
       return res.status(400).json({ message: "Header category name is required" });
+    }
+    if (trimmedName.length < 2) {
+      return res.status(400).json({ message: "Header category name must be at least 2 characters" });
+    }
+    if (trimmedName.length > 60) {
+      return res.status(400).json({ message: "Header category name must be under 60 characters" });
+    }
+
+    // Check for duplicate name (case-insensitive)
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingName = await HeaderCategory.findOne({
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    });
+    if (existingName) {
+      return res.status(400).json({ message: "A header category with this name already exists" });
     }
 
     // Generate unique slug from the category name
-    let baseSlug = generateSlug(name);
+    let baseSlug = generateSlug(trimmedName);
     let slug = baseSlug;
     let suffix = 1;
     while (await HeaderCategory.findOne({ slug })) {
@@ -75,25 +130,23 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
     }
 
     const category = await HeaderCategory.create({
-      name,
-      iconLibrary,
-      iconName,
+      name: trimmedName,
+      iconLibrary: iconLibrary || "Custom",
+      iconName: iconName || "grid",
       slug,
-      theme: theme || sentSlug || 'all', // store color theme separately; fall back to sent slug for old clients
-      relatedCategory,
-      status,
-      order,
+      theme: theme || sentSlug || "all",
+      relatedCategory: relatedCategory || undefined,
+      status: status || "Published",
+      order: order !== undefined && !isNaN(Number(order)) ? Number(order) : 0,
     });
 
     return res.status(201).json(category);
-  } catch (error) {
-    return res.status(500).json({ message: "Server Error", error });
+  } catch (error: any) {
+    console.error("Create Header Category Error:", error);
+    return res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
-// @desc    Update a header category
-// @route   PUT /api/v1/header-categories/:id
-// @access  Private/Admin
 // @desc    Update a header category
 // @route   PUT /api/v1/header-categories/:id
 // @access  Private/Admin
@@ -103,18 +156,40 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
       name,
       iconLibrary,
       iconName,
-      theme,     // New: color theme key
-      slug: sentSlug, // Old clients may send slug=theme — ignored for slug updates
+      theme,
+      slug: sentSlug,
       relatedCategory,
       status,
       order,
     } = req.body;
-    const category = await HeaderCategory.findById(req.params.id);
 
-    if (category) {
+    const category = await HeaderCategory.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ message: "Header category not found" });
+    }
+
+    if (name) {
+      const trimmedName = name.trim();
+      if (trimmedName.length < 2) {
+        return res.status(400).json({ message: "Header category name must be at least 2 characters" });
+      }
+      if (trimmedName.length > 60) {
+        return res.status(400).json({ message: "Header category name must be under 60 characters" });
+      }
+
+      // Check if duplicate name on another document
+      const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const duplicate = await HeaderCategory.findOne({
+        _id: { $ne: category._id },
+        name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+      });
+      if (duplicate) {
+        return res.status(400).json({ message: "A header category with this name already exists" });
+      }
+
       // If name changed, regenerate the slug
-      if (name && name !== category.name) {
-        let baseSlug = generateSlug(name);
+      if (trimmedName !== category.name) {
+        let baseSlug = generateSlug(trimmedName);
         let newSlug = baseSlug;
         let suffix = 1;
         while (await HeaderCategory.findOne({ slug: newSlug, _id: { $ne: category._id } })) {
@@ -123,32 +198,28 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
         }
         category.slug = newSlug;
       }
-
-      category.name = name || category.name;
-      category.iconLibrary = iconLibrary || category.iconLibrary;
-      category.iconName = iconName || category.iconName;
-      // Update theme (color) — allow multiple categories to share the same color
-      if (theme !== undefined) {
-        (category as any).theme = theme;
-      } else if (sentSlug !== undefined) {
-        // Old client compatibility: sent slug was actually the theme
-        (category as any).theme = sentSlug;
-      }
-      category.relatedCategory = relatedCategory; // Allow clearing it
-      category.status = status || category.status;
-      category.order = order !== undefined ? order : category.order;
-
-      const updatedCategory = await category.save();
-      return res.json(updatedCategory);
-    } else {
-      return res.status(404).json({ message: "Header category not found" });
+      category.name = trimmedName;
     }
+
+    if (iconLibrary !== undefined) category.iconLibrary = iconLibrary;
+    if (iconName !== undefined) category.iconName = iconName;
+    if (theme !== undefined) {
+      (category as any).theme = theme;
+    } else if (sentSlug !== undefined) {
+      (category as any).theme = sentSlug;
+    }
+    if (relatedCategory !== undefined) category.relatedCategory = relatedCategory || undefined;
+    if (status !== undefined) category.status = status;
+    if (order !== undefined && !isNaN(Number(order))) category.order = Number(order);
+
+    const updatedCategory = await category.save();
+    return res.json(updatedCategory);
   } catch (error: any) {
     console.error("Update Header Category Error:", error);
     if (error.code === 11000) {
       return res
         .status(400)
-        .json({ message: "A header category with this name already exists. Please use a different name." });
+        .json({ message: "A header category with this name or slug already exists." });
     }
     return res
       .status(500)
@@ -162,14 +233,29 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
 export const deleteHeaderCategory = async (req: Request, res: Response) => {
   try {
     const category = await HeaderCategory.findById(req.params.id);
-
-    if (category) {
-      await category.deleteOne();
-      return res.json({ message: "Header category removed" });
-    } else {
+    if (!category) {
       return res.status(404).json({ message: "Header category not found" });
     }
-  } catch (error) {
-    return res.status(500).json({ message: "Server Error", error });
+
+    // Referential integrity: Check if any Category or Product uses this HeaderCategory
+    const linkedCategoryCount = await Category.countDocuments({ headerCategoryId: req.params.id });
+    if (linkedCategoryCount > 0) {
+      return res.status(400).json({
+        message: `Cannot delete header category because ${linkedCategoryCount} product categories are linked to it.`,
+      });
+    }
+
+    const linkedProductCount = await Product.countDocuments({ headerCategoryId: req.params.id });
+    if (linkedProductCount > 0) {
+      return res.status(400).json({
+        message: `Cannot delete header category because ${linkedProductCount} products are linked to it.`,
+      });
+    }
+
+    await category.deleteOne();
+    return res.json({ message: "Header category deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete Header Category Error:", error);
+    return res.status(500).json({ message: "Server Error", error: error.message });
   }
 };

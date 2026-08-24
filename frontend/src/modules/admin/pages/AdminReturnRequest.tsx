@@ -1,78 +1,145 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   getReturnRequests,
   updateReturnRequest,
   type MiscReturnRequest as ReturnRequest,
 } from "../../../services/api/admin/adminMiscService";
+import { getAllSellers, type Seller } from "../../../services/api/sellerService";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
+
+const REJECTION_TEMPLATES = [
+  "Item damaged or altered by customer",
+  "Return window expired (exceeds return policy)",
+  "Original packaging, tags, or seals missing",
+  "Item verified as fully functional upon inspection",
+  "Perishable product claim window expired",
+];
 
 export default function AdminReturnRequest() {
   const { isAuthenticated, token } = useAuth();
+  const { showToast } = useToast();
+
+  // Filters & Pagination State
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selectedSeller, setSelectedSeller] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [returnRequests, setReturnRequests] = useState<ReturnRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>("requestedAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
-  // Fetch return requests on component mount
+  // Data State
+  const [returnRequests, setReturnRequests] = useState<ReturnRequest[]>([]);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sellersList, setSellersList] = useState<Seller[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Modals State
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<ReturnRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Debounce search
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearchInput(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchTerm(val);
+      setCurrentPage(1);
+    }, 300);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setSearchTerm("");
+    setCurrentPage(1);
+  };
+
+  // Fetch sellers on mount
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        const response = await getAllSellers();
+        if (response.success && Array.isArray(response.data)) {
+          setSellersList(response.data);
+        }
+      } catch (err) {
+        console.error("Failed to load sellers:", err);
+      }
+    };
+    fetchSellers();
+  }, []);
+
+  // Fetch return requests
   useEffect(() => {
     if (!isAuthenticated || !token) {
       setLoading(false);
       return;
     }
 
-    const fetchReturnRequests = async () => {
+    const fetchRequests = async () => {
       try {
         setLoading(true);
-        setError(null);
 
         const params: any = {
           page: currentPage,
           limit: entriesPerPage,
+          sortBy: sortColumn || "createdAt",
+          sortOrder: sortDirection,
         };
 
-        if (selectedStatus !== "all") {
-          params.status = selectedStatus;
-        }
-
-        if (searchTerm) {
-          params.search = searchTerm;
-        }
+        if (selectedStatus !== "all") params.status = selectedStatus;
+        if (selectedSeller !== "all") params.seller = selectedSeller;
+        if (searchTerm.trim()) params.search = searchTerm.trim();
+        if (fromDate) params.dateFrom = fromDate;
+        if (toDate) params.dateTo = toDate;
 
         const response = await getReturnRequests(params);
 
         if (response.success) {
-          setReturnRequests(response.data);
+          setReturnRequests(response.data || []);
+          if (response.pagination) {
+            setTotalEntries(response.pagination.total);
+            setTotalPages(response.pagination.pages || 1);
+          } else {
+            setTotalEntries(response.data?.length || 0);
+            setTotalPages(Math.ceil((response.data?.length || 0) / entriesPerPage) || 1);
+          }
         } else {
-          setError("Failed to load return requests");
+          showToast(response.message || "Failed to load return requests", "error");
         }
       } catch (err: any) {
         console.error("Error fetching return requests:", err);
-        setError(
-          err.response?.data?.message ||
-          "Failed to load return requests. Please try again."
-        );
+        showToast(err.response?.data?.message || "Failed to load return requests", "error");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchReturnRequests();
+    fetchRequests();
   }, [
     isAuthenticated,
     token,
     currentPage,
     entriesPerPage,
     selectedStatus,
+    selectedSeller,
     searchTerm,
+    fromDate,
+    toDate,
+    sortColumn,
+    sortDirection,
   ]);
 
   const handleSort = (column: string) => {
@@ -84,656 +151,501 @@ export default function AdminReturnRequest() {
     }
   };
 
-  // Note: Filtering is done server-side, so we just use the returnRequests as is
-  const displayedRequests = returnRequests;
-
-  // For pagination display (simplified - in real app, this would come from API)
-  const totalPages = Math.ceil(displayedRequests.length / entriesPerPage);
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const endIndex = startIndex + entriesPerPage;
-
-  const handleApproveReturn = async (requestId: string) => {
-    try {
-      setUpdating(requestId);
-      const response = await updateReturnRequest(requestId, {
-        status: "Approved",
-      });
-
-      if (response.success) {
-        // Update local state
-        setReturnRequests((requests) =>
-          requests.map((req) =>
-            req._id === requestId ? { ...req, status: "Approved" } : req
-          )
-        );
-        alert("Return request approved successfully!");
-      } else {
-        alert(
-          "Failed to approve return request: " +
-          (response.message || "Unknown error")
-        );
-      }
-    } catch (err: any) {
-      console.error("Error approving return request:", err);
-      alert(
-        "Failed to approve return request: " +
-        (err.response?.data?.message || "Please try again.")
-      );
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const handleRejectReturn = async (requestId: string) => {
-    const reason = prompt("Enter rejection reason:");
-    if (!reason) return;
-
-    try {
-      setUpdating(requestId);
-      const response = await updateReturnRequest(requestId, {
-        status: "Rejected",
-        adminNotes: reason,
-      });
-
-      if (response.success) {
-        // Update local state
-        setReturnRequests((requests) =>
-          requests.map((req) =>
-            req._id === requestId ? { ...req, status: "Rejected" } : req
-          )
-        );
-        alert("Return request rejected successfully!");
-      } else {
-        alert(
-          "Failed to reject return request: " +
-          (response.message || "Unknown error")
-        );
-      }
-    } catch (err: any) {
-      console.error("Error rejecting return request:", err);
-      alert(
-        "Failed to reject return request: " +
-        (err.response?.data?.message || "Please try again.")
-      );
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const handleExport = () => {
-    alert("Export functionality will be implemented here");
-  };
-
   const handleClearDate = () => {
     setFromDate("");
     setToDate("");
+    setCurrentPage(1);
   };
 
-  const sellers = ["All Seller", "Seller 1", "Seller 2", "Seller 3"];
+  // Open Approval Modal
+  const openApprovalModal = (request: ReturnRequest) => {
+    setSelectedRequest(request);
+    setApprovalModalOpen(true);
+  };
 
-  const statuses = [
-    "All Status",
-    "Pending",
-    "Approved",
-    "Rejected",
-    "Completed",
-  ];
+  // Execute Approval
+  const handleConfirmApproval = async () => {
+    if (!selectedRequest) return;
+
+    try {
+      setActionLoading(true);
+      setUpdatingId(selectedRequest._id);
+
+      const response = await updateReturnRequest(selectedRequest._id, {
+        status: "Approved",
+        refundAmount: selectedRequest.total,
+      });
+
+      if (response.success) {
+        setReturnRequests((requests) =>
+          requests.map((req) =>
+            req._id === selectedRequest._id
+              ? { ...req, status: "Approved", refundAmount: selectedRequest.total }
+              : req
+          )
+        );
+        showToast(`Return request approved (Refund: ₹${selectedRequest.total.toFixed(2)})`, "success");
+        setApprovalModalOpen(false);
+        setSelectedRequest(null);
+      } else {
+        showToast(response.message || "Failed to approve return request", "error");
+      }
+    } catch (err: any) {
+      console.error("Error approving return request:", err);
+      showToast(err.response?.data?.message || "Failed to approve return request", "error");
+    } finally {
+      setActionLoading(false);
+      setUpdatingId(null);
+    }
+  };
+
+  // Open Rejection Modal
+  const openRejectionModal = (request: ReturnRequest) => {
+    setSelectedRequest(request);
+    setRejectionReason("");
+    setRejectionModalOpen(true);
+  };
+
+  // Execute Rejection
+  const handleConfirmRejection = async () => {
+    if (!selectedRequest) return;
+    if (!rejectionReason.trim()) {
+      showToast("Please provide a reason for rejecting this return", "error");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setUpdatingId(selectedRequest._id);
+
+      const response = await updateReturnRequest(selectedRequest._id, {
+        status: "Rejected",
+        adminNotes: rejectionReason.trim(),
+      });
+
+      if (response.success) {
+        setReturnRequests((requests) =>
+          requests.map((req) =>
+            req._id === selectedRequest._id
+              ? { ...req, status: "Rejected", adminNotes: rejectionReason.trim() }
+              : req
+          )
+        );
+        showToast("Return request rejected successfully", "info");
+        setRejectionModalOpen(false);
+        setSelectedRequest(null);
+      } else {
+        showToast(response.message || "Failed to reject return request", "error");
+      }
+    } catch (err: any) {
+      console.error("Error rejecting return request:", err);
+      showToast(err.response?.data?.message || "Failed to reject return request", "error");
+    } finally {
+      setActionLoading(false);
+      setUpdatingId(null);
+    }
+  };
+
+  // True CSV Export Engine
+  const handleExportCSV = () => {
+    if (returnRequests.length === 0) {
+      showToast("No return requests available to export", "info");
+      return;
+    }
+
+    const headers = [
+      "Return Request ID",
+      "Order Number",
+      "Customer Name",
+      "Product Name",
+      "Variant",
+      "Quantity",
+      "Unit Price (₹)",
+      "Total Amount (₹)",
+      "Return Reason",
+      "Status",
+      "Requested Date",
+      "Admin Notes",
+    ];
+
+    const rows = returnRequests.map((req) => [
+      `"${req._id}"`,
+      `"${req.orderNumber || req.orderId || "N/A"}"`,
+      `"${req.userName || "Unknown"}"`,
+      `"${req.productName || "Unknown"}"`,
+      `"${req.variant || "-"}"`,
+      req.quantity,
+      req.price.toFixed(2),
+      req.total.toFixed(2),
+      `"${(req.reason || "").replace(/"/g, '""')}"`,
+      `"${req.status}"`,
+      `"${new Date(req.requestedAt).toLocaleDateString()}"`,
+      `"${(req.adminNotes || "").replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `return_requests_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast(`Exported ${returnRequests.length} return requests to CSV!`, "success");
+  };
+
+  const startIndex = (currentPage - 1) * entriesPerPage;
+  const endIndex = Math.min(startIndex + entriesPerPage, totalEntries);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      {/* Header & Breadcrumbs */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-        <h1 className="text-2xl font-semibold text-neutral-800">
-          Return Request
-        </h1>
-        <div className="text-sm text-neutral-600">
-          <span className="text-rose-700 hover:text-rose-800 cursor-pointer">
-            Home
-          </span>
-          <span className="mx-2">/</span>
-          <span className="text-neutral-800">Return Request</span>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight flex items-center gap-2">
+            <span>📦</span> Return Requests & Refunds
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            Audit item return claims, review customer reasons, and process refund settlements
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-neutral-500 hidden sm:block">
+            <Link
+              to="/admin/dashboard"
+              className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+            >
+              Dashboard
+            </Link>
+            <span className="mx-2 text-neutral-300">/</span>
+            <span className="text-neutral-700 font-medium">Return Requests</span>
+          </nav>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="bg-neutral-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors min-h-[44px] flex items-center gap-2 shadow-sm"
+          >
+            <span>📥</span> Export CSV
+          </button>
         </div>
       </div>
 
       {/* Main Content Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        {/* Green Header Bar */}
-        <div className="bg-rose-600 px-4 sm:px-6 py-3">
-          <h2 className="text-white text-lg font-semibold">
-            View Return Request
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+        {/* Banner Bar */}
+        <div className="bg-rose-700 px-5 py-3.5 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+            <span>📋</span> Return Request Pipeline
           </h2>
+          <span className="text-xs text-rose-100 font-semibold">
+            Total: {totalEntries} Requests
+          </span>
         </div>
 
-        {/* Filters */}
-        <div className="p-4 sm:p-6 border-b border-neutral-200">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            {/* Left Side Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 flex-1 flex-wrap">
-              {/* From - To Date */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700 whitespace-nowrap">
-                  From - To Date:
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400">
-                      <rect
-                        x="3"
-                        y="4"
-                        width="18"
-                        height="18"
-                        rx="2"
-                        ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    <input
-                      type="text"
-                      value={fromDate}
-                      onChange={(e) => setFromDate(e.target.value)}
-                      placeholder="MM/DD/YYYY"
-                      className="pl-10 pr-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[140px]"
-                    />
-                  </div>
-                  <span className="text-neutral-500">-</span>
-                  <div className="relative">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400">
-                      <rect
-                        x="3"
-                        y="4"
-                        width="18"
-                        height="18"
-                        rx="2"
-                        ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    <input
-                      type="text"
-                      value={toDate}
-                      onChange={(e) => setToDate(e.target.value)}
-                      placeholder="MM/DD/YYYY"
-                      className="pl-10 pr-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[140px]"
-                    />
-                  </div>
+        {/* Filter Controls Bar */}
+        <div className="p-4 sm:p-5 border-b border-neutral-200/80 bg-neutral-50/50 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+            {/* From Date */}
+            <div className="lg:col-span-3 space-y-1">
+              <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                Date Range (From - To)
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => {
+                    setFromDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-2.5 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none min-h-[40px]"
+                />
+                <span className="text-neutral-400 font-bold">-</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => {
+                    setToDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-2.5 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none min-h-[40px]"
+                />
+                {(fromDate || toDate) && (
                   <button
+                    type="button"
                     onClick={handleClearDate}
-                    className="px-3 py-2 bg-neutral-700 hover:bg-neutral-800 text-white rounded text-sm transition-colors">
-                    Clear
+                    className="p-2 text-neutral-500 hover:text-neutral-800 text-xs font-bold"
+                    title="Clear date filter"
+                  >
+                    ×
                   </button>
-                </div>
-              </div>
-
-              {/* Filter by Seller */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700 whitespace-nowrap">
-                  Filter by Seller:
-                </label>
-                <select
-                  value={selectedSeller}
-                  onChange={(e) => {
-                    setSelectedSeller(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[130px]">
-                  {sellers.map((seller) => (
-                    <option
-                      key={seller}
-                      value={seller === "All Seller" ? "all" : seller}>
-                      {seller}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter by Status */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700 whitespace-nowrap">
-                  Filter by Status:
-                </label>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => {
-                    setSelectedStatus(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[130px]">
-                  {statuses.map((status) => (
-                    <option
-                      key={status}
-                      value={status === "All Status" ? "all" : status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
+                )}
               </div>
             </div>
 
-            {/* Right Side Controls */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              {/* Per Page */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-neutral-700">Per Page:</span>
-                <select
-                  value={entriesPerPage}
-                  onChange={(e) => {
-                    setEntriesPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600">
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
+            {/* Filter by Seller */}
+            <div className="lg:col-span-3 space-y-1">
+              <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                Filter by Merchant Store
+              </label>
+              <select
+                value={selectedSeller}
+                onChange={(e) => {
+                  setSelectedSeller(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none min-h-[40px] font-medium"
+              >
+                <option value="all">All Merchant Stores</option>
+                {sellersList.map((seller) => (
+                  <option key={seller._id} value={seller._id}>
+                    {seller.storeName || seller.sellerName}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              {/* Export Button */}
-              <button
-                onClick={handleExport}
-                className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                Export
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
+            {/* Filter by Status */}
+            <div className="lg:col-span-2 space-y-1">
+              <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                Return Status
+              </label>
+              <select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none min-h-[40px] font-medium"
+              >
+                <option value="all">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
 
-              {/* Search */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700">Search:</label>
+            {/* Search Input */}
+            <div className="lg:col-span-3 space-y-1">
+              <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                Search Reason / Order / User
+              </label>
+              <div className="relative">
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Search:"
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[150px]"
+                  value={searchInput}
+                  onChange={handleSearchChange}
+                  placeholder="Order ID, reason, user..."
+                  className="w-full pl-3 pr-8 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none min-h-[40px]"
                 />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-sm font-bold"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
+            </div>
+
+            {/* Entries Per Page */}
+            <div className="lg:col-span-1 space-y-1">
+              <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                Rows
+              </label>
+              <select
+                value={entriesPerPage}
+                onChange={(e) => {
+                  setEntriesPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="w-full px-2 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none min-h-[40px] font-medium"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
             </div>
           </div>
         </div>
 
-        {/* Table */}
+        {/* Data Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px]">
-            <thead className="bg-neutral-50 border-b border-neutral-200">
+          <table className="w-full min-w-[1000px] text-left border-collapse">
+            <thead className="bg-neutral-50/80 border-b border-neutral-200 text-[11px] font-bold text-neutral-600 uppercase tracking-wider">
               <tr>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("orderItemId")}>
-                  <div className="flex items-center gap-2">
-                    Order Item Id
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
+                  onClick={() => handleSort("orderNumber")}
+                  className="px-4 py-3.5 cursor-pointer hover:text-neutral-900"
+                >
+                  Order / Item
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("user")}>
-                  <div className="flex items-center gap-2">
-                    User
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
+                  onClick={() => handleSort("userName")}
+                  className="px-4 py-3.5 cursor-pointer hover:text-neutral-900"
+                >
+                  Customer
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("product")}>
-                  <div className="flex items-center gap-2">
-                    Product
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
+                  onClick={() => handleSort("productName")}
+                  className="px-4 py-3.5 cursor-pointer hover:text-neutral-900"
+                >
+                  Product & Variant
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("variant")}>
-                  <div className="flex items-center gap-2">
-                    Variant
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
+                  onClick={() => handleSort("price")}
+                  className="px-4 py-3.5 cursor-pointer hover:text-neutral-900"
+                >
+                  Unit / Total
+                </th>
+                <th className="px-4 py-3.5">Return Reason</th>
+                <th
+                  onClick={() => handleSort("status")}
+                  className="px-4 py-3.5 cursor-pointer hover:text-neutral-900"
+                >
+                  Status
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("price")}>
-                  <div className="flex items-center gap-2">
-                    Price
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
+                  onClick={() => handleSort("requestedAt")}
+                  className="px-4 py-3.5 cursor-pointer hover:text-neutral-900"
+                >
+                  Requested Date
                 </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("discPrice")}>
-                  <div className="flex items-center gap-2">
-                    Disc Price
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("quantity")}>
-                  <div className="flex items-center gap-2">
-                    Quantity
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("total")}>
-                  <div className="flex items-center gap-2">
-                    Total
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("status")}>
-                  <div className="flex items-center gap-2">
-                    Status
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("date")}>
-                  <div className="flex items-center gap-2">
-                    Date
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                  Action
-                </th>
+                <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-neutral-200">
+
+            <tbody className="divide-y divide-neutral-200 text-xs text-neutral-800 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 sm:px-6 py-8 text-center">
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-rose-700 mr-2"></div>
-                      Loading return requests...
+                  <td colSpan={8} className="px-4 py-12 text-center">
+                    <div className="flex items-center justify-center gap-2 text-neutral-500">
+                      <div className="w-5 h-5 border-2 border-rose-700 border-t-transparent rounded-full animate-spin" />
+                      <span>Loading return requests...</span>
                     </div>
                   </td>
                 </tr>
-              ) : error ? (
+              ) : returnRequests.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={11}
-                    className="px-4 sm:px-6 py-8 text-center text-red-600">
-                    {error}
-                  </td>
-                </tr>
-              ) : displayedRequests.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="px-4 sm:px-6 py-8 text-center text-sm text-neutral-500">
-                    No return requests found
+                  <td colSpan={8} className="px-4 py-12 text-center text-neutral-400">
+                    No return requests matching the selected criteria
                   </td>
                 </tr>
               ) : (
-                displayedRequests.map((request) => (
-                  <tr key={request._id} className="hover:bg-neutral-50">
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      {request.orderItemId}
+                returnRequests.map((request) => (
+                  <tr key={request._id} className="hover:bg-neutral-50/80 transition-colors">
+                    {/* Order / Item */}
+                    <td className="px-4 py-3.5">
+                      <div className="font-mono font-bold text-neutral-900">
+                        {request.orderNumber || (request.orderId ? `#${request.orderId.slice(-6)}` : "N/A")}
+                      </div>
+                      <div className="text-[11px] text-neutral-400 font-mono">
+                        Item: {request.orderItemId ? request.orderItemId.slice(-8) : "N/A"}
+                      </div>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                      {request.userName}
+
+                    {/* Customer */}
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-neutral-900">{request.userName || "Customer"}</div>
+                      <div className="text-[11px] text-neutral-400">ID: {request.userId ? request.userId.slice(-6) : "N/A"}</div>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {request.productName}
+
+                    {/* Product & Variant */}
+                    <td className="px-4 py-3.5 max-w-[220px]">
+                      <div className="font-semibold text-neutral-900 truncate" title={request.productName}>
+                        {request.productName}
+                      </div>
+                      <div className="text-[11px] text-neutral-500">
+                        Qty: <span className="font-bold text-neutral-800">{request.quantity}</span>
+                        {request.variant && ` • Variant: ${request.variant}`}
+                      </div>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {request.variant || "-"}
+
+                    {/* Unit / Total */}
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-neutral-900">
+                        ₹{request.total.toFixed(2)}
+                      </div>
+                      <div className="text-[11px] text-neutral-400">
+                        ₹{request.price.toFixed(2)} / unit
+                      </div>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      ₹{request.price.toFixed(2)}
+
+                    {/* Return Reason */}
+                    <td className="px-4 py-3.5 max-w-[240px]">
+                      <p className="text-neutral-700 line-clamp-2 leading-relaxed" title={request.reason}>
+                        {request.reason || "No reason specified"}
+                      </p>
+                      {request.adminNotes && (
+                        <p className="text-[10px] text-rose-700 italic mt-0.5" title={request.adminNotes}>
+                          Admin note: {request.adminNotes}
+                        </p>
+                      )}
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      ₹{(request.discountedPrice || request.price).toFixed(2)}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {request.quantity}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                      ₹{request.total.toFixed(2)}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3">
+
+                    {/* Status */}
+                    <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${request.status === "Approved"
-                          ? "bg-rose-100 text-rose-900"
-                          : request.status === "Pending"
-                            ? "bg-yellow-100 text-yellow-800"
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                          request.status === "Approved"
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : request.status === "Pending"
+                            ? "bg-amber-100 text-amber-800 border border-amber-200 animate-pulse"
                             : request.status === "Rejected"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}>
+                            ? "bg-red-100 text-red-800 border border-red-200"
+                            : "bg-blue-100 text-blue-800 border border-blue-200"
+                        }`}
+                      >
+                        {request.status === "Approved" && "✓ "}
+                        {request.status === "Rejected" && "✕ "}
                         {request.status}
                       </span>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {new Date(request.requestedAt).toLocaleDateString()}
+
+                    {/* Requested Date */}
+                    <td className="px-4 py-3.5 text-neutral-600 whitespace-nowrap text-[11px]">
+                      {new Date(request.requestedAt).toLocaleDateString("en-US", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
                     </td>
-                    <td className="px-4 sm:px-6 py-3">
-                      <div className="flex items-center gap-2">
-                        {request.status === "Pending" ? (
-                          <>
-                            <button
-                              onClick={() => handleApproveReturn(request._id)}
-                              disabled={updating === request._id}
-                              className="p-1.5 bg-rose-100 hover:bg-rose-200 disabled:bg-neutral-100 disabled:text-neutral-400 text-rose-800 rounded transition-colors"
-                              title="Approve">
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleRejectReturn(request._id)}
-                              disabled={updating === request._id}
-                              className="p-1.5 bg-red-100 hover:bg-red-200 disabled:bg-neutral-100 disabled:text-neutral-400 text-red-700 rounded transition-colors"
-                              title="Reject">
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-sm text-neutral-400">
-                            {request.status === "Approved"
-                              ? "Approved"
-                              : "Rejected"}
-                          </span>
-                        )}
-                      </div>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                      {request.status === "Pending" ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openApprovalModal(request)}
+                            disabled={updatingId === request._id}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors min-h-[36px] shadow-sm"
+                            title="Approve return and initiate refund"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openRejectionModal(request)}
+                            disabled={updatingId === request._id}
+                            className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors min-h-[36px] shadow-sm"
+                            title="Reject return request with reason"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-neutral-400 italic">
+                          {request.status === "Approved" ? "Refund Processed" : "Closed"}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -742,76 +654,212 @@ export default function AdminReturnRequest() {
           </table>
         </div>
 
-        {/* Pagination Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-          <div className="text-xs sm:text-sm text-neutral-700">
-            Showing {startIndex + 1} to{" "}
-            {Math.min(endIndex, displayedRequests.length)} of{" "}
-            {displayedRequests.length} entries
+        {/* Server-Driven Pagination Footer */}
+        <div className="px-5 py-4 border-t border-neutral-200/80 bg-neutral-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
+          <div className="text-xs text-neutral-500 font-medium">
+            Showing <span className="font-bold text-neutral-800">{totalEntries > 0 ? startIndex + 1 : 0}</span> to{" "}
+            <span className="font-bold text-neutral-800">{endIndex}</span> of{" "}
+            <span className="font-bold text-neutral-800">{totalEntries}</span> return requests
           </div>
+
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1 || totalPages === 0}
-              className={`p-2 border border-rose-300 rounded bg-white ${currentPage === 1 || totalPages === 0
-                ? "text-neutral-400 cursor-not-allowed"
-                : "text-neutral-700 hover:bg-rose-50"
-                }`}
-              aria-label="Previous page">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M15 18L9 12L15 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              disabled={currentPage <= 1 || loading}
+              className="px-3 py-1.5 border border-neutral-300 rounded-xl bg-white text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed min-h-[36px] shadow-sm transition-colors"
+            >
+              Previous
             </button>
+
+            <span className="text-xs text-neutral-600 font-semibold px-2">
+              Page {currentPage} of {totalPages}
+            </span>
+
             <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-              }
-              disabled={currentPage === totalPages || totalPages === 0}
-              className={`p-2 border border-rose-300 rounded bg-white ${currentPage === totalPages || totalPages === 0
-                ? "text-neutral-400 cursor-not-allowed"
-                : "text-neutral-700 hover:bg-rose-50"
-                }`}
-              aria-label="Next page">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M9 18L15 12L9 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage >= totalPages || loading}
+              className="px-3 py-1.5 border border-neutral-300 rounded-xl bg-white text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed min-h-[36px] shadow-sm transition-colors"
+            >
+              Next
             </button>
           </div>
         </div>
       </div>
 
+      {/* Approval Confirmation Modal */}
+      {approvalModalOpen && selectedRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-neutral-200 animate-scale-up">
+            <div className="bg-emerald-700 text-white px-5 py-3.5 flex items-center justify-between">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span>✓</span> Confirm Return Approval
+              </h3>
+              <button
+                type="button"
+                onClick={() => setApprovalModalOpen(false)}
+                className="text-white/80 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-neutral-600 leading-relaxed">
+                You are approving the return request for the following order item. Approving will authorize the refund to the customer.
+              </p>
+
+              <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Order ID:</span>
+                  <span className="font-mono font-bold text-neutral-900">
+                    {selectedRequest.orderNumber || selectedRequest.orderId}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Product:</span>
+                  <span className="font-bold text-neutral-900 truncate max-w-[200px]">
+                    {selectedRequest.productName}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Customer:</span>
+                  <span className="font-semibold text-neutral-900">{selectedRequest.userName}</span>
+                </div>
+                <div className="flex justify-between pt-1.5 border-t border-neutral-200 font-bold text-emerald-800 text-sm">
+                  <span>Refund Value:</span>
+                  <span>₹{selectedRequest.total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setApprovalModalOpen(false)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl text-xs font-bold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmApproval}
+                  disabled={actionLoading}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors min-h-[44px] flex items-center gap-2 shadow-sm"
+                >
+                  {actionLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Approving...</span>
+                    </>
+                  ) : (
+                    <span>Confirm & Approve</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal with Reason Textarea */}
+      {rejectionModalOpen && selectedRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-neutral-200 animate-scale-up">
+            <div className="bg-red-700 text-white px-5 py-3.5 flex items-center justify-between">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span>✕</span> Reject Return Request
+              </h3>
+              <button
+                type="button"
+                onClick={() => setRejectionModalOpen(false)}
+                className="text-white/80 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-xs flex justify-between">
+                <div>
+                  <span className="text-neutral-400">Order: </span>
+                  <span className="font-mono font-bold text-neutral-800">
+                    {selectedRequest.orderNumber || selectedRequest.orderId}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-neutral-400">Item: </span>
+                  <span className="font-bold text-neutral-800">{selectedRequest.productName}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                  Rejection Reason <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Explain why this return claim is being rejected..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs bg-white focus:border-red-600 outline-none"
+                />
+
+                {/* Quick Templates */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                    Quick Reason Templates:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {REJECTION_TEMPLATES.map((tmpl) => (
+                      <button
+                        key={tmpl}
+                        type="button"
+                        onClick={() => setRejectionReason(tmpl)}
+                        className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-2 py-1 rounded-lg font-medium transition-colors"
+                      >
+                        + {tmpl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRejectionModalOpen(false)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl text-xs font-bold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRejection}
+                  disabled={actionLoading || !rejectionReason.trim()}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors min-h-[44px] flex items-center gap-2 shadow-sm"
+                >
+                  {actionLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Rejecting...</span>
+                    </>
+                  ) : (
+                    <span>Confirm Rejection</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
-      <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2026. Developed By{" "}
-        <a href="#" className="text-rose-700 hover:text-rose-800">
-          Hello Local - 10 Minute App
-        </a>
-      </div>
+      <footer className="text-center text-xs text-neutral-400 py-3">
+        HelloLocal Admin Panel • Quality Assurance & Customer Dispute Resolution
+      </footer>
     </div>
   );
 }
-
-
-

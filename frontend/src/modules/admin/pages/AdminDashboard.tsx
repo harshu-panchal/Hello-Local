@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardCard from "../components/DashboardCard";
 import OrderChart from "../components/OrderChart";
@@ -6,6 +6,7 @@ import SalesLineChart from "../components/SalesLineChart";
 import GaugeChart from "../components/GaugeChart";
 import ErrorBoundary from "../../../components/ErrorBoundary";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 import {
   getDashboardStats,
   getSalesAnalytics,
@@ -25,343 +26,203 @@ import {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { isAuthenticated, token } = useAuth();
+  const { showToast } = useToast();
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [newOrders, setNewOrders] = useState<RecentOrder[]>([]);
   const [topSellers, setTopSellers] = useState<TopSeller[]>([]);
   const [salesByLocation, setSalesByLocation] = useState<SalesByLocation[]>([]);
-  const [salesAnalytics, setSalesAnalytics] = useState<SalesAnalytics | null>(
-    null
-  );
-  const [orderAnalytics, setOrderAnalytics] = useState<SalesAnalytics | null>(
-    null
-  );
-  const [orderAnalyticsDaily, setOrderAnalyticsDaily] = useState<SalesAnalytics | null>(
-    null
-  );
+  const [salesAnalytics, setSalesAnalytics] = useState<SalesAnalytics | null>(null);
+  const [orderAnalytics, setOrderAnalytics] = useState<SalesAnalytics | null>(null);
+  const [orderAnalyticsDaily, setOrderAnalyticsDaily] = useState<SalesAnalytics | null>(null);
   const [todaySales, setTodaySales] = useState<TodaySales | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch dashboard data on component mount
-  useEffect(() => {
-    // Don't fetch if not authenticated
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pagination for tables
+  const [entriesPerPageNewOrders, setEntriesPerPageNewOrders] = useState(10);
+  const [currentPageNewOrders, setCurrentPageNewOrders] = useState(1);
+  const [entriesPerPageTopSellers, setEntriesPerPageTopSellers] = useState(10);
+  const [currentPageTopSellers, setCurrentPageTopSellers] = useState(1);
+
+  // Dynamic Month & Year labels
+  const currentMonthName = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const currentYear = new Date().getFullYear();
+
+  const fetchDashboardData = useCallback(async (isManualRefresh = false) => {
     if (!isAuthenticated || !token) {
       setLoading(false);
       return;
     }
 
-    const fetchDashboardData = async () => {
-      try {
+    try {
+      if (isManualRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-        setError(null);
-
-        // Fetch all dashboard data in parallel
-        const [
-          statsResponse,
-          ordersResponse,
-          sellersResponse,
-          locationResponse,
-          analyticsResponse,
-          orderAnalyticsResponse,
-          orderAnalyticsDailyResponse,
-          todaySalesResponse,
-        ] = await Promise.all([
-          getDashboardStats(),
-          getRecentOrders(10),
-          getTopSellers(10),
-          getSalesByLocation(),
-          getSalesAnalytics("day"), // Use daily data for the sales line chart
-          getOrderAnalytics("month"),
-          getOrderAnalytics("day"),
-          getTodaySales(),
-        ]);
-
-        if (statsResponse.success) {
-          console.log("Dashboard stats received:", statsResponse.data);
-          setStats(statsResponse.data);
-        } else {
-          console.error("Failed to fetch dashboard stats:", statsResponse);
-        }
-
-        if (ordersResponse.success) {
-          setNewOrders(ordersResponse.data);
-        }
-
-        if (sellersResponse.success) {
-          setTopSellers(sellersResponse.data);
-        }
-
-        if (locationResponse.success) {
-          setSalesByLocation(locationResponse.data);
-        }
-
-        if (analyticsResponse.success) {
-          setSalesAnalytics(analyticsResponse.data);
-        }
-
-        if (orderAnalyticsResponse.success) {
-          setOrderAnalytics(orderAnalyticsResponse.data);
-        }
-
-        if (orderAnalyticsDailyResponse.success) {
-          setOrderAnalyticsDaily(orderAnalyticsDailyResponse.data);
-        }
-
-        if (todaySalesResponse.success) {
-          setTodaySales(todaySalesResponse.data);
-        }
-      } catch (err: any) {
-        console.error("Error fetching dashboard data:", err);
-        setError(
-          err.response?.data?.message ||
-          "Failed to load dashboard data. Please try again."
-        );
-      } finally {
-        setLoading(false);
       }
-    };
+      setError(null);
 
+      // Fetch all dashboard data in parallel
+      const [
+        statsResponse,
+        ordersResponse,
+        sellersResponse,
+        locationResponse,
+        analyticsResponse,
+        orderAnalyticsResponse,
+        orderAnalyticsDailyResponse,
+        todaySalesResponse,
+      ] = await Promise.all([
+        getDashboardStats(),
+        getRecentOrders(20),
+        getTopSellers(20),
+        getSalesByLocation(),
+        getSalesAnalytics("day"),
+        getOrderAnalytics("month"),
+        getOrderAnalytics("day"),
+        getTodaySales(),
+      ]);
+
+      if (statsResponse.success && statsResponse.data) {
+        setStats(statsResponse.data);
+      }
+
+      if (ordersResponse.success && ordersResponse.data) {
+        setNewOrders(ordersResponse.data);
+      }
+
+      if (sellersResponse.success && sellersResponse.data) {
+        setTopSellers(sellersResponse.data);
+      }
+
+      if (locationResponse.success && locationResponse.data) {
+        setSalesByLocation(locationResponse.data);
+      }
+
+      if (analyticsResponse.success && analyticsResponse.data) {
+        setSalesAnalytics(analyticsResponse.data);
+      }
+
+      if (orderAnalyticsResponse.success && orderAnalyticsResponse.data) {
+        setOrderAnalytics(orderAnalyticsResponse.data);
+      }
+
+      if (orderAnalyticsDailyResponse.success && orderAnalyticsDailyResponse.data) {
+        setOrderAnalyticsDaily(orderAnalyticsDailyResponse.data);
+      }
+
+      if (todaySalesResponse.success && todaySalesResponse.data) {
+        setTodaySales(todaySalesResponse.data);
+      }
+
+      if (isManualRefresh) {
+        showToast("Dashboard analytics refreshed with live data!", "success");
+      }
+    } catch (err: any) {
+      console.error("Error fetching dashboard data:", err);
+      const errMsg = err.response?.data?.message || "Failed to load dashboard data. Please try again.";
+      setError(errMsg);
+      if (isManualRefresh) {
+        showToast(errMsg, "error");
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [isAuthenticated, token, showToast]);
+
+  useEffect(() => {
     fetchDashboardData();
-  }, [isAuthenticated, token]);
+  }, [fetchDashboardData]);
 
   // Icons for KPI cards
   const userIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <circle
-        cx="12"
-        cy="8"
-        r="4"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      <path
-        d="M4 20c0-4 3.5-7 8-7s8 3 8 7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 
   const categoryIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M8 6H21M8 12H21M8 18H21M3 6H3.01M3 12H3.01M3 18H3.01"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
     </svg>
   );
 
   const subcategoryIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M8 6H21M8 12H21M8 18H21M3 6H3.01M3 12H3.01M3 18H3.01"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   );
 
   const productIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
     </svg>
   );
 
   const ordersIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
   );
 
   const completedOrdersIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 7H18C19.1046 7 20 7.89543 20 9V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V9C4 7.89543 4.89543 7 6 7H8"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
   );
 
   const pendingOrdersIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
     </svg>
   );
 
   const cancelledOrdersIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M16 7L8 15M8 7L16 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 7H18C19.1046 7 20 7.89543 20 9V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V9C4 7.89543 4.89543 7 6 7H8"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="15" y1="9" x2="9" y2="15" />
+      <line x1="9" y1="9" x2="15" y2="15" />
     </svg>
   );
 
   const soldOutIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M8 12H16"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      <line x1="8" y1="14" x2="16" y2="14" />
     </svg>
   );
 
   const lowStockIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 21V5C16 4.46957 15.7893 3.96086 15.4142 3.58579C15.0391 3.21071 14.5304 3 14 3H10C9.46957 3 8.96086 3.21071 8.58579 3.58579C8.21071 3.96086 8 4.46957 8 5V21"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 9V15M9 12H15"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   );
 
   const adsIcon = (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="7" width="20" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
-      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 12v3M9.5 14.5L12 12l2.5 2.5" stroke="currentColor" strokeWidth="2" />
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
 
@@ -369,27 +230,22 @@ export default function AdminDashboard() {
   const salesThisMonth = salesAnalytics?.thisPeriod || [];
   const salesLastMonth = salesAnalytics?.lastPeriod || [];
 
-  // Transform order analytics data for charts (real data from backend)
-  const orderDataDec2025 = orderAnalyticsDaily?.thisPeriod || [];
-  const orderData2025 = orderAnalytics?.thisPeriod || [];
+  // Order analytics data
+  const orderDataMonth = orderAnalyticsDaily?.thisPeriod || [];
+  const orderDataYear = orderAnalytics?.thisPeriod || [];
 
-  const totalPagesNewOrders = Math.ceil(newOrders.length / entriesPerPage);
-  const startIndexNewOrders = (currentPage - 1) * entriesPerPage;
-  const endIndexNewOrders = startIndexNewOrders + entriesPerPage;
-  const displayedNewOrders = newOrders.slice(
-    startIndexNewOrders,
-    endIndexNewOrders
-  );
+  // Table pagination calculations
+  const totalPagesNewOrders = Math.ceil(newOrders.length / entriesPerPageNewOrders) || 1;
+  const startIndexNewOrders = (currentPageNewOrders - 1) * entriesPerPageNewOrders;
+  const endIndexNewOrders = Math.min(startIndexNewOrders + entriesPerPageNewOrders, newOrders.length);
+  const displayedNewOrders = newOrders.slice(startIndexNewOrders, endIndexNewOrders);
 
-  const totalPagesTopSellers = Math.ceil(topSellers.length / entriesPerPage);
-  const startIndexTopSellers = (currentPage - 1) * entriesPerPage;
-  const endIndexTopSellers = startIndexTopSellers + entriesPerPage;
-  const displayedTopSellers = topSellers.slice(
-    startIndexTopSellers,
-    endIndexTopSellers
-  );
+  const totalPagesTopSellers = Math.ceil(topSellers.length / entriesPerPageTopSellers) || 1;
+  const startIndexTopSellers = (currentPageTopSellers - 1) * entriesPerPageTopSellers;
+  const endIndexTopSellers = Math.min(startIndexTopSellers + entriesPerPageTopSellers, topSellers.length);
+  const displayedTopSellers = topSellers.slice(startIndexTopSellers, endIndexTopSellers);
 
-  // Calculate sales today and comparison from today's sales data
+  // Sales metrics
   const salesToday = todaySales?.salesToday || 0;
   const salesLastWeekSameDay = todaySales?.salesLastWeekSameDay || 0;
   const salesDifference = salesToday - salesLastWeekSameDay;
@@ -398,105 +254,101 @@ export default function AdminDashboard() {
       ? ((salesDifference / salesLastWeekSameDay) * 100).toFixed(0)
       : salesToday > 0 ? "100" : "0";
 
-  // Loading state
+  // Dynamic AOV gauge ceiling
+  const maxGaugeValue = Math.max(1000, Math.ceil(((stats?.avgCompletedOrderValue || 0) * 1.5) / 100) * 100);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-rose-700 mb-4"></div>
-          <p className="text-neutral-600">Loading dashboard data...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center p-20 space-y-4">
+        <div className="w-10 h-10 border-4 border-rose-700 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-semibold text-neutral-600">Aggregating executive dashboard analytics...</p>
       </div>
     );
   }
 
-  // Error state
-  if (error) {
+  if (error || !stats) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center max-w-md">
-          <div className="text-red-600 mb-4">
-            <svg
-              className="mx-auto h-12 w-12"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-            Error Loading Dashboard
-          </h3>
-          <p className="text-neutral-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-lg transition-colors">
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // No stats data
-  if (!stats) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <p className="text-neutral-600">No dashboard data available</p>
-        </div>
+      <div className="flex flex-col items-center justify-center p-16 space-y-4 max-w-md mx-auto text-center">
+        <span className="text-4xl">⚠️</span>
+        <h3 className="text-base font-bold text-neutral-900">Dashboard Analytics Unavailable</h3>
+        <p className="text-xs text-neutral-500">{error || "Failed to load dashboard metrics."}</p>
+        <button
+          type="button"
+          onClick={() => fetchDashboardData(false)}
+          className="bg-rose-700 hover:bg-rose-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-colors min-h-[44px] shadow-sm"
+        >
+          Retry Loading
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* KPI Cards Grid - 2 columns on mobile, 4 on desktop */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      {/* Executive Header & Quick Actions */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight flex items-center gap-2">
+            <span>📊</span> Admin Analytics & Command Center
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            Real-time platform telemetry, merchant leaderboard, and 10-minute order velocity
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => fetchDashboardData(true)}
+            disabled={refreshing}
+            className="bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-800 px-4 py-2 rounded-xl text-xs font-bold transition-colors min-h-[44px] flex items-center gap-2 shadow-xs"
+          >
+            <span className={`text-sm ${refreshing ? "animate-spin" : ""}`}>🔄</span>
+            <span>{refreshing ? "Refreshing..." : "Refresh Live Data"}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards Grid - Responsive Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <DashboardCard
           icon={userIcon}
-          title="Total User"
+          title="Total Users"
           value={stats.totalUser}
-          accentColor="#3b82f6"
+          accentColor="#e11d48"
           onClick={() => navigate("/admin/users")}
         />
         <DashboardCard
           icon={categoryIcon}
-          title="Total Category"
+          title="Categories"
           value={stats.totalCategory}
           accentColor="#eab308"
           onClick={() => navigate("/admin/category")}
         />
         <DashboardCard
           icon={subcategoryIcon}
-          title="Total Subcategory"
+          title="Subcategories"
           value={stats.totalSubcategory ?? 0}
-          accentColor="#ec4899"
+          accentColor="#8b5cf6"
           onClick={() => navigate("/admin/subcategory")}
         />
         <DashboardCard
           icon={productIcon}
-          title="Total Product"
+          title="Active Products"
           value={stats.totalProduct}
-          accentColor="#ef4444"
+          accentColor="#0284c7"
           onClick={() => navigate("/admin/product/list")}
         />
         <DashboardCard
           icon={ordersIcon}
           title="Total Orders"
           value={stats.totalOrders}
-          accentColor="#3b82f6"
+          accentColor="#2563eb"
           onClick={() => navigate("/admin/orders/all")}
         />
         <DashboardCard
           icon={completedOrdersIcon}
-          title="Completed Orders"
+          title="Delivered Orders"
           value={stats.completedOrders}
           accentColor="#16a34a"
           onClick={() => navigate("/admin/orders/delivered")}
@@ -505,306 +357,181 @@ export default function AdminDashboard() {
           icon={pendingOrdersIcon}
           title="Pending Orders"
           value={stats.pendingOrders}
-          accentColor="#a855f7"
+          accentColor="#d97706"
           onClick={() => navigate("/admin/orders/pending")}
         />
         <DashboardCard
           icon={cancelledOrdersIcon}
           title="Cancelled Orders"
           value={stats.cancelledOrders}
-          accentColor="#ef4444"
+          accentColor="#dc2626"
           onClick={() => navigate("/admin/orders/cancelled")}
         />
         <DashboardCard
           icon={soldOutIcon}
-          title="Product Sold Out"
+          title="Sold Out Stock"
           value={stats.soldOutProducts}
-          accentColor="#ec4899"
+          accentColor="#be123c"
           onClick={() => navigate("/admin/product/list")}
         />
         <DashboardCard
           icon={lowStockIcon}
-          title="Product low on Stock"
+          title="Low on Stock"
           value={stats.lowStockProducts}
-          accentColor="#eab308"
+          accentColor="#ca8a04"
           onClick={() => navigate("/admin/product/list")}
         />
         <DashboardCard
           icon={adsIcon}
-          title="Pending Ad Requests"
+          title="Ad Requests"
           value={stats.pendingAdRequests || 0}
           accentColor="#7c3aed"
           onClick={() => navigate("/admin/shop-ads?tab=requests")}
         />
       </div>
 
-      {/* Sales Section - Top Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Sales Velocity & Location Heatmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
         {/* Total Sales Today */}
-        <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-neutral-200 p-4 sm:p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-            Total Sales Today
-          </h3>
-          <div className="mb-4">
-            <p className="text-3xl font-bold text-neutral-900">
-              ₹{salesToday.toFixed(2)}
-            </p>
-            {salesDifference >= 0 ? (
-              <p className="text-sm text-rose-700 mt-1">
-                ▲ ₹{Math.abs(salesDifference).toFixed(2)} (+{salesPercentChange}%)
-                vs same day last week
-              </p>
-            ) : (
-              <p className="text-sm text-red-600 mt-1">
-                ▼ ₹{Math.abs(salesDifference).toFixed(2)} ({salesPercentChange}%)
-                vs same day last week
-              </p>
-            )}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-neutral-200/80 p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-bold text-neutral-700 uppercase tracking-wider">
+                Total Storefront Sales Today
+              </h2>
+              <div className="mt-1 flex items-baseline gap-3">
+                <p className="text-3xl font-extrabold text-neutral-900 tracking-tight">
+                  ₹{salesToday.toFixed(2)}
+                </p>
+                {salesDifference >= 0 ? (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                    ▲ +₹{Math.abs(salesDifference).toFixed(2)} (+{salesPercentChange}%) vs last week
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-md">
+                    ▼ -₹{Math.abs(salesDifference).toFixed(2)} ({salesPercentChange}%) vs last week
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className="text-xs text-neutral-400 font-medium">Daily Trend</span>
           </div>
+
           <SalesLineChart
             thisMonthData={salesThisMonth}
             lastMonthData={salesLastMonth}
-            height={200}
+            height={220}
           />
         </div>
 
-        {/* Sales by Location & Gauge */}
+        {/* Sales by Micro-Market & Average Order Value (AOV) */}
         <div className="space-y-4 sm:space-y-6">
-          {/* Sales by Location */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-4 sm:p-6">
-            <h3 className="text-lg font-semibold text-neutral-900 mb-4">
-              Sales by Location
+          {/* Sales by City Location */}
+          <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 p-5">
+            <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider mb-3">
+              Sales by Micro-Market / City
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-2.5 max-h-[160px] overflow-y-auto">
               {salesByLocation.length > 0 ? (
                 salesByLocation.map((location, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-600">
-                      {location.location}
-                    </span>
-                    <span className="text-sm font-semibold text-neutral-900">
-                      ₹{(location.amount / 1000).toFixed(1)}K
+                  <div key={index} className="flex items-center justify-between text-xs py-1 border-b border-neutral-100 last:border-0">
+                    <span className="text-neutral-600 font-medium">{location.location}</span>
+                    <span className="font-bold text-neutral-900">
+                      ₹{location.amount >= 1000 ? `${(location.amount / 1000).toFixed(1)}K` : location.amount.toFixed(2)}
                     </span>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-neutral-500">
-                  No location data available
-                </p>
+                <p className="text-xs text-neutral-400 italic">No geographic location sales data</p>
               )}
             </div>
           </div>
 
-          {/* Avg. Completed Order Value */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-4 sm:p-6">
-            <h3 className="text-lg font-semibold text-neutral-900 mb-4">
-              Avg. Completed Order Value
+          {/* Average Order Value Gauge */}
+          <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 p-5">
+            <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
+              Avg. Completed Order Value (AOV)
             </h3>
             <GaugeChart
               value={stats.avgCompletedOrderValue}
-              maxValue={521}
-              label="Average Order Value"
+              maxValue={maxGaugeValue}
+              label="Platform AOV"
             />
           </div>
         </div>
       </div>
 
-      {/* Charts Row */}
+      {/* Dynamic Order Velocity Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <ErrorBoundary fallback={<div className="text-sm text-red-600 p-4">Chart failed to load</div>}>
+        <ErrorBoundary fallback={<div className="text-xs text-red-600 p-4">Daily chart error</div>}>
           <OrderChart
-            title="Order - Dec 2025"
-            data={orderDataDec2025}
-            maxValue={3}
-            height={400}
+            title={`Orders — ${currentMonthName}`}
+            data={orderDataMonth}
+            maxValue={orderDataMonth.length > 0 ? Math.max(10, ...orderDataMonth.map((d) => Math.ceil((d.value || 0) * 1.2))) : 10}
+            height={320}
           />
         </ErrorBoundary>
-        <ErrorBoundary fallback={<div className="text-sm text-red-600 p-4">Chart failed to load</div>}>
+
+        <ErrorBoundary fallback={<div className="text-xs text-red-600 p-4">Annual chart error</div>}>
           <OrderChart
-            title="Order - 2025"
-            data={orderData2025}
-            maxValue={80}
-            height={400}
+            title={`Annual Order Velocity (${currentYear})`}
+            data={orderDataYear}
+            maxValue={orderDataYear.length > 0 ? Math.max(50, ...orderDataYear.map((d) => Math.ceil((d.value || 0) * 1.2))) : 50}
+            height={320}
           />
         </ErrorBoundary>
       </div>
 
-      {/* Tables Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* View New Orders Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="bg-rose-700 text-white px-4 sm:px-6 py-3">
-            <h2 className="text-base sm:text-lg font-semibold">
-              View New Orders
-            </h2>
-          </div>
-
-          <div className="px-4 sm:px-6 py-3 border-b border-neutral-200">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-neutral-700">Show</span>
-              <input
-                type="number"
-                value={entriesPerPage}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value) || 10;
-                  setEntriesPerPage(Math.max(1, Math.min(100, value)));
-                  setCurrentPage(1);
-                }}
-                className="w-16 px-2 py-1 border border-neutral-300 rounded text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
-                min="1"
-                max="100"
-              />
-              <span className="text-sm text-neutral-700">entries</span>
-            </div>
+      {/* Recent Orders & Merchant Leaderboards Tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
+        {/* Table 1: In-Flight Recent Orders */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <h3 className="text-sm font-bold tracking-wide flex items-center gap-2">
+              <span>📦</span> In-Flight Recent Orders
+            </h3>
+            <span className="text-xs text-rose-100 font-semibold">{newOrders.length} Recent</span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] font-bold text-neutral-600 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      ID
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="text-neutral-400 cursor-pointer">
-                        <path
-                          d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    User Details
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      O. Date
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="text-neutral-400 cursor-pointer">
-                        <path
-                          d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      Status
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="text-neutral-400 cursor-pointer">
-                        <path
-                          d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      Amount
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="text-neutral-400 cursor-pointer">
-                        <path
-                          d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    Action
-                  </th>
+                  <th className="px-4 py-3">Order ID</th>
+                  <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Amount</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-neutral-200">
+              <tbody className="divide-y divide-neutral-200 text-xs text-neutral-800 font-medium">
                 {displayedNewOrders.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 sm:px-6 py-8 text-center text-sm text-neutral-500">
-                      No data available in table
+                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
+                      No recent orders in the queue
                     </td>
                   </tr>
                 ) : (
                   displayedNewOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-neutral-50">
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                        {order.orderNumber || order.id}
+                    <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
+                      <td className="px-4 py-3 font-mono font-bold text-neutral-900">
+                        {order.orderNumber || `#${order.id.slice(-6)}`}
                       </td>
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                        {order.customerName}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                        {new Date(order.orderDate).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-neutral-600 bg-neutral-50">
+                      <td className="px-4 py-3 text-neutral-700">{order.customerName}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-700">
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                        ₹{order.amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3">
+                      <td className="px-4 py-3 font-bold text-neutral-900">₹{order.amount.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right">
                         <button
+                          type="button"
                           onClick={() => navigate(`/admin/orders/${order.id}`)}
-                          className="bg-rose-700 hover:bg-rose-800 text-white p-2 rounded transition-colors"
-                          aria-label="View order">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <circle
-                              cx="12"
-                              cy="12"
-                              r="3"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                          className="bg-rose-700 hover:bg-rose-800 text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-colors min-h-[32px]"
+                          aria-label={`View order ${order.orderNumber || order.id}`}
+                        >
+                          View
                         </button>
                       </td>
                     </tr>
@@ -814,198 +541,75 @@ export default function AdminDashboard() {
             </table>
           </div>
 
-          <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-            <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {startIndexNewOrders + 1} to{" "}
-              {Math.min(endIndexNewOrders, newOrders.length)} of{" "}
-              {newOrders.length} entries
-            </div>
-            <div className="flex items-center gap-2">
+          {/* Table Pagination */}
+          <div className="px-4 py-3 border-t border-neutral-200 bg-neutral-50 flex items-center justify-between text-xs text-neutral-500">
+            <span>
+              Showing {newOrders.length > 0 ? startIndexNewOrders + 1 : 0} to {endIndexNewOrders} of {newOrders.length}
+            </span>
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className={`p-2 border border-neutral-300 rounded ${currentPage === 1
-                  ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                aria-label="Previous page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M15 18L9 12L15 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                type="button"
+                onClick={() => setCurrentPageNewOrders((prev) => Math.max(1, prev - 1))}
+                disabled={currentPageNewOrders <= 1}
+                className="px-2.5 py-1 border border-neutral-300 rounded-lg bg-white text-xs font-bold disabled:opacity-40"
+              >
+                ‹
               </button>
+              <span className="px-2 font-bold">{currentPageNewOrders}</span>
               <button
-                onClick={() =>
-                  setCurrentPage((prev) =>
-                    Math.min(totalPagesNewOrders, prev + 1)
-                  )
-                }
-                disabled={currentPage === totalPagesNewOrders}
-                className={`p-2 border border-neutral-300 rounded ${currentPage === totalPagesNewOrders
-                  ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                aria-label="Next page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M9 18L15 12L9 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                type="button"
+                onClick={() => setCurrentPageNewOrders((prev) => Math.min(totalPagesNewOrders, prev + 1))}
+                disabled={currentPageNewOrders >= totalPagesNewOrders}
+                className="px-2.5 py-1 border border-neutral-300 rounded-lg bg-white text-xs font-bold disabled:opacity-40"
+              >
+                ›
               </button>
             </div>
           </div>
         </div>
 
-        {/* View Top Seller Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="bg-rose-600 text-white px-4 sm:px-6 py-3">
-            <h2 className="text-base sm:text-lg font-semibold">
-              View Top Seller
-            </h2>
-          </div>
-
-          <div className="px-4 sm:px-6 py-3 border-b border-neutral-200">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-neutral-700">Show</span>
-              <input
-                type="number"
-                value={entriesPerPage}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value) || 10;
-                  setEntriesPerPage(Math.max(1, Math.min(100, value)));
-                  setCurrentPage(1);
-                }}
-                className="w-16 px-2 py-1 border border-neutral-300 rounded text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
-                min="1"
-                max="100"
-              />
-              <span className="text-sm text-neutral-700">entries</span>
-            </div>
+        {/* Table 2: Top Performing Merchant Stores */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-neutral-900 text-white px-5 py-3.5 flex items-center justify-between">
+            <h3 className="text-sm font-bold tracking-wide flex items-center gap-2">
+              <span>🏪</span> Merchant Leaderboard
+            </h3>
+            <span className="text-xs text-neutral-300 font-semibold">{topSellers.length} Top Stores</span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] font-bold text-neutral-600 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      ID
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="text-neutral-400 cursor-pointer">
-                        <path
-                          d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    Seller Name
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    Store Name
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      Total Revenue
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="text-neutral-400 cursor-pointer">
-                        <path
-                          d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">
-                    Action
-                  </th>
+                  <th className="px-4 py-3">Store Name</th>
+                  <th className="px-4 py-3">Merchant Name</th>
+                  <th className="px-4 py-3">Orders</th>
+                  <th className="px-4 py-3">Total Gross</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-neutral-200">
+              <tbody className="divide-y divide-neutral-200 text-xs text-neutral-800 font-medium">
                 {displayedTopSellers.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 sm:px-6 py-8 text-center text-sm text-neutral-500">
-                      No top sellers data available
+                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
+                      No merchant sales data recorded
                     </td>
                   </tr>
                 ) : (
                   displayedTopSellers.map((seller) => (
-                    <tr key={seller.sellerId} className="hover:bg-neutral-50">
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                        {seller.sellerId}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                        {seller.sellerName}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                        {seller.storeName}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                        ₹{seller.totalRevenue.toFixed(2)}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3">
+                    <tr key={seller.sellerId} className="hover:bg-neutral-50 transition-colors">
+                      <td className="px-4 py-3 font-bold text-neutral-900">{seller.storeName}</td>
+                      <td className="px-4 py-3 text-neutral-600">{seller.sellerName}</td>
+                      <td className="px-4 py-3 font-semibold text-neutral-700">{seller.totalOrders}</td>
+                      <td className="px-4 py-3 font-bold text-neutral-900">₹{seller.totalRevenue.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right">
                         <button
-                          className="bg-rose-600 hover:bg-rose-700 text-white p-2 rounded transition-colors"
-                          aria-label="View seller">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <circle
-                              cx="12"
-                              cy="12"
-                              r="3"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                          type="button"
+                          onClick={() => navigate("/admin/manage-seller/list")}
+                          className="bg-neutral-900 hover:bg-black text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-colors min-h-[32px]"
+                          aria-label={`View store ${seller.storeName}`}
+                        >
+                          Directory
                         </button>
                       </td>
                     </tr>
@@ -1015,65 +619,28 @@ export default function AdminDashboard() {
             </table>
           </div>
 
-          <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-            <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {startIndexTopSellers + 1} to{" "}
-              {Math.min(endIndexTopSellers, topSellers.length)} of{" "}
-              {topSellers.length} entries
-            </div>
-            <div className="flex items-center gap-2">
+          {/* Table Pagination */}
+          <div className="px-4 py-3 border-t border-neutral-200 bg-neutral-50 flex items-center justify-between text-xs text-neutral-500">
+            <span>
+              Showing {topSellers.length > 0 ? startIndexTopSellers + 1 : 0} to {endIndexTopSellers} of {topSellers.length}
+            </span>
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className={`p-2 border border-neutral-300 rounded ${currentPage === 1
-                  ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                aria-label="Previous page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M15 18L9 12L15 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                type="button"
+                onClick={() => setCurrentPageTopSellers((prev) => Math.max(1, prev - 1))}
+                disabled={currentPageTopSellers <= 1}
+                className="px-2.5 py-1 border border-neutral-300 rounded-lg bg-white text-xs font-bold disabled:opacity-40"
+              >
+                ‹
               </button>
-              <span className="px-3 py-2 border border-neutral-300 rounded text-sm text-neutral-700 bg-white">
-                {currentPage}
-              </span>
+              <span className="px-2 font-bold">{currentPageTopSellers}</span>
               <button
-                onClick={() =>
-                  setCurrentPage((prev) =>
-                    Math.min(totalPagesTopSellers, prev + 1)
-                  )
-                }
-                disabled={currentPage === totalPagesTopSellers}
-                className={`p-2 border border-neutral-300 rounded ${currentPage === totalPagesTopSellers
-                  ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                aria-label="Next page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M9 18L15 12L9 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                type="button"
+                onClick={() => setCurrentPageTopSellers((prev) => Math.min(totalPagesTopSellers, prev + 1))}
+                disabled={currentPageTopSellers >= totalPagesTopSellers}
+                className="px-2.5 py-1 border border-neutral-300 rounded-lg bg-white text-xs font-bold disabled:opacity-40"
+              >
+                ›
               </button>
             </div>
           </div>
@@ -1081,14 +648,9 @@ export default function AdminDashboard() {
       </div>
 
       {/* Footer */}
-      <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2026. Developed By{" "}
-        <a href="#" className="text-rose-600 hover:text-rose-700">
-          Hello Local - 10 Minute App
-        </a>
-      </div>
+      <footer className="text-center text-xs text-neutral-400 py-3">
+        HelloLocal Admin Panel • Real-Time Enterprise Telemetry
+      </footer>
     </div>
   );
 }
-
-

@@ -1,4 +1,5 @@
 import api, { setAuthToken, removeAuthToken } from '../config';
+import { setStoredUser } from '../session';
 
 export interface SendOTPResponse {
   success: boolean;
@@ -46,7 +47,7 @@ export const verifyOTP = async (mobile: string, otp: string, sessionId?: string)
       ...response.data.data.user,
       userType: 'Customer'
     };
-    localStorage.setItem('userData', JSON.stringify(userData));
+    setStoredUser(userData, 'customer');
   }
 
   return response.data;

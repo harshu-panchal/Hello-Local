@@ -285,8 +285,14 @@ export const createPendingCommissions = async (orderId: string) => {
         `[Commission] Item: ${item.product}, Rate: ${commissionRate}%, Amount: ${commissionAmount}, Net: ${netEarning}`,
       );
 
-      // Create commission record as PAID immediately
-      const commission = await Commission.create({
+      // Record the commission as PENDING.
+      //
+      // This runs at payment time. It used to create the record as "Paid" and
+      // credit the seller's withdrawable wallet immediately — so a seller was
+      // paid in full before the goods were even shipped, and a cancellation
+      // could not claw it back. Sellers are credited on delivery, by
+      // distributeCommissions / processPendingCODPayouts. (#H-39)
+      await Commission.create({
         order: item.order,
         orderItem: item._id,
         seller: item.seller,
@@ -294,24 +300,12 @@ export const createPendingCommissions = async (orderId: string) => {
         orderAmount: item.total,
         commissionRate,
         commissionAmount,
-        status: "Paid", // Set to Paid immediately
-        paidAt: new Date(),
+        status: "Pending",
+        paidAt: null,
       });
-
-      // Credit Wallet Immediately
-      if (seller) {
-        await creditWallet(
-          seller._id.toString(),
-          "SELLER",
-          netEarning,
-          `Sale proceeds from Order #${order.orderNumber}`,
-          item.order.toString(),
-          commission._id.toString(),
-        );
-      }
     }
 
-    console.log(`Commissions processed and credited for order ${orderId}`);
+    console.log(`Pending commissions recorded for order ${orderId}`);
   } catch (error) {
     console.error("Error creating commissions:", error);
     throw error;
@@ -643,7 +637,12 @@ export const processPendingCODPayouts = async (
             const breakdown = await calculateCODOrderBreakdown(order._id.toString());
 
             platformWallet.totalAdminEarning += breakdown.totalAdminEarning;
-            platformWallet.sellerPendingPayouts = Math.max(0, platformWallet.sellerPendingPayouts + netEarning);
+            // Paying the seller REDUCES what the platform still owes them.
+            // This used to add, so the liability grew every time it was settled. (#H-43)
+            platformWallet.sellerPendingPayouts = Math.max(
+              0,
+              (platformWallet.sellerPendingPayouts || 0) - netEarning,
+            );
           }
         }
 
@@ -744,38 +743,60 @@ export const reverseCommissions = async (orderId: string) => {
     );
 
     if (commissions.length === 0) {
-      // No commissions to reverse
+      await session.commitTransaction();
       return {
         success: true,
         message: "No commissions to reverse",
       };
     }
 
+    const { debitWallet } = await import("./walletManagementService");
+
     for (const commission of commissions) {
-      // Only reverse if status is Paid
-      if (commission.status === "Paid") {
-        commission.status = "Cancelled";
-        await commission.save({ session });
-
-        // Debit from wallet
-        const userId =
-          commission.type === "SELLER"
-            ? commission.seller
-            : commission.deliveryBoy;
-        const userType = commission.type;
-
-        if (userId) {
-          const { debitWallet } = await import("./walletManagementService");
-          await debitWallet(
-            userId.toString(),
-            userType,
-            commission.commissionAmount,
-            `Commission reversal for cancelled order`,
-            orderId,
-            session,
-          );
+      // A Pending commission was never credited, so cancelling it is enough.
+      if (commission.status !== "Paid") {
+        if (commission.status === "Pending") {
+          commission.status = "Cancelled";
+          await commission.save({ session });
         }
+        continue;
       }
+
+      commission.status = "Cancelled";
+      await commission.save({ session });
+
+      const userId =
+        commission.type === "SELLER" ? commission.seller : commission.deliveryBoy;
+      if (!userId) continue;
+
+      // Reverse what was actually PAID OUT, not the platform's cut.
+      //
+      // A seller is credited `orderAmount - commissionAmount` (their net
+      // proceeds); a courier is credited `commissionAmount` (their fee). This
+      // used to debit `commissionAmount` in both cases, so reversing a seller
+      // clawed back the platform's commission instead of the seller's earnings
+      // — the wrong amount, from the wrong party. (#H-07)
+      const amountToReverse =
+        commission.type === "SELLER"
+          ? Math.round((commission.orderAmount - commission.commissionAmount) * 100) / 100
+          : Math.round(commission.commissionAmount * 100) / 100;
+
+      if (amountToReverse <= 0) continue;
+
+      await debitWallet(
+        userId.toString(),
+        commission.type,
+        amountToReverse,
+        `Reversal for cancelled/returned order ${orderId}`,
+        orderId,
+        session,
+        {
+          // A clawback can legitimately take a balance below zero: the money is
+          // already gone and is owed back.
+          allowNegative: true,
+          reference: `REV-${commission._id}`,
+        },
+      );
     }
 
     await session.commitTransaction();
@@ -795,6 +816,27 @@ export const reverseCommissions = async (orderId: string) => {
     session.endSession();
   }
 };
+
+/**
+ * Derive a schema-valid commission rate without ever dividing by zero.
+ * Returns a percentage clamped to the model's 0..100 range.
+ */
+export function safeCommissionRate(
+  commissionAmount: number,
+  distanceKm?: number,
+  deliveryCharge?: number,
+): number {
+  const amount = Number(commissionAmount) || 0;
+  if (distanceKm && distanceKm > 0) {
+    const perKm = amount / distanceKm;
+    return Number.isFinite(perKm) ? Math.min(Math.max(perKm, 0), 100) : 0;
+  }
+  if (deliveryCharge && deliveryCharge > 0) {
+    const pct = (amount / deliveryCharge) * 100;
+    return Number.isFinite(pct) ? Math.min(Math.max(pct, 0), 100) : 0;
+  }
+  return 0;
+}
 
 /**
  * COD Order Breakdown Interface
@@ -1056,9 +1098,14 @@ export const processCODOrderDelivery = async (
         deliveryBoy: order.deliveryBoy,
         type: "DELIVERY_BOY",
         orderAmount: breakdown.deliveryDistanceKm || breakdown.totalDeliveryCharge,
-        commissionRate: breakdown.deliveryDistanceKm
-          ? breakdown.deliveryBoyCommission / breakdown.deliveryDistanceKm
-          : (breakdown.deliveryBoyCommission / breakdown.totalDeliveryCharge) * 100,
+        // Free delivery makes totalDeliveryCharge 0, which produced Infinity /
+        // NaN here and then failed the schema's 0..100 validation, aborting the
+        // whole COD settlement. (#H-44)
+        commissionRate: safeCommissionRate(
+          breakdown.deliveryBoyCommission,
+          breakdown.deliveryDistanceKm,
+          breakdown.totalDeliveryCharge,
+        ),
         commissionAmount: breakdown.deliveryBoyCommission,
         status: "Paid", // Delivery boy gets paid immediately
         paidAt: new Date(),

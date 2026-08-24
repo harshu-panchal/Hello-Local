@@ -1,182 +1,151 @@
 import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeftIcon,
+  ClockIcon,
+  StoreNavIcon,
+  ShieldCheckIcon,
+  CreditCardIcon,
+  PhoneCallIcon,
+  ZapIcon,
+} from './components/common/UserIcons';
 
 export default function AboutUs() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
-    return (
-        <div className="pb-24 md:pb-8 bg-white min-h-screen">
-            {/* Header */}
-            <div className="bg-gradient-to-b from-teal-50 to-white pb-6 pt-4 sticky top-0 z-10 border-b border-neutral-100">
-                <div className="px-4 md:px-6 lg:px-8">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="text-neutral-900"
-                            aria-label="Back"
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </button>
-                        <h1 className="text-xl font-bold text-neutral-900">About Us</h1>
-                    </div>
-                </div>
-            </div>
-
-            {/* Content */}
-            <div className="px-4 md:px-6 lg:px-8 py-6 max-w-3xl mx-auto">
-                {/* Logo/Brand Section */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 mb-4 shadow-lg">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
-                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" />
-                        </svg>
-                    </div>
-                    <h2 className="text-3xl font-bold text-neutral-900 mb-2">Hello Local</h2>
-                    <p className="text-sm text-neutral-600">Your Trusted Delivery Partner</p>
-                </div>
-
-                {/* Mission Section */}
-                <div className="mb-8">
-                    <h3 className="text-lg font-bold text-neutral-900 mb-3 flex items-center gap-2">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Our Mission
-                    </h3>
-                    <p className="text-sm text-neutral-700 leading-relaxed">
-                        At Hello Local, we're committed to revolutionizing the way you shop and receive your products.
-                        Our mission is to provide lightning-fast delivery services while maintaining the highest
-                        standards of quality and customer satisfaction.
-                    </p>
-                </div>
-
-                {/* What We Do Section */}
-                <div className="mb-8">
-                    <h3 className="text-lg font-bold text-neutral-900 mb-3 flex items-center gap-2">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                            <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        What We Do
-                    </h3>
-                    <p className="text-sm text-neutral-700 leading-relaxed mb-4">
-                        Hello Local is a comprehensive e-commerce platform that connects customers with a wide range
-                        of products across multiple categories including groceries, fashion, electronics, pharmacy,
-                        and much more.
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
-                            <div className="text-2xl font-bold text-teal-600 mb-1">10K+</div>
-                            <div className="text-xs text-neutral-700">Products</div>
-                        </div>
-                        <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
-                            <div className="text-2xl font-bold text-teal-600 mb-1">500+</div>
-                            <div className="text-xs text-neutral-700">Sellers</div>
-                        </div>
-                        <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
-                            <div className="text-2xl font-bold text-teal-600 mb-1">50K+</div>
-                            <div className="text-xs text-neutral-700">Happy Customers</div>
-                        </div>
-                        <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
-                            <div className="text-2xl font-bold text-teal-600 mb-1">24/7</div>
-                            <div className="text-xs text-neutral-700">Support</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Why Choose Us Section */}
-                <div className="mb-8">
-                    <h3 className="text-lg font-bold text-neutral-900 mb-3 flex items-center gap-2">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <polyline points="22 4 12 14.01 9 11.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Why Choose Us
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-semibold text-neutral-900 mb-1">Fast Delivery</h4>
-                                <p className="text-xs text-neutral-600">Get your orders delivered at lightning speed with our efficient delivery network.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-semibold text-neutral-900 mb-1">Secure Payments</h4>
-                                <p className="text-xs text-neutral-600">Your transactions are protected with industry-standard encryption and security.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-semibold text-neutral-900 mb-1">Quality Products</h4>
-                                <p className="text-xs text-neutral-600">We partner with trusted sellers to ensure you receive only the best quality products.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-semibold text-neutral-900 mb-1">24/7 Support</h4>
-                                <p className="text-xs text-neutral-600">Our dedicated support team is always ready to help you with any queries.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Contact Section */}
-                <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-6 border border-teal-200">
-                    <h3 className="text-lg font-bold text-neutral-900 mb-4 text-center">Get In Touch</h3>
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3 text-sm">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600 flex-shrink-0">
-                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className="text-neutral-700">support@hellolocal.com</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600 flex-shrink-0">
-                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className="text-neutral-700">+91 1800-123-4567</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-teal-600 flex-shrink-0">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className="text-neutral-700">India</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Version Info */}
-                <div className="mt-8 text-center">
-                    <p className="text-xs text-neutral-500">Version 1.0.0</p>
-                    <p className="text-xs text-neutral-500 mt-1">© 2024 Hello Local. All rights reserved.</p>
-                </div>
-            </div>
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon size={18} />
+            </button>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              About Hello Local
+            </h1>
+          </div>
         </div>
-    );
+      </div>
+
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-5 space-y-4">
+        {/* Brand Mission Hero */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 shadow-2xs text-center">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] shadow-xs">
+            <ZapIcon size={28} />
+          </div>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <span className="text-2xl font-bold tracking-tight text-[#FF8A00]">Hello</span>
+            <span className="text-2xl font-bold tracking-tight text-[#FF2E7A]">Local</span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
+            Empowering neighborhood shopkeepers and delivering daily essentials to community doorsteps in 15 minutes.
+          </p>
+        </div>
+
+        {/* Mission Statement */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xs space-y-1.5">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-900">
+            Our Mission
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            At Hello Local, we bridge the gap between traditional neighborhood stores and modern fast-delivery convenience. We empower local retailers with technology while offering customers hyper-fast, reliable, and transparent grocery delivery.
+          </p>
+        </div>
+
+        {/* Platform Pillars */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs text-center">
+            <div className="w-8 h-8 mx-auto mb-1 rounded-lg bg-[#FFF1F4] flex items-center justify-center text-[#FF2E7A]">
+              <ClockIcon size={16} />
+            </div>
+            <span className="text-base font-bold text-slate-900 block">15 Mins</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Fast Delivery</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs text-center">
+            <div className="w-8 h-8 mx-auto mb-1 rounded-lg bg-[#FFF1F4] flex items-center justify-center text-[#FF2E7A]">
+              <StoreNavIcon size={16} />
+            </div>
+            <span className="text-base font-bold text-slate-900 block">100%</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Local Stores</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs text-center">
+            <div className="w-8 h-8 mx-auto mb-1 rounded-lg bg-[#FFF1F4] flex items-center justify-center text-[#16A34A]">
+              <ShieldCheckIcon size={16} />
+            </div>
+            <span className="text-base font-bold text-slate-900 block">Fresh</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Handpicked</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs text-center">
+            <div className="w-8 h-8 mx-auto mb-1 rounded-lg bg-[#FFF1F4] flex items-center justify-center text-[#FF2E7A]">
+              <CreditCardIcon size={16} />
+            </div>
+            <span className="text-base font-bold text-slate-900 block">Secure</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Easy Checkout</span>
+          </div>
+        </div>
+
+        {/* Why Choose Hello Local */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xs space-y-3">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-900">
+            Why Shop on Hello Local?
+          </h3>
+
+          <div className="space-y-2.5 divide-y divide-slate-100 text-xs">
+            <div className="pt-2.5 first:pt-0 flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] font-bold text-[10px] flex-shrink-0">
+                1
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900">Support Local Economy</h4>
+                <p className="text-slate-500 mt-0.5 leading-relaxed">
+                  Every order directly supports neighborhood grocery merchants and local delivery partners.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2.5 flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] font-bold text-[10px] flex-shrink-0">
+                2
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900">Fair Pricing & Great Discounts</h4>
+                <p className="text-slate-500 mt-0.5 leading-relaxed">
+                  Enjoy daily discount deals, super saver combos, and verified MRP discounts.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2.5 flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] font-bold text-[10px] flex-shrink-0">
+                3
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900">Zero Contact & OTP Verified</h4>
+                <p className="text-slate-500 mt-0.5 leading-relaxed">
+                  Every delivery is secured with OTP verification to ensure your items reach safely.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Contact Support Card */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xs text-center space-y-1.5">
+          <div className="w-9 h-9 mx-auto rounded-xl bg-[#FFF1F4] flex items-center justify-center text-[#FF2E7A]">
+            <PhoneCallIcon size={18} />
+          </div>
+          <h3 className="text-xs sm:text-sm font-bold text-slate-900">Need Help or Have Inquiries?</h3>
+          <p className="text-xs text-slate-500 font-medium">
+            Contact us at <strong className="text-slate-900">support@hellolocal.com</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }

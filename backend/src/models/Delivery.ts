@@ -38,6 +38,16 @@ export interface IDelivery extends Document {
   balance: number;
   cashCollected: number;
   pendingAdminPayout: number;
+  /**
+   * The Razorpay payment intent issued for the courier's most recent COD
+   * settlement attempt. Verification binds the payment to this intent so the
+   * settled amount cannot be declared by the client. (#C-03)
+   */
+  codPayoutIntent?: {
+    razorpayOrderId: string;
+    amount: number;
+    createdAt: Date;
+  };
   settings: {
     notifications: boolean;
     location: boolean;
@@ -180,7 +190,10 @@ const DeliverySchema = new Schema<IDelivery>(
     balance: {
       type: Number,
       default: 0,
-      min: [0, "Balance cannot be negative"],
+      // No min: a commission reversal on a cancelled or returned order can
+      // legitimately take a balance below zero — the money was already paid out
+      // and is owed back. Ordinary debits are still guarded by a conditional
+      // $gte check in debitWallet, so only clawbacks can go negative. (#H-07)
     },
     cashCollected: {
       type: Number,
@@ -191,6 +204,11 @@ const DeliverySchema = new Schema<IDelivery>(
       type: Number,
       default: 0,
       min: [0, "Pending admin payout cannot be negative"],
+    },
+    codPayoutIntent: {
+      razorpayOrderId: { type: String, trim: true },
+      amount: { type: Number, min: 0 },
+      createdAt: { type: Date },
     },
     settings: {
       notifications: { type: Boolean, default: true },

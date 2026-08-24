@@ -1,6 +1,8 @@
 import api from './config';
 
 export interface SalesReportParams {
+    channel?: string;
+    paymentMethod?: string;
     fromDate?: string;
     toDate?: string;
     search?: string;
@@ -12,9 +14,16 @@ export interface SalesReportParams {
 
 export interface SalesReport {
     orderId: string;
+    billNumber?: string;
     orderItemId: string;
     product: string;
     variant: string;
+    quantity?: number;
+    price?: number;
+    taxAmount?: number;
+    channel?: string;
+    paymentMethod?: string;
+    status?: string;
     total: number;
     date: string;
 }

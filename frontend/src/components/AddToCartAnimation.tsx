@@ -43,10 +43,10 @@ interface AddToCartAnimationProps {
  * listens for cart changes to trigger appropriate animations.
  */
 export default function AddToCartAnimation({
-  bottomOffset = 96,
+  bottomOffset = 88,
   pillClassName = '',
   hideOnPages = true,
-  linkTo = '/user/checkout',
+  linkTo = '/cart',
 }: AddToCartAnimationProps) {
   const { cart, lastAddEvent } = useCart();
   const location = useLocation();
@@ -57,11 +57,12 @@ export default function AddToCartAnimation({
   const flyingThumbnailRef = useRef<HTMLDivElement>(null);
   const prevItemsRef = useRef(cart.items);
 
-  // Hide pill on checkout pages, order pages, and account page (if enabled)
+  // Hide pill on checkout pages, order pages, account page, and cart page (if enabled)
   const isCheckoutPage = location.pathname === '/user/checkout' || location.pathname.startsWith('/user/checkout/') || location.pathname === '/checkout' || location.pathname.startsWith('/checkout/');
   const isOrderPage = location.pathname.startsWith('/orders/');
   const isAccountPage = location.pathname === '/account';
-  const shouldHidePill = hideOnPages && (isCheckoutPage || isOrderPage || isAccountPage);
+  const isCartPage = location.pathname === '/cart';
+  const shouldHidePill = hideOnPages && (isCheckoutPage || isOrderPage || isAccountPage || isCartPage);
 
   // Detect removed products and trigger bounce-out animation
   useEffect(() => {
@@ -330,8 +331,7 @@ export default function AddToCartAnimation({
             <Link
               ref={linkRef}
               to={linkTo}
-              className={`text-white rounded-full shadow-xl px-3 py-2 flex items-center gap-2 transition-all duration-300 pointer-events-auto border border-pink-700/30 backdrop-blur-sm ${pillClassName}`}
-              style={{ background: 'linear-gradient(to right, #D4543E, #E84B8A, #D4543E)', boxShadow: '0 10px 25px rgba(232, 75, 138, 0.35)' }}
+              className={`text-white rounded-full px-4 py-2 flex items-center gap-2.5 transition-all duration-200 pointer-events-auto bg-[#FF2E7A] hover:bg-[#E02269] shadow-lg shadow-[#FF2E7A]/30 border border-white/20 active:scale-95 touch-target-min ${pillClassName}`}
             >
               {/* Left: Product thumbnails */}
               <div className="flex items-center -space-x-4">

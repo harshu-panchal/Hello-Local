@@ -5,7 +5,7 @@ import nodemailer from 'nodemailer';
 
 export const replyToContactInquiry = async (req: Request, res: Response) => {
   try {
-    const { email, subject, message } = req.body;
+    const { inquiryId, email, subject, message } = req.body;
 
     if (!email || !subject || !message) {
       return res.status(400).json({
@@ -31,6 +31,15 @@ export const replyToContactInquiry = async (req: Request, res: Response) => {
 
     await transporter.sendMail(mailOptions);
 
+    if (inquiryId) {
+      await Contact.findByIdAndUpdate(inquiryId, {
+        status: 'Replied',
+        repliedAt: new Date(),
+        replySubject: subject,
+        replyMessage: message,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Reply sent successfully.'
@@ -44,10 +53,26 @@ export const replyToContactInquiry = async (req: Request, res: Response) => {
   }
 };
 
-export const getContactInquiries = async (_req: Request, res: Response) => {
-
+export const getContactInquiries = async (req: Request, res: Response) => {
   try {
-    const inquiries = await Contact.find().sort({ createdAt: -1 });
+    const { search, status } = req.query;
+    const query: any = {};
+
+    if (status && status !== 'All') {
+      query.status = status;
+    }
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { name: { $regex: safe, $options: 'i' } },
+        { email: { $regex: safe, $options: 'i' } },
+        { subject: { $regex: safe, $options: 'i' } },
+        { message: { $regex: safe, $options: 'i' } },
+      ];
+    }
+
+    const inquiries = await Contact.find(query).sort({ createdAt: -1 });
     return res.status(200).json({
       success: true,
       data: inquiries
@@ -57,6 +82,31 @@ export const getContactInquiries = async (_req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: error.message || 'Server error while fetching inquiries.'
+    });
+  }
+};
+
+export const deleteContactInquiry = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const inquiry = await Contact.findByIdAndDelete(id);
+
+    if (!inquiry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact inquiry not found.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Contact inquiry deleted successfully.'
+    });
+  } catch (error: any) {
+    console.error('Delete inquiry error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error while deleting inquiry.'
     });
   }
 };

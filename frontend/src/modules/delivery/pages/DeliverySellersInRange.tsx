@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import DeliveryHeader from '../components/DeliveryHeader';
 import DeliveryBottomNav from '../components/DeliveryBottomNav';
-import { getSellersInRadius } from '../../../services/api/delivery/deliveryService';
 import { useDeliveryStatus } from '../context/DeliveryStatusContext';
 import { useAuth } from '../../../context/AuthContext';
 

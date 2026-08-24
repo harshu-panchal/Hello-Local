@@ -35,6 +35,8 @@ export interface ISellerAdRequest extends Document {
     paymentStatus: "Unpaid" | "Paid" | "Refunded";
     paymentMethod?: string;
     paymentReference?: string; // UPI transaction ID / bank ref
+    // Razorpay order id issued for this ad request. (#C-01)
+    razorpayOrderId?: string;
     paymentScreenshotUrl?: string;
     paymentNote?: string;
     paidAt?: Date;
@@ -90,6 +92,10 @@ const SellerAdRequestSchema = new Schema<ISellerAdRequest>(
             default: "Unpaid",
         },
         paymentMethod: { type: String },
+        razorpayOrderId: {
+            type: String,
+            trim: true,
+        },
         paymentReference: { type: String },
         paymentScreenshotUrl: { type: String },
         paymentNote: { type: String },

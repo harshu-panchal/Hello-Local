@@ -1,0 +1,138 @@
+/**
+ * HelloLocal Reference-Fidelity User Design Tokens
+ * Source of Truth: HelloLocal Mobile Consumer App Reference (media_1787223535327.png)
+ */
+
+:root {
+  /* Brand Identity Colors */
+  --hl-orange: #FF8A00;
+  --hl-orange-soft: #FFF7ED;
+  --hl-pink-primary: #FF2E7A;
+  --hl-pink-hover: #E02269;
+  --hl-pink-soft: #FFF1F4;
+  --hl-pink-border: #FFE4EA;
+  --hl-pink-gradient: linear-gradient(135deg, #FF5364 0%, #FF2E7A 100%);
+
+  /* Green (Rating / In-Stock / Fresh) */
+  --hl-green: #22C55E;
+  --hl-green-dark: #16A34A;
+  --hl-green-soft: #F0FDF4;
+  --hl-green-border: #DCFCE7;
+
+  /* Offer / Discount / Warning Amber */
+  --hl-amber: #F59E0B;
+  --hl-amber-soft: #FEF3C7;
+  --hl-amber-border: #FDE68A;
+
+  /* Neutral Surfaces & Backgrounds */
+  --hl-bg-page: #F8FAFC;
+  --hl-bg-card: #FFFFFF;
+  --hl-bg-subtle: #F1F5F9;
+  --hl-border-card: #F1F5F9;
+  --hl-border-subtle: #E2E8F0;
+
+  /* Typography Colors */
+  --hl-text-heading: #0F172A;
+  --hl-text-body: #334155;
+  --hl-text-muted: #64748B;
+  --hl-text-subtle: #94A3B8;
+
+  /* Layering Z-Indices */
+  --hl-z-base: 1;
+  --hl-z-sticky: 30;
+  --hl-z-floating-cart: 40;
+  --hl-z-bottom-nav: 50;
+  --hl-z-chatbot: 50;
+  --hl-z-modal: 60;
+  --hl-z-toast: 70;
+}
+
+/* Reference Card & Surface Utilities */
+.hl-card-standard {
+  background-color: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 1rem; /* rounded-2xl */
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+}
+
+.hl-card-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hl-card-hover:hover {
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.07);
+  transform: translateY(-1px);
+}
+
+/* Reference Button Utilities */
+.hl-btn-primary {
+  background-color: var(--hl-pink-primary);
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 9999px;
+  transition: all 0.15s ease-in-out;
+}
+.hl-btn-primary:hover {
+  background-color: var(--hl-pink-hover);
+  opacity: 0.96;
+}
+.hl-btn-primary:active {
+  transform: scale(0.97);
+}
+
+.hl-btn-secondary {
+  background-color: var(--hl-pink-soft);
+  color: var(--hl-pink-primary);
+  border: 1px solid var(--hl-pink-border);
+  font-weight: 700;
+  border-radius: 9999px;
+  transition: all 0.15s ease-in-out;
+}
+.hl-btn-secondary:hover {
+  background-color: #FFE4EA;
+}
+
+/* Central Floating Local Setu Action Glow */
+.hl-setu-glow {
+  box-shadow: 0 6px 18px -2px rgba(255, 46, 122, 0.45);
+}
+
+/* Safe Area clearance for Mobile Viewports */
+.user-safe-bottom {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+.user-safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.user-page-scroll-buffer {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .user-page-scroll-buffer {
+    padding-bottom: 40px;
+  }
+}
+
+/* Touch Target Minimum (44x44px for accessibility) */
+.touch-target-min {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Shimmer animation for loading states */
+@keyframes userShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.user-image-shimmer {
+  background: linear-gradient(90deg, #F8FAFC 25%, #F1F5F9 50%, #F8FAFC 75%);
+  background-size: 200% 100%;
+  animation: userShimmer 1.5s infinite;
+}

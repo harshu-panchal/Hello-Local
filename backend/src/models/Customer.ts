@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import crypto from 'crypto';
 
 export interface ICustomer extends Document {
   name: string;
@@ -6,7 +7,7 @@ export interface ICustomer extends Document {
   phone: string;
   dateOfBirth?: Date;
   registrationDate: Date;
-  status: 'Active' | 'Inactive';
+  status: 'Active' | 'Inactive' | 'Suspended';
   refCode: string;
   deliveryOtp: string; // Permanent 4-digit OTP for delivery verification
   totalOrders: number;
@@ -85,7 +86,9 @@ const CustomerSchema = new Schema<ICustomer>(
     },
     status: {
       type: String,
-      enum: ['Active', 'Inactive'],
+      // The admin UI offers "Suspend user", which the model did not allow and
+      // the API rejected with a 400 — the button could never work. (#H-32)
+      enum: ['Active', 'Inactive', 'Suspended'],
       default: 'Active',
     },
     refCode: {
@@ -181,7 +184,8 @@ CustomerSchema.pre('save', async function (next) {
   }
   if (!this.deliveryOtp) {
     // Generate permanent 4-digit delivery OTP
-    this.deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    // crypto for an unpredictable code. (#M-23)
+    this.deliveryOtp = crypto.randomInt(1000, 10000).toString();
   }
   next();
 });

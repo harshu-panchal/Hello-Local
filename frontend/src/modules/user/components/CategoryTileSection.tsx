@@ -85,7 +85,7 @@ export default function CategoryTileSection({
   const gapClass = columns >= 6 ? "gap-1.5 md:gap-2.5" : "gap-2.5 md:gap-4";
 
   return (
-    <div className="mt-2 md:mt-3 mb-6 md:mb-8 overflow-visible">
+    <div className="mt-2 md:mt-3 mb-6 md:mb-8 overflow-visible max-w-[1440px] mx-auto">
       <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
         <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight capitalize relative">
           {title}

@@ -94,6 +94,8 @@ const CommissionSchema = new Schema<ICommission>(
 // Indexes
 CommissionSchema.index({ seller: 1, status: 1 });
 CommissionSchema.index({ order: 1 });
+CommissionSchema.index({ deliveryBoy: 1, status: 1 });  // courier earnings
+CommissionSchema.index({ type: 1, status: 1 });         // COD payout sweep
 
 const Commission = (mongoose.models.Commission as mongoose.Model<ICommission>) || mongoose.model<ICommission>("Commission", CommissionSchema);
 

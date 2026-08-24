@@ -15,11 +15,20 @@ import {
  * Get all shop ads
  */
 export const getAllShopAds = asyncHandler(async (req: Request, res: Response) => {
-    const { status, sortBy = "order", sortOrder = "asc" } = req.query;
+    const { search, status, sortBy = "order", sortOrder = "asc" } = req.query;
 
     let query: any = {};
     if (status === "active") query.isActive = true;
     else if (status === "inactive") query.isActive = false;
+
+    if (search && typeof search === "string" && search.trim()) {
+        const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        query.$or = [
+            { shopName: { $regex: safe, $options: "i" } },
+            { tagline: { $regex: safe, $options: "i" } },
+            { requestedBy: { $regex: safe, $options: "i" } },
+        ];
+    }
 
     const sort: any = {};
     sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;

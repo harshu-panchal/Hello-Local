@@ -1,36 +1,22 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import HomeHero from './components/HomeHero';
 import { useOrders } from '../../hooks/useOrders';
 import { useCart } from '../../context/CartContext';
 import { getProducts } from '../../services/api/customerProductService';
-import WishlistButton from '../../components/WishlistButton';
 import { calculateProductPrice } from '../../utils/priceUtils';
+import { UserImage, UserEmptyState } from './components/common';
+import { ArrowLeftIcon, RefreshIcon, PlusIcon, MinusIcon } from './components/common/UserIcons';
 
 const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Delivered':
-      return 'bg-pink-100 text-[#FF2E7A]';
-    case 'On the way':
-      return 'bg-blue-100 text-blue-700';
-    case 'Accepted':
-      return 'bg-yellow-100 text-yellow-700';
-    case 'Received':
-      return 'bg-neutral-100 text-neutral-700';
-    default:
-      return 'bg-neutral-100 text-neutral-700';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateString;
   }
 };
 
@@ -39,59 +25,56 @@ export default function OrderAgain() {
   const { cart, addToCart, updateQuantity } = useCart();
   const navigate = useNavigate();
   const [addedOrders, setAddedOrders] = useState<Set<string>>(new Set());
+  const [bestsellerProducts, setBestsellerProducts] = useState<any[]>([]);
 
-  // Handle "Order Again" - Add all items from an order to cart
   const handleOrderAgain = (order: any, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Mark this order as added
-    setAddedOrders(prev => new Set(prev).add(order.id));
+    setAddedOrders((prev) => new Set(prev).add(order.id));
 
-    // Add each item from the order to the cart
-    order.items
-      .filter((item: any) => item?.product) // Filter out items with null/undefined products
+    (order.items || [])
+      .filter((item: any) => item?.product)
       .forEach((item: any) => {
-        // Check if product is already in cart
-        const existingCartItem = cart.items.find(cartItem => cartItem?.product && cartItem.product.id === item.product.id);
+        const prodId = item.product.id || item.product._id;
+        const existingCartItem = cart.items.find(
+          (cartItem) => cartItem?.product && (cartItem.product.id === prodId || (cartItem.product as any)._id === prodId)
+        );
 
         if (existingCartItem) {
-          // If already in cart, add the order quantity to existing quantity
-          updateQuantity(item.product.id, existingCartItem.quantity + item.quantity);
+          updateQuantity(prodId, existingCartItem.quantity + item.quantity, item.variant);
         } else {
-          // If not in cart, add it first (adds 1)
           addToCart(item.product);
-          // Then update to the correct quantity if needed
           if (item.quantity > 1) {
-            // Use setTimeout to ensure the item is added first
             setTimeout(() => {
-              updateQuantity(item.product.id, item.quantity);
+              updateQuantity(prodId, item.quantity, item.variant);
             }, 10);
           }
         }
       });
   };
 
-  // Get bestseller products
-  const [bestsellerProducts, setBestsellerProducts] = useState<any[]>([]);
-
   useEffect(() => {
     const fetchBestsellers = async () => {
       try {
-        const response = await getProducts({ sort: 'popular', limit: 6 });
+        const response = await getProducts({ sort: 'popular', limit: 8 });
         if (response.success && response.data) {
-          const mapped = (response.data as any[]).map(p => {
-            // Clean product name - remove description suffixes
+          const mapped = (response.data as any[]).map((p) => {
             let productName = p.productName || p.name || '';
-            productName = productName.replace(/\s*-\s*(Fresh|Quality|Assured|Premium|Best|Top|Hygienic|Carefully|Selected).*$/i, '').trim();
+            productName = productName
+              .replace(/\s*-\s*(Fresh|Quality|Assured|Premium|Best|Top|Hygienic|Carefully|Selected).*$/i, '')
+              .trim();
+
+            const { displayPrice, mrp } = calculateProductPrice(p);
 
             return {
               ...p,
               id: p._id || p.id,
               name: productName,
               imageUrl: p.mainImage || p.imageUrl,
-              mrp: p.mrp || p.price,
-              pack: p.variations?.[0]?.title || p.smallDescription || 'Standard'
+              price: displayPrice,
+              mrp: mrp,
+              pack: p.variations?.[0]?.title || p.smallDescription || 'Standard',
             };
           });
           setBestsellerProducts(mapped);
@@ -106,346 +89,199 @@ export default function OrderAgain() {
   const hasOrders = orders && orders.length > 0;
 
   return (
-    <div className="pb-4">
-      {/* BESSELLERS SECTION REMOVED - If you see this comment, new code is loaded */}
-      {/* Header - Same as Home page */}
-      <HomeHero />
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full transition-colors touch-target-min"
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon size={18} />
+            </button>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                Order Again
+              </h1>
+              <p className="text-[10px] text-slate-400 font-medium">
+                Quickly re-order your favorite staples & grocery orders
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      {/* Orders Section - Show when orders exist */}
-      {hasOrders && (
-        <div className="px-4 mt-2 mb-2">
-          <h2 className="text-sm font-semibold text-neutral-900 mb-2">Your Previous Orders</h2>
-          <div className="space-y-1.5">
-            {orders.map((order) => {
-              const shortId = order.id.split('-').slice(-1)[0];
-              const previewItems = order.items.slice(0, 3);
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-3.5 md:pt-6 space-y-6">
+        {/* Past Orders Section */}
+        {hasOrders ? (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
+                Your Past Orders
+              </h2>
+              <span className="text-[11px] text-slate-400 font-medium">
+                Tap to re-add items
+              </span>
+            </div>
 
-              return (
-                <div
-                  key={order.id}
-                  onClick={() => navigate(`/user/orders/${order.id}`)}
-                  className="bg-white rounded-lg border border-neutral-200 p-2 hover:shadow-sm transition-shadow cursor-pointer"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div className="text-xs font-semibold text-neutral-900">
-                          Order #{shortId}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+              {orders.map((order) => {
+                const shortId = order.id.split('-').slice(-1)[0];
+                const isAdded = addedOrders.has(order.id);
+                const previewItems = (order.items || []).slice(0, 4);
+
+                return (
+                  <div
+                    key={order.id}
+                    className="bg-white rounded-2xl border border-slate-100 p-4 shadow-2xs flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-2.5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs sm:text-sm font-bold text-slate-900">
+                              Order #{shortId}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              • {formatDate(order.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            {order.items?.length || 0} items • ₹{(order.totalAmount || (order as any).total || 0).toLocaleString('en-IN')}
+                          </p>
                         </div>
-                        <span
-                          className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0 ${getStatusColor(
-                            order.status
-                          )}`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-neutral-500 mb-1">{formatDate(order.createdAt)}</div>
 
-                      {/* Product Images Preview - Compact */}
-                      <div className="flex items-center gap-1">
-                        {previewItems
-                          .filter(item => item?.product) // Filter out items with null/undefined products
-                          .map((item, idx) => (
-                            <div
-                              key={item.product.id}
-                              className="w-6 h-6 bg-neutral-100 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-                              style={{ marginLeft: idx > 0 ? '-4px' : '0' }}
+                        <button
+                          type="button"
+                          onClick={(e) => handleOrderAgain(order, e)}
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-2xs touch-target-min flex-shrink-0 ${
+                            isAdded
+                              ? 'bg-[#16A34A] text-white'
+                              : 'bg-[#FF2E7A] text-white hover:bg-[#E02269] active:scale-95'
+                          }`}
+                        >
+                          {isAdded ? '✓ Added' : 'Reorder All'}
+                        </button>
+                      </div>
+
+                      {/* Product Thumbnails */}
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+                        {previewItems.map((item: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="w-12 h-12 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center p-1 flex-shrink-0 overflow-hidden"
+                          >
+                            <UserImage
+                              src={item.product?.imageUrl || item.product?.mainImage}
+                              alt={item.product?.name || 'Item'}
+                              categoryFallback="grocery"
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="py-6">
+            <UserEmptyState
+              icon={<RefreshIcon size={32} className="text-[#FF2E7A]" />}
+              title="No previous orders found"
+              description="Once you place an order, your items will appear here for 1-tap reordering."
+              actionText="Browse Categories"
+              onAction={() => navigate('/')}
+            />
+          </div>
+        )}
+
+        {/* Bestseller Essentials Grid */}
+        {bestsellerProducts.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
+                Popular Daily Essentials
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+              {bestsellerProducts.map((product) => {
+                const inCartItem = cart.items.find(
+                  (i) => i.product?.id === product.id || (i.product as any)?._id === product.id
+                );
+                const inCartQty = inCartItem?.quantity || 0;
+
+                return (
+                  <div
+                    key={product.id}
+                    className="bg-white rounded-2xl border border-slate-100 p-2.5 sm:p-3 shadow-2xs flex flex-col justify-between"
+                  >
+                    <div className="w-full aspect-square bg-slate-50 rounded-xl flex items-center justify-center p-1.5 mb-1.5 overflow-hidden">
+                      <UserImage
+                        src={product.imageUrl}
+                        alt={product.name}
+                        categoryFallback="grocery"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900 line-clamp-1 mb-0.5">
+                        {product.name}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-medium mb-1.5">
+                        {product.pack}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-1.5 border-t border-slate-50">
+                        <span className="text-xs font-bold text-slate-900">
+                          ₹{product.price?.toLocaleString('en-IN')}
+                        </span>
+
+                        {inCartQty === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => addToCart(product)}
+                            className="px-2.5 py-1 bg-[#FFF1F4] hover:bg-[#FFE4EA] text-[#FF2E7A] border border-[#FFE4EA] rounded-full text-xs font-bold transition-colors touch-target-min"
+                          >
+                            + ADD
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 bg-[#FFF1F4] border border-[#FFE4EA] rounded-full px-1.5 py-0.5 text-[#FF2E7A]">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(product.id, inCartQty - 1)}
+                              className="w-4 h-4 flex items-center justify-center font-bold text-xs"
                             >
-                              {item.product.imageUrl ? (
-                                <img
-                                  src={item.product.imageUrl}
-                                  alt={item.product.name}
-                                  className="w-full h-full object-contain"
-                                />
-                              ) : (
-                                <span className="text-[8px] text-neutral-400">
-                                  {(item.product.name || item.product.productName || '?').charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        {order.items.length > 3 && (
-                          <div className="w-6 h-6 bg-neutral-200 rounded flex items-center justify-center text-[8px] font-medium text-neutral-600">
-                            +{order.items.length - 3}
+                              <MinusIcon size={10} />
+                            </button>
+                            <span className="text-xs font-bold min-w-[1rem] text-center">
+                              {inCartQty}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(product.id, inCartQty + 1)}
+                              className="w-4 h-4 flex items-center justify-center font-bold text-xs"
+                            >
+                              <PlusIcon size={10} />
+                            </button>
                           </div>
                         )}
                       </div>
                     </div>
-
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <div className="text-xs font-bold text-neutral-900">
-                        ₹{order.totalAmount.toFixed(0)}
-                      </div>
-                      <div className="text-[10px] text-neutral-500">
-                        {order.totalItems} {order.totalItems === 1 ? 'item' : 'items'}
-                      </div>
-                      {/* Order Again Button */}
-                      <button
-                        onClick={(e) => handleOrderAgain(order, e)}
-                        disabled={addedOrders.has(order.id)}
-                        className={`mt-1 text-[10px] font-semibold px-3 py-1 rounded-md transition-colors shadow-sm ${addedOrders.has(order.id)
-                          ? 'bg-orange-200 text-neutral-600 cursor-not-allowed'
-                          : 'bg-[#FF2E7A] text-white hover:opacity-90 cursor-pointer'
-                          }`}
-                      >
-                        {addedOrders.has(order.id) ? 'Added to Cart!' : 'Order Again'}
-                      </button>
-                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Bestsellers Section - Using checkout-style cards */}
-      <div className="px-4 py-2.5 border-b border-neutral-200">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Bestsellers</h2>
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-3" style={{ scrollSnapType: 'x mandatory' }}>
-          {bestsellerProducts.map((product) => {
-            // Get Price and MRP using utility
-            const { displayPrice, mrp, discount, hasDiscount } = calculateProductPrice(product);
-
-            // Get quantity in cart
-            const cartItem = cart.items.find(item => item?.product && item.product.id === product.id);
-            const inCartQty = cartItem?.quantity || 0;
-
-            return (
-              <div
-                key={product.id}
-                className="flex-shrink-0 w-[140px]"
-                style={{ scrollSnapAlign: 'start' }}
-              >
-                <div className="bg-white rounded-lg overflow-hidden flex flex-col relative h-full" style={{ boxShadow: '0 1px 1px rgba(0, 0, 0, 0.03)' }}>
-                  {/* Product Image Area */}
-                  <div
-                    onClick={() => navigate(`/product/${product.id}`)}
-                    className="relative block cursor-pointer"
-                  >
-                    <div className="w-full h-28 bg-neutral-100 flex items-center justify-center overflow-hidden relative">
-                      {product.imageUrl ? (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-4xl">
-                          {(product.name || product.productName || '?').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-
-                      {/* Red Discount Badge - Top Left */}
-                      {discount > 0 && (
-                        <div className="absolute top-1 left-1 z-10 bg-red-600 text-white text-[9px] font-bold px-1 py-0.5 rounded">
-                          {discount}% OFF
-                        </div>
-                      )}
-
-                      {/* Heart Icon - Top Right */}
-                      <WishlistButton
-                        productId={product.id}
-                        size="sm"
-                        className="top-1 right-1 shadow-sm"
-                      />
-
-                      {/* ADD Button or Quantity Stepper - Overlaid on bottom right of image */}
-                      <div className="absolute bottom-1.5 right-1.5 z-10">
-                        <AnimatePresence mode="wait">
-                          {inCartQty === 0 ? (
-                            <motion.button
-                              key="add-button"
-                              type="button"
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.8 }}
-                              transition={{ duration: 0.2 }}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                addToCart(product, e.currentTarget);
-                              }}
-                              className="bg-white/95 backdrop-blur-sm text-[#FF2E7A] border-2 border-[#FF2E7A] text-[10px] font-semibold px-2 py-1 rounded shadow-md hover:bg-white transition-colors"
-                            >
-                              ADD
-                            </motion.button>
-                          ) : (
-                            <motion.div
-                              key="stepper"
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.8 }}
-                              transition={{ duration: 0.2 }}
-                              className="flex items-center gap-1 bg-[#FF2E7A] rounded px-1.5 py-1 shadow-md"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <motion.button
-                                whileTap={{ scale: 0.9 }}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  updateQuantity(product.id, inCartQty - 1);
-                                }}
-                                className="w-4 h-4 flex items-center justify-center text-white font-bold hover:bg-pink-700 rounded transition-colors p-0 leading-none"
-                                style={{ lineHeight: 1, fontSize: '14px' }}
-                              >
-                                <span className="relative top-[-1px]">−</span>
-                              </motion.button>
-                              <motion.span
-                                key={inCartQty}
-                                initial={{ scale: 1.2, y: -2 }}
-                                animate={{ scale: 1, y: 0 }}
-                                transition={{ type: 'spring', stiffness: 500, damping: 15 }}
-                                className="text-white font-bold min-w-[0.75rem] text-center"
-                                style={{ fontSize: '12px' }}
-                              >
-                                {inCartQty}
-                              </motion.span>
-                              <motion.button
-                                whileTap={{ scale: 0.9 }}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  updateQuantity(product.id, inCartQty + 1);
-                                }}
-                                className="w-4 h-4 flex items-center justify-center text-white font-bold hover:bg-pink-700 rounded transition-colors p-0 leading-none"
-                                style={{ lineHeight: 1, fontSize: '14px' }}
-                              >
-                                <span className="relative top-[-1px]">+</span>
-                              </motion.button>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Product Details */}
-                  <div className="p-1.5 flex-1 flex flex-col bg-white">
-                    {/* Product Name */}
-                    <div
-                      onClick={() => navigate(`/product/${product.id}`)}
-                      className="mb-0.5 cursor-pointer"
-                    >
-                      <h3 className="text-[10px] font-bold text-neutral-900 line-clamp-2 leading-tight">
-                        {(() => {
-                          // Remove description suffixes like " - Fresh & Quality Assured", " - Premium Quality", etc.
-                          const productName = product.name || product.productName || '';
-                          return productName.replace(/\s*-\s*(Fresh|Quality|Assured|Premium|Best|Top|Hygienic|Carefully|Selected).*$/i, '').trim();
-                        })()}
-                      </h3>
-                    </div>
-
-                    {/* Rating and Reviews */}
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <div className="flex items-center">
-                        {[...Array(5)].map((_, i) => (
-                          <svg
-                            key={i}
-                            width="8"
-                            height="8"
-                            viewBox="0 0 24 24"
-                            fill={i < 4 ? '#fbbf24' : '#e5e7eb'}
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                          </svg>
-                        ))}
-                      </div>
-                      <span className="text-[8px] text-neutral-500">(85)</span>
-                    </div>
-
-                    {/* Delivery Time */}
-                    <div className="text-[9px] text-neutral-600 mb-0.5">
-                      20 MINS
-                    </div>
-
-                    {/* Discount - Blue Text */}
-                    {discount > 0 && (
-                      <div className="text-[9px] text-blue-600 font-semibold mb-0.5">
-                        {discount}% OFF
-                      </div>
-                    )}
-
-                    {/* Price */}
-                    <div className="mb-1">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-[13px] font-bold text-neutral-900">
-                          ₹{displayPrice.toLocaleString('en-IN')}
-                        </span>
-                        {hasDiscount && (
-                          <span className="text-[10px] text-neutral-400 line-through">
-                            ₹{mrp.toLocaleString('en-IN')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Bottom Link */}
-                    <div
-                      onClick={() => navigate(`/category/${product.categoryId || 'all'}`)}
-                      className="w-full bg-pink-100 text-pink-700 text-[8px] font-medium py-0.5 rounded-lg flex items-center justify-between px-1 hover:bg-pink-200 transition-colors mt-auto cursor-pointer"
-                    >
-                      <span>See more like this</span>
-                      <div className="flex items-center gap-0.5">
-                        <div className="w-px h-2 bg-pink-300"></div>
-                        <svg width="6" height="6" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M0 0L8 4L0 8Z" fill="#FF2E7A" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Empty State Illustration - Show when no orders */}
-      {!hasOrders && (
-        <div className="bg-stone-50 py-6 px-4">
-          <div className="flex flex-col items-center justify-center max-w-md mx-auto">
-            {/* Grocery Illustration */}
-            <div className="relative w-full max-w-xs mb-4">
-              <div className="relative flex items-center justify-center">
-                {/* Yellow Shopping Bag */}
-                <div className="relative w-40 h-48 bg-gradient-to-b from-yellow-400 via-yellow-300 to-yellow-500 rounded-b-2xl rounded-t-lg shadow-xl border-2 border-yellow-500/30 flex items-center justify-center">
-                  {/* Enhanced bag opening/top with depth */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-8 bg-gradient-to-b from-yellow-500 to-yellow-400 rounded-t-lg shadow-inner"></div>
-
-                  {/* Enhanced bag handle with 3D effect */}
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-20 h-7 border-[4px] border-yellow-600 rounded-full border-b-transparent shadow-lg">
-                    <div className="absolute top-1 left-1/2 -translate-x-1/2 w-12 h-4 border-[2px] border-yellow-500/50 rounded-full border-b-transparent"></div>
-                  </div>
-
-                  {/* Decorative pattern/stitching on bag */}
-                  <div className="absolute top-12 left-1/2 -translate-x-1/2 w-32 h-0.5 bg-yellow-600/30"></div>
-                  <div className="absolute top-20 left-1/2 -translate-x-1/2 w-28 h-0.5 bg-yellow-600/20"></div>
-
-                  {/* Hello Local text inside basket */}
-                  <div className="relative z-10 text-center px-4">
-                    <span className="text-2xl font-extrabold text-neutral-900 tracking-tight drop-shadow-sm">Hello Local</span>
-                    <span className="inline-block w-2.5 h-2.5 bg-[#FF2E7A] rounded-full ml-1.5 shadow-sm"></span>
-                  </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
-
-            {/* Reordering Message */}
-            <h2 className="text-xl font-bold text-neutral-900 mb-1.5 text-center">
-              Reordering will be easy
-            </h2>
-            <p className="text-xs text-neutral-600 text-center max-w-xs leading-snug">
-              Items you order will show up here so you can buy them again easily
-            </p>
           </div>
-        </div>
-      )}
-
+        )}
+      </div>
     </div>
   );
 }

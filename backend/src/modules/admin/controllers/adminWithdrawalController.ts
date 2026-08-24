@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import WithdrawRequest from '../../../models/WithdrawRequest';
-import { debitWallet } from '../../../services/walletManagementService';
+import { releaseWithdrawalHold } from '../../../services/walletManagementService';
 import { sendNotification } from '../../../services/notificationService';
 import { sendNotificationToUser } from '../../../services/firebaseAdmin';
 import mongoose from 'mongoose';
@@ -13,9 +13,13 @@ const notifyWithdrawalStatus = async (
     request: any,
     status: 'Approved' | 'Rejected' | 'Completed'
 ) => {
-    if (request.userType !== 'SELLER') return;
-    const sellerId = request.userId?.toString();
-    if (!sellerId) return;
+    // Delivery partners used to be skipped entirely, so a courier never learned
+    // that their withdrawal had been approved, rejected or paid. (#M-13)
+    const recipientId = request.userId?.toString();
+    if (!recipientId) return;
+    const recipientType: 'Seller' | 'Delivery' =
+        request.userType === 'SELLER' ? 'Seller' : 'Delivery';
+    const sellerId = recipientId;
 
     const amount = request.amount;
     const map: Record<string, { title: string; message: string; type: 'Success' | 'Error' }> = {
@@ -38,7 +42,7 @@ const notifyWithdrawalStatus = async (
     const info = map[status];
 
     try {
-        await sendNotification('Seller', sellerId, info.title, info.message, {
+        await sendNotification(recipientType, sellerId, info.title, info.message, {
             type: info.type,
             priority: 'High',
         });
@@ -46,7 +50,7 @@ const notifyWithdrawalStatus = async (
         console.error('Withdrawal in-app notification failed:', err);
     }
     try {
-        await sendNotificationToUser(sellerId, 'Seller', {
+        await sendNotificationToUser(sellerId, recipientType, {
             title: info.title,
             body: info.message,
             data: { type: 'WITHDRAWAL_STATUS', status },
@@ -61,11 +65,58 @@ const notifyWithdrawalStatus = async (
  */
 export const getAllWithdrawals = async (req: Request, res: Response) => {
     try {
-        const { status, userType, page = 1, limit = 20 } = req.query;
+        const { status, userType, search, dateFrom, dateTo, page = 1, limit = 20 } = req.query;
 
         const query: any = {};
-        if (status) query.status = status;
-        if (userType) query.userType = userType;
+        if (status && status !== "all" && status !== "All") query.status = status;
+        if (userType && userType !== "all" && userType !== "All") query.userType = userType;
+
+        if (dateFrom || dateTo) {
+            query.createdAt = {};
+            if (dateFrom) {
+                const from = new Date(dateFrom as string);
+                if (!isNaN(from.getTime())) {
+                    from.setHours(0, 0, 0, 0);
+                    query.createdAt.$gte = from;
+                }
+            }
+            if (dateTo) {
+                const to = new Date(dateTo as string);
+                if (!isNaN(to.getTime())) {
+                    to.setHours(23, 59, 59, 999);
+                    query.createdAt.$lte = to;
+                }
+            }
+        }
+
+        if (search && typeof search === "string" && search.trim()) {
+            const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const [sellerMatches, deliveryMatches] = await Promise.all([
+                mongoose.model("Seller").find({
+                    $or: [
+                        { sellerName: { $regex: safe, $options: "i" } },
+                        { storeName: { $regex: safe, $options: "i" } },
+                        { mobile: { $regex: safe, $options: "i" } },
+                        { email: { $regex: safe, $options: "i" } },
+                    ],
+                }).distinct("_id"),
+                mongoose.model("Delivery").find({
+                    $or: [
+                        { name: { $regex: safe, $options: "i" } },
+                        { mobile: { $regex: safe, $options: "i" } },
+                        { email: { $regex: safe, $options: "i" } },
+                    ],
+                }).distinct("_id"),
+            ]);
+            const matchedUserIds = [...sellerMatches, ...deliveryMatches];
+
+            query.$or = [
+                { accountDetails: { $regex: safe, $options: "i" } },
+                { transactionReference: { $regex: safe, $options: "i" } },
+                { remarks: { $regex: safe, $options: "i" } },
+                { userId: { $in: matchedUserIds } },
+            ];
+        }
 
         const skip = (Number(page) - 1) * Number(limit);
 
@@ -173,6 +224,14 @@ export const rejectWithdrawal = async (req: Request, res: Response) => {
         if (remarks) request.remarks = remarks;
         await request.save();
 
+        // Funds are reserved when the request is raised, so rejecting must give
+        // them back. (#M-12)
+        try {
+            await releaseWithdrawalHold(request as any, remarks || 'request rejected');
+        } catch (releaseErr) {
+            console.error('Failed to return reserved withdrawal funds:', releaseErr);
+        }
+
         await notifyWithdrawalStatus(request, 'Rejected');
 
         return res.status(200).json({
@@ -225,20 +284,9 @@ export const completeWithdrawal = async (req: Request, res: Response) => {
             });
         }
 
-        // Debit from wallet
-        const debitResult = await debitWallet(
-            request.userId.toString(),
-            request.userType,
-            request.amount,
-            `Withdrawal completed - ${transactionReference}`,
-            undefined,
-            session
-        );
-
-        if (!debitResult.success) {
-            await session.abortTransaction();
-            return res.status(400).json(debitResult);
-        }
+        // The amount was already debited (reserved) when the request was
+        // raised, so completion only records the payout reference. Debiting
+        // again here would take the money twice. (#M-12)
 
         // Update request
         request.status = 'Completed';

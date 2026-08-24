@@ -1,4 +1,5 @@
-import api, { setAuthToken, removeAuthToken } from '../config';
+import api, { removeAuthToken } from '../config';
+import { setAuthToken, setStoredUser } from '../session';
 const handleApiError = (error: any) => {
   if (error.response && error.response.data && error.response.data.message) {
     throw new Error(error.response.data.message);
@@ -42,6 +43,8 @@ export interface RegisterData {
   accountNumber?: string;
   ifscCode?: string;
   bonusType?: string;
+  drivingLicense?: string;
+  nationalIdentityCard?: string;
 }
 
 export interface RegisterResponse {
@@ -84,8 +87,8 @@ export const verifyOTP = async (
     });
 
     if (response.data.success && response.data.data?.token) {
-      localStorage.setItem('authToken', response.data.data.token);
-      localStorage.setItem('userData', JSON.stringify(response.data.data.user));
+      setAuthToken(response.data.data.token, 'delivery');
+      setStoredUser(response.data.data.user, 'delivery');
     }
 
     return response.data;

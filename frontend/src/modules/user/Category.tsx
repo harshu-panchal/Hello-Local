@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import ProductCard from "./components/ProductCard";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,6 +9,8 @@ import {
 } from "../../services/api/customerProductService";
 import { useLocation as useLocationContext } from "../../hooks/useLocation";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
+import { UserEmptyState, UserImage } from "./components/common";
+import { FilterIcon, ArrowLeftIcon, CloseIcon, LocationPinIcon } from "./components/common/UserIcons";
 
 export default function CategoryPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,11 +21,11 @@ export default function CategoryPage() {
   const [category, setCategory] = useState<ApiCategory | null>(null);
   const [subcategories, setSubcategories] = useState<ApiCategory[]>([]);
   const [selectedSubcategory, setSelectedSubcategory] = useState("all");
+  const [dietFilter, setDietFilter] = useState<'all' | 'Veg' | 'Non-Veg'>('all');
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  useBodyScrollLock(isFiltersOpen); // lock background scroll while filters open (#273)
+  useBodyScrollLock(isFiltersOpen);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [filterSearchQuery, setFilterSearchQuery] = useState("");
-  const [selectedFilterCategory, setSelectedFilterCategory] = useState("Type");
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryLoading, setCategoryLoading] = useState(true);
@@ -55,7 +57,6 @@ export default function CategoryPage() {
             ...(subs || []),
           ]);
 
-          // Check URL query params first, then API response
           const subcategoryFromUrl = searchParams.get("subcategory");
           if (subcategoryFromUrl) {
             setSelectedSubcategory(subcategoryFromUrl);
@@ -80,30 +81,31 @@ export default function CategoryPage() {
     }
   }, [id, searchParams]);
 
+  // Reset diet filter when switching category
+  useEffect(() => {
+    setDietFilter('all');
+  }, [id]);
+
   // Fetch Products when category or subcategory changes
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
       setError(null);
       try {
-        // If the ID in the URL is actually for a subcategory, we should use the parent category ID
-        // which we fetch in the other useEffect and store in 'category'.
-        // However, for fetching products, the backend getProducts handles 'category' (parent)
-        // and 'subcategory' separately.
-
         const params: any = { category: category?._id || id };
         if (selectedSubcategory !== "all") {
           params.subcategory = selectedSubcategory;
         }
-        // Include user location for seller service radius filtering
         if (userLocation?.latitude && userLocation?.longitude) {
           params.latitude = userLocation.latitude;
           params.longitude = userLocation.longitude;
         }
+        if (dietFilter !== 'all') {
+          params.foodType = dietFilter;
+        }
 
         const response = await getProducts(params);
         if (response.success) {
-          // Ensure products have default tags/name array for filtering logic if missing
           const safeProducts = response.data.map((p: any) => ({
             ...p,
             tags: Array.isArray(p.tags) ? p.tags : [],
@@ -124,28 +126,26 @@ export default function CategoryPage() {
     if (id) {
       fetchProducts();
     }
-  }, [id, selectedSubcategory, category?._id, userLocation]);
+  }, [id, selectedSubcategory, category?._id, userLocation, dietFilter]);
 
-  // Client-side filtering removed in favor of backend subcategory filtering
   const categoryProducts = products;
 
   if ((categoryLoading || loading) && !products.length && !category) {
-    return null; // Let global IconLoader handle it
+    return null;
   }
 
   if (error && !products.length && !category) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center bg-white">
-        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-4">
-          <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center bg-[#F8FAFC]">
+        <div className="w-14 h-14 bg-[#FFF1F4] rounded-2xl flex items-center justify-center mb-3 border border-[#FFE4EA]">
+          <span className="text-xl">⚠️</span>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Oops! Something went wrong</h3>
-        <p className="text-gray-600 mb-6 max-w-xs">{error}</p>
+        <h3 className="text-base font-bold text-slate-900 mb-1 tracking-tight">Oops! Something went wrong</h3>
+        <p className="text-xs text-slate-500 mb-4 max-w-xs">{error}</p>
         <button
+          type="button"
           onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-[#FF2E7A] text-white rounded-full font-medium hover:opacity-90 transition-colors"
+          className="px-5 py-2 bg-[#FF2E7A] text-white rounded-full text-xs font-bold shadow-xs hover:bg-[#E02269] transition-colors min-h-[40px]"
         >
           Try Refreshing
         </button>
@@ -153,61 +153,21 @@ export default function CategoryPage() {
     );
   }
 
-  if (!category && !categoryLoading) {
-    return (
-      <div className="px-4 md:px-6 lg:px-8 py-6 md:py-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-neutral-900 mb-4">
-          Category not found
-        </h1>
-        <p className="text-neutral-600 md:text-lg">
-          The category you're looking for doesn't exist.
-        </p>
-      </div>
-    );
-  }
-
-  // Extract filter options from products
   const getFilterOptions = () => {
-    const categoryProducts = products.filter((p) => p.categoryId === id);
     const filterMap = new Map<string, number>();
 
-    categoryProducts.forEach((product) => {
-      // Extract main ingredient/type from product name
-      const name = product.name.toLowerCase();
-      // Remove common prefixes like "fresh", "organic", etc.
-      const cleanName = name
-        .replace(/^(fresh|organic|premium|best|new)\s+/i, "")
-        .trim();
-
+    products.forEach((product) => {
+      const cleanName = (product.name || "").toLowerCase();
       const commonTypes = [
         { keywords: ["tomato", "tomatoes"], display: "Tomato" },
         { keywords: ["potato", "potatoes"], display: "Potato" },
-        { keywords: ["chilli", "chili", "chilies"], display: "Chilli" },
-        { keywords: ["spinach"], display: "Spinach" },
-        { keywords: ["brinjal", "eggplant"], display: "Brinjal" },
         { keywords: ["onion", "onions"], display: "Onion" },
-        { keywords: ["peanut", "peanuts"], display: "Peanuts" },
-        { keywords: ["lemon", "lemons"], display: "Lemon" },
-        { keywords: ["mushroom", "mushrooms"], display: "Mushroom" },
-        {
-          keywords: ["capsicum", "bell pepper", "pepper"],
-          display: "Capsicum",
-        },
-        { keywords: ["ginger"], display: "Ginger" },
-        { keywords: ["carrot", "carrots"], display: "Carrot" },
-        { keywords: ["fenugreek", "methi"], display: "Fenugreek" },
-        { keywords: ["broccoli"], display: "Broccoli" },
-        { keywords: ["cucumber", "cucumbers"], display: "Cucumber" },
-        { keywords: ["cabbage"], display: "Cabbage" },
-        { keywords: ["cauliflower"], display: "Cauliflower" },
-        { keywords: ["ladyfinger", "okra"], display: "Ladyfinger" },
-        { keywords: ["beans"], display: "Beans" },
-        { keywords: ["peas"], display: "Peas" },
-        { keywords: ["garlic"], display: "Garlic" },
         { keywords: ["apple", "apples"], display: "Apple" },
         { keywords: ["banana", "bananas"], display: "Banana" },
         { keywords: ["orange", "oranges"], display: "Orange" },
-        { keywords: ["mango", "mangoes"], display: "Mango" },
+        { keywords: ["milk"], display: "Milk" },
+        { keywords: ["bread"], display: "Bread" },
+        { keywords: ["cheese", "butter", "paneer"], display: "Dairy" },
       ];
 
       for (const type of commonTypes) {
@@ -219,35 +179,8 @@ export default function CategoryPage() {
     });
 
     return Array.from(filterMap.entries())
-      .map(([name, count]) => ({ name, count, icon: getIconForFilter(name) }))
+      .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  };
-
-  const getIconForFilter = (name: string): string => {
-    const iconMap: Record<string, string> = {
-      Tomato: "🍅",
-      Potato: "🥔",
-      Chilli: "🌶️",
-      Spinach: "🥬",
-      Brinjal: "🍆",
-      Onion: "🧅",
-      Peanuts: "🥜",
-      Lemon: "🍋",
-      Mushroom: "🍄",
-      Capsicum: "🫑",
-      Ginger: "🫚",
-      Carrot: "🥕",
-      Fenugreek: "🌿",
-      Broccoli: "🥦",
-      Cucumber: "🥒",
-      Cabbage: "🥬",
-      Cauliflower: "🥦",
-      Apple: "🍎",
-      Banana: "🍌",
-      Orange: "🍊",
-      Mango: "🥭",
-    };
-    return iconMap[name] || "🥬";
   };
 
   const filterOptions = getFilterOptions();
@@ -268,79 +201,58 @@ export default function CategoryPage() {
   };
 
   const handleApplyFilters = () => {
-    // Apply filters logic here
     setIsFiltersOpen(false);
   };
 
   return (
-    <div className="flex bg-white h-screen overflow-hidden">
-      {/* Left Sidebar */}
-      <div className="w-24 bg-white border-r border-neutral-100 overflow-y-auto scrollbar-hide flex-shrink-0 py-2">
-        <div className="space-y-1">
+    <div className="flex bg-[#F8FAFC] h-screen overflow-hidden">
+      {/* 1. Left Sidebar - Subcategories Strip */}
+      <div className="w-20 sm:w-24 bg-white border-r border-slate-100 overflow-y-auto scrollbar-hide flex-shrink-0 py-2">
+        <div className="space-y-1 px-1">
           {subcategories.map((subcat) => {
-            const isSelected =
-              selectedSubcategory === (subcat.id || subcat._id);
+            const subId = subcat.id || subcat._id;
+            const isSelected = selectedSubcategory === subId;
             return (
               <button
-                key={subcat.id || subcat._id}
+                key={subId}
                 type="button"
-                onClick={() => {
-                  console.log("Clicked subcategory:", subcat.id || subcat._id);
-                  setSelectedSubcategory(subcat.id || subcat._id);
-                }}
-                className={`w-full flex flex-col items-center justify-center py-2 relative transition-all duration-200 group ${
-                  isSelected ? "bg-pink-50" : "hover:bg-neutral-50"
+                onClick={() => setSelectedSubcategory(subId)}
+                className={`w-full flex flex-col items-center justify-center py-2 rounded-xl relative transition-all group touch-target-min ${
+                  isSelected ? "bg-[#FFF1F4]" : "hover:bg-slate-50"
                 }`}
-                style={{
-                  minHeight: "80px",
-                }}>
-                {/* Active Indicator - curved blob on left */}
+                style={{ minHeight: "72px" }}
+              >
+                {/* Active Indicator Bar */}
                 {isSelected && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-[#FF2E7A] rounded-r-full"></div>
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 bg-[#FF2E7A] rounded-r-full" />
                 )}
 
-                {/* Image Container */}
+                {/* Subcategory Image */}
                 <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl mb-1.5 flex-shrink-0 overflow-hidden transition-all duration-200 shadow-sm ${
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-base mb-1 flex-shrink-0 overflow-hidden transition-all ${
                     isSelected
-                      ? "ring-2 ring-[#FF2E7A] ring-offset-2 bg-white"
-                      : "bg-neutral-50 border border-neutral-100 group-hover:shadow-md"
-                  }`}>
+                      ? "ring-2 ring-[#FF2E7A] bg-white shadow-2xs"
+                      : "bg-slate-50 border border-slate-100 group-hover:bg-white"
+                  }`}
+                >
                   {subcat.image ? (
-                    <img
+                    <UserImage
                       src={subcat.image}
                       alt={subcat.name}
+                      categoryFallback={subcat.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                        const parent = target.parentElement;
-                        if (parent) {
-                          parent.textContent =
-                            subcat.icon || subcat.name?.charAt(0) || "📦";
-                        }
-                      }}
                     />
                   ) : (
-                    <span className="text-2xl">{subcat.icon || "📦"}</span>
+                    <span className="text-lg select-none">{subcat.name === 'All' ? '📦' : '🛍️'}</span>
                   )}
                 </div>
 
                 {/* Text Label */}
                 <span
-                  className={`text-[10px] text-center leading-tight px-1 transition-colors ${
-                    isSelected
-                      ? "font-bold text-pink-700"
-                      : "text-neutral-500 group-hover:text-neutral-900"
+                  className={`text-[10px] text-center leading-tight px-1 font-bold line-clamp-2 ${
+                    isSelected ? "text-[#FF2E7A]" : "text-slate-600 group-hover:text-slate-900"
                   }`}
-                  style={{
-                    wordBreak: "break-word",
-                    maxWidth: "100%",
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden"
-                  }}>
+                >
                   {subcat.name}
                 </span>
               </button>
@@ -349,315 +261,217 @@ export default function CategoryPage() {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      {/* 2. Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#F8FAFC]">
         {/* Header */}
-        <div className="sticky top-0 z-40 bg-white border-b border-neutral-200 flex-shrink-0">
-          <div className="px-4 md:px-6 lg:px-8 py-3 md:py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => navigate(-1)}
-                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors"
-                  aria-label="Go back">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M15 18L9 12L15 6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <h1 className="text-base md:text-xl font-bold text-neutral-900">
+        <div className="sticky top-0 z-30 bg-white border-b border-slate-100 flex-shrink-0 shadow-2xs">
+          <div className="px-4 md:px-6 py-2.5">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="w-8 h-8 flex items-center justify-center text-slate-700 hover:bg-slate-100 rounded-full transition-colors touch-target-min"
+                aria-label="Go back"
+              >
+                <ArrowLeftIcon size={18} />
+              </button>
+              <div>
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight tracking-tight">
                   {category?.name}
                 </h1>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {categoryProducts.length} items available
+                </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Filter/Sort Bar - Updated layout */}
-        <div className="px-4 md:px-6 lg:px-8 py-1.5 md:py-2 bg-white border-b border-neutral-200 flex-shrink-0">
-          <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto scrollbar-hide -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 scroll-smooth">
+        {/* Filter & Diet Strip */}
+        <div className="px-4 py-2 bg-white border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
             {/* Filters Button */}
             <button
+              type="button"
               onClick={() => setIsFiltersOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors flex-shrink-0 whitespace-nowrap">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="flex-shrink-0">
-                <circle cx="6" cy="8" r="1.5" fill="currentColor" />
-                <circle cx="6" cy="16" r="1.5" fill="currentColor" />
-                <path
-                  d="M3 8h6M3 16h6M10 8h11M10 16h11"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0 whitespace-nowrap min-h-[34px]"
+            >
+              <FilterIcon size={13} className="text-slate-500" />
               <span>Filters</span>
-              <span className="text-neutral-500 text-[10px] ml-0.5">▾</span>
             </button>
 
-            {/* Sort Button */}
-            <button className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors flex-shrink-0 whitespace-nowrap">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="flex-shrink-0">
-                <path
-                  d="M7 8l5-5 5 5M7 16l5 5 5-5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span>Sort</span>
-              <span className="text-neutral-500 text-[10px] ml-0.5">▾</span>
+            {/* Veg Diet Filter */}
+            <button
+              type="button"
+              onClick={() => setDietFilter(dietFilter === 'Veg' ? 'all' : 'Veg')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full transition-all flex-shrink-0 whitespace-nowrap border min-h-[34px] ${
+                dietFilter === 'Veg'
+                  ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span className="w-3 h-3 border border-emerald-600 rounded-sm flex items-center justify-center p-[2px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+              </span>
+              <span>Veg</span>
             </button>
 
-            {/* Category Buttons */}
-            {subcategories
-              .filter((subcat) => (subcat.id || subcat._id) !== "all")
-              .map((subcat) => {
-                const subId = subcat.id || subcat._id;
-                const isSelected = selectedSubcategory === subId;
-                return (
-                  <button
-                    key={subId}
-                    onClick={() => setSelectedSubcategory(subId)}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors flex-shrink-0 whitespace-nowrap ${
-                      isSelected
-                        ? "bg-white border border-neutral-300 text-neutral-900"
-                        : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-                    }`}>
-                    <span className="text-sm flex-shrink-0">
-                      {subcat.image ? (
-                        <img
-                          src={subcat.image}
-                          alt=""
-                          className="w-4 h-4 object-cover rounded-full"
-                        />
-                      ) : (
-                        subcat.icon || "📦"
-                      )}
-                    </span>
-                    <span>{subcat.name}</span>
-                  </button>
-                );
-              })}
+            {/* Non-Veg Diet Filter */}
+            <button
+              type="button"
+              onClick={() => setDietFilter(dietFilter === 'Non-Veg' ? 'all' : 'Non-Veg')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full transition-all flex-shrink-0 whitespace-nowrap border min-h-[34px] ${
+                dietFilter === 'Non-Veg'
+                  ? 'bg-rose-50 border-rose-400 text-rose-700'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span className="w-3 h-3 border border-rose-600 rounded-sm flex items-center justify-center p-[2px]">
+                <span className="w-0 h-0 border-l-[3px] border-r-[3px] border-b-[5px] border-l-transparent border-r-transparent border-b-rose-600" />
+              </span>
+              <span>Non-Veg</span>
+            </button>
           </div>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide bg-white">
-          {/* Products Grid */}
+        {/* Products Grid */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide pb-24 md:pb-12 px-3 sm:px-4 md:px-6 py-3.5">
           {categoryProducts.length > 0 ? (
-            <div className="px-3 md:px-6 lg:px-8 py-4 md:py-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">
-                {categoryProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    showHeartIcon={false}
-                    showStockInfo={false}
-                    showBadge={true}
-                    showOptionsText={true}
-                    categoryStyle={true}
-                  />
-                ))}
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5">
+              {categoryProducts.map((product) => (
+                <ProductCard
+                  key={product.id || product._id}
+                  product={product}
+                  showHeartIcon={true}
+                  showStockInfo={false}
+                  showBadge={true}
+                  showOptionsText={true}
+                  categoryStyle={false}
+                />
+              ))}
             </div>
           ) : !userLocation ? (
-            <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 text-center flex flex-col items-center gap-3">
-              <div className="w-16 h-16 bg-pink-50 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-[#FF2E7A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <p className="text-neutral-700 font-semibold text-base">Enable Location</p>
-              <p className="text-neutral-500 text-sm max-w-xs">
-                Please allow location access to see products available near you.
-              </p>
+            <div className="py-10">
+              <UserEmptyState
+                icon={<LocationPinIcon size={28} className="text-[#FF2E7A]" />}
+                title="Location Access Required"
+                description="Please enable location access to see products available from local stores in your area."
+              />
             </div>
           ) : (
-            <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 text-center">
-              <p className="text-neutral-500 md:text-lg">
-                No products found in this category.
-              </p>
+            <div className="py-10">
+              <UserEmptyState
+                icon={<FilterIcon size={28} className="text-slate-400" />}
+                title="No products found"
+                description="We couldn't find any products in this subcategory matching your filters."
+                actionText="View All Items"
+                onAction={() => setSelectedSubcategory('all')}
+              />
             </div>
           )}
         </div>
       </div>
 
-      {/* Filters Modal */}
+      {/* Filters Modal / Bottom Sheet */}
       <AnimatePresence>
         {isFiltersOpen && (
-          <>
-            {/* Hide footer when modal is open */}
-            <style>{`
-              nav[class*="fixed bottom-0"] {
-                display: none !important;
-              }
-            `}</style>
-            <div className="fixed inset-0 z-[100]">
-              {/* Backdrop - Semi-transparent overlay */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="absolute inset-0 bg-black/40"
-                onClick={() => setIsFiltersOpen(false)}
-              />
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsFiltersOpen(false)}
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
+            />
 
-              {/* Modal - Slides up from bottom, compact size matching image */}
-              <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[70vh] flex flex-col">
-                {/* Header */}
-                <div className="px-5 py-4 border-b border-neutral-200">
-                  <h2 className="text-base font-bold text-neutral-900">
-                    Filters
-                  </h2>
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+              className="relative w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-10 flex flex-col max-h-[80dvh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                <div className="text-sm font-bold text-slate-900 tracking-tight">
+                  Filter Products
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFiltersOpen(false)}
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                  aria-label="Close filters"
+                >
+                  <CloseIcon size={16} />
+                </button>
+              </div>
 
-                {/* Search Bar */}
-                <div className="px-5 py-3 border-b border-neutral-200">
-                  <div className="relative">
-                    <svg
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-                    <input
-                      type="text"
-                      placeholder="Search across filters..."
-                      value={filterSearchQuery}
-                      onChange={(e) => setFilterSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF2E7A] focus:border-transparent text-sm text-neutral-700 placeholder:text-neutral-400"
-                    />
-                  </div>
-                </div>
+              {/* Filter Search */}
+              <div className="px-5 py-2 border-b border-slate-100">
+                <input
+                  type="text"
+                  value={filterSearchQuery}
+                  onChange={(e) => setFilterSearchQuery(e.target.value)}
+                  placeholder="Search filters..."
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 outline-none"
+                />
+              </div>
 
-                {/* Content Area */}
-                <div className="flex flex-1 overflow-hidden min-h-0">
-                  {/* Left Column - Filter Categories */}
-                  <div className="w-24 border-r border-neutral-200 flex-shrink-0 bg-neutral-50">
-                    <button
-                      onClick={() => setSelectedFilterCategory("Type")}
-                      className={`w-full px-3 py-3 text-left text-sm font-medium transition-colors ${
-                        selectedFilterCategory === "Type"
-                          ? "bg-pink-50 text-pink-700"
-                          : "text-neutral-600 hover:bg-neutral-100"
-                      }`}>
-                      Type
-                    </button>
-                    <button
-                      onClick={() => setSelectedFilterCategory("Properties")}
-                      className={`w-full px-3 py-3 text-left text-sm font-medium transition-colors ${
-                        selectedFilterCategory === "Properties"
-                          ? "bg-pink-50 text-pink-700"
-                          : "text-neutral-600 hover:bg-neutral-100"
-                      }`}>
-                      Properties
-                    </button>
-                  </div>
+              {/* Filter Options List */}
+              <div className="flex-1 overflow-y-auto px-5 py-2.5 space-y-1.5">
+                {filteredOptions.length > 0 ? (
+                  filteredOptions.map((opt) => {
+                    const isChecked = selectedFilters.includes(opt.name);
+                    return (
+                      <label
+                        key={opt.name}
+                        onClick={() => handleFilterToggle(opt.name)}
+                        className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 border border-slate-100 cursor-pointer transition-colors"
+                      >
+                        <span className="text-xs font-medium text-slate-800">{opt.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-bold">({opt.count})</span>
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                              isChecked
+                                ? 'bg-[#FF2E7A] border-transparent text-white'
+                                : 'border-slate-300 bg-white'
+                            }`}
+                          >
+                            {isChecked && (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-slate-400 text-center py-5">No matching filters found</p>
+                )}
+              </div>
 
-                  {/* Right Column - Filter Options */}
-                  <div className="flex-1 overflow-y-auto">
-                    <div className="p-4">
-                      {filteredOptions.map((option) => {
-                        const isChecked = selectedFilters.includes(option.name);
-                        return (
-                          <button
-                            key={option.name}
-                            onClick={() => handleFilterToggle(option.name)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-50 rounded-lg transition-colors">
-                            <span className="text-xl flex-shrink-0 w-6 h-6 flex items-center justify-center">
-                              {option.icon}
-                            </span>
-                            <span className="flex-1 text-left text-sm font-medium text-neutral-700">
-                              {option.name}
-                            </span>
-                            <span className="text-sm text-neutral-500">
-                              ({option.count})
-                            </span>
-                            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 ml-2">
-                              {isChecked ? (
-                                <div className="w-5 h-5 border-2 border-[#FF2E7A] bg-[#FF2E7A] rounded-sm flex items-center justify-center">
-                                  <svg
-                                    className="w-3 h-3 text-white"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={3}
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
-                                </div>
-                              ) : (
-                                <div className="w-5 h-5 border-2 border-neutral-300 rounded-sm bg-white"></div>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer Buttons */}
-                <div className="px-5 py-4 border-t border-neutral-200 flex gap-3 bg-white">
-                  <button
-                    onClick={handleClearFilters}
-                    className="flex-1 px-4 py-2.5 border border-[#FF2E7A] text-[#FF2E7A] rounded-lg font-medium text-sm hover:bg-pink-50 transition-colors bg-white">
-                    Clear Filter
-                  </button>
-                  <button
-                    onClick={handleApplyFilters}
-                    className={`flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                      selectedFilters.length > 0
-                        ? "bg-[#FF2E7A] text-white hover:opacity-90"
-                        : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
-                    }`}
-                    disabled={selectedFilters.length === 0}>
-                    Apply
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </>
+              {/* Footer */}
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 user-safe-bottom">
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800"
+                >
+                  Clear All
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyFilters}
+                  className="px-5 py-2 bg-[#FF2E7A] text-white rounded-full text-xs font-bold shadow-xs hover:bg-[#E02269] transition-colors min-h-[36px]"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

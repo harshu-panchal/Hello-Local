@@ -1,135 +1,23 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useToast } from "../../../context/ToastContext";
 import {
   getFinancialDashboard,
   getWalletTransactions,
   getAdminEarnings,
-  WalletStats,
-  WalletTransaction,
-  AdminEarning,
+  type WalletStats,
+  type WalletTransaction,
+  type AdminEarning,
 } from "../../../services/api/admin/adminWalletService";
 import AdminWithdrawals from "./AdminWithdrawals";
-
-// Icons
-const WalletIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <path d="M20 7h-9a2 2 0 0 0-2 2v1m0 4v9a2 2 0 0 0 2 2h4" />
-    <path d="M19 13h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1" />
-    <path d="M6 7H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h15v4H6.5" />
-  </svg>
-);
-
-const TrendingUpIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-    <polyline points="17 6 23 6 23 12" />
-  </svg>
-);
-
-const CreditCardIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-    <line x1="1" y1="10" x2="23" y2="10" />
-  </svg>
-);
-
-const ClockIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-
-const DollarSignIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <line x1="12" y1="1" x2="12" y2="23" />
-    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-  </svg>
-);
-
-const FilterIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-  </svg>
-);
-
-const DownloadIcon = ({ className }: { className?: string }) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="7 10 12 15 17 10" />
-    <line x1="12" y1="15" x2="12" y2="3" />
-  </svg>
-);
 
 export default function AdminWallet() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<
     "transactions" | "earnings" | "withdrawals"
   >("transactions");
+
+  // Stats State
   const [stats, setStats] = useState<WalletStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -137,11 +25,79 @@ export default function AdminWallet() {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [trxLoading, setTrxLoading] = useState(false);
   const [trxFilter, setTrxFilter] = useState({ userType: "", type: "" });
+  const [trxSearch, setTrxSearch] = useState("");
+  const [debouncedTrxSearch, setDebouncedTrxSearch] = useState("");
+  const [trxDateFrom, setTrxDateFrom] = useState("");
+  const [trxDateTo, setTrxDateTo] = useState("");
 
   // Earnings State
   const [earnings, setEarnings] = useState<AdminEarning[]>([]);
   const [earnLoading, setEarnLoading] = useState(false);
-  const [earnPage, setEarnPage] = useState(1);
+  const [earnSearch, setEarnSearch] = useState("");
+
+  // Debounce search query (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedTrxSearch(trxSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [trxSearch]);
+
+  const fetchStats = async () => {
+    try {
+      setLoadingStats(true);
+      const response = await getFinancialDashboard();
+      if (response.success && response.data) {
+        setStats(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch financial stats", error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  const fetchTransactions = useCallback(async () => {
+    setTrxLoading(true);
+    try {
+      const response = await getWalletTransactions({
+        userType: trxFilter.userType || undefined,
+        type: trxFilter.type || undefined,
+        search: debouncedTrxSearch || undefined,
+        dateFrom: trxDateFrom || undefined,
+        dateTo: trxDateTo || undefined,
+      });
+      if (response.success && Array.isArray(response.data)) {
+        setTransactions(response.data);
+      } else {
+        setTransactions([]);
+      }
+    } catch (error: any) {
+      console.error("Failed to load transactions", error);
+      showToast("Failed to load transactions", "error");
+      setTransactions([]);
+    } finally {
+      setTrxLoading(false);
+    }
+  }, [trxFilter, debouncedTrxSearch, trxDateFrom, trxDateTo, showToast]);
+
+  const fetchEarnings = useCallback(async () => {
+    setEarnLoading(true);
+    try {
+      const response = await getAdminEarnings();
+      if (response.success && Array.isArray(response.data)) {
+        setEarnings(response.data);
+      } else {
+        setEarnings([]);
+      }
+    } catch (error: any) {
+      console.error("Failed to load earnings", error);
+      showToast("Failed to load earnings", "error");
+      setEarnings([]);
+    } finally {
+      setEarnLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
     fetchStats();
@@ -153,350 +109,604 @@ export default function AdminWallet() {
     } else if (activeTab === "earnings") {
       fetchEarnings();
     }
-  }, [activeTab, trxFilter]);
+  }, [activeTab, fetchTransactions, fetchEarnings]);
 
-  const fetchStats = async () => {
-    try {
-      const response = await getFinancialDashboard();
-      if (response.success && response.data) {
-        setStats(response.data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch stats", error);
-    } finally {
-      setLoadingStats(false);
+  const handleExportTransactions = () => {
+    if (transactions.length === 0) {
+      showToast("No transactions available to export", "info");
+      return;
     }
+
+    const headers = [
+      "Transaction ID",
+      "Date & Time",
+      "User / Store Name",
+      "User Type",
+      "Type (Credit/Debit)",
+      "Description",
+      "Amount (₹)",
+      "Order Ref",
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...transactions.map((t: any) => {
+        const userName = t.userName || (t.userId ? t.userId.storeName || t.userId.name : "Unknown");
+        return [
+          `"${t._id || t.id}"`,
+          `"${new Date(t.createdAt).toLocaleString("en-IN")}"`,
+          `"${userName.replace(/"/g, '""')}"`,
+          `"${t.userType || ""}"`,
+          `"${t.type}"`,
+          `"${(t.description || "").replace(/"/g, '""')}"`,
+          (t.amount || 0).toFixed(2),
+          `"${t.relatedOrder?.orderNumber || t.reference || ""}"`,
+        ].join(",");
+      }),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `hellolocal_wallet_transactions_${new Date().toISOString().split("T")[0]}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Wallet transactions exported successfully", "success");
   };
 
-  const fetchTransactions = async () => {
-    setTrxLoading(true);
-    try {
-      const response = await getWalletTransactions({
-        userType: trxFilter.userType || undefined,
-        type: trxFilter.type || undefined,
-      });
-      if (response.success && response.data) {
-        setTransactions(response.data);
-      }
-    } catch (error: any) {
-      showToast("Failed to load transactions", "error");
-    } finally {
-      setTrxLoading(false);
+  const handleExportEarnings = () => {
+    if (earnings.length === 0) {
+      showToast("No earning records available to export", "info");
+      return;
     }
-  };
 
-  const fetchEarnings = async () => {
-    setEarnLoading(true);
-    try {
-      const response = await getAdminEarnings({ page: earnPage });
-      if (response.success && response.data) {
-        setEarnings(response.data);
-      }
-    } catch (error: any) {
-      showToast("Failed to load earnings", "error");
-    } finally {
-      setEarnLoading(false);
-    }
+    const headers = ["ID", "Date", "Source", "Description", "Status", "Commission (₹)"];
+    const csvContent = [
+      headers.join(","),
+      ...earnings.map((e) =>
+        [
+          `"${e.id}"`,
+          `"${new Date(e.date).toLocaleDateString("en-IN")}"`,
+          `"${e.source}"`,
+          `"${(e.description || "").replace(/"/g, '""')}"`,
+          `"${e.status}"`,
+          (e.amount || 0).toFixed(2),
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `hellolocal_admin_earnings_${new Date().toISOString().split("T")[0]}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Admin earnings exported successfully", "success");
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header & Breadcrumb */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Admin Wallet & Finance
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">
+            Finance & Wallet Operations
           </h1>
-          <p className="text-gray-500">
-            Manage transactions, track earnings, and process withdrawals.
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            Platform revenue ledger, commission settlement, and partner payout disbursements
           </p>
         </div>
-        {/* 
-                <div className="flex gap-2">
-                     <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 font-medium transition">
-                        <DownloadIcon className="w-4 h-4" /> Export Report
-                    </button>
-                </div> 
-                */}
+
+        <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-neutral-500">
+          <Link
+            to="/admin/dashboard"
+            className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+          >
+            Dashboard
+          </Link>
+          <span className="mx-2 text-neutral-300">/</span>
+          <span className="text-neutral-700 font-medium">Finance & Wallet</span>
+        </nav>
       </div>
 
-      {/* Stats Grid */}
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatsCard
-          title="Total Platform Earning"
-          value={`₹${stats?.totalGMV?.toLocaleString("en-IN") || "0"}`}
-          icon={TrendingUpIcon}
-          color="text-blue-600"
-          bg="bg-blue-50"
-        />
-        <StatsCard
-          title="Current Platform Balance"
-          value={`₹${stats?.currentAccountBalance?.toLocaleString("en-IN") || "0"}`}
-          icon={WalletIcon}
-          color="text-rose-700"
-          bg="bg-rose-50"
-        />
-        <StatsCard
-          title="Total Admin Earning"
-          value={`₹${stats?.totalAdminEarnings?.toLocaleString("en-IN") || "0"}`}
-          icon={DollarSignIcon}
-          color="text-purple-600"
-          bg="bg-purple-50"
-        />
-        <StatsCard
-          title="Seller Pending Payouts"
-          value={`₹${stats?.sellerPendingPayouts?.toLocaleString("en-IN") || "0"}`}
-          icon={ClockIcon}
-          color="text-orange-600"
-          bg="bg-orange-50"
-        />
-        <StatsCard
-          title="Delivery Boy Pending Payouts"
-          value={`₹${stats?.deliveryPendingPayouts?.toLocaleString("en-IN") || "0"}`}
-          icon={ClockIcon}
-          color="text-red-600"
-          bg="bg-red-50"
-        />
-        <StatsCard
-          title="Pending from Delivery Boy (COD)"
-          value={`₹${stats?.pendingAmountFromDeliveryBoy?.toLocaleString("en-IN") || "0"}`}
-          icon={ClockIcon}
-          color="text-amber-600"
-          bg="bg-amber-50"
-        />
-      </div>
-
-      {/* Tabs & Content */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
-        <div className="flex border-b border-gray-200 overflow-x-auto">
-          <TabButton
-            active={activeTab === "transactions"}
-            onClick={() => setActiveTab("transactions")}
-            label="All Transactions"
-            icon={CreditCardIcon}
-          />
-          <TabButton
-            active={activeTab === "earnings"}
-            onClick={() => setActiveTab("earnings")}
-            label="Admin Earnings"
-            icon={TrendingUpIcon}
-          />
-          <TabButton
-            active={activeTab === "withdrawals"}
-            onClick={() => setActiveTab("withdrawals")}
-            label="Withdrawal Requests"
-            icon={WalletIcon}
-            badge={stats?.pendingWithdrawalsCount}
-          />
+      {/* Stats Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Gross GMV */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-neutral-200/80 flex items-start justify-between">
+          <div>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-wider mb-1">
+              Total Platform GMV
+            </p>
+            <h3 className="text-2xl font-bold font-mono text-neutral-900">
+              ₹{(stats?.totalGMV || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[11px] text-neutral-400 mt-1">Cumulative platform sales</p>
+          </div>
+          <div className="p-3 rounded-xl bg-blue-50 text-blue-700">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+              <polyline points="17 6 23 6 23 12" />
+            </svg>
+          </div>
         </div>
 
-        <div className="p-6">
+        {/* Current Platform Balance */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-neutral-200/80 flex items-start justify-between">
+          <div>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-wider mb-1">
+              Current Platform Balance
+            </p>
+            <h3 className="text-2xl font-bold font-mono text-rose-700">
+              ₹{(stats?.currentAccountBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[11px] text-neutral-400 mt-1">Available platform liquid reserve</p>
+          </div>
+          <div className="p-3 rounded-xl bg-rose-50 text-rose-700">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 7h-9a2 2 0 0 0-2 2v1m0 4v9a2 2 0 0 0 2 2h4" />
+              <path d="M19 13h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1" />
+              <path d="M6 7H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h15v4H6.5" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Total Admin Net Earnings */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-neutral-200/80 flex items-start justify-between">
+          <div>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-wider mb-1">
+              Total Admin Earnings
+            </p>
+            <h3 className="text-2xl font-bold font-mono text-purple-700">
+              ₹{(stats?.totalAdminEarnings || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[11px] text-neutral-400 mt-1">Store commission + fees</p>
+          </div>
+          <div className="p-3 rounded-xl bg-purple-50 text-purple-700">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="1" x2="12" y2="23" />
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Seller Pending Balances */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-neutral-200/80 flex items-start justify-between">
+          <div>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-wider mb-1">
+              Seller Pending Payouts
+            </p>
+            <h3 className="text-2xl font-bold font-mono text-orange-700">
+              ₹{(stats?.sellerPendingPayouts || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[11px] text-neutral-400 mt-1">Pending seller store balances</p>
+          </div>
+          <div className="p-3 rounded-xl bg-orange-50 text-orange-700">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Delivery Boy Pending Payouts */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-neutral-200/80 flex items-start justify-between">
+          <div>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-wider mb-1">
+              Courier Pending Payouts
+            </p>
+            <h3 className="text-2xl font-bold font-mono text-indigo-700">
+              ₹{(stats?.deliveryPendingPayouts || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[11px] text-neutral-400 mt-1">Unwithdrawn courier earnings</p>
+          </div>
+          <div className="p-3 rounded-xl bg-indigo-50 text-indigo-700">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Pending from Delivery Boy (COD) */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-neutral-200/80 flex items-start justify-between">
+          <div>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-wider mb-1">
+              Courier COD Debt
+            </p>
+            <h3 className="text-2xl font-bold font-mono text-amber-700">
+              ₹{(stats?.pendingAmountFromDeliveryBoy || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[11px] text-neutral-400 mt-1">Cash collected pending handover</p>
+          </div>
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-700">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+              <line x1="1" y1="10" x2="23" y2="10" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Tabs Workspace */}
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden min-h-[500px]">
+        {/* Tabs Bar */}
+        <div className="flex border-b border-neutral-200 overflow-x-auto bg-neutral-50/50">
+          <button
+            type="button"
+            onClick={() => setActiveTab("transactions")}
+            className={`flex items-center gap-2 px-6 py-3.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+              activeTab === "transactions"
+                ? "text-rose-700 border-b-2 border-rose-700 bg-white"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/60"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+              <line x1="1" y1="10" x2="23" y2="10" />
+            </svg>
+            <span>All Wallet Transactions</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("earnings")}
+            className={`flex items-center gap-2 px-6 py-3.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+              activeTab === "earnings"
+                ? "text-rose-700 border-b-2 border-rose-700 bg-white"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/60"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+              <polyline points="17 6 23 6 23 12" />
+            </svg>
+            <span>Admin Commission Log</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("withdrawals")}
+            className={`flex items-center gap-2 px-6 py-3.5 text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
+              activeTab === "withdrawals"
+                ? "text-rose-700 border-b-2 border-rose-700 bg-white"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/60"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 7h-9a2 2 0 0 0-2 2v1m0 4v9a2 2 0 0 0 2 2h4" />
+              <path d="M19 13h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1" />
+              <path d="M6 7H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h15v4H6.5" />
+            </svg>
+            <span>Disbursement & Withdrawals</span>
+            {stats?.pendingWithdrawalsCount ? (
+              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-mono">
+                {stats.pendingWithdrawalsCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-5">
+          {/* TAB 1: ALL TRANSACTIONS */}
           {activeTab === "transactions" && (
             <div className="space-y-4">
-              {/* Filters */}
-              <div className="flex flex-wrap gap-3 mb-4">
-                <select
-                  className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={trxFilter.userType}
-                  onChange={(e) =>
-                    setTrxFilter({ ...trxFilter, userType: e.target.value })
-                  }>
-                  <option value="">All Users</option>
-                  <option value="SELLER">Sellers</option>
-                  <option value="DELIVERY_BOY">Delivery Partners</option>
-                </select>
-                <select
-                  className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={trxFilter.type}
-                  onChange={(e) =>
-                    setTrxFilter({ ...trxFilter, type: e.target.value })
-                  }>
-                  <option value="">All Types</option>
-                  <option value="Credit">Credit</option>
-                  <option value="Debit">Debit</option>
-                </select>
+              {/* Filter Controls Bar */}
+              <div className="p-4 bg-neutral-50/70 border border-neutral-200/80 rounded-2xl space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {/* User Type */}
+                  <div>
+                    <label htmlFor="trxUserTypeSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                      User Type
+                    </label>
+                    <select
+                      id="trxUserTypeSelect"
+                      value={trxFilter.userType}
+                      onChange={(e) => setTrxFilter({ ...trxFilter, userType: e.target.value })}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                    >
+                      <option value="">All Users</option>
+                      <option value="SELLER">Sellers Only</option>
+                      <option value="DELIVERY_BOY">Delivery Partners Only</option>
+                    </select>
+                  </div>
+
+                  {/* Transaction Type */}
+                  <div>
+                    <label htmlFor="trxTypeSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                      Type
+                    </label>
+                    <select
+                      id="trxTypeSelect"
+                      value={trxFilter.type}
+                      onChange={(e) => setTrxFilter({ ...trxFilter, type: e.target.value })}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                    >
+                      <option value="">All Types (Credit & Debit)</option>
+                      <option value="Credit">Credit Only (+)</option>
+                      <option value="Debit">Debit Only (-)</option>
+                    </select>
+                  </div>
+
+                  {/* From Date */}
+                  <div>
+                    <label htmlFor="trxDateFrom" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                      From Date
+                    </label>
+                    <input
+                      id="trxDateFrom"
+                      type="date"
+                      value={trxDateFrom}
+                      onChange={(e) => setTrxDateFrom(e.target.value)}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                    />
+                  </div>
+
+                  {/* To Date */}
+                  <div>
+                    <label htmlFor="trxDateTo" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                      To Date
+                    </label>
+                    <input
+                      id="trxDateTo"
+                      type="date"
+                      value={trxDateTo}
+                      onChange={(e) => setTrxDateTo(e.target.value)}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                    />
+                  </div>
+
+                  {/* Search Input */}
+                  <div>
+                    <label htmlFor="trxSearchInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                      Search Description
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="trxSearchInput"
+                        type="text"
+                        value={trxSearch}
+                        onChange={(e) => setTrxSearch(e.target.value)}
+                        placeholder="Search description, ref..."
+                        className="w-full pl-8 pr-7 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                      />
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      {trxSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setTrxSearch("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-xs font-bold"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-neutral-200/60">
+                  {(trxFilter.userType || trxFilter.type || trxSearch || trxDateFrom || trxDateTo) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTrxFilter({ userType: "", type: "" });
+                        setTrxSearch("");
+                        setTrxDateFrom("");
+                        setTrxDateTo("");
+                      }}
+                      className="text-xs text-rose-700 hover:text-rose-800 font-bold"
+                    >
+                      × Reset all filters
+                    </button>
+                  ) : <div />}
+
+                  <button
+                    type="button"
+                    onClick={handleExportTransactions}
+                    disabled={transactions.length === 0}
+                    className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[36px] disabled:opacity-50"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Export CSV</span>
+                  </button>
+                </div>
               </div>
 
               {/* Transactions Table */}
-              {trxLoading ? (
-                <LoadingSpinner />
-              ) : transactions.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-gray-500 text-sm">
-                        <th className="py-3 px-4 font-medium">Date & Time</th>
-                        <th className="py-3 px-4 font-medium">User</th>
-                        <th className="py-3 px-4 font-medium">Type</th>
-                        <th className="py-3 px-4 font-medium">Description</th>
-                        <th className="py-3 px-4 font-medium text-right">
-                          Amount
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {transactions.map((trx) => (
-                        <tr
-                          key={trx._id}
-                          className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-sm text-gray-600">
-                            {new Date(trx.createdAt).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-gray-900">
-                                {(trx as any).userName}
-                              </span>
-                              <span className="text-xs text-gray-500 capitalize">
-                                {trx.userType?.toLowerCase().replace("_", " ")}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-medium ${
-                                trx.type === "Credit"
-                                  ? "bg-rose-100 text-rose-800"
-                                  : "bg-red-100 text-red-700"
-                              }`}>
-                              {trx.type}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">
-                            {trx.description}
-                          </td>
-                          <td
-                            className={`py-3 px-4 text-right font-medium ${
-                              trx.type === "Credit"
-                                ? "text-rose-700"
-                                : "text-red-600"
-                            }`}>
-                            {trx.type === "Credit" ? "+" : "-"}₹
-                            {trx.amount.toFixed(2)}
-                          </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="bg-neutral-100/70 border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wider text-neutral-700 select-none">
+                      <th className="py-3 px-4">Date & Time</th>
+                      <th className="py-3 px-4">Beneficiary</th>
+                      <th className="py-3 px-3 text-center">Type</th>
+                      <th className="py-3 px-4">Description / Reference</th>
+                      <th className="py-3 px-4 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 text-xs">
+                    {trxLoading ? (
+                      [1, 2, 3, 4].map((i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-32" /></td>
+                          <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-14 mx-auto" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-48" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-16 ml-auto" /></td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <EmptyState message="No transactions found matching your filters." />
-              )}
+                      ))
+                    ) : transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 px-4 text-center">
+                          <p className="text-sm font-bold text-neutral-800">No transactions found</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            Transaction ledger entries will appear here
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map((trx: any) => {
+                        const userName = trx.userName || (trx.userId ? trx.userId.storeName || trx.userId.sellerName || trx.userId.name : "Partner");
+                        const isCredit = trx.type === "Credit";
+
+                        return (
+                          <tr key={trx._id || trx.id} className="hover:bg-neutral-50/80 transition-colors">
+                            <td className="py-3 px-4 font-mono text-neutral-600">
+                              {new Date(trx.createdAt).toLocaleString("en-IN")}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-neutral-900">{userName}</div>
+                              <div className="text-[10px] text-neutral-400 uppercase font-semibold">
+                                {trx.userType}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isCredit
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-red-50 text-red-700 border border-red-200"
+                                }`}
+                              >
+                                {trx.type}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-neutral-700">
+                              <div>{trx.description}</div>
+                              {trx.relatedOrder?.orderNumber && (
+                                <span className="text-[10px] font-mono text-neutral-400">
+                                  Order #{trx.relatedOrder.orderNumber}
+                                </span>
+                              )}
+                            </td>
+                            <td
+                              className={`py-3 px-4 text-right font-mono font-bold ${
+                                isCredit ? "text-emerald-700" : "text-red-600"
+                              }`}
+                            >
+                              {isCredit ? "+" : "-"}₹{(trx.amount || 0).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
+          {/* TAB 2: ADMIN EARNINGS */}
           {activeTab === "earnings" && (
             <div className="space-y-4">
-              {earnLoading ? (
-                <LoadingSpinner />
-              ) : earnings.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-gray-500 text-sm">
-                        <th className="py-3 px-4 font-medium">Date</th>
-                        <th className="py-3 px-4 font-medium">Source</th>
-                        <th className="py-3 px-4 font-medium">Description</th>
-                        <th className="py-3 px-4 font-medium">Status</th>
-                        <th className="py-3 px-4 font-medium text-right">
-                          Commission
-                        </th>
+              <div className="flex items-center justify-between pb-2">
+                <h3 className="text-sm font-bold text-neutral-800">
+                  Platform Commission & Fee Ledger
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleExportEarnings}
+                  disabled={earnings.length === 0}
+                  className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[36px] disabled:opacity-50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  <span>Export CSV</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[650px]">
+                  <thead>
+                    <tr className="bg-neutral-100/70 border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wider text-neutral-700 select-none">
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Source</th>
+                      <th className="py-3 px-4">Description</th>
+                      <th className="py-3 px-3 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Commission Net</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 text-xs">
+                    {earnLoading ? (
+                      [1, 2, 3].map((i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-24" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-48" /></td>
+                          <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-14 mx-auto" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-16 ml-auto" /></td>
+                        </tr>
+                      ))
+                    ) : earnings.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 px-4 text-center">
+                          <p className="text-sm font-bold text-neutral-800">No earning records found</p>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {earnings.map((earning) => (
-                        <tr
-                          key={earning.id}
-                          className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-sm text-gray-600">
-                            {new Date(earning.date).toLocaleDateString()}
+                    ) : (
+                      earnings.map((earning) => (
+                        <tr key={earning.id} className="hover:bg-neutral-50/80 transition-colors">
+                          <td className="py-3 px-4 font-mono text-neutral-600">
+                            {new Date(earning.date).toLocaleDateString("en-IN")}
                           </td>
-                          <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                            {earning.source}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">
-                            {earning.description}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-medium ${
-                                earning.status === "Paid"
-                                  ? "bg-rose-100 text-rose-800"
-                                  : "bg-yellow-100 text-yellow-700"
-                              }`}>
+                          <td className="py-3 px-4 font-bold text-neutral-900">{earning.source}</td>
+                          <td className="py-3 px-4 text-neutral-600">{earning.description}</td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                               {earning.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-right font-medium text-rose-700">
-                            ₹{earning.amount.toFixed(2)}
+                          <td className="py-3 px-4 text-right font-mono font-bold text-rose-700">
+                            ₹{(earning.amount || 0).toFixed(2)}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <EmptyState message="No earning records found." />
-              )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
+          {/* TAB 3: WITHDRAWAL REQUESTS */}
           {activeTab === "withdrawals" && <AdminWithdrawals />}
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="text-center text-xs text-neutral-400 py-3">
+        HelloLocal Admin Panel • Financial Clearinghouse & Ledger
+      </footer>
     </div>
   );
 }
-
-function StatsCard({ title, value, icon: Icon, color, bg, label }: any) {
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between">
-      <div>
-        <p className="text-gray-500 text-sm font-medium mb-1">{title}</p>
-        <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-        {label && <p className="text-xs text-gray-400 mt-1">{label}</p>}
-      </div>
-      <div className={`p-3 rounded-lg ${bg}`}>
-        <Icon className={`w-6 h-6 ${color}`} />
-      </div>
-    </div>
-  );
-}
-
-function TabButton({ active, onClick, label, icon: Icon, badge }: any) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition relative whitespace-nowrap ${
-        active
-          ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50/50"
-          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-      }`}>
-      <Icon className="w-4 h-4" />
-      {label}
-      {badge > 0 && (
-        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-      <FilterIcon className="w-12 h-12 mb-3 opacity-20" />
-      <p>{message}</p>
-    </div>
-  );
-}
-

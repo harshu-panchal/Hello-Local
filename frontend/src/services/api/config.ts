@@ -1,4 +1,9 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import {
+  getAuthToken as readToken,
+  setAuthToken as writeToken,
+  clearSession,
+} from "./session";
 
 // Base API URL - adjust based on your backend URL
 const API_BASE_URL =
@@ -23,23 +28,31 @@ export const getSocketBaseURL = (): string => {
   return socketUrl || "http://localhost:5000";
 };
 
+// Timeouts by request type:
+//   GET  → 15s  (read-only, should be fast; fail quickly so the UI shows a retry)
+//   POST/PUT/PATCH/DELETE → 60s (uploads, checkout, etc. can legitimately take longer)
+const GET_TIMEOUT = 15000;
+const MUTATE_TIMEOUT = 60000;
+
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  // Image uploads / product creation can be slow on poor connections, so allow a
-  // generous window before giving up rather than hanging indefinitely.
-  timeout: 60000,
+  timeout: MUTATE_TIMEOUT, // overridden per-request in the interceptor below
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Request interceptor - Add token to requests
+// Request interceptor - Add token and apply per-method timeout
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("authToken");
+    const token = readToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Apply tighter timeout for read-only requests unless a custom timeout was set
+    if (config.method?.toLowerCase() === "get" && config.timeout === MUTATE_TIMEOUT) {
+      config.timeout = GET_TIMEOUT;
     }
     return config;
   },
@@ -109,8 +122,7 @@ api.interceptors.response.use(
           redirectPath = "/delivery/login";
         }
 
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("userData");
+        clearSession();
         window.location.href = redirectPath;
       }
       // If no token was present, user is just browsing as guest - don't redirect
@@ -122,17 +134,12 @@ api.interceptors.response.use(
 );
 
 // Token management helpers
-export const setAuthToken = (token: string) => {
-  localStorage.setItem("authToken", token);
-};
+export const setAuthToken = (token: string) => writeToken(token);
 
-export const getAuthToken = (): string | null => {
-  return localStorage.getItem("authToken");
-};
+export const getAuthToken = (): string | null => readToken();
 
-export const removeAuthToken = () => {
-  localStorage.removeItem("authToken");
-  localStorage.removeItem("userData");
-};
+export const removeAuthToken = () => clearSession();
+
+export { currentPortal, getStoredUser, setStoredUser } from "./session";
 
 export default api;

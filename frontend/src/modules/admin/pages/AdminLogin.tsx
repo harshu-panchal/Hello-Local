@@ -12,9 +12,25 @@ export default function AdminLogin() {
   const [showOTP, setShowOTP] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mobileError, setMobileError] = useState('');
+
+  const validateMobile = (value: string): string => {
+    if (!value) return 'Mobile number is required';
+    if (value.length !== 10) return 'Mobile number must be 10 digits';
+    if (!/^[6-9]/.test(value)) return 'Mobile number must start with 6, 7, 8, or 9';
+    return '';
+  };
+
+  const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = normalizeMobile(e.target.value);
+    setMobileNumber(val);
+    if (val.length > 0) setMobileError(validateMobile(val));
+    else setMobileError('');
+  };
 
   const handleMobileLogin = async () => {
-    if (mobileNumber.length !== 10) return;
+    const err = validateMobile(mobileNumber);
+    if (err) { setMobileError(err); return; }
 
     setLoading(true);
     setError("");
@@ -52,15 +68,7 @@ export default function AdminLogin() {
     }
   };
 
-  const handleHelloLocalLogin = () => {
-    // Handle Hello Local login logic here
-    navigate("/admin");
-  };
 
-  const handleSellerLogin = () => {
-    // Navigate to seller login page
-    navigate("/seller/login");
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-rose-100 flex flex-col items-center justify-center px-4 py-8">
@@ -122,7 +130,7 @@ export default function AdminLogin() {
                   <input
                     type="tel"
                     value={mobileNumber}
-                    onChange={(e) => setMobileNumber(normalizeMobile(e.target.value))}
+                    onChange={handleMobileChange}
                     placeholder="Enter mobile number"
                     className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
                     maxLength={10}
@@ -130,6 +138,10 @@ export default function AdminLogin() {
                   />
                 </div>
               </div>
+
+              {mobileError && (
+                <p className="text-xs text-red-600 mt-1">{mobileError}</p>
+              )}
 
               {error && (
                 <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
@@ -139,8 +151,8 @@ export default function AdminLogin() {
 
               <button
                 onClick={handleMobileLogin}
-                disabled={mobileNumber.length !== 10 || loading}
-                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${mobileNumber.length === 10 && !loading
+                disabled={mobileNumber.length !== 10 || !!mobileError || loading}
+                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${mobileNumber.length === 10 && !mobileError && !loading
                   ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
                   : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
                   }`}>

@@ -33,3 +33,9 @@ export const addReview = async (productId: string, rating: number, comment: stri
     const response = await api.post('/customer/reviews', { productId, rating, comment });
     return response.data;
 };
+
+/** Remove a review the signed-in customer wrote. (#H-21) */
+export const deleteMyReview = async (reviewId: string) => {
+    const response = await api.delete(`/customer/reviews/${reviewId}`);
+    return response.data;
+};

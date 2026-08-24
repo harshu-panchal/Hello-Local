@@ -8,102 +8,221 @@ import mongoose from "mongoose";
 import { calculateDistance } from "../../../utils/locationHelper";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { generateDeliveryOtp } from "../../../services/deliveryOtpService";
-import AppSettings from "../../../models/AppSettings";
-import { getRoadDistances } from "../../../services/mapService";
 import { Server as SocketIOServer } from "socket.io";
 import { getOrderItemCommissionRate } from "../../../services/commissionService";
-import Admin from "../../../models/Admin";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
+import {
+    findVariation,
+    normalizeSelector,
+    variationLabel,
+    effectiveUnitPrice,
+} from "../../../utils/productVariation";
+import {
+    priceOrder,
+    consumeCoupon,
+    releaseCoupon,
+    PricingError,
+} from "../../../services/orderPricingService";
+import {
+    reserveMany,
+    releaseMany,
+    reservationsFromOrderItems,
+    StockError,
+    type StockReservation,
+} from "../../../services/stockService";
+import { validateTransition } from "../../../services/orderStatusService";
 
 // Create a new order
 export const createOrder = async (req: Request, res: Response) => {
-    let session: mongoose.ClientSession | null = null;
+    const reservations: StockReservation[] = [];
+    let orderCreated = false;
+
     try {
-        // ... (existing code for session start)
-        try {
-            session = await mongoose.startSession();
-            session.startTransaction();
-        } catch (sessionError) {
-            console.warn("MongoDB Transactions not supported or failed to start. Proceeding without transaction.");
-            session = null;
-        }
-
-        const { items, address, paymentMethod, fees } = req.body;
+        const { items, address, paymentMethod, couponCode, tipAmount } = req.body;
         const userId = req.user?.userId;
+
         if (!userId) {
-            if (session) await session.abortTransaction();
-            return res.status(401).json({
+            return res.status(401).json({ success: false, message: "Authentication required" });
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: "Your cart is empty" });
+        }
+        if (!address || typeof address !== "object") {
+            return res.status(400).json({ success: false, message: "A delivery address is required" });
+        }
+
+        // ── Customer ────────────────────────────────────────────────────────
+        const customer = await Customer.findById(userId);
+        if (!customer) {
+            return res.status(404).json({ success: false, message: "Customer not found" });
+        }
+        if (customer.status !== "Active") {
+            return res.status(403).json({
                 success: false,
-                message: "Authentication required"
+                message: "This account is not active and cannot place orders.",
             });
         }
 
-        // ... (logging and validation checks for items, address, city, pincode)
+        // ── Delivery coordinates ────────────────────────────────────────────
+        const toNum = (v: unknown) =>
+            v === null || v === undefined ? NaN : typeof v === "number" ? v : parseFloat(String(v));
+        const deliveryLat = toNum(address.latitude);
+        const deliveryLng = toNum(address.longitude);
 
-        // Fetch customer details
-        let customer: any = await Customer.findById(userId);
-
-        // If customer not found, check if it's an Admin (for testing purposes)
-        if (!customer) {
-            const admin = await Admin.findById(userId);
-            if (admin) {
-                // Map Admin to a customer-like object
-                customer = {
-                    _id: admin._id,
-                    name: `${admin.firstName} ${admin.lastName}`,
-                    email: admin.email,
-                    phone: admin.mobile,
-                    // Add other necessary fields if required by Order model
-                };
-            }
-        }
-
-        if (!customer) {
-            if (session) await session.abortTransaction();
-            return res.status(404).json({
-                success: false,
-                message: "Customer not found",
-            });
-        }
-
-        // Validate delivery address location
-        // Handle both string and number types, and check for null/undefined (not truthy, since 0 is valid)
-        const deliveryLat = address.latitude != null
-            ? (typeof address.latitude === 'number' ? address.latitude : parseFloat(address.latitude))
-            : null;
-        const deliveryLng = address.longitude != null
-            ? (typeof address.longitude === 'number' ? address.longitude : parseFloat(address.longitude))
-            : null;
-
-        if (deliveryLat == null || deliveryLng == null || isNaN(deliveryLat) || isNaN(deliveryLng)) {
-            if (session) await session.abortTransaction();
+        if (!Number.isFinite(deliveryLat) || !Number.isFinite(deliveryLng)) {
             return res.status(400).json({
                 success: false,
                 message: "Delivery address location (latitude/longitude) is required",
-                details: {
-                    receivedLatitude: address.latitude,
-                    receivedLongitude: address.longitude,
-                    parsedLatitude: deliveryLat,
-                    parsedLongitude: deliveryLng,
-                }
             });
         }
-
-        // Validate coordinates
         if (deliveryLat < -90 || deliveryLat > 90 || deliveryLng < -180 || deliveryLng > 180) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "Invalid delivery address coordinates",
-            });
+            return res.status(400).json({ success: false, message: "Invalid delivery address coordinates" });
         }
 
-        // Initialize Order first to get an ID
-        // Determine if this is an online payment (not COD).
-        // Online orders start in 'Pending' state — they only become 'Received'
-        // once payment is verified. COD orders are confirmed immediately.
-        const resolvedPaymentMethod = paymentMethod || 'COD';
-        const isOnlinePayment = resolvedPaymentMethod !== 'COD';
+        // ── Resolve products and validate every line BEFORE touching stock ──
+        // Validation must complete first: the old flow decremented stock inside
+        // the loop and then ran the serviceability check, leaking stock and
+        // orphaning OrderItems whenever that check failed. (#H-01)
+        interface ResolvedLine {
+            product: any;
+            quantity: number;
+            selector: string | null;
+            variation: any | null;
+            unitPrice: number;
+        }
+        const resolved: ResolvedLine[] = [];
+        const sellerIds = new Set<string>();
+
+        for (const item of items) {
+            const productId = item?.product?.id || item?.product?._id || item?.productId;
+            if (!productId || !mongoose.Types.ObjectId.isValid(String(productId))) {
+                return res.status(400).json({ success: false, message: "Invalid product in cart" });
+            }
+
+            const quantity = Number(item?.quantity);
+            if (!Number.isInteger(quantity) || quantity <= 0) {
+                return res.status(400).json({ success: false, message: "Invalid item quantity" });
+            }
+
+            const product = await Product.findById(productId);
+            if (!product) {
+                return res.status(400).json({ success: false, message: `Product not found: ${productId}` });
+            }
+            if (product.status !== "Active" || !product.publish) {
+                return res.status(400).json({
+                    success: false,
+                    message: `"${product.productName}" is no longer available`,
+                });
+            }
+            if (product.totalAllowedQuantity && quantity > product.totalAllowedQuantity) {
+                return res.status(400).json({
+                    success: false,
+                    message: `You can order at most ${product.totalAllowedQuantity} of "${product.productName}"`,
+                });
+            }
+
+            const selector = normalizeSelector(item.variant ?? item.variation ?? null);
+            const hasVariations = Array.isArray(product.variations) && product.variations.length > 0;
+            const variation = hasVariations ? findVariation(product.variations as any, selector) : null;
+
+            if (hasVariations && !variation) {
+                return res.status(400).json({
+                    success: false,
+                    message: selector
+                        ? `"${selector}" is not a valid option for "${product.productName}"`
+                        : `Please choose an option for "${product.productName}"`,
+                });
+            }
+
+            // Price is resolved from the database, never from the request. (#H-03)
+            const unitPrice = effectiveUnitPrice(product as any, variation);
+            if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `"${product.productName}" is not priced correctly. Please contact support.`,
+                });
+            }
+
+            resolved.push({ product, quantity, selector, variation, unitPrice });
+            if (product.seller) sellerIds.add(product.seller.toString());
+        }
+
+        // ── Every seller must be approved AND able to reach this address ────
+        // The old check silently skipped sellers the query did not return, so a
+        // Pending or Rejected seller passed straight through. (#H-14)
+        const sellers = await Seller.find({ _id: { $in: [...sellerIds].map((s) => new mongoose.Types.ObjectId(s)) } });
+        const sellerById = new Map(sellers.map((s) => [String(s._id), s]));
+
+        for (const sellerId of sellerIds) {
+            const seller = sellerById.get(sellerId);
+            if (!seller) {
+                return res.status(400).json({ success: false, message: "A seller in your cart no longer exists" });
+            }
+            if (seller.status !== "Approved") {
+                return res.status(403).json({
+                    success: false,
+                    message: `${seller.storeName} is not currently accepting orders.`,
+                });
+            }
+
+            let sLat: number | undefined;
+            let sLng: number | undefined;
+            if (seller.location?.coordinates?.length === 2) {
+                sLng = seller.location.coordinates[0];
+                sLat = seller.location.coordinates[1];
+            } else if (seller.latitude && seller.longitude) {
+                sLat = parseFloat(seller.latitude);
+                sLng = parseFloat(seller.longitude);
+            }
+
+            if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) {
+                return res.status(403).json({
+                    success: false,
+                    message: `${seller.storeName} has not set a shop location, so it cannot deliver yet.`,
+                });
+            }
+
+            const distance = calculateDistance(deliveryLat, deliveryLng, sLat as number, sLng as number);
+            const radius = seller.serviceRadiusKm || 10;
+            if (distance > radius) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        `Your address is ${distance.toFixed(2)} km from ${seller.storeName}, ` +
+                        `which delivers within ${radius} km.`,
+                });
+            }
+        }
+
+        // ── Server-authoritative money ──────────────────────────────────────
+        const { pricing, lines } = await priceOrder({
+            lines: resolved.map((r) => ({
+                productId: String(r.product._id),
+                sellerId: String(r.product.seller),
+                unitPrice: r.unitPrice,
+                quantity: r.quantity,
+                taxRefId: r.product.tax,
+            })),
+            customerId: userId,
+            deliveryLat,
+            deliveryLng,
+            couponCode,
+            tipAmount,
+        });
+
+        // ── Reserve stock (all-or-nothing) ──────────────────────────────────
+        const taken = await reserveMany(
+            resolved.map((r) => ({
+                productId: String(r.product._id),
+                quantity: r.quantity,
+                variation: r.selector,
+            })),
+        );
+        reservations.push(...taken);
+
+        // ── Persist ─────────────────────────────────────────────────────────
+        const resolvedPaymentMethod = paymentMethod || "COD";
+        const isOnlinePayment = resolvedPaymentMethod !== "COD";
 
         const newOrder = new Order({
             customer: new mongoose.Types.ObjectId(userId),
@@ -111,402 +230,122 @@ export const createOrder = async (req: Request, res: Response) => {
             customerEmail: customer.email,
             customerPhone: customer.phone,
             deliveryAddress: {
-                address: address.address || address.street || 'N/A',
-                city: address.city || 'N/A',
-                state: address.state || '',
-                pincode: address.pincode || '000000',
-                landmark: address.landmark || '',
+                address: address.address || address.street || "N/A",
+                city: address.city || "N/A",
+                state: address.state || "",
+                pincode: address.pincode || "000000",
+                landmark: address.landmark || "",
                 latitude: deliveryLat,
                 longitude: deliveryLng,
             },
             paymentMethod: resolvedPaymentMethod,
-            paymentStatus: 'Pending',
-            // Online orders wait in 'Pending' until payment is verified.
-            // COD orders are immediately 'Received'.
-            status: isOnlinePayment ? 'Pending' : 'Received',
-            subtotal: 0,
-            tax: 0,
-            shipping: fees?.deliveryFee || 0,
-            platformFee: fees?.platformFee || 0,
-            discount: 0,
-            total: 0,
-            items: []
+            paymentStatus: "Pending",
+            status: isOnlinePayment ? "Pending" : "Received",
+            subtotal: pricing.subtotal,
+            tax: pricing.tax,
+            shipping: pricing.shipping,
+            platformFee: pricing.platformFee,
+            discount: pricing.discount,
+            couponCode: pricing.couponCode,
+            tipAmount: pricing.tip,
+            total: pricing.total,
+            deliveryDistanceKm: pricing.deliveryDistanceKm,
+            items: [],
         });
 
-        let calculatedSubtotal = 0;
         const orderItemIds: mongoose.Types.ObjectId[] = [];
-        const sellerIds = new Set<string>(); // Track unique sellers
+        for (let i = 0; i < resolved.length; i++) {
+            const r = resolved[i];
+            const line = lines[i];
+            const commRate = await getOrderItemCommissionRate(
+                String(r.product._id),
+                String(r.product.seller),
+            );
 
-        for (const item of items) {
-            if (!item.product || !item.product.id) {
-                throw new Error("Invalid item structure: product.id is missing");
-            }
-
-            const qty = Number(item.quantity) || 0;
-            if (qty <= 0) {
-                throw new Error("Invalid item quantity");
-            }
-
-            // Atomically check stock and decrement to prevent race conditions
-            let product;
-            // The frontend sends variation info as 'variant' or 'variation'
-            // In the product model, it's stored in 'variations' array
-            const variationValue = item.variant || item.variation;
-
-            if (variationValue) {
-                // Try to decrement stock for the specific variation first
-                const variationConditions: any[] = [];
-                if (mongoose.isValidObjectId(variationValue)) {
-                    variationConditions.push({ "variations._id": variationValue });
-                }
-                variationConditions.push(
-                    { "variations.value": variationValue },
-                    { "variations.title": variationValue },
-                    { "variations.pack": variationValue }
-                );
-
-                product = session
-                    ? await Product.findOneAndUpdate(
-                        {
-                            _id: item.product.id,
-                            $or: variationConditions,
-                            "variations.stock": { $gte: qty }
-                        },
-                        { $inc: { "variations.$.stock": -qty, stock: -qty } },
-                        { session, new: true }
-                    )
-                    : await Product.findOneAndUpdate(
-                        {
-                            _id: item.product.id,
-                            $or: variationConditions,
-                            "variations.stock": { $gte: qty }
-                        },
-                        { $inc: { "variations.$.stock": -qty, stock: -qty } },
-                        { new: true }
-                    );
-            }
-
-            if (!product) {
-                // Either variationValue was not provided, or it didn't match (insufficient stock / invalid variation / not found)
-                const checkProduct = await Product.findById(item.product.id);
-                if (!checkProduct) {
-                    const err = new Error(`Product not found with ID: ${item.product.id}`);
-                    (err as any).statusCode = 400;
-                    throw err;
-                }
-
-                const hasVariations = checkProduct.variations && checkProduct.variations.length > 0;
-
-                if (hasVariations) {
-                    if (!variationValue) {
-                        const err = new Error(`Variation selection is required for product: ${checkProduct.productName}`);
-                        (err as any).statusCode = 400;
-                        throw err;
-                    }
-
-                    // A variation was provided, but didn't match. Check if it actually exists in product variations
-                    const matchedVar = (checkProduct.variations || []).find((v: any) =>
-                        (mongoose.isValidObjectId(variationValue) && v._id.toString() === variationValue.toString()) ||
-                        v.value === variationValue ||
-                        v.title === variationValue ||
-                        v.pack === variationValue
-                    );
-
-                    if (matchedVar) {
-                        const err = new Error(`Insufficient stock for variation "${variationValue}" of product "${checkProduct.productName}". Available: ${matchedVar.stock}, requested: ${qty}`);
-                        (err as any).statusCode = 400;
-                        throw err;
-                    } else {
-                        const err = new Error(`Invalid variation "${variationValue}" specified for product "${checkProduct.productName}". Please specify a valid variation.`);
-                        (err as any).statusCode = 400;
-                        throw err;
-                    }
-                } else {
-                    if (variationValue) {
-                        const err = new Error(`Product "${checkProduct.productName}" does not have variations defined, but variation "${variationValue}" was specified.`);
-                        (err as any).statusCode = 400;
-                        throw err;
-                    }
-
-                    // No variations, decrement top-level stock
-                    product = session
-                        ? await Product.findOneAndUpdate(
-                            { _id: item.product.id, stock: { $gte: qty } },
-                            { $inc: { stock: -qty } },
-                            { session, new: true }
-                        )
-                        : await Product.findOneAndUpdate(
-                            { _id: item.product.id, stock: { $gte: qty } },
-                            { $inc: { stock: -qty } },
-                            { new: true }
-                        );
-
-                    if (!product) {
-                        const err = new Error(`Insufficient stock for product "${checkProduct.productName}". Available: ${checkProduct.stock}, requested: ${qty}`);
-                        (err as any).statusCode = 400;
-                        throw err;
-                    }
-                }
-            }
-
-            // Track seller IDs to validate location
-            if (product.seller) {
-                sellerIds.add(product.seller.toString());
-            }
-
-            // Determine the price based on variation and discounts
-            let selectedVariation;
-            if (product.variations && product.variations.length > 0) {
-                selectedVariation = product.variations.find((v: any) =>
-                    (v._id && v._id.toString() === variationValue) ||
-                    v.value === variationValue ||
-                    v.title === variationValue ||
-                    v.pack === variationValue
-                );
-                if (!selectedVariation) {
-                    const err = new Error(`Variation "${variationValue}" not found on product "${product.productName}"`);
-                    (err as any).statusCode = 400;
-                    throw err;
-                }
-            }
-
-            const itemPrice = (selectedVariation?.discPrice && selectedVariation.discPrice > 0)
-                ? selectedVariation.discPrice
-                : (product.discPrice && product.discPrice > 0)
-                    ? product.discPrice
-                    : (selectedVariation?.price || product.price || 0);
-            const itemTotal = itemPrice * qty;
-            calculatedSubtotal += itemTotal;
-
-            // Calculate commission rate snapshot
-            const commRate = await getOrderItemCommissionRate(product._id.toString(), product.seller.toString());
-            const commAmount = (itemTotal * commRate) / 100;
-
-            // Create OrderItem
-            const newOrderItemData = {
+            const orderItem = await OrderItem.create({
                 order: newOrder._id,
-                product: product._id,
-                seller: product.seller,
-                productName: product.productName,
-                productImage: product.mainImage,
-                sku: product.sku,
-                unitPrice: itemPrice,
-                quantity: qty,
-                total: itemTotal,
+                product: r.product._id,
+                seller: r.product.seller,
+                productName: r.product.productName,
+                productImage: r.product.mainImage,
+                sku: r.product.sku,
+                unitPrice: line.unitPrice,
+                quantity: line.quantity,
+                total: line.lineTotal,
+                subtotal: line.lineTotal,
+                taxRate: line.taxRate,
+                taxAmount: line.taxAmount,
                 commissionRate: commRate,
-                commissionAmount: commAmount,
-                variation: variationValue,
-                // Snapshot the human-readable variation label (e.g. "500g") so the
-                // order/invoice always shows the correct unit, even if `variation`
-                // stored an id. (#order-unit)
-                variantTitle: selectedVariation
-                    ? ((selectedVariation as any).value || (selectedVariation as any).title || (selectedVariation as any).pack || '')
-                    : '',
-                status: 'Pending'
-            };
-
-            const newOrderItem = new OrderItem(newOrderItemData);
-            if (session) {
-                await newOrderItem.save({ session });
-            } else {
-                await newOrderItem.save();
-            }
-            orderItemIds.push(newOrderItem._id as mongoose.Types.ObjectId);
-        }
-
-        // Validate all sellers can deliver to user's location
-        if (sellerIds.size > 0) {
-            const uniqueSellerIds = Array.from(sellerIds).map(id => new mongoose.Types.ObjectId(id));
-
-            // Find sellers and check if user is within their service radius
-            const sellers = await Seller.find({
-                _id: { $in: uniqueSellerIds },
-                status: "Approved",
-                location: { $exists: true, $ne: null },
+                commissionAmount: Math.round(((line.lineTotal * commRate) / 100) * 100) / 100,
+                variation: r.selector || undefined,
+                variantTitle: variationLabel(r.variation),
+                status: "Pending",
             });
-
-            // Check each seller can deliver to user's location
-            for (const seller of sellers) {
-                if (!seller.location || !seller.location.coordinates) {
-                    if (session) await session.abortTransaction();
-                    return res.status(403).json({
-                        success: false,
-                        message: `Seller ${seller.storeName} does not have a valid location. Order cannot be placed.`,
-                    });
-                }
-
-                const sellerLng = seller.location.coordinates[0];
-                const sellerLat = seller.location.coordinates[1];
-                const distance = calculateDistance(deliveryLat, deliveryLng, sellerLat, sellerLng);
-                const serviceRadius = seller.serviceRadiusKm || 10;
-
-                if (distance > serviceRadius) {
-                    if (session) await session.abortTransaction();
-                    return res.status(403).json({
-                        success: false,
-                        message: `Your delivery address is ${distance.toFixed(2)} km away from ${seller.storeName}. They only deliver within ${serviceRadius} km. Please select products from sellers in your area.`,
-                    });
-                }
-            }
+            orderItemIds.push(orderItem._id as mongoose.Types.ObjectId);
         }
 
-        // Apply fees
-        let platformFee = Number(fees?.platformFee) || 0;
-        let deliveryFee = Number(fees?.deliveryFee) || 0;
-        let deliveryDistanceKm = 0;
-
-        // --- Distance-Based Delivery Charge Calculation ---
-        try {
-            const settings = await AppSettings.getSettings();
-            const freeDeliveryThreshold = settings?.freeDeliveryThreshold || 0;
-
-            // Check for Free Delivery eligibility first
-            if (freeDeliveryThreshold > 0 && calculatedSubtotal >= freeDeliveryThreshold) {
-                deliveryFee = 0;
-            }
-            // Only recalculate if enabled in settings (and not free delivery)
-            else if (settings && settings.deliveryConfig?.isDistanceBased === true) {
-                const config = settings.deliveryConfig;
-
-                // Collect seller locations
-                const sellerLocations: { lat: number; lng: number }[] = [];
-                const uniqueSellerIds = Array.from(sellerIds).map(id => new mongoose.Types.ObjectId(id));
-                const sellers = await Seller.find({ _id: { $in: uniqueSellerIds } }).select('location latitude longitude storeName');
-
-                sellers.forEach(seller => {
-                    let lat, lng;
-                    if (seller.location?.coordinates?.length === 2) {
-                        lng = seller.location.coordinates[0];
-                        lat = seller.location.coordinates[1];
-                    } else if (seller.latitude && seller.longitude) {
-                        lat = parseFloat(seller.latitude);
-                        lng = parseFloat(seller.longitude);
-                    }
-
-                    if (lat && lng) {
-                        sellerLocations.push({ lat, lng });
-                    }
-                });
-
-                if (sellerLocations.length > 0 && deliveryLat && deliveryLng) {
-                    // Get distances (Road or Air based on API Key presence)
-                    const distances = await getRoadDistances(
-                        sellerLocations,
-                        { lat: deliveryLat, lng: deliveryLng },
-                        config.googleMapsKey
-                    );
-
-                    // Take the maximum distance (furthest seller)
-                    deliveryDistanceKm = Math.max(...distances);
-
-                    // Calculate Fee
-                    // Formula: BaseCharge + (Max(0, Distance - BaseDistance) * KmRate)
-                    const extraKm = Math.max(0, deliveryDistanceKm - config.baseDistance);
-                    const calculatedDeliveryFee = config.baseCharge + (extraKm * config.kmRate);
-
-                    // Override the delivery fee
-                    deliveryFee = Math.ceil(calculatedDeliveryFee);
-
-                    // Distance calculation complete
-                }
-            }
-        } catch (calcError) {
-            console.error("Error calculating distance-based delivery fee:", calcError);
-            // Fallback to provided fee or 0
-        }
-
-        const finalTotal = calculatedSubtotal + platformFee + deliveryFee;
-
-        // Update Order with calculated values and items
-        newOrder.subtotal = Number(calculatedSubtotal.toFixed(2));
-        newOrder.total = Number(finalTotal.toFixed(2));
         newOrder.items = orderItemIds;
-        newOrder.shipping = deliveryFee; // Update with calculated fee
-        newOrder.deliveryDistanceKm = deliveryDistanceKm; // Store distance for commission calc
+        await newOrder.save();
+        orderCreated = true;
 
+        // Count the coupon use only once the order exists. (#H-29)
+        await consumeCoupon(pricing.couponCode);
 
-        if (session) {
-            await newOrder.save({ session });
-            await session.commitTransaction();
-        } else {
-            // Validate before saving to catch errors with details
-            const validationError = newOrder.validateSync();
-            if (validationError) {
-                throw validationError;
-            }
-            await newOrder.save();
-        }
-
-
-        // Notify sellers immediately for COD orders only.
-        // Online-payment orders are notified AFTER payment is verified in capturePayment().
+        // ── Notifications (never block the response) ────────────────────────
         if (!isOnlinePayment) {
             try {
-                const io: SocketIOServer = (req.app.get("io") as SocketIOServer);
+                const io: SocketIOServer = req.app.get("io") as SocketIOServer;
                 if (io) {
-                    // Reload order to ensure orderNumber is set (generated by pre-validate hook)
-                    Order.findById(newOrder._id).lean().then(savedOrder => {
-                        if (savedOrder) {
-                            return notifySellersOfOrderUpdate(io, savedOrder, 'NEW_ORDER');
-                        }
-                        return undefined;
-                    }).catch(notificationError => {
-                        console.error("Error notifying sellers (COD):", notificationError);
-                    });
+                    Order.findById(newOrder._id)
+                        .lean()
+                        .then((saved) => (saved ? notifySellersOfOrderUpdate(io, saved, "NEW_ORDER") : undefined))
+                        .catch((err) => console.error("Error notifying sellers (COD):", err));
                 }
-            } catch (error) {
-                console.error("Error setting up seller notification:", error);
+            } catch (err) {
+                console.error("Error setting up seller notification:", err);
             }
 
-            // Push notification to customer confirming COD order placement
-            if (newOrder.customer) {
-                const customerId = (newOrder.customer as any).toString();
-                sendNotificationToUser(customerId, 'Customer', {
-                    title: '✅ Order Placed Successfully!',
-                    body: `Your COD order #${newOrder.orderNumber} has been placed. Seller will confirm shortly.`,
-                    data: {
-                        type: 'ORDER_PLACED',
-                        orderId: (newOrder._id as any).toString(),
-                        orderNumber: newOrder.orderNumber || '',
-                    }
-                }).catch(err => console.error(`❌ COD order push notification failed:`, err));
-            }
+            sendNotificationToUser(userId, "Customer", {
+                title: "Order Placed Successfully",
+                body: `Your COD order #${newOrder.orderNumber} has been placed. The seller will confirm shortly.`,
+                data: {
+                    type: "ORDER_PLACED",
+                    orderId: String(newOrder._id),
+                    orderNumber: newOrder.orderNumber || "",
+                },
+            }).catch((err) => console.error("COD order push notification failed:", err));
         }
 
         return res.status(201).json({
             success: true,
             message: "Order placed successfully",
             data: newOrder,
+            // Surface a rejected coupon so the UI can explain the difference
+            // rather than silently charging more than it displayed. (#C-11)
+            ...(pricing.couponRejectionReason
+                ? { warning: `Coupon not applied: ${pricing.couponRejectionReason}` }
+                : {}),
         });
-
     } catch (error: any) {
-        if (session) {
-            try {
-                await session.abortTransaction();
-            } catch (abortError) {
-                console.error("Error aborting transaction:", abortError);
-            }
+        // Anything reserved before the failure goes back on the shelf. (#H-01)
+        if (!orderCreated && reservations.length > 0) {
+            await releaseMany(reservations);
         }
 
-        console.error("Order Creation Error:", error.message);
+        console.error("Order creation error:", error?.message || error);
 
-        // Return a more informative error message if it's a validation error
-        let errorMessage = "Error creating order. " + error.message;
-        if (error.name === 'ValidationError') {
-            const fields = Object.keys(error.errors).join(', ');
-            errorMessage = `Validation failed for fields: ${fields}. ${error.message}`;
-        }
+        const statusCode =
+            error instanceof StockError || error instanceof PricingError
+                ? error.statusCode
+                : error?.statusCode || 500;
 
-        const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
-            message: errorMessage,
-            error: error.message,
-            details: error.errors,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            message:
+                statusCode === 500
+                    ? "We could not place your order. Please try again."
+                    : error.message,
         });
-    } finally {
-        if (session) session.endSession();
     }
 };
 
@@ -710,140 +549,112 @@ export const refreshDeliveryOtp = async (req: Request, res: Response) => {
 
 // Cancel Order
 export const cancelOrder = async (req: Request, res: Response) => {
-    let session: mongoose.ClientSession | null = null;
     try {
         const { id } = req.params;
         const { reason } = req.body;
         const userId = req.user?.userId;
+
         if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required"
-            });
+            return res.status(401).json({ success: false, message: "Authentication required" });
         }
-
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid Order ID format",
-            });
+            return res.status(400).json({ success: false, message: "Invalid Order ID format" });
         }
-
-        if (!reason) {
+        if (!reason || !String(reason).trim()) {
             return res.status(400).json({ success: false, message: "Cancellation reason is required" });
         }
 
-        // Only start session if we are on a replica set (required for transactions)
-        try {
-            session = await mongoose.startSession();
-            session.startTransaction();
-        } catch (sessionError) {
-            console.warn("MongoDB Transactions not supported or failed to start. Proceeding without transaction.");
-            session = null;
-        }
-
-        const order = session
-            ? await Order.findOne({ _id: id, customer: userId }).session(session)
-            : await Order.findOne({ _id: id, customer: userId });
-
+        const order = await Order.findOne({ _id: id, customer: userId });
         if (!order) {
-            if (session) await session.abortTransaction();
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        if (['Delivered', 'Cancelled', 'Returned', 'Rejected', 'Out for Delivery', 'Shipped'].includes(order.status)) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
+        // One shared transition table decides this, rather than an ad-hoc list
+        // that disagreed with the seller and admin paths. (#H-05)
+        const check = validateTransition(order.status, "Cancelled", "customer");
+        if (!check.valid) {
+            return res.status(400).json({ success: false, message: check.message });
+        }
+
+        // Claim the cancellation atomically so two concurrent requests cannot
+        // both restore the stock.
+        const claimed = await Order.findOneAndUpdate(
+            { _id: id, customer: userId, status: order.status },
+            {
+                $set: {
+                    status: "Cancelled",
+                    cancellationReason: String(reason).trim(),
+                    cancelledAt: new Date(),
+                    cancelledBy: new mongoose.Types.ObjectId(userId),
+                },
+            },
+            { new: true },
+        );
+
+        if (!claimed) {
+            return res.status(409).json({
                 success: false,
-                message: `Order cannot be cancelled as it is already ${order.status}`
+                message: "This order was updated by someone else. Please refresh and try again.",
             });
         }
 
-        // Restore stock
-        for (const item of order.items) {
-            const orderItem = session
-                ? await OrderItem.findById(item).session(session)
-                : await OrderItem.findById(item);
+        // ── Restore stock to the exact variation that was taken ─────────────
+        const orderItems = await OrderItem.find({ _id: { $in: claimed.items } });
+        const reservations = await reservationsFromOrderItems(
+            orderItems.map((oi) => ({
+                product: oi.product,
+                quantity: oi.quantity,
+                variation: oi.variation,
+            })),
+        );
+        await releaseMany(reservations);
 
-            if (orderItem) {
-                const product = session
-                    ? await Product.findById(orderItem.product).session(session)
-                    : await Product.findById(orderItem.product);
+        await OrderItem.updateMany({ _id: { $in: claimed.items } }, { $set: { status: "Cancelled" } });
 
-                if (product) {
-                    // Check if it was a variation
-                    if (orderItem.variation) {
-                        // Try to find matching variation
-                        const variationIndex = product.variations?.findIndex((v: any) => v.value === orderItem.variation || v.title === orderItem.variation || v.pack === orderItem.variation);
+        // Give the coupon use back. (#H-29)
+        await releaseCoupon(claimed.couponCode);
 
-                        if (variationIndex !== undefined && variationIndex !== -1 && product.variations && product.variations[variationIndex]) {
-                            const currentStock = product.variations[variationIndex].stock || 0;
-                            product.variations[variationIndex].stock = currentStock + orderItem.quantity;
-                        } else if (product.variations && product.variations.length > 0) {
-                            // Fallback to first variation if specific one not found (should be rare)
-                            const currentStock = product.variations[0].stock || 0;
-                            product.variations[0].stock = currentStock + orderItem.quantity;
-                        }
-                    }
+        // Reverse anything already credited for this order. (#H-07)
+        try {
+            const { reverseCommissions } = await import("../../../services/commissionService");
+            const rev = await reverseCommissions(id);
+            if (!rev.success) {
+                console.error(`Commission reversal failed for cancelled order ${id}: ${rev.message}`);
+            }
+        } catch (revErr) {
+            console.error(`Commission reversal threw for cancelled order ${id}:`, revErr);
+        }
 
-                    // Helper: also increment main stock if variations are just attributes or if simple product
-                    product.stock += orderItem.quantity;
-                    if (session) {
-                        await product.save({ session });
-                    } else {
-                        await product.save();
-                    }
-                }
-
-                orderItem.status = 'Cancelled';
-                if (session) {
-                    await orderItem.save({ session });
-                } else {
-                    await orderItem.save();
-                }
+        // A prepaid order that is cancelled must be refunded, not just closed.
+        // (#H-06)
+        if (claimed.paymentStatus === "Paid" && claimed.paymentMethod !== "COD") {
+            try {
+                const { refundOrder } = await import("../../../services/refundService");
+                await refundOrder(id, `Order cancelled by customer: ${String(reason).trim()}`);
+            } catch (refundErr) {
+                console.error(`Refund failed for cancelled order ${id}:`, refundErr);
             }
         }
 
-        order.status = 'Cancelled';
-        order.cancellationReason = reason;
-        order.cancelledAt = new Date();
-        order.cancelledBy = new mongoose.Types.ObjectId(userId); // Use Customer ID as canceller
-
-        if (session) {
-            await order.save({ session });
-            await session.commitTransaction();
-        } else {
-            await order.save();
-        }
-
-        // Notify
+        // ── Notify ──────────────────────────────────────────────────────────
         try {
             const io = (req.app as any).get("io");
             if (io) {
-                await notifySellersOfOrderUpdate(io, order, 'ORDER_CANCELLED');
+                await notifySellersOfOrderUpdate(io, claimed, "ORDER_CANCELLED");
 
-                // Notify delivery boy if assigned
-                if (order.deliveryBoy) {
-                    // Update delivery status to Failed since order is cancelled
-                    // We do this in background to not block response
-                    Order.findByIdAndUpdate(order._id, { deliveryBoyStatus: 'Failed' }).exec();
-
-                    // Notify the specific delivery boy
-                    const deliveryBoyId = order.deliveryBoy.toString();
-                    io.to(`delivery-${deliveryBoyId}`).emit('order-cancelled', {
-                        orderId: order._id,
-                        orderNumber: order.orderNumber,
-                        message: "Order has been cancelled by the customer"
+                if (claimed.deliveryBoy) {
+                    await Order.updateOne({ _id: claimed._id }, { $set: { deliveryBoyStatus: "Failed" } });
+                    io.to(`delivery-${claimed.deliveryBoy.toString()}`).emit("order-cancelled", {
+                        orderId: claimed._id,
+                        orderNumber: claimed.orderNumber,
+                        message: "Order has been cancelled by the customer",
                     });
-
-                    console.log(`Notification sent to delivery boy ${deliveryBoyId} for cancelled order ${order.orderNumber}`);
                 }
 
-                // Emit to order room for real-time updates on tracking screen
-                io.to(`order-${order._id}`).emit('order-cancelled', {
-                    orderId: order._id,
-                    status: 'Cancelled',
-                    message: "Order has been cancelled"
+                io.to(`order-${claimed._id}`).emit("order-cancelled", {
+                    orderId: claimed._id,
+                    status: "Cancelled",
+                    message: "Order has been cancelled",
                 });
             }
         } catch (err) {
@@ -854,26 +665,14 @@ export const cancelOrder = async (req: Request, res: Response) => {
             success: true,
             message: "Order cancelled successfully",
             data: {
-                id: order._id,
-                status: order.status,
-                cancelledAt: order.cancelledAt
-            }
+                id: claimed._id,
+                status: claimed.status,
+                cancelledAt: claimed.cancelledAt,
+            },
         });
-
     } catch (error: any) {
-        if (session) {
-            try {
-                await session.abortTransaction();
-            } catch (e) { }
-        }
-        console.error('Error cancelling order:', error);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to cancel order",
-            error: error.message
-        });
-    } finally {
-        if (session) session.endSession();
+        console.error("Error cancelling order:", error?.message || error);
+        return res.status(500).json({ success: false, message: "Failed to cancel order" });
     }
 };
 

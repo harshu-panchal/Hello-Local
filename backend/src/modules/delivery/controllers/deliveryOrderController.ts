@@ -10,6 +10,10 @@ import {
   verifyDeliveryOtp,
 } from "../../../services/deliveryOtpService";
 import { processOrderStatusTransition } from "../../../services/orderService";
+import {
+  ACTIVE_COURIER_STATUSES,
+  validateTransition,
+} from "../../../services/orderStatusService";
 
 /**
  * Helper to map order items for response
@@ -149,18 +153,13 @@ export const getPendingOrders = asyncHandler(
   async (req: Request, res: Response) => {
     const deliveryId = req.user?.userId;
 
-    // Pending statuses: Ready for pickup, Out for delivery, Picked Up, Assigned, In Transit
+    // Four of the five statuses this used to query ("Ready for pickup",
+    // "Picked Up", "Assigned", "In Transit") are not in the Order enum, so only
+    // "Out for Delivery" ever matched and the courier's pending list was mostly
+    // empty. ACTIVE_COURIER_STATUSES is the real in-flight set. (#H-31)
     const orders = await Order.find({
       deliveryBoy: deliveryId,
-      status: {
-        $in: [
-          "Ready for pickup",
-          "Out for Delivery",
-          "Picked Up",
-          "Assigned",
-          "In Transit",
-        ],
-      },
+      status: { $in: ACTIVE_COURIER_STATUSES },
     })
       .populate("items")
       .sort({ createdAt: -1 });
@@ -197,6 +196,7 @@ export const getPendingOrders = asyncHandler(
 export const getOrderDetails = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
+    const deliveryId = req.user?.userId;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -205,7 +205,13 @@ export const getOrderDetails = asyncHandler(
       });
     }
 
-    const order = await Order.findById(id).populate("items");
+    // Scoped to the assigned courier. Without this, any authenticated courier
+    // could read any order in the system — customer name, phone and full
+    // delivery address included. (#H-15)
+    const order = await Order.findOne({
+      _id: id,
+      deliveryBoy: deliveryId,
+    }).populate("items");
 
     if (!order) {
       return res
@@ -258,6 +264,12 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
+    // Statuses a courier may set from this endpoint.
+    //
+    // "Delivered" is deliberately EXCLUDED. Completing a delivery must go through
+    // verify-delivery-otp so the customer's OTP is actually checked. This endpoint
+    // used to accept ANY status with no validation, so an order could be closed —
+    // and COD money moved — without any OTP at all. (#C-08)
     const order = await Order.findById(id);
     if (!order) {
       return res
@@ -265,53 +277,22 @@ export const updateOrderStatus = asyncHandler(
         .json({ success: false, message: "Order not found" });
     }
 
-    if (order.deliveryBoy?.toString() != deliveryId) {
+    if (!order.deliveryBoy || order.deliveryBoy.toString() !== deliveryId) {
       return res
         .status(403)
         .json({ success: false, message: "This order is not assigned to you" });
     }
 
-    // Save previous status before updating
-    const previousStatus = order.status;
-
-    // Status transition logic
-    if (status) order.status = status;
-
-    if (status === "Picked up" || status === "Out for Delivery") {
-      order.deliveryBoyStatus = "Picked Up";
-    } else if (status === "Delivered") {
-      order.deliveryBoyStatus = "Delivered";
-      order.deliveredAt = new Date();
-      order.paymentStatus = "Paid"; // Assume paid on delivery (or already paid)
-
-      // CASH COLLECTION AND COMMISSION LOGIC
-      if (order.paymentMethod === "COD") {
-        // Use new COD processing function
-        const { processCODOrderDelivery } =
-          await import("../../../services/commissionService");
-        try {
-          await processCODOrderDelivery(id);
-          console.log(`[COD] Order ${order.orderNumber} delivery processed successfully`);
-        } catch (codError: any) {
-          console.error("Error processing COD order delivery:", codError);
-          // Rollback order status if COD processing fails
-          return res.status(500).json({
-            success: false,
-            message: `Failed to process COD delivery: ${codError.message}`,
-          });
-        }
-      } else {
-        // For non-COD orders, use existing distribution logic
-        const { distributeCommissions } =
-          await import("../../../services/commissionService");
-        try {
-          await distributeCommissions(id);
-        } catch (commError: any) {
-          console.error("Error distributing commissions:", commError);
-          // Continue even if commission distribution fails
-        }
-      }
+    // The shared transition table also refuses "Delivered" for a courier, so
+    // completion can only happen through delivery-OTP verification. (#C-08 / #H-05)
+    const check = validateTransition(order.status, status, "delivery");
+    if (!check.valid) {
+      return res.status(400).json({ success: false, message: check.message });
     }
+
+    const previousStatus = order.status;
+    order.status = check.status!;
+    order.deliveryBoyStatus = "Picked Up";
 
     await order.save();
 
@@ -326,24 +307,9 @@ export const updateOrderStatus = asyncHandler(
         });
       }
 
-      if (status === "Delivered" && previousStatus !== "Delivered") {
-        // Emit order-delivered event to all relevant parties
-        io.to(`order-${id}`).emit("order-delivered", {
-          orderId: id,
-          orderNumber: order.orderNumber,
-          message: "Order has been delivered successfully",
-        });
-
-        // Also emit to delivery boy room
-        io.to(`delivery-${deliveryId}`).emit("order-delivered", {
-          orderId: id,
-          orderNumber: order.orderNumber,
-          message: "Order delivered successfully",
-        });
-      }
-
-      // Trigger notification to sellers for payment status change or specific transitions
-      if (order.paymentStatus === "Paid" || status === "Delivered") {
+      // Delivery completion (and its order-delivered broadcast) now lives in
+      // verifyDeliveryOtpController, the only path that can set "Delivered". (#C-08)
+      if (previousStatus !== status) {
         notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
       }
     }
@@ -656,23 +622,41 @@ export const checkSellerProximity = asyncHandler(
         .json({ success: false, message: "This order is not assigned to you" });
     }
 
-    // Get seller location
+    // Seller coordinates live in two places: a GeoJSON `location` and the
+    // legacy `latitude`/`longitude` strings. This only read the strings, so a
+    // seller whose position was set through the GeoJSON path always returned
+    // "Seller location not found". (#H-38)
     const seller = await Seller.findById(sellerId).select(
-      "latitude longitude storeName",
+      "location latitude longitude storeName",
     );
-    if (!seller || !seller.latitude || !seller.longitude) {
+    if (!seller) {
       return res
         .status(404)
-        .json({ success: false, message: "Seller location not found" });
+        .json({ success: false, message: "Seller not found" });
     }
 
-    // Calculate distance using locationHelper
+    let sellerLat: number | undefined;
+    let sellerLng: number | undefined;
+    if (seller.location?.coordinates?.length === 2) {
+      sellerLng = seller.location.coordinates[0];
+      sellerLat = seller.location.coordinates[1];
+    } else if (seller.latitude && seller.longitude) {
+      sellerLat = parseFloat(seller.latitude);
+      sellerLng = parseFloat(seller.longitude);
+    }
+
+    if (!Number.isFinite(sellerLat) || !Number.isFinite(sellerLng)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Seller location not set" });
+    }
+
     const { calculateDistance } = await import("../../../utils/locationHelper");
     const distance = calculateDistance(
       latitude,
       longitude,
-      parseFloat(seller.latitude),
-      parseFloat(seller.longitude),
+      sellerLat as number,
+      sellerLng as number,
     );
 
     const withinRange = distance <= 0.5; // 500m = 0.5km

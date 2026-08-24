@@ -33,6 +33,7 @@ export interface CreateCouponData {
   maximumDiscount?: number;
   startDate: string;
   endDate: string;
+  isActive?: boolean;
   usageLimit?: number;
   usageLimitPerUser?: number;
   applicableTo?: "All" | "Category" | "Product" | "Seller";

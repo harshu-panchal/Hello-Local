@@ -1,6 +1,5 @@
 import Order from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
-import Inventory from "../models/Inventory";
 import { clearOrderCache } from "../socket/socketService";
 
 /**
@@ -9,7 +8,7 @@ import { clearOrderCache } from "../socket/socketService";
 export const processOrderStatusTransition = async (
   orderId: string,
   newStatus: string,
-  previousStatus: string
+  _previousStatus?: string
 ) => {
   const order = await Order.findById(orderId).populate("items");
 
@@ -22,62 +21,16 @@ export const processOrderStatusTransition = async (
     clearOrderCache(orderId);
   }
 
-  // Handle status-specific logic
-  switch (newStatus) {
-    case "Cancelled":
-      // Restore inventory if order was confirmed
-      if (["Processed", "Shipped"].includes(previousStatus)) {
-        await restoreInventory(order.items as any[]);
-      }
-      break;
-
-    case "Processed":
-      // Reserve inventory
-      await reserveInventory(order.items as any[]);
-      break;
-
-    case "Delivered":
-      // Create commissions for sellers
-      await createCommissions(order.items as any[]);
-      break;
+  // Stock is reserved when the order is created and released when it is
+  // cancelled, both handled by stockService against Product/variation stock.
+  // The separate Inventory collection was never populated and its
+  // reserve/restore branches here were unreachable: this function is only ever
+  // invoked with "Delivered". (#H-42)
+  if (newStatus === "Delivered") {
+    await createCommissions(order.items as any[]);
   }
 
   return order;
-};
-
-/**
- * Reserve inventory for order items
- */
-const reserveInventory = async (items: IOrderItem[]) => {
-  for (const item of items) {
-    const inventory = await Inventory.findOne({ product: item.product });
-    if (inventory) {
-      inventory.reservedStock += item.quantity;
-      inventory.availableStock = Math.max(
-        0,
-        inventory.currentStock - inventory.reservedStock
-      );
-      await inventory.save();
-    }
-  }
-};
-
-/**
- * Restore inventory when order is cancelled
- */
-const restoreInventory = async (items: IOrderItem[]) => {
-  for (const item of items) {
-    const inventory = await Inventory.findOne({ product: item.product });
-    if (inventory) {
-      inventory.reservedStock = Math.max(
-        0,
-        inventory.reservedStock - item.quantity
-      );
-      inventory.availableStock =
-        inventory.currentStock - inventory.reservedStock;
-      await inventory.save();
-    }
-  }
 };
 
 /**
@@ -114,76 +67,15 @@ const createCommissions = async (items: IOrderItem[]) => {
 
 
 /**
- * Validate order can transition to new status
+ * Order status transitions now live in services/orderStatusService.ts, which is
+ * the single table shared by the customer, seller, courier and admin paths.
+ * The validator that used to sit here had a different vocabulary from the Order
+ * enum and had no call sites at all. (#H-05)
  */
-export const validateStatusTransition = (
-  currentStatus: string,
-  newStatus: string
-): { valid: boolean; message?: string } => {
-  const validTransitions: Record<string, string[]> = {
-    Received: ["Pending", "Cancelled", "Rejected"],
-    Pending: ["Processed", "Cancelled", "Rejected"],
-    Processed: ["Shipped", "Cancelled", "Rejected"],
-    Shipped: ["Out for Delivery", "Cancelled", "Rejected"],
-    "Out for Delivery": ["Delivered", "Cancelled", "Rejected"],
-    Delivered: ["Returned"],
-    Cancelled: [],
-    Rejected: [],
-    Returned: [],
-  };
-
-  const allowedStatuses = validTransitions[currentStatus] || [];
-
-  if (!allowedStatuses.includes(newStatus)) {
-    return {
-      valid: false,
-      message: `Cannot transition from ${currentStatus} to ${newStatus}. Valid transitions: ${allowedStatuses.join(
-        ", "
-      )}`,
-    };
-  }
-
-  return { valid: true };
-};
 
 /**
- * Calculate order totals
+ * Order totals are computed by services/orderPricingService.ts, which is
+ * server-authoritative and handles tax, coupons and distance-based delivery.
+ * The helper that used to live here hardcoded 18% GST and a Rs.50 flat shipping
+ * fee and was never called. (#H-04)
  */
-export const calculateOrderTotals = async (
-  items: IOrderItem[],
-  couponCode?: string
-) => {
-  let subtotal = 0;
-  let tax = 0;
-  let shipping = 0;
-  let discount = 0;
-
-  // Calculate subtotal from items
-  for (const item of items) {
-    subtotal += item.total;
-  }
-
-  // Apply coupon discount if provided
-  if (couponCode) {
-    // Coupon validation and discount calculation would go here
-    // For now, we'll skip this as it's handled in the coupon controller
-  }
-
-  // Calculate tax (example: 18% GST)
-  tax = subtotal * 0.18;
-
-  // Calculate shipping (example: free shipping over 500)
-  if (subtotal < 500) {
-    shipping = 50;
-  }
-
-  const total = subtotal + tax + shipping - discount;
-
-  return {
-    subtotal,
-    tax,
-    shipping,
-    discount,
-    total,
-  };
-};

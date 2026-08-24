@@ -12,50 +12,60 @@ export const getDashboardStats = asyncHandler(
     async (req: Request, res: Response) => {
         const sellerId = new mongoose.Types.ObjectId((req as any).user.userId);
 
-        // Find orders associated with this seller
-        // Since Order model doesn't have sellerId, we find orders via OrderItem
+        // Find orders associated with this seller (both multi-seller online items and direct offline sales)
         const sellerOrderItems = await OrderItem.find({ seller: sellerId }).select('order');
-        const sellerOrderIds = [...new Set(sellerOrderItems.map(item => item.order.toString()))];
+        const directOrders = await Order.find({ seller: sellerId }).distinct('_id');
+        const sellerOrderIds = [
+            ...new Set([
+                ...sellerOrderItems.map((item) => item.order?.toString()).filter(Boolean),
+                ...directOrders.map((id) => id.toString()),
+            ]),
+        ];
 
         // 1. KPI Metrics
         const sellerObjectIds = sellerOrderIds.map(id => new mongoose.Types.ObjectId(id));
 
-        // Orders that are actually Delivered. Revenue is based on the ORDER's final
-        // status, not the order-item status — items aren't always synced to
-        // "Delivered" when a delivery partner/admin marks the order delivered, which
-        // previously made revenue show ₹0. (#252)
+        // Delivered / Completed orders
         const deliveredOrderIds = await Order.find({
             _id: { $in: sellerOrderIds },
-            status: "Delivered",
+            status: { $in: ["Delivered", "Completed"] },
         }).distinct("_id");
 
         const [
             totalOrders,
             completedOrders,
-            pendingOrders,    // Orders received by seller but not yet accepted/rejected
+            pendingOrders,
             cancelledOrders,
+            offlineOrdersCount,
+            onlineOrdersCount,
             totalProduct,
             totalCategoryCount,
             totalSubcategoryCount,
             totalCustomerCount,
             revenueData,
+            offlineRevenueData,
         ] = await Promise.all([
             Order.countDocuments({ _id: { $in: sellerOrderIds } }),
-            Order.countDocuments({ _id: { $in: sellerOrderIds }, status: "Delivered" }),
-            // "Pending" for seller = orders they need to action (Received = new, Accepted = in progress, Processed = ready)
+            Order.countDocuments({ _id: { $in: sellerOrderIds }, status: { $in: ["Delivered", "Completed"] } }),
             Order.countDocuments({
                 _id: { $in: sellerOrderIds },
-                status: { $in: ["Received", "Accepted", "Processed"] }
+                status: { $in: ["Received", "Accepted", "Processed"] },
             }),
             Order.countDocuments({ _id: { $in: sellerOrderIds }, status: "Cancelled" }),
+            Order.countDocuments({ _id: { $in: sellerOrderIds }, orderChannel: "OFFLINE" }),
+            Order.countDocuments({ _id: { $in: sellerOrderIds }, orderChannel: "ONLINE" }),
             Product.countDocuments({ seller: sellerId }),
             Product.distinct("category", { seller: sellerId }).then(ids => ids.length),
             Product.distinct("subcategory", { seller: sellerId }).then(ids => ids.length),
             Order.distinct("customer", { _id: { $in: sellerOrderIds } }).then(ids => ids.length),
-            // Total revenue = sum of this seller's items across the seller's
-            // Delivered orders (based on order status, not item status). (#252)
+            // Total revenue across delivered/completed items
             OrderItem.aggregate([
                 { $match: { seller: sellerId, order: { $in: deliveredOrderIds } } },
+                { $group: { _id: null, total: { $sum: "$total" } } }
+            ]).catch(() => []),
+            // Offline revenue
+            Order.aggregate([
+                { $match: { _id: { $in: sellerObjectIds }, orderChannel: "OFFLINE", status: { $ne: "Cancelled" } } },
                 { $group: { _id: null, total: { $sum: "$total" } } }
             ]).catch(() => []),
         ]);
@@ -170,9 +180,13 @@ export const getDashboardStats = asyncHandler(
                     completedOrders,
                     pendingOrders,
                     cancelledOrders,
+                    offlineOrdersCount,
+                    onlineOrdersCount,
                     soldOutProducts,
                     lowStockProducts,
                     totalRevenue: Math.round(totalRevenue * 100) / 100,
+                    offlineRevenue: Math.round((offlineRevenueData[0]?.total || 0) * 100) / 100,
+                    onlineRevenue: Math.round((Math.max(0, totalRevenue - (offlineRevenueData[0]?.total || 0))) * 100) / 100,
                     yearlyOrderData,
                     dailyOrderData
                 },

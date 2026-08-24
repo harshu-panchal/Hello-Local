@@ -8,35 +8,22 @@ import mongoose from 'mongoose';
 import AppSettings from '../../../models/AppSettings';
 import { getRoadDistances } from '../../../services/mapService';
 import Seller from '../../../models/Seller';
+import {
+    findVariation,
+    effectiveUnitPrice,
+} from '../../../utils/productVariation';
 
-// Helper to calculate item price matching frontend logic
+/**
+ * Price a cart line.
+ *
+ * This used to match variations on `_id` only, while checkout matched on
+ * id | value | title | pack. A variation selected by label therefore priced at
+ * the base price in the cart and at the variation price at checkout, so the two
+ * totals disagreed. Both now use the same helper. (#H-35)
+ */
 const calculateItemPrice = (product: any, variationSelector: any) => {
-    let variation = null;
-    let variationId = variationSelector;
-
-    // Handle if variationSelector is an object (some implementations store it differently)
-    if (variationSelector && typeof variationSelector === 'object' && variationSelector._id) {
-        variationId = variationSelector._id;
-    }
-
-    if (variationId && product.variations?.length) {
-        variation = product.variations.find((v: any) =>
-            (v._id && v._id.toString() === variationId.toString()) ||
-            (v.id && v.id === variationId)
-        );
-    }
-
-    let finalPrice = variation?.price || product.price || 0;
-
-    // Priority: Variation Discount -> Product Discount -> Variation Price -> Product Price
-    if (variation?.discPrice && variation.discPrice > 0) {
-        finalPrice = variation.discPrice;
-    } else if (product.discPrice && product.discPrice > 0) {
-        finalPrice = product.discPrice;
-    }
-
-    console.log(`[DEBUG Price] VarId: ${variationId}, Found: ${!!variation}, ProdDisc: ${product.discPrice}, Final: ${finalPrice}`);
-    return finalPrice;
+    const variation = findVariation(product?.variations, variationSelector);
+    return effectiveUnitPrice(product, variation);
 };
 
 // Helper to sync cart items, removing out-of-range/inactive items, and updating total
@@ -150,8 +137,7 @@ const calculateDeliveryStuff = async (total: number, items: any[], userLat: numb
                         if (sellerLocations.length > 0) {
                             const distances = await getRoadDistances(
                                 sellerLocations,
-                                { lat: userLat, lng: userLng },
-                                config.googleMapsKey
+                                { lat: userLat, lng: userLng }
                             );
 
                             if (distances && distances.length > 0) {

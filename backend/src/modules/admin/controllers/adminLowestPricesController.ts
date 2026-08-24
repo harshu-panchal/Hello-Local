@@ -3,10 +3,25 @@ import LowestPricesProduct from "../../../models/LowestPricesProduct";
 import Product from "../../../models/Product";
 import mongoose from "mongoose";
 
-// Get all lowest prices products
-export const getLowestPricesProducts = async (_req: Request, res: Response) => {
+export const getLowestPricesProducts = async (req: Request, res: Response) => {
     try {
-        const products = await LowestPricesProduct.find()
+        const { search, isActive } = req.query;
+        const query: any = {};
+
+        if (isActive !== undefined) {
+            query.isActive = isActive === "true";
+        }
+
+        if (search && typeof search === "string" && search.trim()) {
+            const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const matchingProductIds = await Product.find({
+                productName: { $regex: safe, $options: "i" },
+            }).distinct("_id");
+
+            query.product = { $in: matchingProductIds };
+        }
+
+        const products = await LowestPricesProduct.find(query)
             .populate("product", "productName mainImage price mrp discount status publish")
             .sort({ order: 1 })
             .lean();

@@ -131,3 +131,36 @@ export const handleUploadError = (
 
   _next(err);
 };
+
+/**
+ * Verify a file by its actual bytes, not by the Content-Type the client sent.
+ *
+ * Multer reports the MIME type the *uploader* declared, so the type filters
+ * above are trivially bypassed by labelling any payload `image/png`. This reads
+ * the magic number instead. (#H-11)
+ *
+ * @returns an error message, or null when the file is one of `allowed`.
+ */
+export function assertRealFileType(
+  buffer: Buffer,
+  allowed: Array<"image" | "pdf">
+): string | null {
+  if (!buffer || buffer.length < 12) return "File is empty or truncated";
+
+  const hex = (n: number) => buffer.subarray(0, n).toString("hex").toUpperCase();
+  const ascii = (from: number, to: number) => buffer.subarray(from, to).toString("ascii");
+
+  const isJpeg = hex(3) === "FFD8FF";
+  const isPng = hex(8) === "89504E470D0A1A0A";
+  const isGif = ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a";
+  const isWebp = ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP";
+  const isPdf = ascii(0, 5) === "%PDF-";
+
+  const isImage = isJpeg || isPng || isGif || isWebp;
+
+  if (allowed.includes("image") && isImage) return null;
+  if (allowed.includes("pdf") && isPdf) return null;
+
+  const names = allowed.map((a) => (a === "pdf" ? "PDF" : "image (JPEG, PNG, GIF, WebP)"));
+  return `That file is not a valid ${names.join(" or ")}.`;
+}

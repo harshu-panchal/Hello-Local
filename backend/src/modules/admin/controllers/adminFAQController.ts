@@ -18,11 +18,12 @@ export const getFAQs = asyncHandler(async (req: Request, res: Response) => {
 
     const query: any = {};
 
-    // Search filter
-    if (search) {
+    // Search filter with regex sanitization
+    if (search && typeof search === "string" && search.trim() !== "") {
+        const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         query.$or = [
-            { question: { $regex: search, $options: "i" } },
-            { answer: { $regex: search, $options: "i" } },
+            { question: { $regex: safe, $options: "i" } },
+            { answer: { $regex: safe, $options: "i" } },
         ];
     }
 
@@ -96,9 +97,20 @@ export const createFAQ = asyncHandler(async (req: Request, res: Response) => {
         });
     }
 
+    const safeQuestion = String(question).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existing = await FAQ.findOne({
+        question: { $regex: `^${safeQuestion}$`, $options: "i" },
+    });
+    if (existing) {
+        return res.status(400).json({
+            success: false,
+            message: `An FAQ with this question already exists.`,
+        });
+    }
+
     const faq = await FAQ.create({
-        question,
-        answer,
+        question: question.trim(),
+        answer: answer.trim(),
         category,
         order: order || 0,
     });
@@ -126,8 +138,22 @@ export const updateFAQ = asyncHandler(async (req: Request, res: Response) => {
         });
     }
 
-    if (question !== undefined) faq.question = question;
-    if (answer !== undefined) faq.answer = answer;
+    if (question && question.trim() !== faq.question) {
+        const safeQuestion = String(question).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const existing = await FAQ.findOne({
+            _id: { $ne: id },
+            question: { $regex: `^${safeQuestion}$`, $options: "i" },
+        });
+        if (existing) {
+            return res.status(400).json({
+                success: false,
+                message: `An FAQ with this question already exists.`,
+            });
+        }
+        faq.question = question.trim();
+    }
+
+    if (answer !== undefined) faq.answer = answer.trim();
     if (category !== undefined) faq.category = category;
     if (order !== undefined) faq.order = order;
     if (status !== undefined) faq.status = status;

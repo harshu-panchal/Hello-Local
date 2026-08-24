@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
@@ -7,9 +7,8 @@ import { useToast } from '../../context/ToastContext';
 import { useLocation as useGlobalLocation } from '../../hooks/useLocation';
 import { OrderAddress } from '../../types/order';
 import { getAddresses, addAddress, updateAddress, Address } from '../../services/api/customerAddressService';
-import { appConfig } from '../../services/configService';
-import { calculateProductPrice } from '../../utils/priceUtils';
 import GoogleMapsLocationPicker from '../../components/GoogleMapsLocationPicker';
+import { ArrowLeftIcon, LocationPinIcon, HomeNavIcon, CloseIcon } from './components/common/UserIcons';
 
 export default function CheckoutAddress() {
   const { cart } = useCart();
@@ -19,7 +18,6 @@ export default function CheckoutAddress() {
   const location = useLocation();
   const { location: globalLocation, updateLocation: updateGlobalLocation } = useGlobalLocation();
 
-  // Get address from navigation state if editing
   const editAddress = (location.state as any)?.editAddress as OrderAddress | undefined;
 
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
@@ -39,11 +37,9 @@ export default function CheckoutAddress() {
   const [orderingFor, setOrderingFor] = useState<'myself' | 'someone-else'>('myself');
   const [addressType, setAddressType] = useState<'home' | 'work' | 'hotel' | 'other'>('home');
 
-  // Location picker state
   const [selectedLatitude, setSelectedLatitude] = useState<number>(0);
   const [selectedLongitude, setSelectedLongitude] = useState<number>(0);
 
-  // Prefill with global location if available
   useEffect(() => {
     if (globalLocation?.latitude && globalLocation?.longitude && !selectedLatitude) {
       setSelectedLatitude(globalLocation.latitude);
@@ -56,10 +52,6 @@ export default function CheckoutAddress() {
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
   });
 
-  // Get user's current location on mount
-
-
-  // Fetch all addresses on mount
   useEffect(() => {
     if (isAuthenticated) {
       const fetchAddresses = async () => {
@@ -68,7 +60,6 @@ export default function CheckoutAddress() {
           if (response.success && Array.isArray(response.data)) {
             setSavedAddresses(response.data);
 
-            // If not editing, try to load the default 'home' address if it exists
             if (!editAddress) {
               const homeAddr = response.data.find(a => a.type === 'Home');
               if (homeAddr) {
@@ -95,7 +86,6 @@ export default function CheckoutAddress() {
     }
   }, [isAuthenticated, editAddress]);
 
-  // Update address when addressType changes
   useEffect(() => {
     if (!editAddress && savedAddresses.length > 0) {
       const typeLabel = addressType.charAt(0).toUpperCase() + addressType.slice(1) as any;
@@ -115,7 +105,6 @@ export default function CheckoutAddress() {
           id: existingAddr._id,
         });
       } else {
-        // Clear or reset to defaults if no address of this type
         setAddress(prev => ({
           ...prev,
           flat: '',
@@ -131,7 +120,6 @@ export default function CheckoutAddress() {
     }
   }, [addressType, savedAddresses, editAddress]);
 
-  // Update address when editAddress changes
   useEffect(() => {
     if (editAddress) {
       setAddress({
@@ -145,118 +133,94 @@ export default function CheckoutAddress() {
         landmark: editAddress.landmark || '',
       });
 
-      // Try to set address type based on editAddress if it has one
       if ((editAddress as any).type) {
         setAddressType((editAddress as any).type.toLowerCase());
       }
     }
   }, [editAddress]);
 
-  const platformFee = appConfig.platformFee;
-  const deliveryFee = cart.total >= appConfig.freeDeliveryThreshold ? 0 : appConfig.deliveryFee;
-  const totalAmount = cart.total + platformFee + deliveryFee;
-
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof OrderAddress, string>> = {};
-
-    if (!address.name.trim()) {
-      newErrors.name = 'Name is required';
-    } else if (!/^[A-Za-z\s]+$/.test(address.name.trim())) {
-      newErrors.name = 'Name should contain only alphabets';
+  const validateField = (field: keyof OrderAddress, value: string): string => {
+    switch (field) {
+      case 'name':
+        if (!value.trim()) return 'Name is required';
+        if (value.trim().length < 2) return 'Name must be at least 2 characters';
+        if (!/^[A-Za-z\s]+$/.test(value.trim())) return 'Name should only contain letters';
+        return '';
+      case 'phone':
+        if (!value.trim()) return 'Mobile number is required';
+        if (!/^[6-9]\d{9}$/.test(value.trim())) return 'Enter a valid 10-digit mobile number';
+        return '';
+      case 'flat':
+        if (!value.trim()) return 'House/Flat details are required';
+        return '';
+      case 'street':
+        if (!value.trim()) return 'Street/Area is required';
+        if (value.trim().length < 3) return 'Street address is too short';
+        return '';
+      case 'city':
+        if (!value.trim()) return 'City is required';
+        if (!/^[A-Za-z\s]+$/.test(value.trim())) return 'City should only contain letters';
+        return '';
+      case 'state':
+        if (!value.trim()) return 'State is required';
+        if (!/^[A-Za-z\s]+$/.test(value.trim())) return 'State should only contain letters';
+        return '';
+      case 'pincode':
+        if (!value.trim()) return 'Pincode is required';
+        if (!/^\d{6}$/.test(value.trim())) return 'Enter a valid 6-digit PIN code';
+        return '';
+      default:
+        return '';
     }
-    if (!address.phone.trim()) {
-      newErrors.phone = 'Phone is required';
-    } else if (address.phone.length < 10) {
-      newErrors.phone = 'Phone must be at least 10 digits';
-    }
-    if (!address.flat.trim()) {
-      newErrors.flat = 'Flat/House No. is required';
-    }
-    if (!address.street.trim()) {
-      newErrors.street = 'Street/Area is required';
-    }
-    if (!address.city.trim()) {
-      newErrors.city = 'City is required';
-    }
-    if (!address.state?.trim()) {
-        newErrors.state = 'State is required';
-    }
-    if (!address.pincode.trim()) {
-      newErrors.pincode = 'Pincode is required';
-    } else if (address.pincode.length < 6) {
-      newErrors.pincode = 'Pincode must be at least 6 digits';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleInputChange = (field: keyof OrderAddress, value: string) => {
-    setAddress((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+    setAddress(prev => ({ ...prev, [field]: value }));
+    const error = validateField(field, value);
+    setErrors(prev => ({ ...prev, [field]: error }));
   };
 
   const handleSaveAddress = async () => {
-    if (!isAuthenticated) {
-      showToast('Please login to save your address', 'info');
-      navigate('/login', { state: { from: location.pathname } });
-      return;
-    }
+    const fieldsToValidate: (keyof OrderAddress)[] = ['name', 'phone', 'flat', 'street', 'city', 'state', 'pincode'];
+    const newErrors: Partial<Record<keyof OrderAddress, string>> = {};
+    let hasError = false;
 
-    if (!validateForm()) {
+    fieldsToValidate.forEach(field => {
+      const val = address[field] ? String(address[field]) : '';
+      const error = validateField(field, val);
+      if (error) {
+        newErrors[field] = error;
+        hasError = true;
+      }
+    });
+
+    setErrors(newErrors);
+
+    if (hasError) {
+      showToast('Please fix the errors before continuing', 'error');
       return;
     }
 
     setIsSaving(true);
-
     try {
-      let finalLat = selectedLatitude || 0;
-      let finalLng = selectedLongitude || 0;
+      const finalLat = selectedLatitude || globalLocation?.latitude;
+      const finalLng = selectedLongitude || globalLocation?.longitude;
 
-      // Try to geocode if map wasn't used but we have text address
-      if (isLoaded && (!finalLat || !finalLng)) {
-        const fullAddress = `${address.flat}, ${address.street}, ${address.city}, ${address.state}, ${address.pincode}`;
-        try {
-          const geocoder = new google.maps.Geocoder();
-          const result = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-            geocoder.geocode({ address: fullAddress }, (results, status) => {
-              if (status === 'OK' && results && results.length > 0) {
-                resolve(results);
-              } else {
-                reject(status);
-              }
-            });
-          });
+      const formattedType = (addressType.charAt(0).toUpperCase() + addressType.slice(1)) as 'Home' | 'Work' | 'Hotel' | 'Other';
 
-          if (result && result[0] && result[0].geometry && result[0].geometry.location) {
-            finalLat = result[0].geometry.location.lat();
-            finalLng = result[0].geometry.location.lng();
-            console.log("Geocoded address to:", finalLat, finalLng);
-          }
-        } catch (e) {
-          console.warn("Geocoding failed, proceeding with 0,0", e);
-        }
-      }
-
-      const payload = {
+      const payload: Partial<Address> & { flat?: string; street?: string } = {
         fullName: address.name,
         phone: address.phone,
-        flat: address.flat,
-        street: address.street,
         city: address.city,
         state: address.state,
         pincode: address.pincode,
-        landmark: address.landmark,
-        type: addressType.charAt(0).toUpperCase() + addressType.slice(1) as 'Home' | 'Work' | 'Hotel' | 'Other', // Capitalize
-        isDefault: true, // Auto set as default for now
-        address: `${address.flat}, ${address.street}`, // Fallback combined string
+        landmark: address.landmark || undefined,
+        type: formattedType,
+        address: `${address.flat}, ${address.street}`,
         latitude: finalLat,
         longitude: finalLng,
       };
 
-      // If editing an existing address, use updateAddress instead
       if (editAddress && (editAddress.id || editAddress._id)) {
         const addressId = editAddress.id || editAddress._id;
         await updateAddress(addressId!, payload);
@@ -264,7 +228,6 @@ export default function CheckoutAddress() {
         await addAddress(payload);
       }
 
-      // Update global location to match the selected address
       if (finalLat && finalLng) {
         await updateGlobalLocation({
           latitude: finalLat,
@@ -276,282 +239,299 @@ export default function CheckoutAddress() {
         });
       }
 
-      // Show success feedback logic if needed or just navigate
       setTimeout(() => {
         setIsSaving(false);
         navigate('/checkout', { replace: true });
-      }, 500);
+      }, 400);
     } catch (error) {
       console.error('Error saving address:', error);
       setIsSaving(false);
-      // Show error toast
     }
   };
 
-  const isFormValid = address.name.trim() !== '' &&
-    address.phone.trim().length >= 10 &&
+  const isFormValid =
+    /^[A-Za-z\s]{2,}$/.test(address.name.trim()) &&
+    /^[6-9]\d{9}$/.test(address.phone) &&
     address.flat.trim() !== '' &&
-    address.street.trim() !== '' &&
-    address.city.trim() !== '' &&
-    (address.state?.trim() || '') !== '' &&
-    address.pincode.trim().length >= 6;
+    address.street.trim().length >= 3 &&
+    /^[A-Za-z\s]+$/.test(address.city.trim()) &&
+    /^[A-Za-z\s]+$/.test((address.state || '').trim()) &&
+    /^\d{6}$/.test(address.pincode);
 
   return (
-    <div className="pb-24 bg-white min-h-screen">
+    <div className="pb-28 md:pb-16 bg-[#F8FAFC] min-h-screen">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-neutral-200">
-        <div className="px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center">
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="w-7 h-7 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors mr-2"
+              className="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full transition-colors touch-target-min"
               aria-label="Go back"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <ArrowLeftIcon size={18} />
             </button>
-            <h1 className="text-base font-bold text-neutral-900">Enter complete address</h1>
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
+              {editAddress ? 'Edit Address' : 'Add Delivery Address'}
+            </h1>
           </div>
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="w-7 h-7 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-full"
             aria-label="Close"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <CloseIcon size={16} />
           </button>
         </div>
       </div>
 
-      <div className="px-4 py-3 border-b border-neutral-200">
-        <label className="block text-xs font-medium text-neutral-700 mb-2">
-           Delivery Address Details
-        </label>
-      </div>
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-4">
+        <div className="lg:grid lg:grid-cols-12 lg:gap-6 items-start space-y-4 lg:space-y-0">
+          {/* Left Column: Map & Address Type */}
+          <div className="lg:col-span-6 xl:col-span-5 space-y-3.5 lg:sticky lg:top-20">
+            {/* Map Location Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs overflow-hidden">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <LocationPinIcon size={16} className="text-[#FF2E7A]" />
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900">Pin Location on Map</h3>
+              </div>
+              <p className="text-[10px] text-slate-400 mb-2.5 font-medium">
+                Drag the pin to adjust your exact doorstep location.
+              </p>
+              <div className="rounded-xl overflow-hidden border border-slate-200">
+                <GoogleMapsLocationPicker
+                  initialLat={selectedLatitude || globalLocation?.latitude || 28.6139}
+                  initialLng={selectedLongitude || globalLocation?.longitude || 77.2090}
+                  onLocationSelect={(lat, lng, addr) => {
+                    setSelectedLatitude(lat);
+                    setSelectedLongitude(lng);
+                    if (addr) {
+                      setAddress(prev => ({
+                        ...prev,
+                        street: addr.street || prev.street,
+                        city: addr.city || prev.city,
+                        state: addr.state || prev.state,
+                        pincode: addr.pincode || prev.pincode,
+                        landmark: addr.landmark || prev.landmark
+                      }));
+                    }
+                  }}
+                  height="220px"
+                />
+              </div>
+            </div>
 
-      {/* Map Picker */}
-      <div className="px-4 py-3 border-b border-neutral-200">
-        <GoogleMapsLocationPicker
-          initialLat={selectedLatitude || globalLocation?.latitude || 28.6139}
-          initialLng={selectedLongitude || globalLocation?.longitude || 77.2090}
-          onLocationSelect={(lat, lng, addr) => {
-            setSelectedLatitude(lat);
-            setSelectedLongitude(lng);
-            if (addr) {
-              setAddress(prev => ({
-                ...prev,
-                street: addr.street || prev.street,
-                city: addr.city || prev.city,
-                state: addr.state || prev.state,
-                pincode: addr.pincode || prev.pincode,
-                landmark: addr.landmark || prev.landmark
-              }));
-            }
-          }}
-          height="180px"
-        />
-      </div>
+            {/* Ordering For */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs">
+              <p className="text-xs font-bold text-slate-900 mb-2">Who are you ordering for?</p>
+              <div className="flex items-center gap-2">
+                {[
+                  { id: 'myself', label: 'Myself' },
+                  { id: 'someone-else', label: 'Someone else' }
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setOrderingFor(opt.id as any)}
+                    className={`flex-1 py-1.5 px-3 rounded-xl border text-xs font-bold transition-all touch-target-min ${
+                      orderingFor === opt.id
+                        ? 'border-[#FF2E7A] bg-[#FFF1F4] text-[#FF2E7A] shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-      {/* Who you are ordering for? */}
-      <div className="px-4 py-2.5 border-b border-neutral-200">
-        <p className="text-xs font-medium text-neutral-700 mb-2">Who you are ordering for?</p>
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="orderingFor"
-              value="myself"
-              checked={orderingFor === 'myself'}
-              onChange={(e) => setOrderingFor(e.target.value as 'myself' | 'someone-else')}
-              className="w-4 h-4 appearance-none border-2 border-neutral-300 rounded-full bg-white checked:bg-white checked:border-[#FF2E7A] focus:ring-2 focus:ring-pink-500 focus:ring-offset-0"
-              style={{
-                backgroundImage: orderingFor === 'myself'
-                  ? 'radial-gradient(circle, #FF2E7A 35%, transparent 40%)'
-                  : 'none',
-                backgroundSize: '40%',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-              }}
-            />
-            <span className="text-xs text-neutral-700">Myself</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="orderingFor"
-              value="someone-else"
-              checked={orderingFor === 'someone-else'}
-              onChange={(e) => setOrderingFor(e.target.value as 'myself' | 'someone-else')}
-              className="w-4 h-4 appearance-none border-2 border-neutral-300 rounded-full bg-white checked:bg-white checked:border-[#FF2E7A] focus:ring-2 focus:ring-pink-500 focus:ring-offset-0"
-              style={{
-                backgroundImage: orderingFor === 'someone-else'
-                  ? 'radial-gradient(circle, #FF2E7A 35%, transparent 40%)'
-                  : 'none',
-                backgroundSize: '40%',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-              }}
-            />
-            <span className="text-xs text-neutral-700">Someone else</span>
-          </label>
-        </div>
-      </div>
+            {/* Save Address As */}
+            {orderingFor === 'myself' && (
+              <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs">
+                <label className="block text-xs font-bold text-slate-900 mb-2">
+                  Save Address As <span className="text-[#FF2E7A]">*</span>
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { id: 'home', label: 'Home' },
+                    { id: 'work', label: 'Work' },
+                    { id: 'hotel', label: 'Hotel' },
+                    { id: 'other', label: 'Other' },
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setAddressType(type.id as typeof addressType)}
+                      className={`py-1.5 px-1 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-0.5 touch-target-min ${
+                        addressType === type.id
+                          ? 'border-[#FF2E7A] bg-[#FFF1F4] text-[#FF2E7A] shadow-2xs'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="text-xs">{type.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-      {/* Save address as - Only show when ordering for myself */}
-      {orderingFor === 'myself' && (
-        <div className="px-4 py-2.5 border-b border-neutral-200">
-          <label className="block text-xs font-medium text-neutral-700 mb-2">
-            Save address as <span className="text-red-500">*</span>
-          </label>
-          <div className="flex items-center gap-2 flex-wrap">
-            {[
-              { id: 'home', label: 'Home', icon: '🏠' },
-              { id: 'work', label: 'Work', icon: '🏢' },
-              { id: 'hotel', label: 'Hotel', icon: '🏨' },
-              { id: 'other', label: 'Other', icon: '📍' },
-            ].map((type) => (
-              <button
-                key={type.id}
-                onClick={() => setAddressType(type.id as typeof addressType)}
-                className={`px-3 py-1.5 rounded-lg border-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${addressType === type.id
-                  ? 'border-[#FF2E7A] bg-pink-50 text-pink-700'
-                  : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
+          {/* Right Column: Form Inputs */}
+          <div className="lg:col-span-6 xl:col-span-7 space-y-3.5">
+            <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-2xs space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Full Name <span className="text-[#FF2E7A]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={address.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                    errors.name ? 'border-rose-500' : 'border-slate-200'
                   }`}
-              >
-                <span className="text-sm">{type.icon}</span>
-                <span>{type.label}</span>
-              </button>
-            ))}
+                  placeholder="e.g. Rahul Sharma"
+                />
+                {errors.name && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.name}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Mobile Number <span className="text-[#FF2E7A]">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={address.phone}
+                  onChange={(e) => handleInputChange('phone', e.target.value.replace(/\D/g, ''))}
+                  className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                    errors.phone ? 'border-rose-500' : 'border-slate-200'
+                  }`}
+                  placeholder="10-digit mobile number"
+                  maxLength={10}
+                />
+                {errors.phone && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.phone}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Flat / House No. <span className="text-[#FF2E7A]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={address.flat}
+                    onChange={(e) => handleInputChange('flat', e.target.value)}
+                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                      errors.flat ? 'border-rose-500' : 'border-slate-200'
+                    }`}
+                    placeholder="e.g. Flat 402, Tower B"
+                  />
+                  {errors.flat && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.flat}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Street / Area <span className="text-[#FF2E7A]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={address.street}
+                    onChange={(e) => handleInputChange('street', e.target.value)}
+                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                      errors.street ? 'border-rose-500' : 'border-slate-200'
+                    }`}
+                    placeholder="e.g. Main Market, Sector 14"
+                  />
+                  {errors.street && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.street}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    City <span className="text-[#FF2E7A]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={address.city}
+                    onChange={(e) => handleInputChange('city', e.target.value)}
+                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                      errors.city ? 'border-rose-500' : 'border-slate-200'
+                    }`}
+                    placeholder="City"
+                  />
+                  {errors.city && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.city}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    State <span className="text-[#FF2E7A]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={address.state || ''}
+                    onChange={(e) => handleInputChange('state', e.target.value)}
+                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                      errors.state ? 'border-rose-500' : 'border-slate-200'
+                    }`}
+                    placeholder="State"
+                  />
+                  {errors.state && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.state}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Pincode <span className="text-[#FF2E7A]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={address.pincode}
+                    onChange={(e) => handleInputChange('pincode', e.target.value.replace(/\D/g, ''))}
+                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                      errors.pincode ? 'border-rose-500' : 'border-slate-200'
+                    }`}
+                    placeholder="6-digit PIN"
+                    maxLength={6}
+                  />
+                  {errors.pincode && <p className="text-[10px] text-rose-500 mt-1 font-bold">{errors.pincode}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nearby Landmark (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={address.landmark || ''}
+                  onChange={(e) => handleInputChange('landmark', e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors"
+                  placeholder="e.g. Opposite City Hospital"
+                />
+              </div>
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Delivery Address Form */}
-      <div className="px-4 py-3 space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={address.name}
-            onChange={(e) => handleInputChange('name', e.target.value)}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-pink-500 focus:border-[#FF2E7A] transition-colors ${errors.name ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="Enter your name"
-          />
-          {errors.name && <p className="text-[10px] text-red-500 mt-0.5">{errors.name}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            Mobile Number <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="tel"
-            value={address.phone}
-            onChange={(e) => handleInputChange('phone', e.target.value.replace(/\D/g, ''))}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.phone ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="Enter mobile number"
-            maxLength={10}
-          />
-          {errors.phone && <p className="text-[10px] text-red-500 mt-0.5">{errors.phone}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            Flat / House No. <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={address.flat}
-            onChange={(e) => handleInputChange('flat', e.target.value)}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.flat ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="Flat/House No."
-          />
-          {errors.flat && <p className="text-[10px] text-red-500 mt-0.5">{errors.flat}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            Street / Area <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={address.street}
-            onChange={(e) => handleInputChange('street', e.target.value)}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.street ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="Street/Area"
-          />
-          {errors.street && <p className="text-[10px] text-red-500 mt-0.5">{errors.street}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            City <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={address.city}
-            onChange={(e) => handleInputChange('city', e.target.value)}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.city ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="City"
-          />
-          {errors.city && <p className="text-[10px] text-red-500 mt-0.5">{errors.city}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            State <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={address.state || ''}
-            onChange={(e) => handleInputChange('state', e.target.value)}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.state ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="State"
-          />
-          {errors.state && <p className="text-[10px] text-red-500 mt-0.5">{errors.state}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-neutral-700 mb-1">
-            Pincode <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={address.pincode}
-            onChange={(e) => handleInputChange('pincode', e.target.value.replace(/\D/g, ''))}
-            className={`w-full px-3 py-2 bg-white border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-colors ${errors.pincode ? 'border-red-500' : 'border-neutral-200'
-              }`}
-            placeholder="Pincode"
-            maxLength={6}
-          />
-          {errors.pincode && <p className="text-[10px] text-red-500 mt-0.5">{errors.pincode}</p>}
-        </div>
       </div>
 
-      {/* Order Summary removed from the address-entry screen (#195) */}
-
-      {/* Save Address Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-[60] shadow-lg">
-        <button
-          onClick={handleSaveAddress}
-          disabled={!isFormValid || isSaving}
-          className={`w-full py-3 px-4 font-semibold text-sm transition-colors ${isFormValid && !isSaving
-            ? 'bg-[#FF2E7A] text-white hover:opacity-90'
-            : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
+      {/* Sticky Save Button */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-40 shadow-lg user-safe-bottom">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5">
+          <button
+            type="button"
+            onClick={handleSaveAddress}
+            disabled={!isFormValid || isSaving}
+            className={`w-full py-2.5 rounded-full font-bold text-xs uppercase tracking-wider transition-all shadow-xs active:scale-95 touch-target-min flex items-center justify-center gap-1.5 ${
+              isFormValid && !isSaving
+                ? 'bg-[#FF2E7A] text-white hover:bg-[#E02269]'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             }`}
-        >
-          {isSaving ? 'Saving...' : 'Save Address'}
-        </button>
+          >
+            {isSaving ? 'Saving Address...' : 'Save & Deliver Here'}
+          </button>
+        </div>
       </div>
     </div>
   );

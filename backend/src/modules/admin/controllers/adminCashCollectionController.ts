@@ -15,7 +15,7 @@ export const getCashCollections = asyncHandler(
             deliveryBoyId,
             fromDate,
             toDate,
-            // search = "",
+            search = "",
             sortBy = "collectedAt",
             sortOrder = "desc",
         } = req.query;
@@ -23,7 +23,7 @@ export const getCashCollections = asyncHandler(
         const query: any = {};
 
         // Filter by delivery boy
-        if (deliveryBoyId) {
+        if (deliveryBoyId && deliveryBoyId !== "all") {
             query.deliveryBoy = deliveryBoyId;
         }
 
@@ -31,11 +31,40 @@ export const getCashCollections = asyncHandler(
         if (fromDate || toDate) {
             query.collectedAt = {};
             if (fromDate) {
-                query.collectedAt.$gte = new Date(fromDate as string);
+                const fDate = new Date(fromDate as string);
+                fDate.setHours(0, 0, 0, 0);
+                query.collectedAt.$gte = fDate;
             }
             if (toDate) {
-                query.collectedAt.$lte = new Date(toDate as string);
+                const tDate = new Date(toDate as string);
+                tDate.setHours(23, 59, 59, 999);
+                query.collectedAt.$lte = tDate;
             }
+        }
+
+        // Search query
+        if (search && typeof search === "string" && search.trim() !== "") {
+            const searchStr = search.trim();
+            const [matchingBoys, matchingOrders] = await Promise.all([
+                Delivery.find({
+                    $or: [
+                        { name: { $regex: searchStr, $options: "i" } },
+                        { mobile: { $regex: searchStr, $options: "i" } },
+                    ],
+                }).select("_id"),
+                Order.find({
+                    orderNumber: { $regex: searchStr, $options: "i" },
+                }).select("_id"),
+            ]);
+
+            const boyIds = matchingBoys.map((b) => b._id);
+            const orderIds = matchingOrders.map((o) => o._id);
+
+            query.$or = [
+                { deliveryBoy: { $in: boyIds } },
+                { order: { $in: orderIds } },
+                { remark: { $regex: searchStr, $options: "i" } },
+            ];
         }
 
         const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
@@ -59,6 +88,9 @@ export const getCashCollections = asyncHandler(
             deliveryBoyId: collection.deliveryBoy?._id,
             deliveryBoyName: collection.deliveryBoy?.name || "Unknown",
             orderId: collection.order?._id,
+            orderNumber:
+                collection.order?.orderNumber ||
+                (collection.order?._id ? String(collection.order._id).slice(-6) : "-"),
             total: collection.order?.total || 0,
             amount: collection.amount,
             remark: collection.remark,

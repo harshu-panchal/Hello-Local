@@ -260,45 +260,89 @@ export const getAdminEarnings = asyncHandler(
  */
 export const getWalletTransactions = asyncHandler(
   async (req: Request, res: Response) => {
-    const { page = 1, limit = 20, type, userType, search: _search } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      type,
+      userType,
+      userId,
+      sellerId,
+      status,
+      dateFrom,
+      dateTo,
+      search,
+    } = req.query;
 
     const query: any = {};
-    if (type) query.type = type;
+    if (type && type !== "all" && type !== "All") query.type = type;
     if (userType) query.userType = userType;
+    if (userId || sellerId) query.userId = userId || sellerId;
+    if (status && status !== "all" && status !== "All") query.status = status;
 
-    // Search handling not fully implemented for cross-collection ref
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) {
+        const from = new Date(dateFrom as string);
+        if (!isNaN(from.getTime())) {
+          from.setHours(0, 0, 0, 0);
+          query.createdAt.$gte = from;
+        }
+      }
+      if (dateTo) {
+        const to = new Date(dateTo as string);
+        if (!isNaN(to.getTime())) {
+          to.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = to;
+        }
+      }
+    }
+
+    if (search && typeof search === "string" && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { description: { $regex: escaped, $options: "i" } },
+        { reference: { $regex: escaped, $options: "i" } },
+      ];
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const transactions = await WalletTransaction.find(query)
-      .populate({
-        path: "userId", // This will populate based on refPath 'userType'
-        select: "name firstName lastName storeName sellerName mobile email",
-      })
-      .populate("relatedOrder", "orderNumber")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit));
+    const [transactions, total] = await Promise.all([
+      WalletTransaction.find(query)
+        .populate({
+          path: "userId", // This will populate based on refPath 'userType'
+          select: "name firstName lastName storeName sellerName mobile email",
+        })
+        .populate("relatedOrder", "orderNumber")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit)),
+      WalletTransaction.countDocuments(query),
+    ]);
 
-    const total = await WalletTransaction.countDocuments(query);
-
-    // Format transactions to ensure user name is accessible
+    // Format transactions to ensure user name and store name are accessible
     const formattedTransactions = transactions.map((t: any) => {
       let userName = "Unknown";
+      let storeName = "";
       if (t.userId) {
         if (t.userType === "SELLER") {
-          userName = t.userId.storeName || t.userId.sellerName;
+          userName = t.userId.sellerName || t.userId.name || "Seller";
+          storeName = t.userId.storeName || "";
         } else {
           userName =
-            t.userId.name || t.userId.firstName + " " + t.userId.lastName;
+            t.userId.name ||
+            `${t.userId.firstName || ""} ${t.userId.lastName || ""}`.trim() ||
+            "Delivery Partner";
         }
       }
 
       return {
         _id: t._id,
+        id: t._id,
         type: t.type,
         userType: t.userType,
         userName: userName,
+        storeName: storeName,
         userId: t.userId?._id,
         amount: t.amount,
         description: t.description,
@@ -416,3 +460,57 @@ export const getSellerWalletById = asyncHandler(
     });
   }
 );
+
+/**
+ * Create Manual Fund Transfer (Credit or Debit to Delivery Partner or Seller)
+ */
+export const createFundTransfer = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { userId, userType = "DELIVERY_BOY", amount, type, description } = req.body;
+
+    if (!userId || !amount || !type || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID, amount, type (Credit/Debit), and description are required",
+      });
+    }
+
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Amount must be a positive number",
+      });
+    }
+
+    if (!["Credit", "Debit"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "Type must be either 'Credit' or 'Debit'",
+      });
+    }
+
+    if (!["SELLER", "DELIVERY_BOY"].includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: "User type must be either 'SELLER' or 'DELIVERY_BOY'",
+      });
+    }
+
+    const { creditWallet, debitWallet } = await import("../../../services/walletManagementService");
+
+    let result;
+    if (type === "Credit") {
+      result = await creditWallet(userId, userType, numAmount, description.trim());
+    } else {
+      result = await debitWallet(userId, userType, numAmount, description.trim());
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully ${type === "Credit" ? "credited" : "debited"} ₹${numAmount.toFixed(2)} ${type === "Credit" ? "to" : "from"} account`,
+      data: result,
+    });
+  }
+);
+

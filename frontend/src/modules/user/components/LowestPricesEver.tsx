@@ -51,32 +51,31 @@ const ProductCard = memo(({
 
   return (
     <div
-      className="flex-shrink-0 w-[140px]"
+      className="flex-shrink-0 w-[145px]"
       style={{ scrollSnapAlign: 'start' }}
     >
       <div
         onClick={() => navigate(`/product/${product.id}`)}
-        className="bg-white rounded-lg overflow-hidden flex flex-col relative h-full max-h-full cursor-pointer"
-        style={{ boxShadow: '0 1px 1px rgba(0, 0, 0, 0.03)' }}
+        className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden flex flex-col relative h-full max-h-full cursor-pointer hover:shadow-md transition-all shadow-2xs group"
       >
         {/* Product Image Area */}
         <div className="relative block">
-          <div className="w-full h-28 bg-neutral-100 flex items-center justify-center overflow-hidden relative">
+          <div className="w-full h-28 bg-slate-50 flex items-center justify-center overflow-hidden relative">
             {product.imageUrl ? (
               <img
                 src={product.imageUrl}
                 alt={product.name}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-neutral-100 text-neutral-400 text-4xl">
+              <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 text-3xl font-bold">
                 {(product.name || product.productName || '?').charAt(0).toUpperCase()}
               </div>
             )}
 
-            {/* Red Discount Badge - Top Left */}
+            {/* Coral Discount Badge - Top Left */}
             {discount > 0 && (
-              <div className="absolute top-1 left-1 z-10 bg-red-600 text-white text-[9px] font-bold px-1 py-0.5 rounded">
+              <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-xs">
                 {discount}% OFF
               </div>
             )}
@@ -88,16 +87,16 @@ const ProductCard = memo(({
                 e.stopPropagation();
                 toggleWishlist(e);
               }}
-              className="absolute top-1 right-1 z-30 w-7 h-7 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors shadow-sm"
+              className="absolute top-1.5 right-1.5 z-30 w-7 h-7 rounded-full bg-white/95 backdrop-blur-xs flex items-center justify-center hover:bg-white transition-colors shadow-xs"
               aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
             >
               <svg
-                width="16"
-                height="16"
+                width="15"
+                height="15"
                 viewBox="0 0 24 24"
-                fill={isWishlisted ? "#ef4444" : "none"}
+                fill={isWishlisted ? "#FF5364" : "none"}
                 xmlns="http://www.w3.org/2000/svg"
-                className={isWishlisted ? "text-red-500" : "text-neutral-700"}
+                className={isWishlisted ? "text-[#FF5364]" : "text-slate-400 hover:text-slate-600"}
               >
                 <path
                   d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
@@ -126,26 +125,17 @@ const ProductCard = memo(({
                       e.stopPropagation();
                       onAddToCart(product, e.currentTarget);
                     }}
-                    className={`bg-white/95 backdrop-blur-sm text-[10px] font-semibold px-2 py-1 rounded shadow-md transition-colors ${product.isAvailable === false
-                      ? 'text-neutral-400 border-2 border-neutral-300 cursor-not-allowed'
-                      : 'active:scale-95'
-                      }`}
-                    style={{
-                      color: product.isAvailable !== false ? theme.accentColor : undefined,
-                      borderColor: product.isAvailable !== false ? theme.primary[0] : undefined,
-                      borderWidth: '2px'
-                    }}
+                    className={`bg-white/95 backdrop-blur-xs text-[11px] font-black px-3 py-1 rounded-full shadow-sm transition-all ${
+                      product.isAvailable === false
+                        ? 'text-slate-400 border border-slate-300 cursor-not-allowed'
+                        : 'text-rose-600 border border-rose-200 hover:bg-rose-50 active:scale-95'
+                    }`}
                   >
                     {product.isAvailable === false ? 'Out of Range' : 'ADD'}
                   </motion.button>
                 ) : (
                   <div
-                    className="flex items-center justify-center gap-1.5 bg-white rounded px-1.5 py-0.5 h-7 w-full shadow-sm"
-                    style={{
-                      borderColor: theme.primary[0],
-                      borderWidth: '1.5px',
-                      color: theme.accentColor
-                    }}
+                    className="flex items-center justify-center gap-1.5 bg-rose-50/95 backdrop-blur-xs rounded-full px-2 py-0.5 h-7 shadow-xs border border-rose-200 text-rose-600 font-bold"
                   >
                     <button
                       type="button"
@@ -154,12 +144,11 @@ const ProductCard = memo(({
                         e.stopPropagation();
                         onUpdateQuantity(product.id, inCartQty - 1);
                       }}
-                      className="w-5 h-5 flex items-center justify-center font-bold"
-                      style={{ color: theme.accentColor }}
+                      className="w-5 h-5 flex items-center justify-center font-black hover:text-rose-700"
                     >
                       −
                     </button>
-                    <span className="text-xs font-bold min-w-[1rem] text-center">
+                    <span className="text-xs font-black min-w-[1rem] text-center text-rose-700">
                       {inCartQty}
                     </span>
                     <button
@@ -169,8 +158,7 @@ const ProductCard = memo(({
                         e.stopPropagation();
                         onUpdateQuantity(product.id, inCartQty + 1);
                       }}
-                      className="w-5 h-5 flex items-center justify-center font-bold"
-                      style={{ color: theme.accentColor }}
+                      className="w-5 h-5 flex items-center justify-center font-black hover:text-rose-700"
                     >
                       +
                     </button>

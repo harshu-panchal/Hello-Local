@@ -32,15 +32,3 @@ export const verifyPayment = async (paymentData: {
     }
 };
 
-/**
- * Get payment history (if needed)
- */
-export const getPaymentHistory = async () => {
-    try {
-        const response = await api.get('/customer/payments');
-        return response.data;
-    } catch (error: any) {
-        console.error('Error getting payment history:', error);
-        throw error;
-    }
-};

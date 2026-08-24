@@ -28,8 +28,8 @@ messaging.onBackgroundMessage((payload) => {
     const notificationTitle = payload.notification?.title || 'New Notification';
     const notificationOptions = {
         body: payload.notification?.body || '',
-        icon: payload.notification?.icon || '/favicon.png',
-        badge: '/favicon.png',
+        icon: payload.notification?.icon || '/logo.png',
+        badge: '/logo.png',
         data: payload.data || {},
         tag: payload.data?.type || 'default',
         requireInteraction: false

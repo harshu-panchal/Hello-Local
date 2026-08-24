@@ -10,10 +10,8 @@ router.post("/send-otp", otpRateLimiter, adminAuthController.sendOTP);
 // Verify OTP and login route
 router.post("/verify-otp", loginRateLimiter, adminAuthController.verifyOTP);
 
-// Register route
-router.post("/register", adminAuthController.register);
-
-// Check existence route
-router.get("/check-existence", adminAuthController.checkExistence);
+// The public admin existence lookup has been removed: there is no public admin
+// signup, so it only enabled enumeration of admin accounts. The system-user
+// screen now uses GET /admin/system-users/check-existence (Super Admin). (#M-05)
 
 export default router;

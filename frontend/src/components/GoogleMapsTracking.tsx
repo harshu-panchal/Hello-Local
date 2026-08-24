@@ -1,5 +1,4 @@
 import { useCallback, useRef, useEffect, useState } from 'react'
-// @ts-ignore - @react-google-maps/api types may not be available
 import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api'
 import { motion } from 'framer-motion'
 // Use direct public path which is more reliable in this setup

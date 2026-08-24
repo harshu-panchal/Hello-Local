@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { uploadImage } from "../../../services/api/uploadService";
 import {
   validateImageFile,
@@ -7,21 +8,26 @@ import {
 import {
   getCoupons,
   createCoupon,
+  updateCoupon,
   deleteCoupon,
   type Coupon,
 } from "../../../services/api/admin/adminCouponService";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 
 export default function AdminCoupon() {
   const { isAuthenticated, token } = useAuth();
+  const { showToast } = useToast();
+
+  // Form State
   const [formData, setFormData] = useState({
-    userType: "",
+    userType: "All Users",
     numberOfTimes: "Single Time Valid",
     couponImageUrl: "",
     couponExpiryDate: "",
     couponCode: "",
     couponTitle: "",
-    couponStatus: "",
+    couponStatus: "Published",
     couponMinOrderAmount: "",
     couponValue: "",
     couponType: "Percentage",
@@ -30,43 +36,66 @@ export default function AdminCoupon() {
 
   const [couponImageFile, setCouponImageFile] = useState<File | null>(null);
   const [couponImagePreview, setCouponImagePreview] = useState<string>("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string>("");
 
+  // Table State
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortColumn, setSortColumn] = useState<"code" | "discountValue" | "minimumPurchase" | "endDate" | "isActive">("endDate");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Deletion Modal State
+  const [deleteTarget, setDeleteTarget] = useState<Coupon | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Status Toggling State
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // Fetch coupons from API
-  const fetchCoupons = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await getCoupons({ limit: 100 });
-      if (response.success) {
-        setCoupons(response.data);
-      } else {
-        setError("Failed to load coupons");
-      }
-    } catch (err) {
-      console.error("Error fetching coupons:", err);
-      setError("Failed to load coupons. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
+  const fetchCouponsList = useCallback(async () => {
     if (!isAuthenticated || !token) {
       setLoading(false);
       return;
     }
-    fetchCoupons();
-  }, [isAuthenticated, token]);
+
+    try {
+      setLoading(true);
+      setTableError(null);
+      const response = await getCoupons({ limit: 1000 });
+      if (response.success && Array.isArray(response.data)) {
+        setCoupons(response.data);
+      } else {
+        setCoupons([]);
+      }
+    } catch (err: any) {
+      console.error("Error fetching coupons:", err);
+      const msg = err.response?.data?.message || "Failed to load coupons";
+      setTableError(msg);
+      showToast(msg, "error");
+      setCoupons([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated, token, showToast]);
+
+  useEffect(() => {
+    fetchCouponsList();
+  }, [fetchCouponsList]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -83,18 +112,19 @@ export default function AdminCoupon() {
 
     const validation = validateImageFile(file);
     if (!validation.valid) {
-      setUploadError(validation.error || "Invalid image file");
+      setFormError(validation.error || "Invalid image file");
+      showToast(validation.error || "Invalid image file", "error");
       return;
     }
 
     setCouponImageFile(file);
-    setUploadError("");
+    setFormError("");
 
     try {
       const preview = await createImagePreview(file);
       setCouponImagePreview(preview);
-    } catch (error) {
-      setUploadError("Failed to create image preview");
+    } catch {
+      setFormError("Failed to create image preview");
     }
   };
 
@@ -109,69 +139,78 @@ export default function AdminCoupon() {
 
   const handleAddCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUploadError("");
+    setFormError("");
 
-    // Validation
+    // Validations
     if (
-      !formData.userType ||
-      !formData.couponTitle ||
-      !formData.couponCode ||
+      !formData.couponTitle.trim() ||
+      !formData.couponCode.trim() ||
       !formData.couponExpiryDate ||
-      !formData.couponStatus ||
       !formData.couponMinOrderAmount ||
       !formData.couponValue ||
-      !formData.couponDescription
+      !formData.couponDescription.trim()
     ) {
-      setUploadError("Please fill in all required fields");
+      setFormError("Please fill in all required fields");
+      showToast("Please fill in all required fields", "error");
       return;
     }
 
-    // Coupon expiry cannot be a past date (#278/#331)
-    if (formData.couponExpiryDate < new Date().toISOString().split('T')[0]) {
-      setUploadError("Coupon expiry date cannot be in the past");
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (formData.couponExpiryDate < todayStr) {
+      setFormError("Coupon expiry date cannot be in the past");
+      showToast("Coupon expiry date cannot be in the past", "error");
       return;
     }
 
-    setUploading(true);
+    const discountVal = parseFloat(formData.couponValue);
+    if (isNaN(discountVal) || discountVal <= 0) {
+      setFormError("Discount value must be greater than 0");
+      showToast("Discount value must be greater than 0", "error");
+      return;
+    }
+
+    if (formData.couponType === "Percentage" && discountVal > 100) {
+      setFormError("Percentage discount cannot exceed 100%");
+      showToast("Percentage discount cannot exceed 100%", "error");
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
-      let imageUrl = "";
-
       // Upload coupon image if provided
       if (couponImageFile) {
-        const imageResult = await uploadImage(couponImageFile, "dhakadsnazzy/coupons");
-        imageUrl = imageResult.secureUrl;
+        await uploadImage(couponImageFile, "hellolocal/coupons");
       }
 
-      // Create coupon via API
-      const today = new Date().toISOString().split("T")[0];
       const couponData = {
-        code: formData.couponCode.toUpperCase(),
-        description: formData.couponDescription,
-        discountType: formData.couponType === "Percentage" ? "Percentage" as const : "Fixed" as const,
-        discountValue: parseFloat(formData.couponValue),
-        minimumPurchase: parseFloat(formData.couponMinOrderAmount),
-        startDate: today,
+        code: formData.couponCode.trim().toUpperCase(),
+        description: `${formData.couponTitle.trim()} - ${formData.couponDescription.trim()}`,
+        discountType: formData.couponType === "Percentage" ? ("Percentage" as const) : ("Fixed" as const),
+        discountValue: discountVal,
+        minimumPurchase: parseFloat(formData.couponMinOrderAmount) || 0,
+        startDate: todayStr,
         endDate: formData.couponExpiryDate,
         usageLimit: formData.numberOfTimes === "Single Time Valid" ? 1 : undefined,
-        applicableTo: formData.userType === "All Users" ? "All" as const : "All" as const,
+        applicableTo: "All" as const,
+        isActive: formData.couponStatus === "Published",
       };
 
       const response = await createCoupon(couponData);
 
       if (response.success) {
-        // Refresh the list
-        fetchCoupons();
+        showToast(`Coupon "${couponData.code}" created successfully`, "success");
+        fetchCouponsList();
 
         // Reset form
         setFormData({
-          userType: "",
+          userType: "All Users",
           numberOfTimes: "Single Time Valid",
           couponImageUrl: "",
           couponExpiryDate: "",
           couponCode: "",
           couponTitle: "",
-          couponStatus: "",
+          couponStatus: "Published",
           couponMinOrderAmount: "",
           couponValue: "",
           couponType: "Percentage",
@@ -180,72 +219,113 @@ export default function AdminCoupon() {
         setCouponImageFile(null);
         setCouponImagePreview("");
       } else {
-        setUploadError("Failed to create coupon");
+        const msg = response.message || "Failed to create coupon";
+        setFormError(msg);
+        showToast(msg, "error");
       }
     } catch (error: any) {
-      setUploadError(
+      const msg =
         error.response?.data?.message ||
         error.message ||
-        "Failed to create coupon. Please try again."
-      );
+        "Failed to create coupon. Please try again.";
+      setFormError(msg);
+      showToast(msg, "error");
     } finally {
-      setUploading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  // Status Toggle
+  const handleToggleStatus = async (coupon: Coupon) => {
     try {
-      const response = await deleteCoupon(id);
+      setTogglingId(coupon._id);
+      const newStatus = !coupon.isActive;
+      const response = await updateCoupon(coupon._id, { isActive: newStatus });
+
       if (response.success) {
-        setCoupons(coupons.filter((coupon) => coupon._id !== id));
+        setCoupons((prev) =>
+          prev.map((c) => (c._id === coupon._id ? { ...c, isActive: newStatus } : c))
+        );
+        showToast(
+          `Coupon "${coupon.code}" marked as ${newStatus ? "Active" : "Inactive"}`,
+          "success"
+        );
+      }
+    } catch (err: any) {
+      console.error("Error toggling coupon status:", err);
+      showToast(err.response?.data?.message || "Failed to update coupon status", "error");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // Safe Delete Confirmation
+  const confirmDeleteCoupon = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      setIsDeleting(true);
+      const response = await deleteCoupon(deleteTarget._id);
+      if (response.success) {
+        setCoupons((prev) => prev.filter((c) => c._id !== deleteTarget._id));
+        showToast(`Coupon "${deleteTarget.code}" deleted successfully`, "success");
+        setDeleteTarget(null);
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || "Failed to delete coupon");
+      console.error("Error deleting coupon:", error);
+      showToast(error.response?.data?.message || "Failed to delete coupon", "error");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const handleSort = (column: string) => {
+  const handleSort = (column: "code" | "discountValue" | "minimumPurchase" | "endDate" | "isActive") => {
     if (sortColumn === column) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortColumn(column);
       setSortDirection("asc");
     }
   };
 
-  const SortIcon = ({ column }: { column: string }) => (
-    <span className="text-neutral-400 text-xs ml-1">
-      {sortColumn === column ? (sortDirection === "asc" ? "↑" : "↓") : "⇅"}
-    </span>
-  );
+  // Filter coupons by search query
+  const filteredCoupons = useMemo(() => {
+    return coupons.filter((coupon) => {
+      const matchSearch =
+        debouncedSearch.trim() === "" ||
+        coupon.code.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (coupon.description && coupon.description.toLowerCase().includes(debouncedSearch.toLowerCase()));
+
+      return matchSearch;
+    });
+  }, [coupons, debouncedSearch]);
 
   // Sort coupons
-  let sortedCoupons = [...coupons];
-  if (sortColumn) {
-    sortedCoupons = [...sortedCoupons].sort((a, b) => {
+  const sortedCoupons = useMemo(() => {
+    return [...filteredCoupons].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
       switch (sortColumn) {
         case "code":
-          aValue = a.code;
-          bValue = b.code;
+          aValue = a.code.toLowerCase();
+          bValue = b.code.toLowerCase();
           break;
         case "discountValue":
           aValue = a.discountValue;
           bValue = b.discountValue;
           break;
+        case "minimumPurchase":
+          aValue = a.minimumPurchase || 0;
+          bValue = b.minimumPurchase || 0;
+          break;
         case "endDate":
-          aValue = a.endDate;
-          bValue = b.endDate;
+          aValue = new Date(a.endDate).getTime();
+          bValue = new Date(b.endDate).getTime();
           break;
         case "isActive":
           aValue = a.isActive ? 1 : 0;
           bValue = b.isActive ? 1 : 0;
-          break;
-        case "minimumPurchase":
-          aValue = a.minimumPurchase || 0;
-          bValue = b.minimumPurchase || 0;
           break;
         default:
           return 0;
@@ -255,528 +335,694 @@ export default function AdminCoupon() {
       if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }
+  }, [filteredCoupons, sortColumn, sortDirection]);
 
-  const totalPages = Math.ceil(sortedCoupons.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(sortedCoupons.length / rowsPerPage));
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
   const displayedCoupons = sortedCoupons.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      {/* Page Content */}
-      <div className="flex-1 p-6">
-        {/* Header with Title and Breadcrumb */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl font-semibold text-neutral-800">Coupon</h1>
-          <div className="text-sm">
-            <span className="text-blue-600 hover:underline cursor-pointer">
-              Home
-            </span>
-            <span className="text-neutral-400 mx-1">/</span>
-            <span className="text-neutral-600">Coupon</span>
-          </div>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header & Breadcrumb */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">
+            Coupons & Promo Codes
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            Create and manage promotional discount vouchers for consumer checkout
+          </p>
         </div>
 
-        {/* Add Coupon Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 mb-6">
-          <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
-            <h2 className="text-lg font-semibold">Add Coupon</h2>
-          </div>
+        <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-neutral-500">
+          <Link
+            to="/admin/dashboard"
+            className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+          >
+            Dashboard
+          </Link>
+          <span className="mx-2 text-neutral-300">/</span>
+          <span className="text-neutral-700 font-medium">Coupons</span>
+        </nav>
+      </div>
 
-          <form onSubmit={handleAddCoupon} className="p-6">
-            {uploadError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                {uploadError}
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              {/* Row 1 */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Select User Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="userType"
-                  value={formData.userType}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none bg-white"
-                  disabled={uploading}>
-                  <option value="">Select User Type</option>
-                  <option value="All Users">All Users</option>
-                  <option value="Specific User">Specific User</option>
-                </select>
-              </div>
+      {/* Add Coupon Form Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+        <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+          <h2 className="text-sm sm:text-base font-bold tracking-tight">
+            Add New Promotion Coupon
+          </h2>
+        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Number of Times <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="numberOfTimes"
-                  value={formData.numberOfTimes}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none bg-white"
-                  disabled={uploading}>
-                  <option value="Single Time Valid">Single Time Valid</option>
-                  <option value="Multi Time Valid">Multi Time Valid</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Image
-                </label>
-                <label className="block border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center cursor-pointer hover:border-rose-600 transition-colors">
-                  {couponImagePreview ? (
-                    <div className="space-y-2">
-                      <img
-                        src={couponImagePreview}
-                        alt="Coupon preview"
-                        className="max-h-24 mx-auto rounded-lg object-cover"
-                      />
-                      <p className="text-xs text-neutral-600">
-                        {couponImageFile?.name}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setCouponImageFile(null);
-                          setCouponImagePreview("");
-                        }}
-                        className="text-xs text-red-600 hover:text-red-700">
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <svg
-                        width="32"
-                        height="32"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className="mx-auto mb-2 text-neutral-400">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                      </svg>
-                      <p className="text-xs text-neutral-600">Choose File</p>
-                      <p className="text-xs text-neutral-500 mt-1">Max 5MB</p>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    disabled={uploading}
-                  />
-                </label>
-              </div>
+        <form onSubmit={handleAddCoupon} className="p-4 sm:p-6 space-y-4">
+          {formError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-semibold">
+              {formError}
             </div>
+          )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              {/* Row 2 */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Expiry Date <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    name="couponExpiryDate"
-                    value={formData.couponExpiryDate}
-                    onChange={handleInputChange}
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Code <span className="text-red-500">*</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    name="couponCode"
-                    value={formData.couponCode}
-                    onChange={handleInputChange}
-                    required
-                    className="flex-1 px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
-                    placeholder="Enter coupon code"
-                  />
-                  <button
-                    type="button"
-                    onClick={generateCouponCode}
-                    className="p-2 bg-rose-700 hover:bg-rose-800 text-white rounded-full transition-colors"
-                    title="Generate Code">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round">
-                      <polyline points="23 4 23 10 17 10"></polyline>
-                      <polyline points="1 20 1 14 7 14"></polyline>
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="couponTitle"
-                  value={formData.couponTitle}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
-                  placeholder="Enter coupon title"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              {/* Row 3 */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Status <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="couponStatus"
-                  value={formData.couponStatus}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none bg-white">
-                  <option value="">Select Coupon Status</option>
-                  <option value="Published">Published</option>
-                  <option value="Draft">Draft</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Min Order Amount{" "}
-                  <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="couponMinOrderAmount"
-                  value={formData.couponMinOrderAmount}
-                  onChange={handleInputChange}
-                  required
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
-                  placeholder="Enter min order amount"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Value <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="couponValue"
-                  value={formData.couponValue}
-                  onChange={handleInputChange}
-                  required
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none"
-                  placeholder="Enter coupon value"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Coupon Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="couponType"
-                  value={formData.couponType}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none bg-white">
-                  <option value="Percentage">Percentage</option>
-                  <option value="Fixed">Fixed</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              {/* Row 4 */}
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Coupon Description <span className="text-red-500">*</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* User Type */}
+            <div>
+              <label htmlFor="userTypeSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                User Target <span className="text-red-500">*</span>
               </label>
-              <textarea
-                name="couponDescription"
-                value={formData.couponDescription}
+              <select
+                id="userTypeSelect"
+                name="userType"
+                value={formData.userType}
                 onChange={handleInputChange}
                 required
-                rows={4}
-                className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-2 focus:ring-rose-600 focus:border-rose-600 outline-none resize-none"
-                placeholder="Enter coupon description"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                disabled={submitting}
+              >
+                <option value="All Users">All Customers</option>
+                <option value="Specific User">Specific User Group</option>
+              </select>
+            </div>
+
+            {/* Validity Limit */}
+            <div>
+              <label htmlFor="numberOfTimesSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Redemption Frequency <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="numberOfTimesSelect"
+                name="numberOfTimes"
+                value={formData.numberOfTimes}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                disabled={submitting}
+              >
+                <option value="Single Time Valid">Single Time (One use per user)</option>
+                <option value="Multi Time Valid">Multi Time (Multiple uses allowed)</option>
+              </select>
+            </div>
+
+            {/* Coupon Image */}
+            <div>
+              <label className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Promo Banner Image (Optional)
+              </label>
+              <label className="block border-2 border-dashed border-neutral-300 rounded-xl p-2.5 text-center cursor-pointer hover:border-rose-600 transition-colors min-h-[44px]">
+                {couponImagePreview ? (
+                  <div className="flex items-center justify-between gap-2 px-2">
+                    <img
+                      src={couponImagePreview}
+                      alt="Coupon preview"
+                      className="h-7 w-12 rounded object-cover"
+                    />
+                    <span className="text-xs text-neutral-600 truncate max-w-[120px]">
+                      {couponImageFile?.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCouponImageFile(null);
+                        setCouponImagePreview("");
+                      }}
+                      className="text-xs text-red-600 font-bold hover:text-red-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-neutral-500 font-medium">
+                    📁 Choose Banner File (Max 5MB)
+                  </span>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={submitting}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Expiry Date */}
+            <div>
+              <label htmlFor="couponExpiryDateInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Expiry Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="couponExpiryDateInput"
+                type="date"
+                name="couponExpiryDate"
+                value={formData.couponExpiryDate}
+                onChange={handleInputChange}
+                required
+                min={new Date().toISOString().split("T")[0]}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={uploading}
-              className={`w-full px-6 py-3 rounded font-medium transition-colors ${uploading
+            {/* Coupon Code */}
+            <div>
+              <label htmlFor="couponCodeInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Coupon Code <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="couponCodeInput"
+                  type="text"
+                  name="couponCode"
+                  value={formData.couponCode}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="e.g. WELCOME50"
+                  className="flex-1 px-3 py-2 border border-neutral-300 rounded-xl text-xs font-bold uppercase tracking-wider bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+                />
+                <button
+                  type="button"
+                  onClick={generateCouponCode}
+                  className="px-3 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold transition-colors min-h-[44px] flex items-center gap-1 shadow-sm"
+                  title="Generate Random Code"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                  <span>Auto</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Coupon Title */}
+            <div>
+              <label htmlFor="couponTitleInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Coupon Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="couponTitleInput"
+                type="text"
+                name="couponTitle"
+                value={formData.couponTitle}
+                onChange={handleInputChange}
+                required
+                placeholder="e.g. Flat 50% Off on First Order"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Status */}
+            <div>
+              <label htmlFor="couponStatusSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Publish Status <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="couponStatusSelect"
+                name="couponStatus"
+                value={formData.couponStatus}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              >
+                <option value="Published">Published (Active)</option>
+                <option value="Draft">Draft (Inactive)</option>
+              </select>
+            </div>
+
+            {/* Min Order Amount */}
+            <div>
+              <label htmlFor="couponMinOrderAmountInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Min Order Amount (₹) <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="couponMinOrderAmountInput"
+                type="number"
+                name="couponMinOrderAmount"
+                value={formData.couponMinOrderAmount}
+                onChange={handleInputChange}
+                required
+                min="0"
+                step="1"
+                placeholder="e.g. 199"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              />
+            </div>
+
+            {/* Discount Type */}
+            <div>
+              <label htmlFor="couponTypeSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Discount Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="couponTypeSelect"
+                name="couponType"
+                value={formData.couponType}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              >
+                <option value="Percentage">Percentage (%)</option>
+                <option value="Fixed">Fixed Amount (₹)</option>
+              </select>
+            </div>
+
+            {/* Discount Value */}
+            <div>
+              <label htmlFor="couponValueInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Discount Value <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="couponValueInput"
+                type="number"
+                name="couponValue"
+                value={formData.couponValue}
+                onChange={handleInputChange}
+                required
+                min="0"
+                step="0.01"
+                placeholder={formData.couponType === "Percentage" ? "e.g. 20" : "e.g. 100"}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label htmlFor="couponDescriptionInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+              Coupon Terms & Description <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="couponDescriptionInput"
+              name="couponDescription"
+              value={formData.couponDescription}
+              onChange={handleInputChange}
+              required
+              rows={2}
+              placeholder="e.g. Get 20% discount up to ₹100 on orders above ₹199."
+              className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none resize-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className={`w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors shadow-sm flex items-center justify-center gap-2 min-h-[44px] ${
+              submitting
                 ? "bg-neutral-400 cursor-not-allowed text-white"
                 : "bg-rose-700 hover:bg-rose-800 text-white"
-                }`}>
-              {uploading ? "Creating Coupon..." : "Add Coupon"}
-            </button>
-          </form>
+            }`}
+          >
+            {submitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Creating Coupon...</span>
+              </>
+            ) : (
+              <span>Create Coupon</span>
+            )}
+          </button>
+        </form>
+      </div>
+
+      {/* View Coupons Table Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+        <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+          <h2 className="text-sm sm:text-base font-bold tracking-tight">
+            Active & Draft Promo Codes ({sortedCoupons.length})
+          </h2>
         </div>
 
-        {/* View Coupon Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
-          <div className="px-6 py-4 border-b border-neutral-200">
-            <h2 className="text-lg font-semibold text-neutral-800">
-              View Coupon
-            </h2>
+        {/* Controls Bar */}
+        <div className="p-4 border-b border-neutral-200/70 bg-neutral-50/50 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-neutral-600">Show</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1.5 border border-neutral-300 rounded-lg text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-xs font-medium text-neutral-600">entries</span>
           </div>
 
-          {/* Controls */}
-          <div className="p-4 border-b border-neutral-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-neutral-600">Show</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => {
-                  setRowsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer">
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span className="text-sm text-neutral-600">entries</span>
-            </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search coupon code or description..."
+              className="pl-8 pr-7 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none w-full sm:w-64 min-h-[40px]"
+            />
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-xs font-bold"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
           </div>
+        </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-neutral-50 text-xs font-bold text-neutral-800 border-b border-neutral-200">
-                  <th className="p-4">Sr No.</th>
-                  <th
-                    className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("code")}>
-                    <div className="flex items-center">
-                      Coupon Code <SortIcon column="code" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("discountValue")}>
-                    <div className="flex items-center">
-                      Discount <SortIcon column="discountValue" />
-                    </div>
-                  </th>
-                  <th className="p-4">Discount Type</th>
-                  <th
-                    className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("minimumPurchase")}>
-                    <div className="flex items-center">
-                      Min Purchase <SortIcon column="minimumPurchase" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("endDate")}>
-                    <div className="flex items-center">
-                      Expiry Date <SortIcon column="endDate" />
-                    </div>
-                  </th>
-                  <th
-                    className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                    onClick={() => handleSort("isActive")}>
-                    <div className="flex items-center">
-                      Status <SortIcon column="isActive" />
-                    </div>
-                  </th>
-                  <th className="p-4">Action</th>
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[850px]">
+            <thead>
+              <tr className="bg-neutral-100/70 border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wider text-neutral-700 select-none">
+                <th className="py-3 px-4 w-16 text-center">Sr.</th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors"
+                  onClick={() => handleSort("code")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Coupon Code</span>
+                    <span className="text-neutral-400">{sortColumn === "code" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-32"
+                  onClick={() => handleSort("discountValue")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Discount</span>
+                    <span className="text-neutral-400">{sortColumn === "discountValue" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4 w-32">Type</th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-36"
+                  onClick={() => handleSort("minimumPurchase")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Min Purchase</span>
+                    <span className="text-neutral-400">{sortColumn === "minimumPurchase" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-32"
+                  onClick={() => handleSort("endDate")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Expiry Date</span>
+                    <span className="text-neutral-400">{sortColumn === "endDate" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-28 text-center"
+                  onClick={() => handleSort("isActive")}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Status</span>
+                    <span className="text-neutral-400">{sortColumn === "isActive" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4 w-20 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100 text-xs">
+              {loading ? (
+                [1, 2, 3, 4].map((idx) => (
+                  <tr key={idx} className="animate-pulse">
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-6 mx-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-20" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-20" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-24" /></td>
+                    <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-16 mx-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-8 bg-neutral-200 rounded-lg w-8 mx-auto" /></td>
+                  </tr>
+                ))
+              ) : tableError ? (
+                <tr>
+                  <td colSpan={8} className="py-10 px-4 text-center">
+                    <p className="text-sm font-bold text-red-600 mb-2">{tableError}</p>
+                    <button
+                      type="button"
+                      onClick={fetchCouponsList}
+                      className="px-3.5 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-xs font-bold"
+                    >
+                      Retry Loading
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="p-8 text-center text-neutral-400">
-                      Loading coupons...
+              ) : displayedCoupons.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 px-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-2 text-neutral-400">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-bold text-neutral-800">No coupons found</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {searchTerm ? `No coupons matching "${searchTerm}"` : "Create a new coupon above to get started"}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                displayedCoupons.map((coupon, idx) => (
+                  <tr key={coupon._id} className="hover:bg-neutral-50/80 transition-colors">
+                    <td className="py-3 px-4 text-center font-mono font-bold text-neutral-400">
+                      {startIndex + idx + 1}
                     </td>
-                  </tr>
-                ) : error ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-red-600">
-                      {error}
-                    </td>
-                  </tr>
-                ) : displayedCoupons.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="p-8 text-center text-neutral-400">
-                      No coupons found. Add your first coupon above.
-                    </td>
-                  </tr>
-                ) : (
-                  displayedCoupons.map((coupon, index) => (
-                    <tr
-                      key={coupon._id}
-                      className="hover:bg-neutral-50 transition-colors text-sm text-neutral-700 border-b border-neutral-200">
-                      <td className="p-4 align-middle">
-                        {startIndex + index + 1}
-                      </td>
-                      <td className="p-4 align-middle font-medium">
+                    <td className="py-3 px-4">
+                      <span className="font-mono font-bold text-neutral-900 bg-neutral-100 px-2 py-1 rounded-md text-xs border border-neutral-200">
                         {coupon.code}
-                      </td>
-                      <td className="p-4 align-middle">
-                        {coupon.discountType === "Percentage"
-                          ? `${coupon.discountValue}%`
-                          : `?${coupon.discountValue}`}
-                      </td>
-                      <td className="p-4 align-middle">{coupon.discountType}</td>
-                      <td className="p-4 align-middle">
-                        {coupon.minimumPurchase
-                          ? `?${coupon.minimumPurchase}`
-                          : "N/A"}
-                      </td>
-                      <td className="p-4 align-middle">
-                        {new Date(coupon.endDate).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 align-middle">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${coupon.isActive
-                            ? "bg-rose-100 text-rose-900"
-                            : "bg-gray-100 text-gray-800"
-                            }`}>
-                          {coupon.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="p-4 align-middle">
-                        <button
-                          onClick={() => handleDelete(coupon._id)}
-                          className="p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                          title="Delete">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </span>
+                      {coupon.description && (
+                        <div className="text-[11px] text-neutral-500 mt-1 line-clamp-1">
+                          {coupon.description}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-rose-700 text-sm">
+                      {coupon.discountType === "Percentage"
+                        ? `${coupon.discountValue}% OFF`
+                        : `₹${coupon.discountValue} OFF`}
+                    </td>
+                    <td className="py-3 px-4 text-neutral-600 font-medium">
+                      {coupon.discountType}
+                    </td>
+                    <td className="py-3 px-4 font-medium text-neutral-800">
+                      {coupon.minimumPurchase ? `₹${coupon.minimumPurchase}` : "No Minimum"}
+                    </td>
+                    <td className="py-3 px-4 text-neutral-600 font-mono">
+                      {new Date(coupon.endDate).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(coupon)}
+                        disabled={togglingId === coupon._id}
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors min-h-[30px] ${
+                          coupon.isActive
+                            ? "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200"
+                            : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-200"
+                        }`}
+                        title="Click to toggle status"
+                      >
+                        {togglingId === coupon._id ? (
+                          <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1" />
+                        ) : null}
+                        {coupon.isActive ? "Active" : "Inactive"}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(coupon)}
+                        className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors inline-flex items-center justify-center min-w-[36px] min-h-[36px]"
+                        title="Delete coupon"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="px-5 py-3.5 border-t border-neutral-200/80 bg-neutral-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-neutral-600 font-medium">
+            Showing {sortedCoupons.length > 0 ? startIndex + 1 : 0} to{" "}
+            {Math.min(endIndex, sortedCoupons.length)} of {sortedCoupons.length} entries
           </div>
 
-          {/* Pagination Footer */}
-          <div className="px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-            <div className="text-xs sm:text-sm text-neutral-700">
-              Showing {sortedCoupons.length === 0 ? 0 : startIndex + 1} to{" "}
-              {Math.min(endIndex, sortedCoupons.length)} of{" "}
-              {sortedCoupons.length} entries
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`px-2.5 py-1.5 border rounded-lg font-bold min-h-[36px] transition-colors ${
+                currentPage === 1
+                  ? "border-neutral-200 text-neutral-300 bg-neutral-50 cursor-not-allowed"
+                  : "border-neutral-300 text-neutral-700 bg-white hover:bg-neutral-100"
+              }`}
+              aria-label="Previous page"
+            >
+              ‹ Prev
+            </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .map((page, idx, arr) => {
+                  const prevPage = arr[idx - 1];
+                  const showEllipsis = prevPage && page - prevPage > 1;
+
+                  return (
+                    <div key={page} className="flex items-center gap-1">
+                      {showEllipsis && <span className="px-1 text-neutral-400">...</span>}
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1.5 rounded-lg font-bold min-h-[36px] transition-colors ${
+                          currentPage === page
+                            ? "bg-rose-700 text-white"
+                            : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </div>
+                  );
+                })}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className={`p-2 border border-rose-700 rounded ${currentPage === 1
-                  ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-rose-700 hover:bg-rose-50"
-                  }`}
-                aria-label="Previous page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M15 18L9 12L15 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              <button className="px-3 py-1.5 border border-rose-700 bg-rose-700 text-white rounded font-medium text-sm">
-                {currentPage}
-              </button>
-              <button
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                }
-                disabled={currentPage === totalPages || totalPages === 0}
-                className={`p-2 border border-rose-700 rounded ${currentPage === totalPages || totalPages === 0
-                  ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                  : "text-rose-700 hover:bg-rose-50"
-                  }`}
-                aria-label="Next page">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M9 18L15 12L9 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className={`px-2.5 py-1.5 border rounded-lg font-bold min-h-[36px] transition-colors ${
+                currentPage === totalPages || totalPages === 0
+                  ? "border-neutral-200 text-neutral-300 bg-neutral-50 cursor-not-allowed"
+                  : "border-neutral-300 text-neutral-700 bg-white hover:bg-neutral-100"
+              }`}
+              aria-label="Next page"
+            >
+              Next ›
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-neutral-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-neutral-900 text-base">
+                  Delete Coupon Promo Code
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  This action is permanent and cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/70 text-xs text-neutral-700 space-y-1">
+              <p>
+                <span className="font-bold">Code:</span>{" "}
+                <span className="font-mono font-bold text-rose-700">{deleteTarget.code}</span>
+              </p>
+              <p>
+                <span className="font-bold">Discount:</span>{" "}
+                {deleteTarget.discountType === "Percentage"
+                  ? `${deleteTarget.discountValue}% OFF`
+                  : `₹${deleteTarget.discountValue} OFF`}
+              </p>
+              <p>
+                <span className="font-bold">Expiry Date:</span>{" "}
+                {new Date(deleteTarget.endDate).toLocaleDateString("en-IN")}
+              </p>
+            </div>
+
+            <p className="text-xs text-neutral-600">
+              Customers will no longer be able to apply this promo code during checkout.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 rounded-xl transition-colors min-h-[44px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteCoupon}
+                disabled={isDeleting}
+                className="px-5 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors min-h-[44px] flex items-center gap-2 shadow-sm"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Yes, Delete Coupon</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
-      <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
-        Copyright © 2026. Developed By{" "}
-        <a href="#" className="text-blue-600 hover:underline">
-          Hello Local - 10 Minute App
-        </a>
+      <footer className="text-center text-xs text-neutral-400 py-3">
+        HelloLocal Admin Panel • Quick-Commerce Operations
       </footer>
     </div>
   );
 }
-
-

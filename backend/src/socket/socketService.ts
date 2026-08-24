@@ -115,19 +115,28 @@ export const initializeSocket = (httpServer: HttpServer) => {
     });
 
     // Authentication middleware
+    // A token is REQUIRED. Anonymous sockets used to be admitted and could then
+    // join the admin / seller / delivery notification rooms and receive customer
+    // names, phone numbers and addresses. (#C-06)
     io.use((socket, next) => {
-        const token = socket.handshake.auth.token;
+        const token = socket.handshake.auth?.token;
 
         if (!token) {
-            // Allow connection but mark as unauthenticated
-            return next();
+            return next(new Error('Authentication required'));
         }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+            const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
+                userId: string;
+                userType: 'Admin' | 'Seller' | 'Customer' | 'Delivery';
+                role?: string;
+            };
+            if (!decoded?.userId || !decoded?.userType) {
+                return next(new Error('Invalid token payload'));
+            }
             (socket as any).user = decoded;
             next();
-        } catch (error) {
+        } catch {
             next(new Error('Authentication error'));
         }
     });
@@ -176,14 +185,26 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Delivery partner joins their active deliveries room
-        socket.on('join-delivery-room', (deliveryPartnerId: string) => {
-            console.log(`🛵 Delivery partner joined: ${deliveryPartnerId}`);
-            socket.join(`delivery-${deliveryPartnerId}`);
+        // Room id comes from the verified token, never from the client. (#C-06)
+        socket.on('join-delivery-room', () => {
+            const user = (socket as any).user;
+            if (user?.userType !== 'Delivery') {
+                socket.emit('room-error', { message: 'Delivery account required' });
+                return;
+            }
+            console.log(`Delivery partner joined: ${user.userId}`);
+            socket.join(`delivery-${user.userId}`);
         });
 
         // Admin joins their notification room
+        // Admin userType required. Previously unchecked. (#C-06)
         socket.on('join-admin-room', () => {
-            console.log(`🛡️  Admin joined admin-notifications room (socket: ${socket.id})`);
+            const user = (socket as any).user;
+            if (user?.userType !== 'Admin') {
+                socket.emit('room-error', { message: 'Admin account required' });
+                return;
+            }
+            console.log(`Admin ${user.userId} joined admin-notifications (socket: ${socket.id})`);
             socket.join('admin-notifications');
             socket.emit('joined-admin-room', {
                 success: true,
@@ -192,9 +213,16 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Seller joins their notification room
-        socket.on('join-seller-room', (sellerId: string) => {
-            const normalizedSellerId = String(sellerId).trim();
-            console.log(`🏪 Seller ${normalizedSellerId} joined notifications room`);
+        // The client-supplied id is ignored; the room is derived from the token,
+        // so a seller can only ever join their own room. (#C-06)
+        socket.on('join-seller-room', () => {
+            const user = (socket as any).user;
+            if (user?.userType !== 'Seller') {
+                socket.emit('room-error', { message: 'Seller account required' });
+                return;
+            }
+            const normalizedSellerId = String(user.userId).trim();
+            console.log(`Seller ${normalizedSellerId} joined notifications room`);
             socket.join(`seller-${normalizedSellerId}`);
 
             socket.emit('joined-seller-room', {
@@ -205,9 +233,16 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Delivery boy joins notification room
-        socket.on('join-delivery-notifications', async (deliveryBoyId: string) => {
-            // Normalize deliveryBoyId to string to ensure consistent room naming
-            const normalizedDeliveryBoyId = String(deliveryBoyId).trim();
+        socket.on('join-delivery-notifications', async () => {
+            const user = (socket as any).user;
+            if (user?.userType !== 'Delivery') {
+                socket.emit('room-error', { message: 'Delivery account required' });
+                return;
+            }
+            // Derived from the verified token. This handler replays pending orders
+            // including customer name, phone and address, so a spoofed or anonymous
+            // id here was a bulk PII disclosure. (#C-06)
+            const normalizedDeliveryBoyId = String(user.userId).trim();
             console.log(`🔔 Delivery boy ${normalizedDeliveryBoyId} joined notifications room`);
 
             socket.join('delivery-notifications');
@@ -307,10 +342,18 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Handle order acceptance
-        socket.on('accept-order', async (data: { orderId: string; deliveryBoyId: string }) => {
+        socket.on('accept-order', async (data: { orderId: string; deliveryBoyId?: string }) => {
             try {
-                console.log(`✅ Delivery boy ${data.deliveryBoyId} accepting order ${data.orderId}`);
-                const result = await handleOrderAcceptance(io, data.orderId, String(data.deliveryBoyId).trim());
+                const user = (socket as any).user;
+                if (user?.userType !== 'Delivery') {
+                    socket.emit('accept-order-response', { success: false, message: 'Delivery account required' });
+                    return;
+                }
+                // `data.deliveryBoyId` is deliberately ignored - accepting on behalf
+                // of another courier was possible before. (#C-06)
+                const deliveryBoyId = String(user.userId).trim();
+                console.log(`Delivery boy ${deliveryBoyId} accepting order ${data.orderId}`);
+                const result = await handleOrderAcceptance(io, data.orderId, deliveryBoyId);
                 socket.emit('accept-order-response', result);
             } catch (error) {
                 console.error('❌ Error in accept-order handler:', error);
@@ -319,10 +362,17 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Handle order rejection
-        socket.on('reject-order', async (data: { orderId: string; deliveryBoyId: string }) => {
+        socket.on('reject-order', async (data: { orderId: string; deliveryBoyId?: string }) => {
             try {
-                console.log(`❌ Delivery boy ${data.deliveryBoyId} rejecting order ${data.orderId}`);
-                const result = await handleOrderRejection(io, data.orderId, String(data.deliveryBoyId).trim());
+                const user = (socket as any).user;
+                if (user?.userType !== 'Delivery') {
+                    socket.emit('reject-order-response', { success: false, message: 'Delivery account required', allRejected: false });
+                    return;
+                }
+                // Identity from the token, not the payload. (#C-06)
+                const deliveryBoyId = String(user.userId).trim();
+                console.log(`Delivery boy ${deliveryBoyId} rejecting order ${data.orderId}`);
+                const result = await handleOrderRejection(io, data.orderId, deliveryBoyId);
                 socket.emit('reject-order-response', result);
             } catch (error) {
                 console.error('❌ Error in reject-order handler:', error);

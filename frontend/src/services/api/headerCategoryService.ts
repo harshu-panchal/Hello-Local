@@ -20,9 +20,19 @@ export const getHeaderCategoriesPublic = async (skipLoader = false): Promise<Hea
     return response.data;
 };
 
-export const getHeaderCategoriesAdmin = async (): Promise<HeaderCategory[]> => {
-    const response = await api.get<HeaderCategory[]>('/header-categories/admin');
-    return response.data;
+export const getHeaderCategoriesAdmin = async (params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    pagination?: boolean;
+}): Promise<HeaderCategory[]> => {
+    const response = await api.get<HeaderCategory[] | { success: boolean; data: HeaderCategory[]; pagination?: any }>('/header-categories/admin', { params });
+    if (response.data && typeof response.data === 'object' && 'data' in response.data && Array.isArray((response.data as any).data)) {
+        return (response.data as any).data;
+    }
+    return (response.data || []) as HeaderCategory[];
 };
 
 export const createHeaderCategory = async (data: Partial<HeaderCategory>): Promise<HeaderCategory> => {

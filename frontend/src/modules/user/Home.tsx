@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import HomeHero from "./components/HomeHero";
+import UserTopHeader from "./components/UserTopHeader";
+import CategoryQuickStrip from "./components/CategoryQuickStrip";
+import SuperSaverHeroBanner from "./components/SuperSaverHeroBanner";
+import FeatureHighlightStrip from "./components/FeatureHighlightStrip";
+import NearYouShopsSection from "./components/NearYouShopsSection";
+import PopularCategoriesGrid from "./components/PopularCategoriesGrid";
+import TrustHelpPills from "./components/TrustHelpPills";
 import { getHomeContent } from "../../services/api/customerHomeService";
 import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryService";
 import { useLocation } from "../../hooks/useLocation";
@@ -10,7 +16,6 @@ import PageLoader from "../../components/PageLoader";
 const ShopAdCarousel = React.lazy(() => import("./components/ShopAdCarousel"));
 const LowestPricesEver = React.lazy(() => import("./components/LowestPricesEver"));
 const CategoryTileSection = React.lazy(() => import("./components/CategoryTileSection"));
-const FeaturedThisWeek = React.lazy(() => import("./components/FeaturedThisWeek"));
 const ProductCard = React.lazy(() => import("./components/ProductCard"));
 
 import { useThemeContext } from "../../context/ThemeContext";
@@ -40,32 +45,9 @@ export default function Home() {
 
   const isProductMatchDiet = (product: any, diet: string) => {
     if (diet === 'all') return true;
-
-    const productDietStr = (
-      (product?.tags || []).join(' ') + ' ' +
-      (product?.productName || '') + ' ' +
-      (product?.name || '') + ' ' +
-      (product?.description || '') + ' ' +
-      (product?.category?.name || '') + ' ' +
-      (product?.category?.slug || '') + ' ' +
-      (product?.categoryId || '')
-    ).toLowerCase();
-
-    // Keywords determining non-veg
-    const hasNonVeg = productDietStr.includes('non-veg') ||
-      productDietStr.includes('non veg') ||
-      productDietStr.includes('chicken') ||
-      productDietStr.includes('mutton') ||
-      productDietStr.includes('fish') ||
-      productDietStr.includes('egg') ||
-      productDietStr.includes('meat');
-
-    if (diet === 'non-veg') {
-      return hasNonVeg;
-    }
-    if (diet === 'veg') {
-      return !hasNonVeg;
-    }
+    const ft = product?.foodType;
+    if (diet === 'veg') return ft === 'Veg';
+    if (diet === 'non-veg') return ft === 'Non-Veg';
     return true;
   };
 
@@ -307,17 +289,17 @@ export default function Home() {
 
   if (error && !loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
-        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-4">
-          <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+        <div className="w-16 h-16 bg-rose-50 rounded-3xl flex items-center justify-center mb-4 border border-rose-100 shadow-xs">
+          <svg className="w-8 h-8 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Oops! Something went wrong</h3>
-        <p className="text-gray-600 mb-6 max-w-xs">{error}</p>
+        <h3 className="text-lg font-black text-slate-900 mb-1 tracking-tight">Oops! Something went wrong</h3>
+        <p className="text-xs sm:text-sm text-slate-500 mb-5 max-w-xs">{error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-[#FF2E7A] text-white rounded-full font-medium hover:opacity-90 transition-opacity"
+          className="px-6 py-2.5 bg-gradient-to-r from-[#FF5364] to-[#FF2E7A] text-white rounded-full text-xs font-black shadow-sm hover:opacity-95 active:scale-95 transition-all min-h-[44px]"
         >
           Try Refreshing
         </button>
@@ -387,21 +369,43 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-white min-h-screen pb-20 md:pb-0" ref={contentRef}>
-      {/* Hero Header with Gradient and Tabs */}
-      <HomeHero activeTab={activeTab} onTabChange={handleTabChange} />
+    <div className="bg-[#F8FAFC] min-h-screen pb-24 md:pb-12" ref={contentRef}>
+      <div className="w-full space-y-1 sm:space-y-2">
+        {/* 1. Top Header: Location Pill | HelloLocal Logo | Bell + Search Bar + Twin Cards */}
+        <UserTopHeader />
 
-      {/* Empty space since toggle was moved */}
+        {/* 2. Category Quick-Strip: All + Circular categories */}
+        <CategoryQuickStrip activeTab={activeTab} onTabChange={handleTabChange} />
+
+        {/* 3. Super Saver Hero Banner */}
+        <SuperSaverHeroBanner />
+
+        {/* 4. Feature Highlight Strip (Offers, Spin & Win, Loyalty, Friends) */}
+        <FeatureHighlightStrip />
+
+        {/* 5. Near You (Best Shops) Horizontal Section */}
+        <NearYouShopsSection shops={homeData.shops} />
+
+        {/* 6. Popular Categories Circular Grid */}
+        <PopularCategoriesGrid categories={homeData.categories} />
+
+        {/* 7. Trust & Help Badges */}
+        <TrustHelpPills />
+      </div>
 
       {/* Shop Ad Carousel - Sponsored Shop Ads */}
-      <Suspense fallback={<div className="h-40 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
-        <ShopAdCarousel />
-      </Suspense>
+      <div className="w-full">
+        <Suspense fallback={<div className="h-40 bg-slate-100 user-image-shimmer rounded-2xl mx-3.5 my-2 max-w-[1440px] mx-auto" />}>
+          <ShopAdCarousel />
+        </Suspense>
+      </div>
 
       {/* LOWEST PRICES EVER Section */}
-      <Suspense fallback={<div className="h-40 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
-        <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
-      </Suspense>
+      <div className="w-full max-w-[1440px] mx-auto">
+        <Suspense fallback={<div className="h-40 bg-slate-100 user-image-shimmer rounded-2xl mx-3.5 my-2" />}>
+          <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
+        </Suspense>
+      </div>
 
       {/* Unlimited Fashion Section */}
       {unlimitedFashionSection && (
@@ -525,11 +529,6 @@ export default function Home() {
                 showProductCount={true}
               />
             </div>
-
-            {/* Featured this week Section */}
-            <Suspense fallback={<div className="h-60 bg-neutral-100 animate-pulse rounded-lg mx-4"></div>}>
-              <FeaturedThisWeek />
-            </Suspense>
 
             {/* Shop by Store Section */}
             <div className="mb-6 mt-6 md:mb-8 md:mt-8">

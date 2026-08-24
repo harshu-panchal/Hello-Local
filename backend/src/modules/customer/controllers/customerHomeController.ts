@@ -135,12 +135,12 @@ async function fetchSectionData(
         ],
       };
 
-      // We fetch these irrespective of location radius to show preview images on home page
-      // Location validation still happens at cart/order level
+      // Only show products from sellers within user's delivery range
       if (nearbySellerIds && nearbySellerIds.length > 0) {
-        // If we have nearby sellers, we can still filter by them if we want to prioritize
-        // But the user requested to show them irrespective of location radius
-        // For now, let's keep it simple and show all active products for the section
+        query.seller = { $in: nearbySellerIds };
+      } else if (nearbySellerIds) {
+        // nearbySellerIds was resolved but is empty — no sellers in range
+        return [];
       }
 
       if (categories && categories.length > 0) {
@@ -169,35 +169,28 @@ async function fetchSectionData(
         .select("productName mainImage price mrp discount rating reviewsCount pack seller variations")
         .lean();
 
-      return products.map((p: any) => {
-        // Check if the product's seller is within range
-        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p?.seller
-          ? nearbySellerIds.some(id => id?.toString() === p.seller?.toString())
-          : false;
-
-        return {
-          id: p._id.toString(),
-          productId: p._id.toString(),
-          name: p.productName,
-          productName: p.productName,
-          image: p.mainImage,
-          mainImage: p.mainImage,
-          price: p.price,
-          discount:
-            p.discount ||
-            (p.mrp && p.price
-              ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
-              : 0),
-          productImages: p.mainImage ? [p.mainImage] : [],
-          rating: p.rating || 0,
-          reviewsCount: p.reviewsCount || 0,
-          reviews: p.reviewsCount || 0,
-          pack: p.pack || "",
-          type: "product",
-          isAvailable,
-          seller: p.seller,
-        };
-      });
+      return products.map((p: any) => ({
+        id: p._id.toString(),
+        productId: p._id.toString(),
+        name: p.productName,
+        productName: p.productName,
+        image: p.mainImage,
+        mainImage: p.mainImage,
+        price: p.price,
+        discount:
+          p.discount ||
+          (p.mrp && p.price
+            ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
+            : 0),
+        productImages: p.mainImage ? [p.mainImage] : [],
+        rating: p.rating || 0,
+        reviewsCount: p.reviewsCount || 0,
+        reviews: p.reviewsCount || 0,
+        pack: p.pack || "",
+        type: "product",
+        isAvailable: true,
+        seller: p.seller,
+      }));
     }
 
     // If displayType is "categories", fetch the selected categories themselves
@@ -279,15 +272,17 @@ export const getHomeContent = async (req: Request, res: Response) => {
           };
         }
 
-        // Build product query for images (ignore location to show category preview)
+        // Build product query — only from sellers within user's range
         const productQuery: any = {
           category: categoryId,
           status: "Active",
           publish: true,
         };
+        if (nearbySellerIds.length > 0) {
+          productQuery.seller = { $in: nearbySellerIds };
+        }
 
         // Fetch 4 active products from the category for preview images
-        // We fetch these irrespective of location radius to show category preview
         const categoryProducts = await Product.find(productQuery)
           .select("productName mainImage galleryImages")
           .sort({ createdAt: -1 })
@@ -330,38 +325,31 @@ export const getHomeContent = async (req: Request, res: Response) => {
       })
     );
 
-    // 2. Lowest Prices Products - Get admin-selected products
-    // We fetch these irrespective of location radius to show preview on home page
-    const lowestPricesProductsQuery: any = {
-      isActive: true,
+    // 2. Lowest Prices Products - Get admin-selected products, filtered by range
+    const lowestPricesMatchFilter: any = {
+      status: "Active",
+      publish: true,
     };
+    // Only show products from sellers within range
+    if (nearbySellerIds.length > 0) {
+      lowestPricesMatchFilter.seller = { $in: nearbySellerIds };
+    }
 
-    const lowestPricesProducts = await LowestPricesProduct.find(
-      lowestPricesProductsQuery
-    )
+    const lowestPricesProducts = await LowestPricesProduct.find({ isActive: true })
       .populate({
         path: "product",
         select:
           "productName mainImage price mrp discount status publish category subcategory seller variations",
-        match: {
-          status: "Active",
-          publish: true,
-          // Removed location filter to show preview images irrespective of radius
-        },
+        match: lowestPricesMatchFilter,
       })
       .sort({ order: 1 })
       .lean();
 
-    // Filter out any products that were null (due to match condition)
+    // Filter out null products (populate match returned null) and map
     const validLowestPricesProducts = lowestPricesProducts
       .filter((item: any) => item.product !== null)
       .map((item: any) => {
         const product = item.product;
-        // Check if the product's seller is within range
-        const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && product?.seller
-          ? nearbySellerIds.some(id => id?.toString() === product.seller?.toString())
-          : false;
-
         return {
           id: product._id.toString(),
           _id: product._id.toString(),
@@ -376,7 +364,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
           subcategory: product.subcategory?.toString() || "",
           status: product.status,
           publish: product.publish,
-          isAvailable,
+          isAvailable: true,
           seller: product.seller,
         };
       });
@@ -441,11 +429,13 @@ export const getHomeContent = async (req: Request, res: Response) => {
     // 6. Personal Care Subcategories - Now handled by dynamic sections
 
     // 7. Cooking Ideas (Fetch some products from 'Food' or 'Grocery' categories)
-    // We fetch these irrespective of location radius to show preview images
     const foodProductsQuery: any = {
       status: "Active",
       publish: true,
     };
+    if (nearbySellerIds.length > 0) {
+      foodProductsQuery.seller = { $in: nearbySellerIds };
+    }
 
     const foodProducts = await Product.find(foodProductsQuery)
       .limit(3)
@@ -531,13 +521,17 @@ export const getHomeContent = async (req: Request, res: Response) => {
           .map((child: any) => child.image)
           .filter((img: string) => img && img.trim() !== "");
 
-        // If not enough subcategory images, fetch product images for this category to fill the preview
+        // If not enough subcategory images, fetch product images from in-range sellers
         if (subcategoryImages.length < 4) {
-          const categoryProducts = await Product.find({
+          const promoProductQuery: any = {
             category: category._id,
             status: "Active",
             publish: true,
-          })
+          };
+          if (nearbySellerIds.length > 0) {
+            promoProductQuery.seller = { $in: nearbySellerIds };
+          }
+          const categoryProducts = await Product.find(promoProductQuery)
             .select("mainImage galleryImages")
             .sort({ createdAt: -1 })
             .limit(4)
@@ -649,17 +643,18 @@ export const getHomeContent = async (req: Request, res: Response) => {
       })
     );
 
-    // 10. Fetch PromoStrip for the current header category (with caching)
+    // 10. Fetch PromoStrip for the current header category
+    // Cache the raw DB document by slug, then filter by location in memory per-request
     const currentHeaderCategorySlug = (headerCategorySlug as string) || "all";
-    const promoStripCacheKey = `promoStrip-${currentHeaderCategorySlug.toLowerCase()}`;
+    const promoStripCacheKey = `promoStrip-raw-${currentHeaderCategorySlug.toLowerCase()}`;
 
-    // Try to get from cache first (supports cached `null`)
+    let promoStrip: any = null;
     const hasPromoStripCache = cache.has(promoStripCacheKey);
-    let promoStrip = cache.get(promoStripCacheKey) as any;
+    let rawPromoStrip = cache.get(promoStripCacheKey) as any;
 
     if (!hasPromoStripCache) {
       const now = new Date();
-      const promoStripDoc = await PromoStrip.findOne({
+      rawPromoStrip = await PromoStrip.findOne({
         headerCategorySlug: currentHeaderCategorySlug.toLowerCase(),
         isActive: true,
         startDate: { $lte: now },
@@ -670,26 +665,20 @@ export const getHomeContent = async (req: Request, res: Response) => {
         .sort({ order: 1 })
         .lean();
 
-      promoStrip = promoStripDoc;
+      cache.set(promoStripCacheKey, rawPromoStrip, 3 * 60 * 1000);
+    }
 
-      // If we have promoStrip, add availability flag to featured products
-      if (promoStrip && (promoStrip as any).featuredProducts) {
-        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts
-          .filter((p: any) => p !== null) // Filter out null products
-          .map((p: any) => {
-            const isAvailable = nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-              ? nearbySellerIds.some(id => id && id.toString() === p.seller.toString())
-              : false;
-            return { ...p, isAvailable };
-          });
-      }
-
-      // Cache for 3 minutes (PromoStrip data doesn't change frequently)
-      if (promoStrip) {
-        cache.set(promoStripCacheKey, promoStrip, 3 * 60 * 1000);
-      } else {
-        // Cache null result for 1 minute to prevent repeated DB queries
-        cache.set(promoStripCacheKey, null, 60 * 1000);
+    // Apply location filter per-request (not cached)
+    if (rawPromoStrip) {
+      promoStrip = { ...rawPromoStrip };
+      if (promoStrip.featuredProducts) {
+        promoStrip.featuredProducts = promoStrip.featuredProducts
+          .filter((p: any) => {
+            if (!p) return false;
+            if (nearbySellerIds.length === 0) return false;
+            return nearbySellerIds.some(id => id && p.seller && id.toString() === p.seller.toString());
+          })
+          .map((p: any) => ({ ...p, isAvailable: true }));
       }
     }
 

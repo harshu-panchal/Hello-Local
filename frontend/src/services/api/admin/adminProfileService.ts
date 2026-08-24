@@ -39,3 +39,17 @@ export const updateProfile = async (data: UpdateProfileData): Promise<ProfileRes
     const response = await api.put<ProfileResponse>('/admin/profile', data);
     return response.data;
 };
+
+export interface ChangePasswordData {
+    currentPassword: string;
+    newPassword: string;
+}
+
+/**
+ * Change admin password
+ */
+export const changePassword = async (data: ChangePasswordData): Promise<{ success: boolean; message: string }> => {
+    const response = await api.put<{ success: boolean; message: string }>('/admin/profile/password', data);
+    return response.data;
+};
+

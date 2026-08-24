@@ -1,23 +1,19 @@
 import { Router } from 'express';
 import { getActiveTaxes, getAllTaxes, createTax, updateTaxStatus } from '../modules/seller/controllers/taxController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireUserType } from '../middleware/auth';
 
 const router = Router();
 
-// Publicly available within the app for calculation if needed, 
-// but usually requires auth
 router.use(authenticate);
 
-// Get active taxes for selection
-router.get('/active', getActiveTaxes);
+// Reads: sellers need the tax list when creating products; admins manage them.
+router.get('/active', requireUserType('Seller', 'Admin'), getActiveTaxes);
+router.get('/', requireUserType('Seller', 'Admin'), getAllTaxes);
 
-// Get all taxes for management
-router.get('/', getAllTaxes);
-
-// Create tax (Admin should ideally do this, but seller management has a page for it in this app it seems)
-router.post('/', createTax);
-
-// Update tax status
-router.patch('/:id/status', updateTaxStatus);
+// Writes: tax configuration is platform-level and is Admin-only. These used to
+// sit behind `authenticate` alone, so any logged-in customer or courier could
+// create tax rates or disable them. (#H-13)
+router.post('/', requireUserType('Admin'), createTax);
+router.patch('/:id/status', requireUserType('Admin'), updateTaxStatus);
 
 export default router;

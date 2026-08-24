@@ -1,26 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  getSellerTransactions,
-  type SellerTransaction,
+  getWalletTransactions,
+  type WalletTransaction,
 } from "../../../services/api/admin/adminWalletService";
 import { getAllSellers as getSellers } from "../../../services/api/sellerService";
 import { useAuth } from "../../../context/AuthContext";
-
-interface Transaction {
-  id: string;
-  sellerName: string;
-  sellerId: string;
-  orderId?: string;
-  orderItemId?: string;
-  productName?: string;
-  variation?: string;
-  flag: string;
-  amount: number;
-  remark?: string;
-  date: string;
-  type: string;
-  status: string;
-}
+import { useToast } from "../../../context/ToastContext";
 
 interface Seller {
   _id: string;
@@ -29,32 +15,42 @@ interface Seller {
 }
 
 export default function AdminSellerTransaction() {
+  const navigate = useNavigate();
   const { isAuthenticated, token } = useAuth();
+  const { showToast } = useToast();
+
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selectedSeller, setSelectedSeller] = useState("all");
-  const [selectedMethod, setSelectedMethod] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [sortColumn, setSortColumn] = useState<"id" | "storeName" | "amount" | "type" | "date" | "status">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch sellers on component mount
+  // Debounce search query (300ms)
   useEffect(() => {
-    if (!isAuthenticated || !token) {
-      setLoading(false);
-      return;
-    }
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  // Fetch approved sellers for dropdown
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
 
     const fetchSellers = async () => {
       try {
         const response = await getSellers({ status: "Approved" });
-        if (response.success && response.data) {
+        if (response.success && Array.isArray(response.data)) {
           setSellers(
             response.data.map((seller) => ({
               _id: seller._id,
@@ -64,164 +60,118 @@ export default function AdminSellerTransaction() {
           );
         }
       } catch (err) {
-        console.error("Error fetching sellers:", err);
-        setError("Failed to load sellers");
+        console.error("Error fetching sellers for transaction filter:", err);
       }
     };
 
     fetchSellers();
   }, [isAuthenticated, token]);
 
-  // Fetch transactions based on selected seller
-  useEffect(() => {
+  // Fetch transactions via single consolidated backend query
+  const fetchTransactions = useCallback(async () => {
     if (!isAuthenticated || !token) {
       setLoading(false);
       return;
     }
 
-    const fetchTransactions = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+    try {
+      setLoading(true);
+      setError(null);
 
-        if (selectedSeller === "all") {
-          // Fetch transactions for all sellers
-          const allTransactions: Transaction[] = [];
+      const response = await getWalletTransactions({
+        userType: "SELLER",
+        sellerId: selectedSeller !== "all" ? selectedSeller : undefined,
+        type: selectedType !== "all" ? selectedType : undefined,
+        dateFrom: fromDate || undefined,
+        dateTo: toDate || undefined,
+        search: debouncedSearch || undefined,
+        limit: 1000,
+      });
 
-          // For now, we'll fetch from the first few sellers
-          // In a real implementation, you might want a separate endpoint for all transactions
-          const sellersToFetch = sellers.slice(0, 10); // Limit to first 10 sellers
-
-          for (const seller of sellersToFetch) {
-            try {
-              const response = await getSellerTransactions(seller._id, {
-                page: 1,
-                limit: 50,
-              });
-
-              if (response.success && response.data) {
-                const sellerTransactions: Transaction[] = response.data.map(
-                  (tx: SellerTransaction) => ({
-                    id: tx.id,
-                    sellerName: seller.sellerName,
-                    sellerId: seller._id,
-                    amount: tx.amount,
-                    flag: tx.transactionType,
-                    date: tx.date,
-                    type: tx.type,
-                    status: tx.status,
-                    remark: tx.description,
-                  })
-                );
-                allTransactions.push(...sellerTransactions);
-              }
-            } catch (err) {
-              console.error(
-                `Error fetching transactions for seller ${seller._id}:`,
-                err
-              );
-            }
-          }
-
-          // Sort by date (newest first)
-          allTransactions.sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-          );
-          setTransactions(allTransactions);
-        } else {
-          // Fetch transactions for specific seller
-          const response = await getSellerTransactions(selectedSeller, {
-            page: currentPage,
-            limit: entriesPerPage,
-          });
-
-          if (response.success && response.data) {
-            const seller = sellers.find((s) => s._id === selectedSeller);
-            const sellerTransactions: Transaction[] = response.data.map(
-              (tx: SellerTransaction) => ({
-                id: tx.id,
-                sellerName: seller?.sellerName || "Unknown Seller",
-                sellerId: selectedSeller,
-                amount: tx.amount,
-                flag: tx.transactionType,
-                date: tx.date,
-                type: tx.type,
-                status: tx.status,
-                remark: tx.description,
-              })
-            );
-            setTransactions(sellerTransactions);
-          } else {
-            setTransactions([]);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching transactions:", err);
-        setError("Failed to load transactions. Please try again.");
+      if (response.success && Array.isArray(response.data)) {
+        setTransactions(response.data);
+      } else {
         setTransactions([]);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    if (selectedSeller !== "all" || sellers.length > 0) {
-      fetchTransactions();
+    } catch (err: any) {
+      console.error("Error fetching seller transactions:", err);
+      const msg = err.response?.data?.message || "Failed to load seller transactions. Please try again.";
+      setError(msg);
+      showToast(msg, "error");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
     }
   }, [
-    selectedSeller,
-    currentPage,
-    entriesPerPage,
     isAuthenticated,
     token,
-    sellers,
+    selectedSeller,
+    selectedType,
+    fromDate,
+    toDate,
+    debouncedSearch,
+    showToast,
   ]);
 
-  const handleSort = (column: string) => {
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const handleSort = (column: "id" | "storeName" | "amount" | "type" | "date" | "status") => {
     if (sortColumn === column) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortColumn(column);
       setSortDirection("asc");
     }
   };
 
-  // Filter transactions based on search term
-  const filteredTransactions = transactions.filter(
-    (transaction) =>
-      transaction.sellerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.orderId &&
-        transaction.orderId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (transaction.productName &&
-        transaction.productName
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())) ||
-      transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.remark &&
-        transaction.remark.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      const matchSearch =
+        debouncedSearch.trim() === "" ||
+        (tx.userName && tx.userName.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
+        (tx.storeName && tx.storeName.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
+        (tx.description && tx.description.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
+        (tx.reference && tx.reference.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
+        (tx.relatedOrder?.orderNumber && tx.relatedOrder.orderNumber.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
+        tx._id.toLowerCase().includes(debouncedSearch.toLowerCase());
+
+      return matchSearch;
+    });
+  }, [transactions, debouncedSearch]);
 
   // Sort transactions
-  if (sortColumn) {
-    filteredTransactions.sort((a, b) => {
+  const sortedTransactions = useMemo(() => {
+    return [...filteredTransactions].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
       switch (sortColumn) {
-        case "sellerName":
-          aValue = a.sellerName;
-          bValue = b.sellerName;
+        case "id":
+          aValue = a._id;
+          bValue = b._id;
+          break;
+        case "storeName":
+          aValue = (a.storeName || a.userName || "").toLowerCase();
+          bValue = (b.storeName || b.userName || "").toLowerCase();
           break;
         case "amount":
           aValue = a.amount;
           bValue = b.amount;
           break;
+        case "type":
+          aValue = a.type.toLowerCase();
+          bValue = b.type.toLowerCase();
+          break;
         case "date":
-          aValue = new Date(a.date).getTime();
-          bValue = new Date(b.date).getTime();
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
           break;
         case "status":
-          aValue = a.status;
-          bValue = b.status;
+          aValue = a.status.toLowerCase();
+          bValue = b.status.toLowerCase();
           break;
         default:
           return 0;
@@ -231,530 +181,451 @@ export default function AdminSellerTransaction() {
       if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }
+  }, [filteredTransactions, sortColumn, sortDirection]);
 
-  const totalPages = Math.ceil(filteredTransactions.length / entriesPerPage);
+  const totalPages = Math.max(1, Math.ceil(sortedTransactions.length / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
   const endIndex = startIndex + entriesPerPage;
-  const displayedTransactions = filteredTransactions.slice(
-    startIndex,
-    endIndex
-  );
+  const displayedTransactions = sortedTransactions.slice(startIndex, endIndex);
 
+  // CSV Export
   const handleExport = () => {
-    alert("Export functionality will be implemented here");
+    if (sortedTransactions.length === 0) {
+      showToast("No transactions available to export", "info");
+      return;
+    }
+
+    const headers = [
+      "Transaction ID",
+      "Store Name",
+      "Seller Name",
+      "Type",
+      "Amount (₹)",
+      "Status",
+      "Order Number",
+      "Description",
+      "Reference",
+      "Date",
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...sortedTransactions.map((tx) =>
+        [
+          `"${tx._id}"`,
+          `"${(tx.storeName || "").replace(/"/g, '""')}"`,
+          `"${(tx.userName || "").replace(/"/g, '""')}"`,
+          tx.type,
+          tx.amount,
+          tx.status,
+          `"${(tx.relatedOrder?.orderNumber || "").replace(/"/g, '""')}"`,
+          `"${(tx.description || "").replace(/"/g, '""')}"`,
+          `"${(tx.reference || "").replace(/"/g, '""')}"`,
+          `"${new Date(tx.createdAt).toLocaleDateString("en-IN")}"`,
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `hellolocal_seller_transactions_${new Date().toISOString().split("T")[0]}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Transaction history exported successfully", "success");
   };
 
   const handleClearDate = () => {
     setFromDate("");
     setToDate("");
+    setCurrentPage(1);
   };
-
-  const methods = ["All", "Credit", "Debit", "Bank Transfer"];
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="bg-rose-700 px-4 sm:px-6 py-4 rounded-t-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-        <h1 className="text-white text-xl sm:text-2xl font-semibold">
-          View Seller List
-        </h1>
-        <button className="bg-white text-rose-700 border-2 border-rose-700 hover:bg-rose-50 px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Add Fund Transfer
-        </button>
+      {/* Header & Breadcrumb */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">
+            Seller Transactions & Settlements
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            Audit store wallet balance inflows, order settlement credits, and withdrawal disbursements
+          </p>
+        </div>
+
+        <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-neutral-500">
+          <Link
+            to="/admin/dashboard"
+            className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+          >
+            Dashboard
+          </Link>
+          <span className="mx-2 text-neutral-300">/</span>
+          <span className="text-neutral-700 font-medium">Seller Transactions</span>
+        </nav>
       </div>
 
-      {/* Main Content Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        {/* Filters */}
-        <div className="p-4 sm:p-6 border-b border-neutral-200">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            {/* Left Side Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 flex-1 flex-wrap">
-              {/* From - To Date */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700 whitespace-nowrap">
-                  From - To Date:
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400">
-                      <rect
-                        x="3"
-                        y="4"
-                        width="18"
-                        height="18"
-                        rx="2"
-                        ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    <input
-                      type="text"
-                      value={fromDate}
-                      onChange={(e) => setFromDate(e.target.value)}
-                      placeholder="MM/DD/YYYY"
-                      className="pl-10 pr-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[140px]"
-                    />
-                  </div>
-                  <span className="text-neutral-500">-</span>
-                  <div className="relative">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400">
-                      <rect
-                        x="3"
-                        y="4"
-                        width="18"
-                        height="18"
-                        rx="2"
-                        ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    <input
-                      type="text"
-                      value={toDate}
-                      onChange={(e) => setToDate(e.target.value)}
-                      placeholder="MM/DD/YYYY"
-                      className="pl-10 pr-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[140px]"
-                    />
-                  </div>
-                  <button
-                    onClick={handleClearDate}
-                    className="px-3 py-2 bg-neutral-700 hover:bg-neutral-800 text-white rounded text-sm transition-colors">
-                    Clear
-                  </button>
-                </div>
-              </div>
+      {/* Main Container Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+        {/* Banner with Action Buttons */}
+        <div className="bg-rose-700 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm sm:text-base font-bold tracking-tight">
+            Transaction Ledger ({sortedTransactions.length} records)
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/admin/delivery-boy/fund-transfer")}
+              className="bg-white text-rose-700 hover:bg-rose-50 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors min-h-[36px]"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Fund Transfer</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              className="bg-white/15 hover:bg-white/25 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[36px]"
+              title="Export CSV"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
 
-              {/* Filter by Seller */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700 whitespace-nowrap">
-                  Filter by Seller:
-                </label>
-                <select
-                  value={selectedSeller}
-                  onChange={(e) => {
-                    setSelectedSeller(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  disabled={loading}
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[130px] disabled:bg-neutral-100 disabled:cursor-not-allowed">
-                  <option value="all">All Sellers</option>
-                  {sellers.map((seller) => (
-                    <option key={seller._id} value={seller._id}>
-                      {seller.sellerName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter by Method */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700 whitespace-nowrap">
-                  Filter by Method:
-                </label>
-                <select
-                  value={selectedMethod}
-                  onChange={(e) => {
-                    setSelectedMethod(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[100px]">
-                  {methods.map((method) => (
-                    <option
-                      key={method}
-                      value={method === "All" ? "all" : method}>
-                      {method}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {/* Filters and Controls */}
+        <div className="p-4 border-b border-neutral-200/70 bg-neutral-50/50 space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Filter by Seller */}
+            <div>
+              <label htmlFor="filterSellerSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Seller / Store
+              </label>
+              <select
+                id="filterSellerSelect"
+                value={selectedSeller}
+                onChange={(e) => {
+                  setSelectedSeller(e.target.value);
+                  setCurrentPage(1);
+                }}
+                disabled={loading}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              >
+                <option value="all">All Sellers</option>
+                {sellers.map((seller) => (
+                  <option key={seller._id} value={seller._id}>
+                    {seller.storeName ? `${seller.storeName} (${seller.sellerName})` : seller.sellerName}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Right Side Controls */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              {/* Per Page */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-neutral-700">Per Page:</span>
-                <select
-                  value={entriesPerPage}
-                  onChange={(e) => {
-                    setEntriesPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 border border-neutral-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600">
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
+            {/* Filter by Transaction Type */}
+            <div>
+              <label htmlFor="filterTypeSelect" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                Transaction Type
+              </label>
+              <select
+                id="filterTypeSelect"
+                value={selectedType}
+                onChange={(e) => {
+                  setSelectedType(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              >
+                <option value="all">All Types</option>
+                <option value="Credit">Credit (Earnings / Top-up)</option>
+                <option value="Debit">Debit (Withdrawal / Payout)</option>
+              </select>
+            </div>
 
-              {/* Export Button */}
-              <button
-                onClick={handleExport}
-                className="bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2 transition-colors">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                Export
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
+            {/* From Date */}
+            <div>
+              <label htmlFor="fromDateInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                From Date
+              </label>
+              <input
+                id="fromDateInput"
+                type="date"
+                value={fromDate}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              />
+            </div>
 
-              {/* Search */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-neutral-700">Search:</label>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Search:"
-                  className="px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-rose-600 focus:border-rose-600 min-w-[150px]"
-                />
+            {/* To Date */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="toDateInput" className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                  To Date
+                </label>
+                {(fromDate || toDate) && (
+                  <button
+                    type="button"
+                    onClick={handleClearDate}
+                    className="text-[11px] font-bold text-rose-700 hover:text-rose-800"
+                  >
+                    Clear Dates
+                  </button>
+                )}
               </div>
+              <input
+                id="toDateInput"
+                type="date"
+                value={toDate}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
+              />
+            </div>
+          </div>
+
+          {/* Table Search & Rows Controls */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-neutral-600">Show</span>
+              <select
+                value={entriesPerPage}
+                onChange={(e) => {
+                  setEntriesPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2.5 py-1.5 border border-neutral-300 rounded-lg text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-xs font-medium text-neutral-600">entries</span>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search transaction, order, store..."
+                className="pl-8 pr-7 py-2 border border-neutral-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none w-full sm:w-64 min-h-[44px]"
+              />
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-xs font-bold"
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px]">
-            <thead className="bg-neutral-50 border-b border-neutral-200">
-              <tr>
+          <table className="w-full text-left border-collapse min-w-[900px]">
+            <thead>
+              <tr className="bg-neutral-100/70 border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wider text-neutral-700 select-none">
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("id")}>
-                  <div className="flex items-center gap-2">
-                    Id
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-24"
+                  onClick={() => handleSort("id")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Tx ID</span>
+                    <span className="text-neutral-400">{sortColumn === "id" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
                   </div>
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("sellerName")}>
-                  <div className="flex items-center gap-2">
-                    Seller Name
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors"
+                  onClick={() => handleSort("storeName")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Store / Seller</span>
+                    <span className="text-neutral-400">{sortColumn === "storeName" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4">Order / Reference</th>
+                <th
+                  className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-24 text-center"
+                  onClick={() => handleSort("type")}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Type</span>
+                    <span className="text-neutral-400">{sortColumn === "type" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
                   </div>
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("orderId")}>
-                  <div className="flex items-center gap-2">
-                    Order Id
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-32 text-right"
+                  onClick={() => handleSort("amount")}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Amount</span>
+                    <span className="text-neutral-400">{sortColumn === "amount" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
                   </div>
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("orderItemId")}>
-                  <div className="flex items-center gap-2">
-                    Order Item Id
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                  className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-28 text-center"
+                  onClick={() => handleSort("status")}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Status</span>
+                    <span className="text-neutral-400">{sortColumn === "status" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
                   </div>
                 </th>
                 <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("productName")}>
-                  <div className="flex items-center gap-2">
-                    Product Name
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("variation")}>
-                  <div className="flex items-center gap-2">
-                    Variation
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("flag")}>
-                  <div className="flex items-center gap-2">
-                    Flag
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("amount")}>
-                  <div className="flex items-center gap-2">
-                    Amount
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("remark")}>
-                  <div className="flex items-center gap-2">
-                    Remark
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </th>
-                <th
-                  className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider cursor-pointer hover:bg-neutral-100"
-                  onClick={() => handleSort("date")}>
-                  <div className="flex items-center gap-2">
-                    Date
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-neutral-400">
-                      <path
-                        d="M7 10L12 5L17 10M7 14L12 19L17 14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-32 text-right"
+                  onClick={() => handleSort("date")}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Date</span>
+                    <span className="text-neutral-400">{sortColumn === "date" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
                   </div>
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-neutral-200">
+            <tbody className="divide-y divide-neutral-100 text-xs">
               {loading ? (
-                <tr>
-                  <td colSpan={10} className="px-4 sm:px-6 py-8 text-center">
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-rose-700 mr-2"></div>
-                      Loading transactions...
-                    </div>
-                  </td>
-                </tr>
+                [1, 2, 3, 4].map((idx) => (
+                  <tr key={idx} className="animate-pulse">
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-14" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-36" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                    <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-16 mx-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-20 ml-auto" /></td>
+                    <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-18 mx-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-20 ml-auto" /></td>
+                  </tr>
+                ))
               ) : error ? (
                 <tr>
-                  <td
-                    colSpan={10}
-                    className="px-4 sm:px-6 py-8 text-center text-red-600">
-                    {error}
+                  <td colSpan={7} className="py-10 px-4 text-center">
+                    <p className="text-sm font-bold text-red-600 mb-2">{error}</p>
+                    <button
+                      type="button"
+                      onClick={fetchTransactions}
+                      className="px-3.5 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-xs font-bold"
+                    >
+                      Retry Loading
+                    </button>
                   </td>
                 </tr>
               ) : displayedTransactions.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={10}
-                    className="px-4 sm:px-6 py-8 text-center text-sm text-neutral-500">
-                    No transactions found
+                  <td colSpan={7} className="py-12 px-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-2 text-neutral-400">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-bold text-neutral-800">No seller transactions found</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {searchTerm || fromDate || toDate
+                        ? "Try adjusting your search or date filter parameters"
+                        : "Transactions will appear here as orders and settlements occur"}
+                    </p>
                   </td>
                 </tr>
               ) : (
-                displayedTransactions.map((transaction) => (
-                  <tr key={transaction.id} className="hover:bg-neutral-50">
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900">
-                      {transaction.id.slice(-6)}
+                displayedTransactions.map((tx) => (
+                  <tr key={tx._id} className="hover:bg-neutral-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-bold text-neutral-500">
+                      #{tx._id.slice(-6).toUpperCase()}
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                      {transaction.sellerName}
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-neutral-900">
+                        {tx.storeName || tx.userName || "Seller"}
+                      </div>
+                      {tx.userName && tx.storeName && tx.userName !== tx.storeName && (
+                        <div className="text-[11px] text-neutral-500 font-medium">
+                          {tx.userName}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {transaction.orderId || "-"}
+                    <td className="py-3 px-4 text-neutral-600">
+                      {tx.relatedOrder?.orderNumber ? (
+                        <span className="font-mono font-semibold text-rose-700">
+                          Order #{tx.relatedOrder.orderNumber}
+                        </span>
+                      ) : tx.reference ? (
+                        <span className="font-mono text-neutral-700">Ref: {tx.reference}</span>
+                      ) : (
+                        <span className="text-neutral-500">{tx.description || "Settlement"}</span>
+                      )}
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {transaction.orderItemId || "-"}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {transaction.productName || transaction.type}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {transaction.variation || "-"}
-                    </td>
-                    <td className="px-4 sm:px-6 py-3">
+                    <td className="py-3 px-3 text-center">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${transaction.flag === "credit"
-                          ? "bg-rose-100 text-rose-900"
-                          : transaction.flag === "debit"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
-                          }`}>
-                        {transaction.flag.charAt(0).toUpperCase() +
-                          transaction.flag.slice(1)}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          tx.type.toLowerCase() === "credit"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                            : "bg-rose-50 text-rose-700 border border-rose-100"
+                        }`}
+                      >
+                        {tx.type}
                       </span>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-900 font-medium">
-                      ₹{transaction.amount.toFixed(2)}
+                    <td
+                      className={`py-3 px-4 text-right font-mono font-bold text-sm ${
+                        tx.type.toLowerCase() === "credit"
+                          ? "text-emerald-600"
+                          : "text-rose-600"
+                      }`}
+                    >
+                      {tx.type.toLowerCase() === "credit" ? "+" : "-"}₹{tx.amount.toFixed(2)}
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {transaction.remark || transaction.status}
+                    <td className="py-3 px-3 text-center">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          tx.status.toLowerCase() === "completed" || tx.status.toLowerCase() === "success"
+                            ? "bg-rose-50 text-rose-700 border border-rose-100"
+                            : tx.status.toLowerCase() === "pending"
+                            ? "bg-amber-50 text-amber-800 border border-amber-200"
+                            : "bg-neutral-100 text-neutral-600 border border-neutral-200"
+                        }`}
+                      >
+                        {tx.status}
+                      </span>
                     </td>
-                    <td className="px-4 sm:px-6 py-3 text-sm text-neutral-600">
-                      {new Date(transaction.date).toLocaleDateString()}
+                    <td className="py-3 px-4 text-right font-mono text-neutral-500">
+                      {new Date(tx.createdAt).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
                     </td>
                   </tr>
                 ))
@@ -764,74 +635,74 @@ export default function AdminSellerTransaction() {
         </div>
 
         {/* Pagination Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-          <div className="text-xs sm:text-sm text-neutral-700">
-            Showing {startIndex + 1} to{" "}
-            {Math.min(endIndex, filteredTransactions.length)} of{" "}
-            {filteredTransactions.length} entries
+        <div className="px-5 py-3.5 border-t border-neutral-200/80 bg-neutral-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-neutral-600 font-medium">
+            Showing {sortedTransactions.length > 0 ? startIndex + 1 : 0} to{" "}
+            {Math.min(endIndex, sortedTransactions.length)} of {sortedTransactions.length} entries
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1 || totalPages === 0}
-              className={`p-2 border border-neutral-300 rounded ${currentPage === 1 || totalPages === 0
-                ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                : "text-neutral-700 hover:bg-neutral-50"
-                }`}
-              aria-label="Previous page">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M15 18L9 12L15 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`px-2.5 py-1.5 border rounded-lg font-bold min-h-[36px] transition-colors ${
+                currentPage === 1
+                  ? "border-neutral-200 text-neutral-300 bg-neutral-50 cursor-not-allowed"
+                  : "border-neutral-300 text-neutral-700 bg-white hover:bg-neutral-100"
+              }`}
+              aria-label="Previous page"
+            >
+              ‹ Prev
             </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .map((page, idx, arr) => {
+                  const prevPage = arr[idx - 1];
+                  const showEllipsis = prevPage && page - prevPage > 1;
+
+                  return (
+                    <div key={page} className="flex items-center gap-1">
+                      {showEllipsis && <span className="px-1 text-neutral-400">...</span>}
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1.5 rounded-lg font-bold min-h-[36px] transition-colors ${
+                          currentPage === page
+                            ? "bg-rose-700 text-white"
+                            : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+
             <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-              }
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages || totalPages === 0}
-              className={`p-2 border border-neutral-300 rounded ${currentPage === totalPages || totalPages === 0
-                ? "text-neutral-400 cursor-not-allowed bg-neutral-50"
-                : "text-neutral-700 hover:bg-neutral-50"
-                }`}
-              aria-label="Next page">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M9 18L15 12L9 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              className={`px-2.5 py-1.5 border rounded-lg font-bold min-h-[36px] transition-colors ${
+                currentPage === totalPages || totalPages === 0
+                  ? "border-neutral-200 text-neutral-300 bg-neutral-50 cursor-not-allowed"
+                  : "border-neutral-300 text-neutral-700 bg-white hover:bg-neutral-100"
+              }`}
+              aria-label="Next page"
+            >
+              Next ›
             </button>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="text-center text-sm text-neutral-500 py-4">
-        Copyright © 2026. Developed By{" "}
-        <a href="#" className="text-rose-700 hover:text-rose-800">
-          Hello Local - 10 Minute App
-        </a>
-      </div>
+      <footer className="text-center text-xs text-neutral-400 py-3">
+        HelloLocal Admin Panel • Quick-Commerce Operations
+      </footer>
     </div>
   );
 }
-
-

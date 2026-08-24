@@ -1,1066 +1,1143 @@
-import { useState, useEffect } from 'react';
-import { getAllSellers, updateSellerStatus, deleteSeller, Seller as SellerType, updateSeller } from '../../../services/api/sellerService';
-import SellerServiceMap from '../components/SellerServiceMap';
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
+import {
+  getAllSellers,
+  updateSellerStatus,
+  deleteSeller,
+  updateSeller,
+  type Seller as SellerType,
+} from "../../../services/api/sellerService";
+import SellerServiceMap from "../components/SellerServiceMap";
+import { useToast } from "../../../context/ToastContext";
 
 interface Seller {
-    _id: string;
-    id?: number; // For backward compatibility with existing code
-    name: string;
-    sellerName: string;
-    storeName: string;
-    phone: string;
-    mobile: string;
-    email: string;
-    logo?: string;
-    balance: number;
-    commission: number;
-    categories: string[];
-    status: 'Approved' | 'Pending' | 'Rejected';
-    needApproval: boolean;
-    // Additional fields from signup
-    category?: string;
-    address?: string;
-    city?: string;
-    serviceableArea?: string;
-    panCard?: string;
-    taxName?: string;
-    taxNumber?: string;
-    searchLocation?: string;
-    latitude?: string;
-    longitude?: string;
-    serviceRadiusKm?: number;
-    accountName?: string;
-    bankName?: string;
-    branch?: string;
-    accountNumber?: string;
-    ifsc?: string;
-    profile?: string;
-    idProof?: string;
-    addressProof?: string;
-    requireProductApproval?: boolean;
-    viewCustomerDetails?: boolean;
+  _id: string;
+  id?: number;
+  name: string;
+  sellerName: string;
+  storeName: string;
+  phone: string;
+  mobile: string;
+  email: string;
+  logo?: string;
+  balance: number;
+  commission: number;
+  categories: string[];
+  status: "Approved" | "Pending" | "Rejected";
+  needApproval: boolean;
+  category?: string;
+  address?: string;
+  city?: string;
+  serviceableArea?: string;
+  panCard?: string;
+  taxName?: string;
+  taxNumber?: string;
+  searchLocation?: string;
+  latitude?: string;
+  longitude?: string;
+  serviceRadiusKm?: number;
+  accountName?: string;
+  bankName?: string;
+  branch?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  profile?: string;
+  idProof?: string;
+  addressProof?: string;
+  requireProductApproval?: boolean;
+  viewCustomerDetails?: boolean;
 }
 
-// Helper function to convert backend seller to frontend format
 const mapSellerToFrontend = (seller: SellerType): Seller => {
-    return {
-        _id: seller._id,
-        id: parseInt(seller._id.slice(-6), 16) || 0, // Generate a numeric ID from MongoDB _id
-        name: seller.sellerName,
-        sellerName: seller.sellerName,
-        storeName: seller.storeName,
-        phone: seller.mobile,
-        mobile: seller.mobile,
-        email: seller.email,
-        logo: seller.logo || '/api/placeholder/40/40',
-        balance: seller.balance || 0,
-        commission: seller.commission || 0,
-        categories: seller.categories || [],
-        status: seller.status,
-        needApproval: seller.status === 'Pending',
-        category: seller.category,
-        address: seller.address,
-        city: seller.city,
-        serviceableArea: seller.serviceableArea,
-        panCard: seller.panCard,
-        taxName: seller.taxName,
-        taxNumber: seller.taxNumber,
-        searchLocation: seller.searchLocation,
-        latitude: seller.latitude,
-        longitude: seller.longitude,
-        serviceRadiusKm: seller.serviceRadiusKm,
-        accountName: seller.accountName,
-        bankName: seller.bankName,
-        branch: seller.branch,
-        accountNumber: seller.accountNumber,
-        ifsc: seller.ifsc,
-        profile: seller.profile,
-        idProof: seller.idProof,
-        addressProof: seller.addressProof,
-        requireProductApproval: seller.requireProductApproval,
-        viewCustomerDetails: seller.viewCustomerDetails,
-    };
+  return {
+    _id: seller._id,
+    id: parseInt(seller._id.slice(-6), 16) || 0,
+    name: seller.sellerName,
+    sellerName: seller.sellerName,
+    storeName: seller.storeName,
+    phone: seller.mobile,
+    mobile: seller.mobile,
+    email: seller.email,
+    logo: seller.logo || "",
+    balance: seller.balance || 0,
+    commission: seller.commission || 0,
+    categories: seller.categories || [],
+    status: seller.status,
+    needApproval: seller.status === "Pending",
+    category: seller.category,
+    address: seller.address,
+    city: seller.city,
+    serviceableArea: seller.serviceableArea,
+    panCard: seller.panCard,
+    taxName: seller.taxName,
+    taxNumber: seller.taxNumber,
+    searchLocation: seller.searchLocation,
+    latitude: seller.latitude,
+    longitude: seller.longitude,
+    serviceRadiusKm: seller.serviceRadiusKm,
+    accountName: seller.accountName,
+    bankName: seller.bankName,
+    branch: seller.branch,
+    accountNumber: seller.accountNumber,
+    ifsc: seller.ifsc,
+    profile: seller.profile,
+    idProof: seller.idProof,
+    addressProof: seller.addressProof,
+    requireProductApproval: seller.requireProductApproval,
+    viewCustomerDetails: seller.viewCustomerDetails,
+  };
 };
 
-// Stable fallback logo to avoid endless reload loops when logo is missing
 const FALLBACK_LOGO =
-    'data:image/svg+xml;utf8,' +
-    encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="8" fill="#E5F3F2"/>
-            <path d="M20 19c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5Zm0 2.5c-3.333 0-10 1.667-10 5v1.5c0 .552.448 1 1 1h18c.552 0 1-.448 1-1V26.5c0-3.333-6.667-5-10-5Z" fill="#0F766E"/>
-        </svg>`
-    );
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <rect width="40" height="40" rx="8" fill="#FFF1F2"/>
+        <path d="M20 19c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5Zm0 2.5c-3.333 0-10 1.667-10 5v1.5c0 .552.448 1 1 1h18c.552 0 1-.448 1-1V26.5c0-3.333-6.667-5-10-5Z" fill="#BE123C"/>
+    </svg>`
+  );
 
 export default function AdminManageSellerList() {
-    const [sellers, setSellers] = useState<Seller[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string>('');
-    const [successMessage, setSuccessMessage] = useState<string>('');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [sortColumn, setSortColumn] = useState<string | null>(null);
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-    const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingSeller, setEditingSeller] = useState<Seller | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isUpdatingRadius, setIsUpdatingRadius] = useState(false);
-    const [newRadius, setNewRadius] = useState<number>(10);
+  const { showToast } = useToast();
 
-    // Fetch sellers from backend
-    useEffect(() => {
-        const fetchSellers = async () => {
-            try {
-                setLoading(true);
-                setError('');
-                const response = await getAllSellers();
-                if (response.success && response.data) {
-                    const mappedSellers = response.data.map(mapSellerToFrontend);
-                    setSellers(mappedSellers);
-                } else {
-                    setError('Failed to fetch sellers');
-                }
-            } catch (err: any) {
-                console.error('Error fetching sellers:', err);
-                // Show a clear message when the admin is not authenticated/authorized
-                if (err?.response?.status === 401 || err?.response?.status === 403) {
-                    setError('Please login as admin to view sellers.');
-                } else {
-                    setError(err.response?.data?.message || 'Failed to fetch sellers. Please try again.');
-                }
-                // Show empty on error - no mock data fallback
-                setSellers([]);
-            } finally {
-                setLoading(false);
-            }
-        };
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("All Status");
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortColumn, setSortColumn] = useState<string | null>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-        fetchSellers();
-    }, []);
+  // Modals
+  const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingSeller, setEditingSeller] = useState<Seller | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUpdatingRadius, setIsUpdatingRadius] = useState(false);
+  const [newRadius, setNewRadius] = useState<number>(10);
 
-    const handleSort = (column: string) => {
-        if (sortColumn === column) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortColumn(column);
-            setSortDirection('asc');
-        }
-    };
+  // Deletion Modal
+  const [deleteTarget, setDeleteTarget] = useState<Seller | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-    const SortIcon = ({ column }: { column: string }) => (
-        <span className="text-neutral-400 text-xs ml-1">
-            {sortColumn === column ? (sortDirection === 'asc' ? '↑' : '↓') : '⇅'}
-        </span>
-    );
+  // Debounce search query (300ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
-    // Filter sellers
-    let filteredSellers = sellers.filter(seller =>
-        seller.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        seller.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        seller.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        seller.phone.includes(searchTerm) ||
-        seller.mobile.includes(searchTerm)
-    );
+  // Fetch sellers
+  const fetchSellers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await getAllSellers();
+      if (response.success && response.data) {
+        const mappedSellers = response.data.map(mapSellerToFrontend);
+        setSellers(mappedSellers);
+      } else {
+        setError("Failed to fetch sellers");
+      }
+    } catch (err: any) {
+      console.error("Error fetching sellers:", err);
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        setError("Please login as admin to view sellers.");
+      } else {
+        const msg = err.response?.data?.message || "Failed to fetch sellers. Please try again.";
+        setError(msg);
+        showToast(msg, "error");
+      }
+      setSellers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
-    // Sort sellers
-    if (sortColumn) {
-        filteredSellers = [...filteredSellers].sort((a, b) => {
-            let aValue: any;
-            let bValue: any;
+  useEffect(() => {
+    fetchSellers();
+  }, [fetchSellers]);
 
-            switch (sortColumn) {
-                case 'id':
-                    aValue = a._id;
-                    bValue = b._id;
-                    break;
-                case 'name':
-                    aValue = a.name;
-                    bValue = b.name;
-                    break;
-                case 'storeName':
-                    aValue = a.storeName;
-                    bValue = b.storeName;
-                    break;
-                case 'balance':
-                    aValue = a.balance;
-                    bValue = b.balance;
-                    break;
-                case 'commission':
-                    aValue = a.commission;
-                    bValue = b.commission;
-                    break;
-                case 'status':
-                    aValue = a.status;
-                    bValue = b.status;
-                    break;
-                default:
-                    return 0;
-            }
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
 
-            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-            return 0;
-        });
+  // Filtered sellers
+  const filteredSellers = useMemo(() => {
+    return sellers.filter((seller) => {
+      const matchesStatus =
+        statusFilter === "All Status" || seller.status === statusFilter;
+      const matchesSearch =
+        debouncedSearch.trim() === "" ||
+        seller.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        seller.storeName.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        seller.email.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        seller.phone.includes(debouncedSearch) ||
+        seller.mobile.includes(debouncedSearch);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [sellers, statusFilter, debouncedSearch]);
+
+  // Sorted sellers
+  const sortedSellers = useMemo(() => {
+    if (!sortColumn) return filteredSellers;
+
+    return [...filteredSellers].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case "id":
+          aValue = a._id;
+          bValue = b._id;
+          break;
+        case "name":
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case "storeName":
+          aValue = a.storeName.toLowerCase();
+          bValue = b.storeName.toLowerCase();
+          break;
+        case "balance":
+          aValue = a.balance;
+          bValue = b.balance;
+          break;
+        case "commission":
+          aValue = a.commission;
+          bValue = b.commission;
+          break;
+        case "status":
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredSellers, sortColumn, sortDirection]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedSellers.length / rowsPerPage));
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const displayedSellers = sortedSellers.slice(startIndex, endIndex);
+
+  // CSV Export
+  const handleExport = () => {
+    if (sortedSellers.length === 0) {
+      showToast("No sellers available to export", "info");
+      return;
     }
 
-    const totalPages = Math.ceil(filteredSellers.length / rowsPerPage);
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage;
-    const displayedSellers = filteredSellers.slice(startIndex, endIndex);
+    const headers = ["Id", "Seller Name", "Store Name", "Phone", "Email", "Balance", "Commission (%)", "Status"];
+    const csvContent = [
+      headers.join(","),
+      ...sortedSellers.map((seller) =>
+        [
+          `"${seller._id}"`,
+          `"${(seller.name || "").replace(/"/g, '""')}"`,
+          `"${(seller.storeName || "").replace(/"/g, '""')}"`,
+          `"${seller.phone || ""}"`,
+          `"${seller.email || ""}"`,
+          seller.balance,
+          seller.commission,
+          seller.status,
+        ].join(",")
+      ),
+    ].join("\n");
 
-    const handleExport = () => {
-        const headers = ['Id', 'Name', 'Store Name', 'Contact', 'Balance', 'Commission', 'Status'];
-        const csvContent = [
-            headers.join(','),
-            ...filteredSellers.map(seller => [
-                seller.id,
-                `"${seller.name}"`,
-                `"${seller.storeName}"`,
-                `"${seller.phone}, ${seller.email}"`,
-                seller.balance,
-                `${seller.commission}%`,
-                seller.status
-            ].join(','))
-        ].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `sellers_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `hellolocal_sellers_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Seller directory exported successfully", "success");
+  };
 
-    const handleEdit = (id: number | string) => {
-        const sellerId = typeof id === 'number' ? sellers.find(s => s.id === id)?._id : id;
-        const seller = sellers.find(s => s._id === sellerId);
-        if (seller) {
-            setEditingSeller(seller);
-            setNewRadius(seller.serviceRadiusKm || 10);
-            setIsEditModalOpen(true);
-        }
-    };
+  const handleEdit = (sellerId: string) => {
+    const seller = sellers.find((s) => s._id === sellerId);
+    if (seller) {
+      setEditingSeller(seller);
+      setNewRadius(seller.serviceRadiusKm || 10);
+      setIsEditModalOpen(true);
+    }
+  };
 
-    const handleUpdateRadius = async () => {
-        if (!editingSeller) return;
+  const handleUpdateRadius = async () => {
+    if (!editingSeller) return;
 
-        try {
-            setIsUpdatingRadius(true);
-            const response = await updateSeller(editingSeller._id, { serviceRadiusKm: newRadius });
-            if (response.success) {
-                setEditingSeller({ ...editingSeller, serviceRadiusKm: newRadius });
-                // Also update the seller in the main list
-                setSellers(sellers.map(s => s._id === editingSeller._id ? { ...s, serviceRadiusKm: newRadius } : s));
-                setSuccessMessage('Service radius updated successfully');
-                setTimeout(() => setSuccessMessage(''), 3000);
-            }
-        } catch (error) {
-            console.error('Error updating radius:', error);
-            setError('Failed to update service radius');
-            setTimeout(() => setError(''), 3000);
-        } finally {
-            setIsUpdatingRadius(false);
-        }
-    };
+    try {
+      setIsUpdatingRadius(true);
+      const response = await updateSeller(editingSeller._id, { serviceRadiusKm: newRadius });
+      if (response.success) {
+        setEditingSeller({ ...editingSeller, serviceRadiusKm: newRadius });
+        setSellers((prev) =>
+          prev.map((s) => (s._id === editingSeller._id ? { ...s, serviceRadiusKm: newRadius } : s))
+        );
+        showToast("Service radius updated successfully", "success");
+      }
+    } catch (error: any) {
+      console.error("Error updating radius:", error);
+      showToast(error.response?.data?.message || "Failed to update service radius", "error");
+    } finally {
+      setIsUpdatingRadius(false);
+    }
+  };
 
-    const handleApprove = async (id: number | string) => {
-        const sellerId = typeof id === 'number' ? sellers.find(s => s.id === id)?._id : id;
-        if (!sellerId) return;
-
-        try {
-            const response = await updateSellerStatus(sellerId, 'Approved');
-            if (response.success) {
-                // Update local state
-                setSellers(prevSellers =>
-                    prevSellers.map(seller =>
-                        seller._id === sellerId
-                            ? { ...seller, status: 'Approved', needApproval: false }
-                            : seller
-                    )
-                );
-                setSuccessMessage('Seller has been approved.');
-                setIsEditModalOpen(false);
-                setEditingSeller(null);
-                setTimeout(() => setSuccessMessage(''), 3000);
-            } else {
-                setError('Failed to approve seller. Please try again.');
-            }
-        } catch (err: any) {
-            console.error('Error approving seller:', err);
-            setError(err.response?.data?.message || 'Failed to approve seller. Please try again.');
-        }
-    };
-
-    const handleReject = async (id: number | string) => {
-        const sellerId = typeof id === 'number' ? sellers.find(s => s.id === id)?._id : id;
-        if (!sellerId) return;
-
-        try {
-            const response = await updateSellerStatus(sellerId, 'Rejected');
-            if (response.success) {
-                // Update local state
-                setSellers(prevSellers =>
-                    prevSellers.map(seller =>
-                        seller._id === sellerId
-                            ? { ...seller, status: 'Rejected', needApproval: false }
-                            : seller
-                    )
-                );
-                setSuccessMessage('Seller has been rejected.');
-                setIsEditModalOpen(false);
-                setEditingSeller(null);
-                setTimeout(() => setSuccessMessage(''), 3000);
-            } else {
-                setError('Failed to reject seller. Please try again.');
-            }
-        } catch (err: any) {
-            console.error('Error rejecting seller:', err);
-            setError(err.response?.data?.message || 'Failed to reject seller. Please try again.');
-        }
-    };
-
-    const handleCloseEditModal = () => {
+  const handleApprove = async (sellerId: string) => {
+    try {
+      const response = await updateSellerStatus(sellerId, "Approved");
+      if (response.success) {
+        setSellers((prev) =>
+          prev.map((s) =>
+            s._id === sellerId ? { ...s, status: "Approved", needApproval: false } : s
+          )
+        );
+        showToast("Seller account approved successfully!", "success");
         setIsEditModalOpen(false);
         setEditingSeller(null);
-    };
+      } else {
+        showToast("Failed to approve seller", "error");
+      }
+    } catch (err: any) {
+      console.error("Error approving seller:", err);
+      showToast(err.response?.data?.message || "Failed to approve seller", "error");
+    }
+  };
 
-    const handleDelete = async (id: number | string) => {
-        const sellerId = typeof id === 'number' ? sellers.find(s => s.id === id)?._id : id;
-        if (!sellerId) return;
+  const handleReject = async (sellerId: string) => {
+    try {
+      const response = await updateSellerStatus(sellerId, "Rejected");
+      if (response.success) {
+        setSellers((prev) =>
+          prev.map((s) =>
+            s._id === sellerId ? { ...s, status: "Rejected", needApproval: false } : s
+          )
+        );
+        showToast("Seller application rejected", "info");
+        setIsEditModalOpen(false);
+        setEditingSeller(null);
+      } else {
+        showToast("Failed to reject seller", "error");
+      }
+    } catch (err: any) {
+      console.error("Error rejecting seller:", err);
+      showToast(err.response?.data?.message || "Failed to reject seller", "error");
+    }
+  };
 
-        if (window.confirm('Are you sure you want to delete this seller?')) {
-            try {
-                const response = await deleteSeller(sellerId);
-                if (response.success) {
-                    // Remove from local state
-                    setSellers(prevSellers => prevSellers.filter(seller => seller._id !== sellerId));
-                    setSuccessMessage('Seller deleted successfully.');
-                    setTimeout(() => setSuccessMessage(''), 3000);
-                } else {
-                    setError('Failed to delete seller. Please try again.');
-                }
-            } catch (err: any) {
-                console.error('Error deleting seller:', err);
-                setError(err.response?.data?.message || 'Failed to delete seller. Please try again.');
-            }
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingSeller(null);
+  };
+
+  // Safe delete handler
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteSeller(deleteTarget._id);
+      if (response.success) {
+        showToast("Seller deleted successfully", "success");
+        setDeleteTarget(null);
+        if (editingSeller?._id === deleteTarget._id) {
+          handleCloseEditModal();
         }
-    };
+        fetchSellers();
+      } else {
+        showToast("Failed to delete seller", "error");
+      }
+    } catch (err: any) {
+      console.error("Error deleting seller:", err);
+      const msg = err.response?.data?.message || "Failed to delete seller";
+      showToast(msg, "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
-    const handleViewCategories = (seller: Seller) => {
-        setSelectedSeller(seller);
-        setIsModalOpen(true);
-    };
+  const handleViewCategories = (seller: Seller) => {
+    setSelectedSeller(seller);
+    setIsCategoryModalOpen(true);
+  };
 
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedSeller(null);
-    };
+  const handleCloseCategoryModal = () => {
+    setIsCategoryModalOpen(false);
+    setSelectedSeller(null);
+  };
 
-    return (
-        <div className="flex flex-col h-full bg-gray-50">
-            {/* Page Content */}
-            <div className="flex-1 p-6">
-                {/* Main Panel */}
-                <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
-                    {/* Header */}
-                    <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg">
-                        <h2 className="text-lg font-semibold">View Seller List</h2>
-                    </div>
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header & Breadcrumb */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">
+            Manage Sellers & Approvals
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            Review vendor KYC applications, manage serviceability radii, and monitor store metrics
+          </p>
+        </div>
 
-                    {/* Error Message */}
-                    {error && (
-                        <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-center justify-between">
-                            <p className="text-sm">{error}</p>
-                            <button
-                                onClick={() => setError('')}
-                                className="text-red-700 hover:text-red-900 ml-4 text-lg font-bold"
-                                type="button"
-                            >
-                                ×
-                            </button>
-                        </div>
-                    )}
-                    {/* Success Message */}
-                    {successMessage && (
-                        <div className="p-4 bg-rose-50 border-l-4 border-rose-600 text-rose-800 flex items-center justify-between">
-                            <p className="text-sm">{successMessage}</p>
-                            <button
-                                onClick={() => setSuccessMessage('')}
-                                className="text-rose-800 hover:text-rose-900 ml-4 text-lg font-bold"
-                                type="button"
-                            >
-                                ×
-                            </button>
-                        </div>
-                    )}
+        <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-neutral-500">
+          <Link
+            to="/admin/dashboard"
+            className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+          >
+            Dashboard
+          </Link>
+          <span className="mx-2 text-neutral-300">/</span>
+          <span className="text-neutral-700 font-medium">Sellers</span>
+        </nav>
+      </div>
 
-                    {/* Loading State */}
-                    {loading && (
-                        <div className="p-8 text-center">
-                            <p className="text-neutral-600">Loading sellers...</p>
-                        </div>
-                    )}
+      {/* Main Content Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+        {/* Banner with Action Buttons */}
+        <div className="bg-rose-700 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm sm:text-base font-bold tracking-tight">
+            Active Sellers ({sortedSellers.length})
+          </h2>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="bg-white/15 hover:bg-white/25 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[36px]"
+            title="Export CSV"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Export CSV</span>
+          </button>
+        </div>
 
-                    {/* Controls */}
-                    <div className="p-4 border-b border-neutral-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-neutral-600">Show</span>
-                            <select
-                                value={rowsPerPage}
-                                onChange={(e) => {
-                                    setRowsPerPage(Number(e.target.value));
-                                    setCurrentPage(1);
-                                }}
-                                className="bg-white border border-neutral-300 rounded py-1.5 px-3 text-sm focus:ring-1 focus:ring-rose-600 focus:outline-none cursor-pointer"
-                            >
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                            </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleExport}
-                                className="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1 transition-colors"
-                            >
-                                Export
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </button>
-                            <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">Search:</span>
-                                <input
-                                    type="text"
-                                    className="pl-14 pr-3 py-1.5 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-rose-600 w-48"
-                                    value={searchTerm}
-                                    onChange={(e) => {
-                                        setSearchTerm(e.target.value);
-                                        setCurrentPage(1);
-                                    }}
-                                    placeholder=""
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Table */}
-                    {!loading && (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-neutral-50 text-xs font-bold text-neutral-800 border-b border-neutral-200">
-                                        <th
-                                            className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('id')}
-                                        >
-                                            <div className="flex items-center">
-                                                Id <SortIcon column="id" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('name')}
-                                        >
-                                            <div className="flex items-center">
-                                                Name <SortIcon column="name" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('storeName')}
-                                        >
-                                            <div className="flex items-center">
-                                                Store Name <SortIcon column="storeName" />
-                                            </div>
-                                        </th>
-                                        <th className="p-4">
-                                            Contact
-                                        </th>
-                                        <th className="p-4">
-                                            Logo
-                                        </th>
-                                        <th
-                                            className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('balance')}
-                                        >
-                                            <div className="flex items-center">
-                                                Balance <SortIcon column="balance" />
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('commission')}
-                                        >
-                                            <div className="flex items-center">
-                                                Commission <SortIcon column="commission" />
-                                            </div>
-                                        </th>
-                                        <th className="p-4">
-                                            Category
-                                        </th>
-                                        <th
-                                            className="p-4 cursor-pointer hover:bg-neutral-100 transition-colors"
-                                            onClick={() => handleSort('status')}
-                                        >
-                                            <div className="flex items-center">
-                                                Status <SortIcon column="status" />
-                                            </div>
-                                        </th>
-                                        <th className="p-4">
-                                            Need Approval?
-                                        </th>
-                                        <th className="p-4">
-                                            Action
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {displayedSellers.map((seller) => (
-                                        <tr key={seller._id} className="hover:bg-neutral-50 transition-colors text-sm text-neutral-700 border-b border-neutral-200">
-                                            <td className="p-4 align-middle">{seller.id || seller._id.slice(-6)}</td>
-                                            <td className="p-4 align-middle">{seller.name}</td>
-                                            <td className="p-4 align-middle">{seller.storeName}</td>
-                                            <td className="p-4 align-middle">
-                                                <div className="text-xs">
-                                                    <div>{seller.phone}</div>
-                                                    <div className="text-neutral-500">{seller.email}</div>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 align-middle">
-                                                <img
-                                                    src={(seller.logo && seller.logo.trim() !== '') ? seller.logo : FALLBACK_LOGO}
-                                                    alt={seller.storeName}
-                                                    className="w-10 h-10 object-cover rounded"
-                                                    loading="lazy"
-                                                    onError={(e) => {
-                                                        const img = e.currentTarget;
-                                                        if (img.dataset.fallbackApplied === 'true') return;
-                                                        img.dataset.fallbackApplied = 'true';
-                                                        img.src = FALLBACK_LOGO;
-                                                    }}
-                                                />
-                                            </td>
-                                            <td className="p-4 align-middle">{seller.balance.toFixed(2)}</td>
-                                            <td className="p-4 align-middle">{seller.commission.toFixed(2)}%</td>
-                                            <td className="p-4 align-middle">
-                                                <button
-                                                    onClick={() => handleViewCategories(seller)}
-                                                    className="px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-xs font-medium rounded transition-colors flex items-center gap-1"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                                        <circle cx="12" cy="12" r="3"></circle>
-                                                    </svg>
-                                                    View ({seller.categories.length})
-                                                </button>
-                                            </td>
-                                            <td className="p-4 align-middle">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${seller.status === 'Approved'
-                                                    ? 'bg-rose-100 text-rose-900'
-                                                    : seller.status === 'Pending'
-                                                        ? 'bg-yellow-100 text-yellow-800'
-                                                        : 'bg-red-100 text-red-800'
-                                                    }`}>
-                                                    {seller.status}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 align-middle">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${seller.needApproval
-                                                    ? 'bg-pink-100 text-pink-800'
-                                                    : 'bg-pink-100 text-pink-800'
-                                                    }`}>
-                                                    {seller.needApproval ? 'Yes' : 'No'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 align-middle">
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => handleEdit(seller._id)}
-                                                        className="p-1.5 text-rose-700 hover:bg-rose-50 rounded transition-colors"
-                                                        title="Edit"
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                        </svg>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(seller._id)}
-                                                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                        title="Delete"
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                            <polyline points="3 6 5 6 21 6"></polyline>
-                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {displayedSellers.length === 0 && (
-                                        <tr>
-                                            <td colSpan={11} className="p-8 text-center text-neutral-400">
-                                                No sellers found.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {/* Pagination Footer */}
-                    {!loading && (
-                        <div className="px-4 sm:px-6 py-3 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-                            <div className="text-xs sm:text-sm text-neutral-700">
-                                Showing {startIndex + 1} to {Math.min(endIndex, filteredSellers.length)} of {filteredSellers.length} entries
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                    disabled={currentPage === 1}
-                                    className={`p-2 border border-rose-700 rounded ${currentPage === 1
-                                        ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                                        : 'text-rose-700 hover:bg-rose-50'
-                                        }`}
-                                    aria-label="Previous page"
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M15 18L9 12L15 6"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                </button>
-                                <button
-                                    className="px-3 py-1.5 border border-rose-700 bg-rose-700 text-white rounded font-medium text-sm"
-                                >
-                                    {currentPage}
-                                </button>
-                                <button
-                                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className={`p-2 border border-rose-700 rounded ${currentPage === totalPages
-                                        ? 'text-neutral-400 cursor-not-allowed bg-neutral-50'
-                                        : 'text-rose-700 hover:bg-rose-50'
-                                        }`}
-                                    aria-label="Next page"
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M9 18L15 12L9 6"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
+        {/* Controls & Filter Bar */}
+        <div className="p-4 border-b border-neutral-200/70 bg-neutral-50/50 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-neutral-600">Show</span>
+              <select
+                value={rowsPerPage}
+                onChange={(e) => {
+                  setRowsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2.5 py-1.5 border border-neutral-300 rounded-lg text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-xs font-medium text-neutral-600">entries</span>
             </div>
 
-            {/* Footer */}
-            <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
-                Copyright © 2026. Developed By{' '}
-                <a href="#" className="text-blue-600 hover:underline">Hello Local - 10 Minute App</a>
-            </footer>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-neutral-600">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-1.5 border border-neutral-300 rounded-lg text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[38px]"
+              >
+                <option value="All Status">All Status</option>
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending (Needs Approval)</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+          </div>
 
-            {/* Categories Modal */}
-            {isModalOpen && selectedSeller && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={handleCloseModal}>
-                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                        {/* Modal Header */}
-                        <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold">Categories</h3>
-                                <p className="text-sm text-rose-100 mt-1">{selectedSeller.storeName} - {selectedSeller.name}</p>
-                            </div>
-                            <button
-                                onClick={handleCloseModal}
-                                className="text-white hover:text-rose-200 transition-colors p-1"
-                                aria-label="Close modal"
-                            >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-6 overflow-y-auto flex-1">
-                            {selectedSeller.categories.length > 0 ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {selectedSeller.categories.map((category, index) => (
-                                        <div
-                                            key={index}
-                                            className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors"
-                                        >
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-rose-700 flex-shrink-0">
-                                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                                            </svg>
-                                            <span className="text-sm font-medium text-rose-900">{category}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-8 text-neutral-400">
-                                    <p>No categories assigned to this seller.</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="px-6 py-4 border-t border-neutral-200 flex justify-end">
-                            <button
-                                onClick={handleCloseModal}
-                                className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded text-sm font-medium transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search store, seller, phone..."
+              className="pl-8 pr-7 py-1.5 text-xs font-medium border border-neutral-300 rounded-lg bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none w-full sm:w-64 min-h-[38px]"
+            />
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-xs font-bold"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
             )}
-
-            {/* Edit Seller Modal */}
-            {isEditModalOpen && editingSeller && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={handleCloseEditModal}>
-                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                        {/* Modal Header */}
-                        <div className="bg-rose-700 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold">Edit Seller - {editingSeller.name}</h3>
-                                <p className="text-sm text-rose-100 mt-1">View and manage seller details</p>
-                            </div>
-                            <button
-                                onClick={handleCloseEditModal}
-                                className="text-white hover:text-rose-200 transition-colors p-1"
-                                aria-label="Close modal"
-                            >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-6 overflow-y-auto flex-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                            <style>{`
-                                .edit-seller-modal::-webkit-scrollbar {
-                                    display: none;
-                                }
-                            `}</style>
-
-                            <div className="space-y-6">
-                                {/* Status Badge */}
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${editingSeller.status === 'Approved'
-                                            ? 'bg-rose-100 text-rose-900'
-                                            : editingSeller.status === 'Pending'
-                                                ? 'bg-yellow-100 text-yellow-800'
-                                                : 'bg-red-100 text-red-800'
-                                            }`}>
-                                            Status: {editingSeller.status}
-                                        </span>
-                                    </div>
-                                    {editingSeller.status === 'Pending' && (
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleApprove(editingSeller._id)}
-                                                className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
-                                            >
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                                </svg>
-                                                Approve
-                                            </button>
-                                            <button
-                                                onClick={() => handleReject(editingSeller._id)}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
-                                            >
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                </svg>
-                                                Reject
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Basic Information */}
-                                <div className="bg-neutral-50 rounded-lg p-4">
-                                    <h4 className="text-sm font-semibold text-neutral-700 mb-3">Basic Information</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Seller Name</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.name}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Store Name</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.storeName}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Email</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.email}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Phone</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.phone}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Category</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.category || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Commission</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.commission.toFixed(2)}%</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Address Information */}
-                                <div className="bg-neutral-50 rounded-lg p-4">
-                                    <h4 className="text-sm font-semibold text-neutral-700 mb-3">Address Information</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="md:col-span-2">
-                                            <label className="text-xs text-neutral-500">Address</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.address || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">City</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.city || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Serviceable Area</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.serviceableArea || 'N/A'}</p>
-                                        </div>
-                                        {editingSeller.searchLocation && (
-                                            <div className="md:col-span-2">
-                                                <label className="text-xs text-neutral-500">Location</label>
-                                                <p className="text-sm font-medium text-neutral-900">{editingSeller.searchLocation}</p>
-                                            </div>
-                                        )}
-                                        {(editingSeller.latitude || editingSeller.longitude) && (
-                                            <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Latitude</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.latitude || 'N/A'}</p>
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Longitude</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.longitude || 'N/A'}</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Service Area Map */}
-                                <div className="bg-neutral-50 rounded-lg p-4">
-                                    <h4 className="text-sm font-semibold text-neutral-700 mb-3">Service Area Visualization</h4>
-                                    {editingSeller.latitude && editingSeller.longitude ? (
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                                                <div>
-                                                    <label className="text-xs text-neutral-500 mb-1 block">Service Radius (km)</label>
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="number"
-                                                            min="0.1"
-                                                            max="100"
-                                                            step="0.1"
-                                                            value={newRadius}
-                                                            onChange={(e) => setNewRadius(parseFloat(e.target.value))}
-                                                            className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:ring-rose-600 focus:border-rose-600"
-                                                        />
-                                                        <button
-                                                            onClick={handleUpdateRadius}
-                                                            disabled={isUpdatingRadius || newRadius === editingSeller.serviceRadiusKm}
-                                                            className="px-4 py-2 bg-rose-700 text-white rounded text-sm font-medium hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                                                        >
-                                                            {isUpdatingRadius ? 'Updating...' : 'Update Radius'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="h-[300px] w-full">
-                                                <SellerServiceMap
-                                                    latitude={parseFloat(editingSeller.latitude)}
-                                                    longitude={parseFloat(editingSeller.longitude)}
-                                                    radiusKm={newRadius}
-                                                    storeName={editingSeller.storeName}
-                                                />
-                                            </div>
-                                            <p className="text-xs text-neutral-500 italic">
-                                                * Adjust the radius above to see the service area change dynamically.
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="p-8 text-center border-2 border-dashed border-neutral-200 rounded-lg">
-                                            <p className="text-sm text-neutral-500">No coordinates available for this seller.</p>
-                                            <p className="text-xs text-neutral-400 mt-1">Please update the seller's latitude and longitude to see the service map.</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Tax Information */}
-                                {(editingSeller.panCard || editingSeller.taxName || editingSeller.taxNumber) && (
-                                    <div className="bg-neutral-50 rounded-lg p-4">
-                                        <h4 className="text-sm font-semibold text-neutral-700 mb-3">Tax Information</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {editingSeller.panCard && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">PAN Card</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.panCard}</p>
-                                                </div>
-                                            )}
-                                            {editingSeller.taxName && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Tax Name</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.taxName}</p>
-                                                </div>
-                                            )}
-                                            {editingSeller.taxNumber && (
-                                                <div className="md:col-span-2">
-                                                    <label className="text-xs text-neutral-500">Tax Number</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.taxNumber}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Bank Information */}
-                                {(editingSeller.accountName || editingSeller.bankName || editingSeller.accountNumber) && (
-                                    <div className="bg-neutral-50 rounded-lg p-4">
-                                        <h4 className="text-sm font-semibold text-neutral-700 mb-3">Bank Information</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {editingSeller.accountName && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Account Name</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.accountName}</p>
-                                                </div>
-                                            )}
-                                            {editingSeller.bankName && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Bank Name</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.bankName}</p>
-                                                </div>
-                                            )}
-                                            {editingSeller.branch && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Branch</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.branch}</p>
-                                                </div>
-                                            )}
-                                            {editingSeller.accountNumber && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">Account Number</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.accountNumber}</p>
-                                                </div>
-                                            )}
-                                            {editingSeller.ifsc && (
-                                                <div>
-                                                    <label className="text-xs text-neutral-500">IFSC Code</label>
-                                                    <p className="text-sm font-medium text-neutral-900">{editingSeller.ifsc}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Settings */}
-                                <div className="bg-neutral-50 rounded-lg p-4">
-                                    <h4 className="text-sm font-semibold text-neutral-700 mb-3">Settings</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Require Product Approval</label>
-                                            <p className="text-sm font-medium text-neutral-900">
-                                                {editingSeller.requireProductApproval ? 'Yes' : 'No'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">View Customer Details</label>
-                                            <p className="text-sm font-medium text-neutral-900">
-                                                {editingSeller.viewCustomerDetails ? 'Yes' : 'No'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Balance</label>
-                                            <p className="text-sm font-medium text-neutral-900">₹{editingSeller.balance.toFixed(2)}</p>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-neutral-500">Categories Count</label>
-                                            <p className="text-sm font-medium text-neutral-900">{editingSeller.categories.length} categories</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Categories */}
-                                {editingSeller.categories.length > 0 && (
-                                    <div className="bg-neutral-50 rounded-lg p-4">
-                                        <h4 className="text-sm font-semibold text-neutral-700 mb-3">Categories</h4>
-                                        <div className="flex flex-wrap gap-2">
-                                            {editingSeller.categories.map((category, index) => (
-                                                <span
-                                                    key={index}
-                                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-900"
-                                                >
-                                                    {category}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-2">
-                            <button
-                                onClick={handleCloseEditModal}
-                                className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-700 rounded text-sm font-medium transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+          </div>
         </div>
-    );
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[850px]">
+            <thead>
+              <tr className="bg-neutral-100/70 border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wider text-neutral-700 select-none">
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors w-20"
+                  onClick={() => handleSort("id")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>ID</span>
+                    <span className="text-neutral-400">{sortColumn === "id" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors"
+                  onClick={() => handleSort("storeName")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Store Name</span>
+                    <span className="text-neutral-400">{sortColumn === "storeName" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-neutral-200/60 transition-colors"
+                  onClick={() => handleSort("name")}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Seller Contact</span>
+                    <span className="text-neutral-400">{sortColumn === "name" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th className="py-3 px-3 w-16 text-center">Logo</th>
+                <th
+                  className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-24 text-right"
+                  onClick={() => handleSort("balance")}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Balance</span>
+                    <span className="text-neutral-400">{sortColumn === "balance" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-24 text-center"
+                  onClick={() => handleSort("commission")}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Comm (%)</span>
+                    <span className="text-neutral-400">{sortColumn === "commission" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th className="py-3 px-3 w-28 text-center">Categories</th>
+                <th
+                  className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-28 text-center"
+                  onClick={() => handleSort("status")}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Status</span>
+                    <span className="text-neutral-400">{sortColumn === "status" ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}</span>
+                  </div>
+                </th>
+                <th className="py-3 px-4 text-right w-24">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100 text-xs">
+              {loading ? (
+                [1, 2, 3, 4].map((idx) => (
+                  <tr key={idx} className="animate-pulse">
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-10" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-32" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-36" /></td>
+                    <td className="py-3.5 px-3"><div className="h-9 w-9 bg-neutral-200 rounded mx-auto" /></td>
+                    <td className="py-3.5 px-3"><div className="h-4 bg-neutral-200 rounded w-16 ml-auto" /></td>
+                    <td className="py-3.5 px-3"><div className="h-4 bg-neutral-200 rounded w-10 mx-auto" /></td>
+                    <td className="py-3.5 px-3"><div className="h-6 bg-neutral-200 rounded w-18 mx-auto" /></td>
+                    <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-20 mx-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-8 bg-neutral-200 rounded w-16 ml-auto" /></td>
+                  </tr>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={9} className="py-10 px-4 text-center">
+                    <p className="text-sm font-bold text-red-600 mb-2">{error}</p>
+                    <button
+                      type="button"
+                      onClick={fetchSellers}
+                      className="px-3.5 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-xs font-bold"
+                    >
+                      Retry Loading
+                    </button>
+                  </td>
+                </tr>
+              ) : displayedSellers.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-12 px-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-2 text-neutral-400">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-bold text-neutral-800">No sellers found</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {searchTerm
+                        ? `No sellers matching "${searchTerm}"`
+                        : "No seller accounts currently registered"}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                displayedSellers.map((seller) => (
+                  <tr key={seller._id} className="hover:bg-neutral-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-bold text-neutral-500">
+                      #{seller._id.slice(-5).toUpperCase()}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-neutral-900">
+                      {seller.storeName}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-neutral-800">{seller.name}</div>
+                      <div className="text-[11px] text-neutral-500 font-mono">
+                        {seller.phone || seller.mobile} • {seller.email}
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <img
+                        src={seller.logo && seller.logo.trim() !== "" ? seller.logo : FALLBACK_LOGO}
+                        alt={seller.storeName}
+                        className="w-9 h-9 object-cover rounded-lg border border-neutral-200 mx-auto"
+                        loading="lazy"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (img.dataset.fallbackApplied === "true") return;
+                          img.dataset.fallbackApplied = "true";
+                          img.src = FALLBACK_LOGO;
+                        }}
+                      />
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-bold text-neutral-800">
+                      ₹{seller.balance.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-semibold text-neutral-700">
+                      {seller.commission.toFixed(1)}%
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleViewCategories(seller)}
+                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold rounded-lg transition-colors touch-target-min"
+                      >
+                        View ({seller.categories.length})
+                      </button>
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          seller.status === "Approved"
+                            ? "bg-rose-50 text-rose-700 border border-rose-100"
+                            : seller.status === "Pending"
+                            ? "bg-amber-50 text-amber-800 border border-amber-200"
+                            : "bg-neutral-100 text-neutral-600 border border-neutral-200"
+                        }`}
+                      >
+                        {seller.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(seller._id)}
+                          className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors touch-target-min"
+                          title="View & Edit Seller KYC"
+                          aria-label={`View KYC for ${seller.storeName}`}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(seller)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors touch-target-min"
+                          title="Delete seller"
+                          aria-label={`Delete ${seller.storeName}`}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="px-5 py-3.5 border-t border-neutral-200/80 bg-neutral-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-neutral-600 font-medium">
+            Showing {sortedSellers.length > 0 ? startIndex + 1 : 0} to{" "}
+            {Math.min(endIndex, sortedSellers.length)} of {sortedSellers.length} entries
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`px-2.5 py-1.5 border rounded-lg font-bold min-h-[36px] transition-colors ${
+                currentPage === 1
+                  ? "border-neutral-200 text-neutral-300 bg-neutral-50 cursor-not-allowed"
+                  : "border-neutral-300 text-neutral-700 bg-white hover:bg-neutral-100"
+              }`}
+              aria-label="Previous page"
+            >
+              ‹ Prev
+            </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .map((page, idx, arr) => {
+                  const prevPage = arr[idx - 1];
+                  const showEllipsis = prevPage && page - prevPage > 1;
+
+                  return (
+                    <div key={page} className="flex items-center gap-1">
+                      {showEllipsis && <span className="px-1 text-neutral-400">...</span>}
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1.5 rounded-lg font-bold min-h-[36px] transition-colors ${
+                          currentPage === page
+                            ? "bg-rose-700 text-white"
+                            : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className={`px-2.5 py-1.5 border rounded-lg font-bold min-h-[36px] transition-colors ${
+                currentPage === totalPages || totalPages === 0
+                  ? "border-neutral-200 text-neutral-300 bg-neutral-50 cursor-not-allowed"
+                  : "border-neutral-300 text-neutral-700 bg-white hover:bg-neutral-100"
+              }`}
+              aria-label="Next page"
+            >
+              Next ›
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* View Categories Modal */}
+      {isCategoryModalOpen && selectedSeller && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+          onClick={handleCloseCategoryModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-white rounded-2xl shadow-xl border border-neutral-200 max-w-lg w-full max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-rose-700 text-white px-5 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold">Authorized Categories</h3>
+                <p className="text-xs text-rose-100 mt-0.5">
+                  {selectedSeller.storeName} ({selectedSeller.name})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseCategoryModal}
+                className="text-white hover:text-rose-200 p-1 text-lg font-bold"
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1">
+              {selectedSeller.categories.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {selectedSeller.categories.map((category, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-50/70 border border-rose-100 rounded-xl"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-rose-700 flex-shrink-0">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span className="text-xs font-semibold text-rose-950">{category}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-neutral-400 text-xs font-medium">
+                  No specific categories assigned to this seller.
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-neutral-200 bg-neutral-50 flex justify-end">
+              <button
+                type="button"
+                onClick={handleCloseCategoryModal}
+                className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold transition-colors min-h-[38px]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Seller / KYC Inspection Modal */}
+      {isEditModalOpen && editingSeller && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+          onClick={handleCloseEditModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-white rounded-2xl shadow-xl border border-neutral-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-rose-700 text-white px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold">
+                  Seller KYC & Store Settings — {editingSeller.storeName}
+                </h3>
+                <p className="text-xs text-rose-100 mt-0.5">
+                  Review applicant credentials and configure serviceability geofence
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseEditModal}
+                className="text-white hover:text-rose-200 p-1 text-xl font-bold"
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              {/* Approval Bar */}
+              <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-neutral-600 uppercase tracking-wider">Account Status:</span>
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                      editingSeller.status === "Approved"
+                        ? "bg-rose-100 text-rose-800"
+                        : editingSeller.status === "Pending"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {editingSeller.status}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {editingSeller.status !== "Approved" && (
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(editingSeller._id)}
+                      className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold shadow-sm transition-colors min-h-[38px] flex items-center gap-1.5"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span>Approve Seller</span>
+                    </button>
+                  )}
+                  {editingSeller.status !== "Rejected" && (
+                    <button
+                      type="button"
+                      onClick={() => handleReject(editingSeller._id)}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors min-h-[38px] flex items-center gap-1.5"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      <span>Reject Seller</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Basic Info */}
+              <div className="bg-neutral-50/70 border border-neutral-200/80 rounded-xl p-4">
+                <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider mb-3">
+                  Basic Business Credentials
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs">
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Legal Contact</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Store Trade Name</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.storeName}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Email Address</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Mobile Phone</label>
+                    <p className="font-bold text-neutral-900 font-mono mt-0.5">{editingSeller.phone || editingSeller.mobile}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Primary Category</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.category || "General"}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Platform Commission</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.commission.toFixed(2)}%</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Address Information */}
+              <div className="bg-neutral-50/70 border border-neutral-200/80 rounded-xl p-4">
+                <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider mb-3">
+                  Store Physical Location
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] text-neutral-500 font-semibold">Full Address</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.address || "N/A"}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">City</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.city || "N/A"}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">Serviceable Area</label>
+                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.serviceableArea || "N/A"}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-semibold">GPS Coordinates</label>
+                    <p className="font-bold text-neutral-900 font-mono mt-0.5">
+                      {editingSeller.latitude && editingSeller.longitude
+                        ? `${editingSeller.latitude}, ${editingSeller.longitude}`
+                        : "Not specified"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service Area Map & Geofence */}
+              <div className="bg-neutral-50/70 border border-neutral-200/80 rounded-xl p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                  <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider">
+                    Service Area Geofence Radar
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-neutral-700">Radius (km):</label>
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="100"
+                      step="0.5"
+                      value={newRadius}
+                      onChange={(e) => setNewRadius(parseFloat(e.target.value))}
+                      className="w-20 px-2.5 py-1 border border-neutral-300 rounded-lg text-xs font-bold bg-white text-center"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUpdateRadius}
+                      disabled={isUpdatingRadius || newRadius === editingSeller.serviceRadiusKm}
+                      className="px-3 py-1 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors min-h-[32px]"
+                    >
+                      {isUpdatingRadius ? "Updating..." : "Save Radius"}
+                    </button>
+                  </div>
+                </div>
+
+                {editingSeller.latitude && editingSeller.longitude ? (
+                  <div className="h-[280px] w-full rounded-xl overflow-hidden border border-neutral-200">
+                    <SellerServiceMap
+                      latitude={parseFloat(editingSeller.latitude)}
+                      longitude={parseFloat(editingSeller.longitude)}
+                      radiusKm={newRadius}
+                      storeName={editingSeller.storeName}
+                    />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center border-2 border-dashed border-neutral-200 rounded-xl">
+                    <p className="text-xs font-semibold text-neutral-600">No GPS coordinates recorded for this store.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Banking & Taxes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-neutral-50/70 border border-neutral-200/80 rounded-xl p-4">
+                  <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider mb-3">
+                    Tax / GST Details
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <span className="text-neutral-500 font-semibold">PAN Card: </span>
+                      <span className="font-mono font-bold text-neutral-900">{editingSeller.panCard || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 font-semibold">Tax Type: </span>
+                      <span className="font-bold text-neutral-900">{editingSeller.taxName || "GST"}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 font-semibold">GSTIN / Number: </span>
+                      <span className="font-mono font-bold text-neutral-900">{editingSeller.taxNumber || "N/A"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-neutral-50/70 border border-neutral-200/80 rounded-xl p-4">
+                  <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider mb-3">
+                    Settlement Bank Account
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <span className="text-neutral-500 font-semibold">Account Holder: </span>
+                      <span className="font-bold text-neutral-900">{editingSeller.accountName || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 font-semibold">Bank Name: </span>
+                      <span className="font-bold text-neutral-900">{editingSeller.bankName || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 font-semibold">Account No: </span>
+                      <span className="font-mono font-bold text-neutral-900">{editingSeller.accountNumber || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 font-semibold">IFSC Code: </span>
+                      <span className="font-mono font-bold text-neutral-900">{editingSeller.ifsc || "N/A"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex justify-end">
+              <button
+                type="button"
+                onClick={handleCloseEditModal}
+                className="px-5 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 rounded-xl text-xs font-bold transition-colors min-h-[38px]"
+              >
+                Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Accessible Safe Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="deleteSellerModalTitle"
+            className="bg-white rounded-2xl shadow-xl border border-neutral-200 max-w-sm w-full p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center mx-auto text-rose-600">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </div>
+
+            <div className="text-center">
+              <h3 id="deleteSellerModalTitle" className="text-base font-bold text-neutral-900">
+                Delete Seller Account?
+              </h3>
+              <p className="text-xs text-neutral-500 mt-1">
+                Are you sure you want to delete <strong className="text-neutral-800">"{deleteTarget.storeName}"</strong>? Sellers with active catalog products or pending in-flight orders cannot be removed.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 transition-colors min-h-[44px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-rose-700 hover:bg-rose-800 transition-colors min-h-[44px] flex items-center justify-center gap-1.5 shadow-sm shadow-rose-700/20"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  "Yes, Delete"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer className="text-center text-xs text-neutral-400 py-3">
+        HelloLocal Admin Panel • Quick-Commerce Operations
+      </footer>
+    </div>
+  );
 }
-
-
-
-

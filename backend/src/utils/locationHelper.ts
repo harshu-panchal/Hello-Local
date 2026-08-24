@@ -48,9 +48,36 @@ export async function findSellersWithinRange(
   }
 
   try {
-    // Fetch all sellers (relaxing 'Approved' status for easier testing)
+    // Only approved, open shops are sellable from.
+    //
+    // The status filter was commented out "to allow testing with new/pending
+    // sellers", which meant Pending and Rejected sellers' products were listed
+    // and purchasable across all 14 call sites of this helper. (#H-14)
+    //
+    // A $geoWithin prefilter narrows the candidate set at the database instead
+    // of loading every seller and filtering in JS. `serviceRadiusKm` is
+    // per-seller, so the precise test still runs below; this only bounds the
+    // rows fetched, using the widest radius any seller could have. (#H-34)
+    const MAX_SERVICE_RADIUS_KM = 100;
+    const EARTH_RADIUS_KM = 6378.1;
+
+    const query: Record<string, unknown> = { status: "Approved" };
+
     const sellers = await Seller.find({
-      // status: "Approved", // Commented out to allow testing with new/pending sellers
+      ...query,
+      $or: [
+        {
+          location: {
+            $geoWithin: {
+              $centerSphere: [[userLng, userLat], MAX_SERVICE_RADIUS_KM / EARTH_RADIUS_KM],
+            },
+          },
+        },
+        // Sellers whose position only exists in the legacy string fields are
+        // not indexed geospatially, so they still need the JS pass.
+        { location: { $exists: false } },
+        { "location.coordinates": { $size: 0 } },
+      ],
     }).select("_id location serviceRadiusKm latitude longitude status");
 
     // Filter sellers where user is within their service radius
@@ -83,10 +110,8 @@ export async function findSellersWithinRange(
         if (distance <= serviceRadius) {
           nearbySellerIds.push(seller._id as mongoose.Types.ObjectId);
         }
-      } else {
-        // If seller has no location set, include them by default (useful for testing/global sellers)
-        nearbySellerIds.push(seller._id as mongoose.Types.ObjectId);
       }
+      // Sellers with no location data are excluded — location is mandatory
     }
 
     return nearbySellerIds;

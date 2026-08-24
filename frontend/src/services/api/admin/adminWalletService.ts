@@ -15,27 +15,38 @@ export interface WalletStats {
 
 export interface WalletTransaction {
   _id: string; // Mongoose ID
+  id?: string;
   type: string; // Credit/Debit
   userType: string;
+  userName?: string;
+  storeName?: string;
+  userId?: string;
   amount: number;
   description: string;
   status: string;
   createdAt: string;
+  reference?: string;
   relatedOrder?: { orderNumber: string };
 }
 
 export interface WithdrawalRequest {
   id: string;
-  userId: string;
+  _id?: string;
+  userId: any;
   userName: string;
   userEmail: string;
+  userType?: "SELLER" | "DELIVERY_BOY";
   amount: number;
   requestDate: string;
-  status: "Pending" | "Approved" | "Rejected";
+  createdAt?: string;
+  status: "Pending" | "Approved" | "Rejected" | "Completed";
   paymentMethod: string;
   accountDetails: string;
+  remarks?: string;
   remark?: string;
   transactionReference?: string;
+  processedAt?: string;
+  processedBy?: any;
 }
 
 export interface AdminEarning {
@@ -97,6 +108,11 @@ export const getWalletTransactions = async (params?: {
   type?: string;
   status?: string;
   userType?: string;
+  userId?: string;
+  sellerId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
 }): Promise<ApiResponse<WalletTransaction[]>> => {
   const response = await api.get<ApiResponse<WalletTransaction[]>>(
     "/admin/wallet/transactions",
@@ -105,14 +121,17 @@ export const getWalletTransactions = async (params?: {
   return response.data;
 };
 
-/**
- * Get Withdrawal Requests
- */
-export const getWithdrawalRequests = async (params?: {
+export interface GetWithdrawalParams {
   page?: number;
   limit?: number;
   status?: string;
-}): Promise<
+  userType?: string;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export const getWithdrawalRequests = async (params?: GetWithdrawalParams): Promise<
   ApiResponse<{ requests: WithdrawalRequest[]; pagination: any }>
 > => {
   const response = await api.get<
@@ -148,3 +167,25 @@ export const getSellerTransactions = async (
   );
   return response.data;
 };
+
+export interface CreateFundTransferData {
+  userId: string;
+  userType?: "DELIVERY_BOY" | "SELLER";
+  amount: number;
+  type: "Credit" | "Debit";
+  description: string;
+}
+
+/**
+ * Execute Manual Fund Transfer
+ */
+export const createFundTransfer = async (
+  data: CreateFundTransferData
+): Promise<ApiResponse<any>> => {
+  const response = await api.post<ApiResponse<any>>(
+    "/admin/wallet/transfer",
+    data
+  );
+  return response.data;
+};
+

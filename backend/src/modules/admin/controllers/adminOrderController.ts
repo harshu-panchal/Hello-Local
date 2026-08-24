@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import { validateTransition } from "../../../services/orderStatusService";
+import {
+  reservationsFromOrderItems,
+  releaseMany,
+} from "../../../services/stockService";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Delivery from "../../../models/Delivery";
@@ -34,12 +39,13 @@ export const getAllOrders = asyncHandler(
       if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
       if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
     }
-    if (search) {
+    if (search && typeof search === "string" && search.trim() !== "") {
+      const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       query.$or = [
-        { orderNumber: { $regex: search as string, $options: "i" } },
-        { customerName: { $regex: search as string, $options: "i" } },
-        { customerEmail: { $regex: search as string, $options: "i" } },
-        { customerPhone: { $regex: search as string, $options: "i" } },
+        { orderNumber: { $regex: safe, $options: "i" } },
+        { customerName: { $regex: safe, $options: "i" } },
+        { customerEmail: { $regex: safe, $options: "i" } },
+        { customerPhone: { $regex: safe, $options: "i" } },
       ];
     }
 
@@ -131,33 +137,27 @@ export const updateOrderStatus = asyncHandler(
     const { id } = req.params;
     const { status, adminNotes } = req.body;
 
-    const validStatuses = [
-      "Received",
-      "Pending",
-      "Processed",
-      "Shipped",
-      "Out for Delivery",
-      "Delivered",
-      "Cancelled",
-      "Rejected",
-      "Returned",
-    ];
-
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-      });
+    const current = await Order.findById(id).select("status paymentStatus paymentMethod items couponCode");
+    if (!current) {
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    const updateData: any = { status };
+    // Admins may drive any stage, but only along legal edges — no reviving a
+    // terminal order and re-triggering its money side-effects. (#H-05 / #H-09)
+    const check = validateTransition(current.status, status, "admin");
+    if (!check.valid) {
+      return res.status(400).json({ success: false, message: check.message });
+    }
+    const nextStatus = check.status!;
+
+    const updateData: any = { status: nextStatus };
     if (adminNotes) updateData.adminNotes = adminNotes;
 
-    if (status === "Delivered") {
+    if (nextStatus === "Delivered") {
       updateData.deliveredAt = new Date();
     }
 
-    if (status === "Cancelled") {
+    if (nextStatus === "Cancelled") {
       updateData.cancelledAt = new Date();
       updateData.cancelledBy = req.user?.userId;
     }
@@ -179,20 +179,67 @@ export const updateOrderStatus = asyncHandler(
 
 
     // Trigger notification if status is "Processed" (Confirmed) or if paymentStatus changed to "Paid"
-    if (status === "Processed" || order.paymentStatus === "Paid") {
+    if (nextStatus === "Processed" || order.paymentStatus === "Paid") {
       const io: SocketIOServer = req.app.get("io");
       if (io) {
         notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
       }
     }
 
+    // Cancelling/rejecting/returning returns the stock the order was holding.
+    // The admin path used to leave it permanently decremented. (#H-09)
+    if (["Cancelled", "Rejected", "Returned"].includes(nextStatus)) {
+      try {
+        const items = await OrderItem.find({ order: id });
+        const reservations = await reservationsFromOrderItems(
+          items.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
+        );
+        await releaseMany(reservations);
+        await OrderItem.updateMany({ order: id }, { $set: { status: "Cancelled" } });
+      } catch (stockErr) {
+        console.error(`Failed to restore stock for order ${id}:`, stockErr);
+      }
+
+      // Prepaid orders must be refunded, not merely closed. (#H-06)
+      if (current.paymentStatus === "Paid" && current.paymentMethod !== "COD") {
+        try {
+          const { refundOrder } = await import("../../../services/refundService");
+          await refundOrder(id, `Order ${nextStatus.toLowerCase()} by admin`);
+        } catch (refundErr) {
+          console.error(`Refund failed for order ${id}:`, refundErr);
+        }
+      }
+
+      // Return the coupon use. (#H-29)
+      try {
+        const { releaseCoupon } = await import("../../../services/orderPricingService");
+        await releaseCoupon(current.couponCode);
+      } catch (couponErr) {
+        console.error(`Coupon release failed for order ${id}:`, couponErr);
+      }
+    }
+
     // Distribute commissions if order is delivered
-    if (status === "Delivered") {
+    if (nextStatus === "Delivered") {
       const { distributeCommissions } = await import("../../../services/commissionService");
       try {
         await distributeCommissions(id);
       } catch (error) {
         console.error("Error distributing commissions:", error);
+      }
+    }
+
+    // Cancelling, rejecting or returning an order must claw back anything
+    // already credited for it. (#H-07)
+    if (["Cancelled", "Rejected", "Returned"].includes(nextStatus)) {
+      const { reverseCommissions } = await import("../../../services/commissionService");
+      try {
+        const rev = await reverseCommissions(id);
+        if (!rev.success) {
+          console.error(`Commission reversal failed for order ${id}: ${rev.message}`);
+        }
+      } catch (error) {
+        console.error("Error reversing commissions:", error);
       }
     }
 
@@ -243,6 +290,21 @@ export const assignDeliveryBoy = asyncHandler(
       });
     }
 
+    // A finished order cannot be reassigned. This used to be allowed, which
+    // silently orphaned the previous courier's assignment. (#H-30)
+    if (["Delivered", "Cancelled", "Rejected", "Returned"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order is ${order.status} and cannot be assigned.`,
+      });
+    }
+
+    if (order.deliveryBoy && String(order.deliveryBoy) !== String(deliveryBoyId)) {
+      console.warn(
+        `Order ${order.orderNumber} reassigned from ${order.deliveryBoy} to ${deliveryBoyId}`,
+      );
+    }
+
     // Update order
     order.deliveryBoy = deliveryBoyId as any;
     order.deliveryBoyStatus = "Assigned";
@@ -267,6 +329,39 @@ export const assignDeliveryBoy = asyncHandler(
       .populate("deliveryBoy", "name mobile email")
       .populate("items");
 
+    // Tell the courier. Assignment used to be silent — no socket event and no
+    // push — so a partner only discovered the job by refreshing. (#H-30)
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`delivery-${deliveryBoyId}`).emit("order-assigned", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          total: order.total,
+          deliveryAddress: order.deliveryAddress,
+          message: "A new order has been assigned to you",
+        });
+      }
+    } catch (socketErr) {
+      console.error("Socket notify on assignment failed:", socketErr);
+    }
+
+    try {
+      const { sendNotificationToUser } = await import("../../../services/firebaseAdmin");
+      await sendNotificationToUser(String(deliveryBoyId), "Delivery", {
+        title: "New delivery assigned",
+        body: `Order #${order.orderNumber} has been assigned to you.`,
+        data: {
+          type: "ORDER_ASSIGNED",
+          orderId: String(order._id),
+          orderNumber: order.orderNumber || "",
+        },
+      });
+    } catch (pushErr) {
+      console.error("Push notify on assignment failed:", pushErr);
+    }
+
     return res.status(200).json({
       success: true,
       message: "Delivery boy assigned successfully",
@@ -281,7 +376,15 @@ export const assignDeliveryBoy = asyncHandler(
 export const getOrdersByStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const { status } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      paymentStatus,
+      seller,
+      dateFrom,
+      dateTo,
+      search,
+    } = req.query;
 
     const validStatuses = [
       "Received",
@@ -302,17 +405,40 @@ export const getOrdersByStatus = asyncHandler(
       });
     }
 
+    const query: any = { status };
+
+    if (paymentStatus) query.paymentStatus = paymentStatus;
+    if (dateFrom || dateTo) {
+      query.orderDate = {};
+      if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
+      if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
+    }
+    if (search && typeof search === "string" && search.trim() !== "") {
+      const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { orderNumber: { $regex: safe, $options: "i" } },
+        { customerName: { $regex: safe, $options: "i" } },
+        { customerEmail: { $regex: safe, $options: "i" } },
+        { customerPhone: { $regex: safe, $options: "i" } },
+      ];
+    }
+
+    if (seller) {
+      const orderItems = await OrderItem.find({ seller }).distinct("order");
+      query._id = { $in: orderItems };
+    }
+
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
     const [orders, total] = await Promise.all([
-      Order.find({ status })
+      Order.find(query)
         .populate("customer", "name email phone")
         .populate("deliveryBoy", "name mobile")
         .populate("items")
         .sort({ orderDate: -1 })
         .skip(skip)
         .limit(parseInt(limit as string)),
-      Order.countDocuments({ status }),
+      Order.countDocuments(query),
     ]);
 
     return res.status(200).json({

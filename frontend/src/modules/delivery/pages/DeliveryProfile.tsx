@@ -9,6 +9,7 @@ export default function DeliveryProfile() {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const { userName, setUserName } = useDeliveryUser();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [profileData, setProfileData] = useState({
     name: '',
@@ -60,10 +61,39 @@ export default function DeliveryProfile() {
 
   const handleCancel = () => {
     setIsEditing(false);
-    // Re-fetch or reset to previous state
+    setFieldErrors({});
   };
 
   const handleSave = async () => {
+    const errors: Record<string, string> = {};
+
+    const name = profileData.name.trim();
+    if (!name) errors.name = 'Name is required';
+    else if (name.length < 2) errors.name = 'Name must be at least 2 characters';
+    else if (!/^[A-Za-z\s]+$/.test(name)) errors.name = 'Name must contain only letters and spaces';
+
+    const email = profileData.email.trim();
+    if (!email) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Please enter a valid email address';
+
+    const accountNumber = profileData.accountNumber.trim();
+    if (accountNumber && !/^\d{9,18}$/.test(accountNumber)) errors.accountNumber = 'Account number must be 9–18 digits';
+
+    const accountName = profileData.accountName.trim();
+    if (accountName && !/^[A-Za-z\s]+$/.test(accountName)) errors.accountName = 'Account name must contain only letters and spaces';
+
+    const bankName = profileData.bankName.trim();
+    if (bankName && !/^[A-Za-z\s]+$/.test(bankName)) errors.bankName = 'Bank name must contain only letters and spaces';
+
+    const ifscCode = profileData.ifscCode.trim();
+    if (ifscCode && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/i.test(ifscCode)) errors.ifscCode = 'Invalid IFSC code (e.g. HDFC0001234)';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setFieldErrors({});
     try {
       await updateProfile({
         name: profileData.name,
@@ -78,18 +108,21 @@ export default function DeliveryProfile() {
       });
       setUserName(profileData.name);
       setIsEditing(false);
-      // You could add a toast notification here
     } catch (error) {
       console.error("Failed to update profile", error);
-      alert("Failed to update profile");
+      setFieldErrors({ _global: 'Failed to update profile. Please try again.' });
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setProfileData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    if (field === 'name' || field === 'accountName' || field === 'bankName') {
+      value = value.replace(/[^A-Za-z\s]/g, '');
+    }
+    if (field === 'accountNumber') {
+      value = value.replace(/\D/g, '');
+    }
+    setFieldErrors((prev) => { const e = { ...prev }; delete e[field]; return e; });
+    setProfileData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -128,13 +161,15 @@ export default function DeliveryProfile() {
                   type="text"
                   value={profileData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full text-center text-neutral-900 text-xl font-semibold mb-2 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className={`w-full text-center text-neutral-900 text-xl font-semibold mb-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.name ? 'border-red-400' : 'border-neutral-300'}`}
+                  placeholder="Full Name"
                 />
+                {fieldErrors.name && <p className="text-xs text-red-500 text-center mb-1">{fieldErrors.name}</p>}
                 <input
                   type="tel"
                   value={profileData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className="w-full text-center text-neutral-600 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  disabled
+                  className="w-full text-center text-neutral-400 text-sm px-3 py-2 border border-neutral-200 rounded-lg bg-neutral-50 cursor-not-allowed"
                 />
               </div>
             ) : (
@@ -164,12 +199,15 @@ export default function DeliveryProfile() {
             <div className="p-4">
               <p className="text-neutral-500 text-xs mb-1">Email</p>
               {isEditing ? (
-                <input
-                  type="email"
-                  value={profileData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
+                <>
+                  <input
+                    type="email"
+                    value={profileData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.email ? 'border-red-400' : 'border-neutral-300'}`}
+                  />
+                  {fieldErrors.email && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.email}</p>}
+                </>
               ) : (
                 <p className="text-neutral-900 text-sm">{profileData.email}</p>
               )}
@@ -229,13 +267,16 @@ export default function DeliveryProfile() {
             <div className="p-4">
               <p className="text-neutral-500 text-xs mb-1">Account Holder Name</p>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={profileData.accountName}
-                  onChange={(e) => handleInputChange('accountName', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter account holder name"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={profileData.accountName}
+                    onChange={(e) => handleInputChange('accountName', e.target.value)}
+                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.accountName ? 'border-red-400' : 'border-neutral-300'}`}
+                    placeholder="Letters only (e.g. Ravi Kumar)"
+                  />
+                  {fieldErrors.accountName && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.accountName}</p>}
+                </>
               ) : (
                 <p className="text-neutral-900 text-sm">{profileData.accountName || 'Not Set'}</p>
               )}
@@ -243,13 +284,16 @@ export default function DeliveryProfile() {
             <div className="p-4">
               <p className="text-neutral-500 text-xs mb-1">Bank Name</p>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={profileData.bankName}
-                  onChange={(e) => handleInputChange('bankName', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="e.g. HDFC Bank"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={profileData.bankName}
+                    onChange={(e) => handleInputChange('bankName', e.target.value)}
+                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.bankName ? 'border-red-400' : 'border-neutral-300'}`}
+                    placeholder="e.g. HDFC Bank"
+                  />
+                  {fieldErrors.bankName && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.bankName}</p>}
+                </>
               ) : (
                 <p className="text-neutral-900 text-sm">{profileData.bankName || 'Not Set'}</p>
               )}
@@ -257,13 +301,17 @@ export default function DeliveryProfile() {
             <div className="p-4">
               <p className="text-neutral-500 text-xs mb-1">Account Number</p>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={profileData.accountNumber}
-                  onChange={(e) => handleInputChange('accountNumber', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter account number"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={profileData.accountNumber}
+                    onChange={(e) => handleInputChange('accountNumber', e.target.value)}
+                    maxLength={18}
+                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.accountNumber ? 'border-red-400' : 'border-neutral-300'}`}
+                    placeholder="9–18 digits"
+                  />
+                  {fieldErrors.accountNumber && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.accountNumber}</p>}
+                </>
               ) : (
                 <p className="text-neutral-900 text-sm">{profileData.accountNumber ? `XXXX${profileData.accountNumber.slice(-4)}` : 'Not Set'}</p>
               )}
@@ -271,13 +319,17 @@ export default function DeliveryProfile() {
             <div className="p-4">
               <p className="text-neutral-500 text-xs mb-1">IFSC Code</p>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={profileData.ifscCode}
-                  onChange={(e) => handleInputChange('ifscCode', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="e.g. HDFC0001234"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={profileData.ifscCode}
+                    onChange={(e) => handleInputChange('ifscCode', e.target.value.toUpperCase())}
+                    maxLength={11}
+                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.ifscCode ? 'border-red-400' : 'border-neutral-300'}`}
+                    placeholder="e.g. HDFC0001234"
+                  />
+                  {fieldErrors.ifscCode && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.ifscCode}</p>}
+                </>
               ) : (
                 <p className="text-neutral-900 text-sm">{profileData.ifscCode || 'Not Set'}</p>
               )}
@@ -300,6 +352,9 @@ export default function DeliveryProfile() {
         </div>
 
         {/* Edit/Save/Cancel Buttons */}
+        {fieldErrors._global && (
+          <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{fieldErrors._global}</div>
+        )}
         {isEditing ? (
           <div className="flex gap-3 mt-4">
             <button

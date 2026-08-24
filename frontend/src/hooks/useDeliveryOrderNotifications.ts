@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { OrderNotificationData } from '../services/api/delivery/deliveryOrderNotificationService';
 import { acceptOrder, rejectOrder } from '../services/api/delivery/deliveryOrderNotificationService';
 import { getSocketBaseURL } from '../services/api/config';
+import { getAuthToken } from '../services/api/session';
 
 interface NotificationState {
     currentNotification: OrderNotificationData | null;
@@ -56,7 +57,7 @@ export const useDeliveryOrderNotifications = () => {
             reconnectTimeoutRef.current = null;
         }
 
-        const token = localStorage.getItem('authToken');
+        const token = getAuthToken('delivery');
         const socket = io(getSocketBaseURL(), {
             auth: { token },
             // polling first — works reliably behind nginx/reverse proxies;

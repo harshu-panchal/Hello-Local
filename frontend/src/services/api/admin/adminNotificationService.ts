@@ -62,6 +62,7 @@ export interface GetNotificationsParams {
   | "Payment"
   | "System";
   priority?: "Low" | "Medium" | "High" | "Urgent";
+  search?: string;
 }
 
 export interface MarkMultipleAsReadData {

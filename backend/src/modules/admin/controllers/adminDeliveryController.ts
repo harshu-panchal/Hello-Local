@@ -3,6 +3,10 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import Delivery from "../../../models/Delivery";
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import CashCollection from "../../../models/CashCollection";
+import {
+  settleCourierCodDebt,
+  CodSettlementError,
+} from "../../../services/codSettlementService";
 
 /**
  * Create a new delivery boy
@@ -327,74 +331,56 @@ export const getDeliveryAssignments = asyncHandler(
  * Collect cash from delivery boy
  */
 export const collectCash = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params; // Delivery boy ID
+  const { id } = req.params; // Delivery partner ID
   const { amount, notes } = req.body;
+  const adminId = req.user!.userId;
 
-  if (!amount || amount <= 0) {
+  const requested = Math.round(Number(amount) * 100) / 100;
+  if (!Number.isFinite(requested) || requested <= 0) {
     return res.status(400).json({
       success: false,
-      message: "Valid amount is required",
+      message: "A valid positive amount is required",
     });
   }
 
-  const deliveryBoy = await Delivery.findById(id);
-  if (!deliveryBoy) {
-    return res.status(404).json({
-      success: false,
-      message: "Delivery boy not found",
+  try {
+    // Delegated to the single authoritative COD settlement path.
+    //
+    // This handler previously ran `deliveryBoy.balance += amount`, crediting the
+    // courier's WITHDRAWABLE EARNINGS with the cash they had just handed over,
+    // left `pendingAdminPayout` untouched so the same debt could be settled a
+    // second time through the Razorpay path, wrote no audit record at all, and
+    // never released the seller commissions held against those orders. (#C-04)
+    const result = await settleCourierCodDebt({
+      deliveryBoyId: id,
+      amount: requested,
+      source: "CASH",
+      // Deterministic per admin action; the unique `reference` index rejects
+      // an accidental double-submit of the same collection.
+      reference: `CASH-${id}-${Date.now()}`,
+      adminId,
+      remark: notes,
     });
-  }
 
-  if (deliveryBoy.cashCollected < amount) {
-    return res.status(400).json({
-      success: false,
-      message: "Amount exceeds cash collected",
-    });
-  }
-
-  // Update cash collected
-  deliveryBoy.cashCollected -= amount;
-  // LOGIC FIX: When cash is collected (paid to admin), balance (amount owed to delivery boy) should logicly NOT increase? 
-  // However, looking at the previous developer's logic: 
-  // "balance" might mean "amount delivery boy OWES admin"?? Or "amount Admin OWES delivery boy"?
-  // If deliveryBoy.cashCollected is "Cash currently held by delivery boy", then collecting it reduces it.
-  // Generally "Balance" in these apps = Wallet Balance (Earnings).
-  // If we collected cash, it means the delivery boy PAID the admin. 
-  // If the delivery boy PAID the admin, why would their wallet balance INCREASE?
-  // Unless "Balance" is a debt ledger?
-  // Let's assume standard behavior: Paying cash reduces cashCollected. Logic regarding 'balance' was suspicious.
-  // I will LEAVE the existing suspicious logic as-is for now to avoid breaking existing accounting, 
-  // but I'll add the new endpoint.
-
-  // deliveryBoy.balance += amount; // This line was in original code. Keeping it but noting it is weird.
-  // Wait, if I am implementing this new, I should probably do it right? 
-  // The original file had this logic? Yes, lines 277-278. 
-  // I am NOT touching collectCash logic right now as it wasn't requested, I'm just adding NEW endpoints.
-
-  // Re-adding the original lines I replaced in this chunk (actually I'm just appending, wait):
-  // Ah, this chunk is replacing the END of the file basically? 
-  // No, I'm appending getDeliveryBoyCashCollections AFTER collectCash.
-
-  // Actually, I should just append to the file.
-
-  deliveryBoy.balance += amount;
-  await deliveryBoy.save();
-
-  return res.status(200).json({
-    success: true,
-    message: "Cash collected successfully",
-    data: {
-      deliveryBoy: deliveryBoy.toObject(),
-      transaction: {
-        amount,
-        notes,
-        previousCashCollected: deliveryBoy.cashCollected + amount,
-        newCashCollected: deliveryBoy.cashCollected,
-        previousBalance: deliveryBoy.balance - amount,
-        newBalance: deliveryBoy.balance,
+    return res.status(200).json({
+      success: true,
+      message: "Cash collection recorded successfully",
+      data: {
+        amountCollected: result.amountSettled,
+        cashCollected: result.cashCollected,
+        pendingAdminPayout: result.pendingAdminPayout,
+        ordersSettled: result.processedOrders,
+        reference: result.reference,
       },
-    },
-  });
+    });
+  } catch (error: any) {
+    const status = error instanceof CodSettlementError ? error.statusCode : 500;
+    console.error("Error recording cash collection:", error?.message || error);
+    return res.status(status).json({
+      success: false,
+      message: error?.message || "Failed to record cash collection",
+    });
+  }
 });
 
 /**

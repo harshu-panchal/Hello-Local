@@ -1,5 +1,3 @@
-import { Product } from '../types/domain';
-
 export interface CalculatedPrice {
   displayPrice: number;
   mrp: number;

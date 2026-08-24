@@ -5,356 +5,355 @@ import Delivery from "../models/Delivery";
 import AppSettings from "../models/AppSettings";
 import mongoose from "mongoose";
 
+export type WalletUserType = "SELLER" | "DELIVERY_BOY";
+
 /**
- * Credit wallet
+ * Wallet failures must be loud.
+ *
+ * These functions used to return `{ success: false }` on error, and every
+ * caller in commissionService ignored the return value — so a failed credit
+ * left the commission marked Paid with no money moved, silently. (#H-19)
+ */
+export class WalletError extends Error {
+  public readonly statusCode: number;
+  constructor(message: string, statusCode = 400) {
+    super(message);
+    this.name = "WalletError";
+    this.statusCode = statusCode;
+  }
+}
+
+const model = (userType: WalletUserType) =>
+  (userType === "SELLER" ? Seller : Delivery) as mongoose.Model<any>;
+
+const round2 = (n: number) => Math.round(Number(n) * 100) / 100;
+
+function assertAmount(amount: number): number {
+  const a = round2(amount);
+  if (!Number.isFinite(a) || a <= 0) {
+    throw new WalletError(`Invalid wallet amount: ${amount}`);
+  }
+  return a;
+}
+
+/** Deterministic-ish unique reference when the caller does not supply one. */
+function makeReference(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
+}
+
+/**
+ * Credit a wallet.
+ *
+ * Throws on any failure. The balance update is a single atomic `$inc` and the
+ * result is checked, so a credit against a missing user is an error rather than
+ * a silent no-op.
  */
 export const creditWallet = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
   amount: number,
   description: string,
   relatedOrderId?: string,
   relatedCommissionId?: string,
   session?: mongoose.ClientSession,
-) => {
-  try {
-    // Generate unique reference
-    const reference = `CR-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  reference?: string,
+): Promise<{ transactionId: string; reference: string; amount: number }> => {
+  const value = assertAmount(amount);
+  const ref = reference || makeReference("CR");
 
-    // Create transaction record
-    const transaction = new WalletTransaction({
-      userId,
-      userType,
-      amount,
-      type: "Credit",
-      description,
-      status: "Completed",
-      reference,
-      relatedOrder: relatedOrderId,
-      relatedCommission: relatedCommissionId,
-    });
-
-    if (session) {
-      await transaction.save({ session });
-    } else {
-      await transaction.save();
-    }
-
-    // Update user balance
-    const Model: any = userType === "SELLER" ? Seller : Delivery;
-    const updateQuery = { $inc: { balance: amount } };
-
-    if (session) {
-      await Model.findByIdAndUpdate(userId, updateQuery, { session });
-    } else {
-      await Model.findByIdAndUpdate(userId, updateQuery);
-    }
-
-    return {
-      success: true,
-      message: "Wallet credited successfully",
-      data: {
-        transactionId: transaction._id,
-        newBalance: await getWalletBalance(userId, userType),
-      },
-    };
-  } catch (error: any) {
-    console.error("Error crediting wallet:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to credit wallet",
-    };
+  // Idempotency: the unique index on `reference` is the real guard, but check
+  // first so a replay returns cleanly instead of throwing a duplicate-key error.
+  const existing = await WalletTransaction.findOne({ reference }).session(session || null);
+  if (reference && existing) {
+    return { transactionId: String(existing._id), reference: ref, amount: existing.amount };
   }
+
+  const [transaction] = await WalletTransaction.create(
+    [
+      {
+        userId,
+        userType,
+        amount: value,
+        type: "Credit",
+        description,
+        status: "Completed",
+        reference: ref,
+        relatedOrder: relatedOrderId,
+        relatedCommission: relatedCommissionId,
+      },
+    ],
+    session ? { session } : {},
+  );
+
+  const result = await model(userType).updateOne(
+    { _id: userId },
+    { $inc: { balance: value } },
+    session ? { session } : {},
+  );
+
+  if (result.matchedCount === 0) {
+    throw new WalletError(`Cannot credit: ${userType} ${userId} not found`, 404);
+  }
+
+  return { transactionId: String(transaction._id), reference: ref, amount: value };
 };
 
 /**
- * Debit wallet
+ * Debit a wallet.
+ *
+ * The balance check and the decrement happen in ONE conditional update, so two
+ * concurrent debits cannot both observe a sufficient balance and both succeed.
+ * The previous implementation read the balance, then issued an unconditional
+ * `$inc`, which is a textbook read-modify-write race and could drive the
+ * balance negative (`$inc` does not run the schema's `min` validator). (#H-18)
+ *
+ * @param allowNegative reversals/clawbacks may legitimately push a balance
+ *        below zero — the money has already been paid out and is owed back.
  */
 export const debitWallet = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
   amount: number,
   description: string,
   relatedOrderId?: string,
   session?: mongoose.ClientSession,
-) => {
-  try {
-    // Check balance
-    const currentBalance = await getWalletBalance(userId, userType);
-    if (currentBalance < amount) {
-      throw new Error("Insufficient wallet balance");
+  options?: { allowNegative?: boolean; reference?: string },
+): Promise<{ transactionId: string; reference: string; amount: number }> => {
+  const value = assertAmount(amount);
+  const ref = options?.reference || makeReference("DR");
+
+  if (options?.reference) {
+    const existing = await WalletTransaction.findOne({ reference: ref }).session(session || null);
+    if (existing) {
+      return { transactionId: String(existing._id), reference: ref, amount: existing.amount };
     }
-
-    // Generate unique reference
-    const reference = `DR-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-    // Create transaction record
-    const transaction = new WalletTransaction({
-      userId,
-      userType,
-      amount,
-      type: "Debit",
-      description,
-      status: "Completed",
-      reference,
-      relatedOrder: relatedOrderId,
-    });
-
-    if (session) {
-      await transaction.save({ session });
-    } else {
-      await transaction.save();
-    }
-
-    // Update user balance
-    const Model: any = userType === "SELLER" ? Seller : Delivery;
-    const updateQuery = { $inc: { balance: -amount } };
-
-    if (session) {
-      await Model.findByIdAndUpdate(userId, updateQuery, { session });
-    } else {
-      await Model.findByIdAndUpdate(userId, updateQuery);
-    }
-
-    return {
-      success: true,
-      message: "Wallet debited successfully",
-      data: {
-        transactionId: transaction._id,
-        newBalance: await getWalletBalance(userId, userType),
-      },
-    };
-  } catch (error: any) {
-    console.error("Error debiting wallet:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to debit wallet",
-    };
   }
+
+  // Atomic guarded decrement.
+  const filter: Record<string, any> = { _id: userId };
+  if (!options?.allowNegative) {
+    filter.balance = { $gte: value };
+  }
+
+  const updated = await model(userType).findOneAndUpdate(
+    filter,
+    { $inc: { balance: -value } },
+    { new: true, ...(session ? { session } : {}) },
+  );
+
+  if (!updated) {
+    // Distinguish "no such user" from "not enough money".
+    const exists = await model(userType).exists({ _id: userId });
+    throw new WalletError(
+      exists ? "Insufficient wallet balance" : `Cannot debit: ${userType} ${userId} not found`,
+      exists ? 400 : 404,
+    );
+  }
+
+  const [transaction] = await WalletTransaction.create(
+    [
+      {
+        userId,
+        userType,
+        amount: value,
+        type: "Debit",
+        description,
+        status: "Completed",
+        reference: ref,
+        relatedOrder: relatedOrderId,
+      },
+    ],
+    session ? { session } : {},
+  );
+
+  return { transactionId: String(transaction._id), reference: ref, amount: value };
 };
 
-/**
- * Get wallet balance
- */
 export const getWalletBalance = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
 ): Promise<number> => {
-  try {
-    const Model: any = userType === "SELLER" ? Seller : Delivery;
-    const user = await Model.findById(userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    return user.balance || 0;
-  } catch (error) {
-    console.error("Error getting wallet balance:", error);
-    return 0;
-  }
+  const user = await model(userType).findById(userId).select("balance");
+  if (!user) throw new WalletError(`${userType} ${userId} not found`, 404);
+  return user.balance || 0;
 };
 
-/**
- * Get wallet transactions
- */
 export const getWalletTransactions = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
   page: number = 1,
   limit: number = 20,
 ) => {
-  try {
-    const skip = (page - 1) * limit;
+  // Bounded pagination — an unbounded `limit` lets one request pull the whole
+  // ledger. (#M-09)
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const safePage = Math.max(Number(page) || 1, 1);
+  const skip = (safePage - 1) * safeLimit;
 
-    const transactions = await WalletTransaction.find({ userId, userType })
+  const [transactions, total] = await Promise.all([
+    WalletTransaction.find({ userId, userType })
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit)
+      .limit(safeLimit)
       .populate("relatedOrder", "orderNumber")
-      .populate("relatedCommission", "commissionAmount");
+      .populate("relatedCommission", "commissionAmount"),
+    WalletTransaction.countDocuments({ userId, userType }),
+  ]);
 
-    const total = await WalletTransaction.countDocuments({ userId, userType });
-
-    return {
-      success: true,
-      data: {
-        transactions,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
+  return {
+    success: true as const,
+    data: {
+      transactions,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        pages: Math.ceil(total / safeLimit),
       },
-    };
-  } catch (error: any) {
-    console.error("Error getting wallet transactions:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to get wallet transactions",
-    };
-  }
+    },
+  };
 };
 
 /**
- * Validate withdrawal request
+ * Validate a withdrawal request. Called inside the request transaction.
  */
 export const validateWithdrawal = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
   amount: number,
 ) => {
-  try {
-    // Check minimum withdrawal amount
-    const settings = await AppSettings.findOne();
-    const minAmount = settings?.minimumWithdrawalAmount || 100;
+  const settings = await AppSettings.findOne();
+  const minAmount = settings?.minimumWithdrawalAmount || 100;
 
-    if (amount < minAmount) {
-      return {
-        success: false,
-        message: `Minimum withdrawal amount is ₹${minAmount}`,
-      };
-    }
+  if (amount < minAmount) {
+    return { success: false as const, message: `Minimum withdrawal amount is Rs.${minAmount}` };
+  }
 
-    // Check balance
-    const balance = await getWalletBalance(userId, userType);
-    if (balance < amount) {
-      return {
-        success: false,
-        message: "Insufficient wallet balance",
-      };
-    }
-
-    // Check for pending withdrawal requests
-    const pendingRequests = await WithdrawRequest.countDocuments({
-      userId,
-      userType,
-      status: { $in: ["Pending", "Approved"] },
-    });
-
-    if (pendingRequests > 0) {
-      return {
-        success: false,
-        message:
-          "You have a pending withdrawal request. Please wait for it to be processed.",
-      };
-    }
-
-    // Check bank details
-    const Model: any = userType === "SELLER" ? Seller : Delivery;
-    const user = await Model.findById(userId);
-
-    if (!user) {
-      return {
-        success: false,
-        message: "User not found",
-      };
-    }
-
-    const ifsc = (user as any).ifsc || (user as any).ifscCode;
-    if (!user.accountNumber || !ifsc || !user.bankName) {
-      return {
-        success: false,
-        message:
-          "Please complete your bank account details before requesting withdrawal",
-      };
-    }
-
+  const pendingRequests = await WithdrawRequest.countDocuments({
+    userId,
+    userType,
+    status: { $in: ["Pending", "Approved"] },
+  });
+  if (pendingRequests > 0) {
     return {
-      success: true,
-      message: "Withdrawal request is valid",
-    };
-  } catch (error: any) {
-    console.error("Error validating withdrawal:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to validate withdrawal",
+      success: false as const,
+      message:
+        "You have a pending withdrawal request. Please wait for it to be processed.",
     };
   }
+
+  const user = await model(userType).findById(userId);
+  if (!user) return { success: false as const, message: "User not found" };
+
+  const ifsc = (user as any).ifsc || (user as any).ifscCode;
+  if (!user.accountNumber || !ifsc || !user.bankName) {
+    return {
+      success: false as const,
+      message: "Please complete your bank account details before requesting withdrawal",
+    };
+  }
+
+  return { success: true as const, message: "Withdrawal request is valid" };
 };
 
 /**
- * Create withdrawal request
+ * Create a withdrawal request AND reserve the funds.
+ *
+ * The amount is debited at request time rather than at completion, so the same
+ * balance cannot be promised twice and the seller's visible balance reflects
+ * what is actually available. Rejecting a request returns the funds. (#M-12)
  */
 export const createWithdrawalRequest = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
   amount: number,
   paymentMethod: "Bank Transfer" | "UPI",
 ) => {
+  const value = assertAmount(amount);
+
+  const validation = await validateWithdrawal(userId, userType, value);
+  if (!validation.success) return validation;
+
+  const user = await model(userType).findById(userId);
+  if (!user) throw new WalletError("User not found", 404);
+
+  const ifsc = (user as any).ifsc || (user as any).ifscCode;
+  const accountDetails = `${user.bankName} - ${user.accountNumber} (${ifsc})`;
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    // Validate withdrawal
-    const validation = await validateWithdrawal(userId, userType, amount);
-    if (!validation.success) {
-      return validation;
-    }
+    const [withdrawRequest] = await WithdrawRequest.create(
+      [
+        {
+          userId,
+          userType,
+          amount: value,
+          status: "Pending",
+          paymentMethod,
+          accountDetails,
+        },
+      ],
+      { session },
+    );
 
-    // Get user details
-    const Model: any = userType === "SELLER" ? Seller : Delivery;
-    const user = await Model.findById(userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    // Create account details string (Seller model stores IFSC as `ifsc`; Delivery may use `ifscCode`)
-    const ifsc = (user as any).ifsc || (user as any).ifscCode;
-    const accountDetails = `${user.bankName} - ${user.accountNumber} (${ifsc})`;
-
-    // Create withdrawal request
-    const withdrawRequest = new WithdrawRequest({
+    // Reserve the funds. Throws WalletError('Insufficient wallet balance') if
+    // the balance moved between validation and here.
+    await debitWallet(
       userId,
       userType,
-      amount,
-      status: "Pending",
-      paymentMethod,
-      accountDetails,
-    });
+      value,
+      `Withdrawal requested (${withdrawRequest._id})`,
+      undefined,
+      session,
+      { reference: `WDR-HOLD-${withdrawRequest._id}` },
+    );
 
-    await withdrawRequest.save();
-
-    return {
-      success: true,
-      message: "Withdrawal request created successfully",
-      data: withdrawRequest,
-    };
-  } catch (error: any) {
-    console.error("Error creating withdrawal request:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to create withdrawal request",
-    };
+    await session.commitTransaction();
+    return { success: true as const, message: "Withdrawal request created successfully", data: withdrawRequest };
+  } catch (error) {
+    if (session.inTransaction()) {
+      try { await session.abortTransaction(); } catch { /* ignore */ }
+    }
+    if (error instanceof WalletError) {
+      return { success: false as const, message: error.message };
+    }
+    throw error;
+  } finally {
+    session.endSession();
   }
 };
 
-/**
- * Get withdrawal requests
- */
+/** Return reserved funds when a withdrawal is rejected. */
+export const releaseWithdrawalHold = async (
+  request: { _id: unknown; userId: unknown; userType: WalletUserType; amount: number },
+  reason: string,
+  session?: mongoose.ClientSession,
+) => {
+  return creditWallet(
+    String(request.userId),
+    request.userType,
+    request.amount,
+    `Withdrawal returned: ${reason}`,
+    undefined,
+    undefined,
+    session,
+    `WDR-RELEASE-${request._id}`,
+  );
+};
+
 export const getWithdrawalRequests = async (
   userId: string,
-  userType: "SELLER" | "DELIVERY_BOY",
+  userType: WalletUserType,
   status?: string,
 ) => {
-  try {
-    const query: any = { userId, userType };
-    if (status) {
-      query.status = status;
-    }
+  const query: any = { userId, userType };
+  if (status) query.status = status;
 
-    const requests = await WithdrawRequest.find(query)
-      .sort({ createdAt: -1 })
-      .populate("processedBy", "name email");
+  const requests = await WithdrawRequest.find(query)
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .populate("processedBy", "name email");
 
-    return {
-      success: true,
-      data: requests,
-    };
-  } catch (error: any) {
-    console.error("Error getting withdrawal requests:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to get withdrawal requests",
-    };
-  }
+  return { success: true as const, data: requests };
 };

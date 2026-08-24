@@ -44,8 +44,22 @@ export const createCoupon = asyncHandler(
       });
     }
 
+    const cleanCode = code.trim().toUpperCase();
+
+    // Case-insensitive duplicate check
+    const existingCoupon = await Coupon.findOne({
+      code: { $regex: new RegExp(`^${cleanCode}$`, "i") },
+    });
+
+    if (existingCoupon) {
+      return res.status(400).json({
+        success: false,
+        message: `A coupon with code "${cleanCode}" already exists`,
+      });
+    }
+
     const coupon = await Coupon.create({
-      code: code.toUpperCase(),
+      code: cleanCode,
       description,
       discountType,
       discountValue,
@@ -156,7 +170,19 @@ export const updateCoupon = asyncHandler(
 
     // Convert code to uppercase if provided
     if (updateData.code) {
-      updateData.code = updateData.code.toUpperCase();
+      updateData.code = updateData.code.trim().toUpperCase();
+
+      const existingCoupon = await Coupon.findOne({
+        _id: { $ne: id },
+        code: { $regex: new RegExp(`^${updateData.code}$`, "i") },
+      });
+
+      if (existingCoupon) {
+        return res.status(400).json({
+          success: false,
+          message: `A coupon with code "${updateData.code}" already exists`,
+        });
+      }
     }
 
     // Convert dates if provided

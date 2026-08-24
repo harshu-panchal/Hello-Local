@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import DeliveryHeader from "../components/DeliveryHeader";
 import DeliveryBottomNav from "../components/DeliveryBottomNav";
+import { clearSession } from '../../../services/api/session';
 
 export default function DeliveryMenu() {
   const navigate = useNavigate();
@@ -239,8 +240,7 @@ export default function DeliveryMenu() {
   const handleMenuClick = (route: string) => {
     if (route === "/delivery/login") {
       // Handle logout logic here
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("userData");
+      clearSession('delivery');
       navigate(route);
     } else {
       // Navigate to the selected route

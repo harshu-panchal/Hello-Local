@@ -21,27 +21,26 @@ export const sendSmsOtp = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
+  // Identical response whether or not the account exists, so the endpoint
+  // cannot be used to enumerate registered couriers. A sessionId is always
+  // returned so the client flow is unchanged. (#M-03)
+  const GENERIC = "If an account exists for this number, an OTP has been sent.";
   // Check if delivery partner exists with this mobile
   const delivery = await Delivery.findOne({ mobile });
-  
-  // Special bypass for testing
-  const isBypass = mobile === '9111966732';
 
-  if (!delivery && !isBypass) {
-    console.log(`[DeliveryAuth] sendSmsOtp failed: Mobile ${mobile} not found`);
-    return res.status(400).json({
-      success: false,
-      message:
-        "Delivery partner not found with this mobile number. Please register first.",
+  if (!delivery) {
+    return res.status(200).json({
+      success: true,
+      message: GENERIC,
+      sessionId: `DB_VERIFIED_${mobile}`,
     });
   }
 
-  // Send SMS OTP
   const result = await sendSmsOtpService(mobile, "Delivery");
 
   return res.status(200).json({
     success: true,
-    message: result.message,
+    message: GENERIC,
     sessionId: result.sessionId,
   });
 });
@@ -89,32 +88,25 @@ export const verifySmsOtp = asyncHandler(
       });
     }
 
-    // Find delivery partner
-    let delivery = await Delivery.findOne({ mobile }).select("-password");
-
-    // Special bypass for testing: Auto-create if doesn't exist
-    if (!delivery && mobile === '9111966732') {
-      delivery = await Delivery.create({
-        name: "Test Delivery Partner",
-        mobile: mobile,
-        email: "test_delivery@hellolocal.com",
-        password: "bypass_password_not_used",
-        status: "Active",
-        isOnline: true,
-        balance: 0,
-        cashCollected: 0,
-        settings: {
-          notifications: true,
-          location: true,
-          sound: true
-        }
-      } as any);
-    }
+    // Find delivery partner. Accounts are only ever created through the register
+    // flow (which starts them Inactive, pending admin approval); the
+    // auto-provisioning backdoor for a hardcoded mobile has been removed. (#C-09)
+    const delivery = await Delivery.findOne({ mobile }).select("-password");
 
     if (!delivery) {
       return res.status(401).json({
         success: false,
-        message: "Delivery partner not found. Please Register first.",
+        message: "Invalid or expired OTP",
+      });
+    }
+
+    // Inactive couriers are pending approval (or suspended) and must not
+    // obtain a token — courier tokens can read orders and move COD money. (#H-17)
+    if (delivery.status !== "Active") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your delivery partner account is not active yet. Please wait for admin approval.",
       });
     }
 
@@ -157,6 +149,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     accountNumber,
     ifscCode,
     bonusType,
+    drivingLicense,
+    nationalIdentityCard,
   } = req.body;
 
   // Validation
@@ -208,6 +202,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     accountNumber,
     ifscCode,
     bonusType,
+    drivingLicense,
+    nationalIdentityCard,
     status: "Inactive", // New delivery partners start as Inactive
     balance: 0,
     cashCollected: 0,
@@ -269,25 +265,20 @@ export const checkExistence = asyncHandler(async (req: Request, res: Response) =
   if (mobile) query.mobile = mobile;
   if (email) query.email = email;
 
-  const existingDelivery = await Delivery.findOne({
-    $or: Object.entries(query).map(([key, value]) => ({ [key]: value })),
-  });
+  // Signup duplicate check. Returns a bare boolean and does not echo which
+  // field matched, and the route is rate limited. (#M-05)
+  const or: any[] = [];
+  if (mobile) or.push({ mobile });
+  if (email) or.push({ email });
 
-  if (existingDelivery) {
-    let conflictField = "mobile or email";
-    if (existingDelivery.mobile === mobile) conflictField = "mobile number";
-    else if (existingDelivery.email === email) conflictField = "email address";
-
-    return res.status(200).json({
-      success: true,
-      exists: true,
-      message: `A delivery partner is already registered with this ${conflictField}`,
-    });
-  }
+  const exists = await Delivery.exists({ $or: or });
 
   return res.status(200).json({
     success: true,
-    exists: false,
+    exists: Boolean(exists),
+    message: exists
+      ? "An account is already registered with these details"
+      : undefined,
   });
 });
 

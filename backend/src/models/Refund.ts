@@ -8,7 +8,9 @@ export interface IRefund extends Document {
   // Refund Info
   amount: number;
   reason: string;
-  status: "Pending" | "Approved" | "Processed" | "Rejected" | "Completed";
+  status: "Pending" | "Approved" | "Processed" | "Rejected" | "Completed" | "Failed";
+  /** Gateway message when a refund attempt did not go through. (#H-06) */
+  failureReason?: string;
 
   // Processing
   processedBy?: mongoose.Types.ObjectId;
@@ -54,7 +56,9 @@ const RefundSchema = new Schema<IRefund>(
     },
     status: {
       type: String,
-      enum: ["Pending", "Approved", "Processed", "Rejected", "Completed"],
+      enum: ["Pending", "Approved", "Processed", "Rejected", "Completed",
+      "Failed",
+    ],
       default: "Pending",
     },
 

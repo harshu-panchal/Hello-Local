@@ -3,9 +3,28 @@ import HomeSection from "../../../models/HomeSection";
 import mongoose from "mongoose";
 
 // Get all home sections
-export const getHomeSections = async (_req: Request, res: Response) => {
+export const getHomeSections = async (req: Request, res: Response) => {
     try {
-        const sections = await HomeSection.find()
+        const { search, pageLocation, isActive } = req.query;
+        const query: any = {};
+
+        if (pageLocation && pageLocation !== "all" && pageLocation !== "All") {
+            query.pageLocation = pageLocation;
+        }
+
+        if (isActive !== undefined) {
+            query.isActive = isActive === "true";
+        }
+
+        if (search && typeof search === "string" && search.trim()) {
+            const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            query.$or = [
+                { title: { $regex: safe, $options: "i" } },
+                { slug: { $regex: safe, $options: "i" } },
+            ];
+        }
+
+        const sections = await HomeSection.find(query)
             .populate("categories", "name slug image")
             .populate("subCategories", "name")
             .populate("targetHeaderCategory", "name")
@@ -251,8 +270,9 @@ export const reorderHomeSections = async (req: Request, res: Response) => {
         await Promise.all(updatePromises);
 
         const updatedSections = await HomeSection.find()
-            .populate("category", "name slug image")
-            .populate("subCategory", "name")
+            .populate("categories", "name slug image")
+            .populate("subCategories", "name")
+            .populate("targetHeaderCategory", "name")
             .sort({ order: 1 })
             .lean();
 

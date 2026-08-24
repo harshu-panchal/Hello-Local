@@ -1,9 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
-import { getNotifications, Notification as NotificationType, markAsRead } from '../../../services/api/admin/adminNotificationService';
-import { useAdminSocket, AdminSocketNotification } from '../hooks/useAdminSocket';
-import helloLocalLogo from '@assets/logo.png';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
+import {
+  getNotifications,
+  Notification as NotificationType,
+  markAsRead,
+  markMultipleAsRead,
+} from "../../../services/api/admin/adminNotificationService";
+import { useAdminSocket, AdminSocketNotification } from "../hooks/useAdminSocket";
+import helloLocalLogo from "@assets/logo.png";
 
 interface AdminHeaderProps {
   onMenuClick: () => void;
@@ -14,35 +20,36 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  const { showToast } = useToast();
+
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [markingAll, setMarkingAll] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  const isActive = (path: string) => location.pathname.includes(path);
+  const isActive = (path: string) => location.pathname.startsWith(path);
 
   // Real-time socket notification handler — fires immediately when a new order arrives
   const handleSocketNotification = useCallback((socketNotif: AdminSocketNotification) => {
-    if (socketNotif.type !== 'NEW_ORDER') return;
+    if (socketNotif.type !== "NEW_ORDER") return;
 
-    // Prepend a synthetic notification entry to the list without waiting for HTTP
+    // Prepend synthetic notification entry to the list
     const syntheticNotif: NotificationType = {
       _id: `socket-${Date.now()}`,
-      recipientType: 'Admin',
-      title: '📦 New Order Received',
-      message: `Order #${socketNotif.orderNumber} — ₹${socketNotif.totalAmount.toLocaleString('en-IN')} (${socketNotif.paymentMethod || 'Unknown'})`,
-      type: 'Order',
+      recipientType: "Admin",
+      title: "📦 New Order Received",
+      message: `Order #${socketNotif.orderNumber} — ₹${socketNotif.totalAmount.toLocaleString("en-IN")} (${socketNotif.paymentMethod || "Unknown"})`,
+      type: "Order",
       isRead: false,
-      priority: 'High',
+      priority: "High",
       createdAt: new Date(socketNotif.timestamp).toISOString(),
       link: `/admin/orders/${socketNotif.orderId}`,
-      actionLabel: 'View Order',
+      actionLabel: "View Order",
     };
 
-    setNotifications(prev => [syntheticNotif, ...prev].slice(0, 10));
-    setUnreadCount(prev => prev + 1);
+    setNotifications((prev) => [syntheticNotif, ...prev].slice(0, 10));
+    setUnreadCount((prev) => prev + 1);
   }, []);
 
   // Connect to socket for real-time admin notifications
@@ -55,38 +62,46 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
       }
     };
 
-    // Initial fetch; re-poll every 60s as a safety net (socket covers real-time)
+    // Initial fetch; re-poll every 60s as a safety net
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000);
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
       clearInterval(interval);
     };
   }, []);
 
   const fetchNotifications = async () => {
     try {
-      const response = await getNotifications({ recipientType: 'Admin', limit: 10 });
+      const response = await getNotifications({ recipientType: "Admin", limit: 10 });
       if (response.success && response.data) {
         setNotifications(response.data);
         const unread = response.data.filter((n: any) => !n.isRead).length;
         setUnreadCount(unread);
       }
     } catch (err) {
-      console.error('Error fetching admin notifications:', err);
+      console.error("Error fetching admin notifications:", err);
     }
   };
 
   const handleNotificationClick = async (notification: NotificationType) => {
-    if (!notification.isRead) {
+    if (!notification.isRead && !notification._id.startsWith("socket-")) {
       try {
         await markAsRead(notification._id);
-        fetchNotifications();
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === notification._id ? { ...n, isRead: true } : n))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
       } catch (err) {
-        console.error('Error marking notification as read:', err);
+        console.error("Error marking notification as read:", err);
       }
+    } else if (notification._id.startsWith("socket-")) {
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === notification._id ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     }
 
     if (notification.link) {
@@ -95,268 +110,270 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
     setShowNotificationsDropdown(false);
   };
 
+  const handleMarkAllAsRead = async () => {
+    const unreadIds = notifications
+      .filter((n) => !n.isRead && !n._id.startsWith("socket-"))
+      .map((n) => n._id);
+
+    try {
+      setMarkingAll(true);
+      if (unreadIds.length > 0) {
+        await markMultipleAsRead({ notificationIds: unreadIds });
+      }
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+      showToast("All notifications marked as read", "success");
+    } catch (err) {
+      console.error("Error marking all notifications as read:", err);
+      showToast("Failed to mark notifications as read", "error");
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
   const handleLogout = () => {
     logout();
-    navigate('/admin/login');
+    navigate("/admin/login");
   };
 
   const handleLogoClick = () => {
-    navigate('/admin');
+    navigate("/admin/dashboard");
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-neutral-200 sticky top-0 z-30">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-3 sm:px-4 md:px-6 py-3 sm:py-4 gap-3 sm:gap-0">
-        {/* Logo and Hamburger Menu */}
-        <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+    <header className="bg-white shadow-xs border-b border-neutral-200 sticky top-0 z-30">
+      <div className="flex items-center justify-between px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 gap-3">
+        {/* Left: Logo and Hamburger Menu */}
+        <div className="flex items-center gap-2 sm:gap-4">
           {/* Hamburger Menu Button */}
           <button
             onClick={onMenuClick}
-            className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors flex-shrink-0"
-            aria-label="Toggle menu"
+            className="p-2.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Toggle navigation sidebar"
           >
             {isSidebarOpen ? (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M18 6L6 18M6 6L18 18"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             ) : (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M4 6H20M4 12H20M4 18H20"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="18" x2="20" y2="18" />
               </svg>
             )}
           </button>
+
           {/* Hello Local Logo */}
           <button
             onClick={handleLogoClick}
-            className="hover:opacity-80 transition-opacity"
+            className="hover:opacity-85 transition-opacity flex items-center"
+            title="Go to Admin Dashboard"
           >
             <img
               src={helloLocalLogo}
               alt="Hello Local"
-              className="h-10 sm:h-12 w-auto object-contain cursor-pointer"
-              style={{ maxWidth: '200px' }}
+              className="h-9 sm:h-10 w-auto object-contain cursor-pointer"
+              style={{ maxWidth: "180px" }}
             />
           </button>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="hidden md:flex items-center gap-4 lg:gap-6">
+        {/* Center: Top Quick Navigation Tabs */}
+        <nav aria-label="Quick Links" className="hidden md:flex items-center gap-1 lg:gap-2">
           <button
-            onClick={() => navigate('/admin/orders')}
-            className={`relative px-3 lg:px-4 py-2 text-xs sm:text-sm font-medium transition-colors ${isActive('/admin/orders') ? 'text-neutral-900' : 'text-neutral-600 hover:text-neutral-900'
-              }`}
+            onClick={() => navigate("/admin/orders/all")}
+            className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-colors min-h-[40px] ${
+              isActive("/admin/orders")
+                ? "bg-rose-50 text-rose-700 font-bold"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+            }`}
           >
             Orders
-
           </button>
+
           <button
-            onClick={() => navigate('/admin/customers')}
-            className={`px-3 lg:px-4 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${isActive('/admin/customers') ? 'text-neutral-900' : 'text-neutral-600 hover:text-neutral-900'
-              }`}
+            onClick={() => navigate("/admin/users")}
+            className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-colors min-h-[40px] whitespace-nowrap ${
+              isActive("/admin/users") || isActive("/admin/customers")
+                ? "bg-rose-50 text-rose-700 font-bold"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+            }`}
           >
             Manage Customer
           </button>
+
           <button
-            onClick={() => navigate('/admin/collect-cash')}
-            className={`px-3 lg:px-4 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${isActive('/admin/collect-cash') ? 'text-neutral-900' : 'text-neutral-600 hover:text-neutral-900'
-              }`}
+            onClick={() => navigate("/admin/delivery-boy/cash-collection")}
+            className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-colors min-h-[40px] whitespace-nowrap ${
+              isActive("/admin/delivery-boy/cash-collection") || isActive("/admin/collect-cash")
+                ? "bg-rose-50 text-rose-700 font-bold"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+            }`}
           >
             Collect Cash
           </button>
-        </div>
+        </nav>
 
-        {/* Action Icons */}
-        <div className="flex items-center gap-2 md:gap-4 relative">
-          {/* Search Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSearchModal(!showSearchModal)}
-              className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
-              aria-label="Search"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {showSearchModal && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-neutral-200 p-4 z-50">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchQuery.trim()) {
-                        // Navigate to search results or perform search
-                        navigate(`/admin?search=${encodeURIComponent(searchQuery)}`);
-                        setShowSearchModal(false);
-                        setSearchQuery('');
-                      }
-                    }}
-                    placeholder="Search orders, customers, products..."
-                    className="w-full px-4 py-2 pl-10 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
-                    autoFocus
-                  />
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-                  >
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="M21 21L16.65 16.65"></path>
-                  </svg>
-                  <button
-                    onClick={() => {
-                      setShowSearchModal(false);
-                      setSearchQuery('');
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-                {searchQuery && (
-                  <div className="mt-2 text-xs text-neutral-500">
-                    Press Enter to search
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Notifications Button */}
+        {/* Right: Action Icons (Notification Bell, Profile, Logout) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 relative">
+          {/* Notifications Button & Dropdown */}
           <div className="relative" ref={notificationsRef}>
             <button
-              onClick={() => {
-                setShowNotificationsDropdown(!showNotificationsDropdown);
-                setShowSearchModal(false);
-              }}
-              className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors relative"
-              aria-label="Notifications"
+              onClick={() => setShowNotificationsDropdown((prev) => !prev)}
+              className="p-2.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center relative"
+              aria-label="View notifications"
+              title="Notifications"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 8A6 6 0 0 0 6 8C6 11.3137 4 14 4 17H20C20 14 18 11.3137 18 8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8C6 11.3137 4 14 4 17H20C20 14 18 11.3137 18 8Z" />
+                <path d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21" />
               </svg>
+
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full font-bold">
-                  {unreadCount > 9 ? '9+' : unreadCount}
+                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-rose-600 text-white text-[10px] flex items-center justify-center rounded-full font-extrabold shadow-sm border border-white animate-pulse">
+                  {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </button>
-            {showNotificationsDropdown && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-neutral-200 py-0 z-50 flex flex-col max-h-[500px]">
-                <div className="px-4 py-3 border-b border-neutral-100 flex justify-between items-center bg-neutral-50 rounded-t-lg">
-                  <h3 className="text-sm font-bold text-neutral-800">Notifications</h3>
-                  {unreadCount > 0 && <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full">{unreadCount} New</span>}
-                </div>
 
-                <div className="overflow-y-auto overflow-x-hidden flex-1">
-                  {notifications.length === 0 ? (
-                    <div className="py-8 px-4 text-center">
-                      <div className="text-neutral-300 mb-2">
-                        <svg className="w-10 h-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                        </svg>
-                      </div>
-                      <p className="text-sm text-neutral-500">No notifications found</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col">
-                      {notifications.map((n) => (
-                        <div
-                          key={n._id}
-                          onClick={() => handleNotificationClick(n)}
-                          className={`px-4 py-3 border-b border-neutral-50 cursor-pointer hover:bg-rose-50 transition-colors relative ${!n.isRead ? 'bg-blue-50/30' : ''}`}
-                        >
-                          {!n.isRead && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-rose-500 rounded-r"></div>}
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex justify-between items-start">
-                              <span className={`text-[11px] font-bold uppercase tracking-wider ${n.type === 'Payment' ? 'text-amber-600' :
-                                  n.type === 'Success' ? 'text-rose-700' : 'text-rose-600'
-                                }`}>
-                                {n.type}
-                              </span>
-                              <span className="text-[10px] text-neutral-400">
-                                {new Date(n.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <h4 className={`text-sm ${!n.isRead ? 'font-bold text-neutral-900' : 'text-neutral-700'}`}>{n.title}</h4>
-                            <p className="text-xs text-neutral-500 line-clamp-2 mt-0.5">{n.message}</p>
-                            {n.actionLabel && (
-                              <div className="mt-1.5 text-[11px] font-bold text-rose-600 flex items-center gap-1 group">
-                                {n.actionLabel}
-                                <span className="group-hover:translate-x-1 transition-transform">→</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+            {/* Notification Popover */}
+            {showNotificationsDropdown && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-neutral-200/90 z-50 flex flex-col max-h-[500px] overflow-hidden animate-scale-up">
+                {/* Popover Header */}
+                <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/80">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
+                      Live Notifications
+                    </h3>
+                    {unreadCount > 0 && (
+                      <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {unreadCount} New
+                      </span>
+                    )}
+                  </div>
+
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllAsRead}
+                      disabled={markingAll}
+                      className="text-[11px] font-bold text-rose-700 hover:text-rose-800 disabled:opacity-50"
+                    >
+                      {markingAll ? "Marking..." : "Mark All Read"}
+                    </button>
                   )}
                 </div>
 
-                <div className="px-4 py-2 border-t border-neutral-100 bg-neutral-50 rounded-b-lg">
+                {/* Notification List Body */}
+                <div className="overflow-y-auto overflow-x-hidden flex-1 divide-y divide-neutral-100">
+                  {notifications.length === 0 ? (
+                    <div className="py-12 px-4 text-center space-y-2">
+                      <div className="text-2xl text-neutral-300">🔔</div>
+                      <p className="text-xs font-medium text-neutral-500">No active notifications</p>
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n._id}
+                        onClick={() => handleNotificationClick(n)}
+                        className={`px-4 py-3 cursor-pointer hover:bg-rose-50/60 transition-colors relative ${
+                          !n.isRead ? "bg-rose-50/30" : "bg-white"
+                        }`}
+                      >
+                        {!n.isRead && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-rose-600 rounded-r" />
+                        )}
+
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex justify-between items-start">
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-wider ${
+                                n.type === "Payment"
+                                  ? "text-amber-600"
+                                  : n.type === "Success"
+                                  ? "text-emerald-700"
+                                  : "text-rose-700"
+                              }`}
+                            >
+                              {n.type}
+                            </span>
+                            <span className="text-[10px] text-neutral-400">
+                              {n.createdAt
+                                ? new Date(n.createdAt).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "Just now"}
+                            </span>
+                          </div>
+
+                          <h4
+                            className={`text-xs ${
+                              !n.isRead ? "font-bold text-neutral-900" : "font-semibold text-neutral-700"
+                            }`}
+                          >
+                            {n.title}
+                          </h4>
+
+                          <p className="text-[11px] text-neutral-500 line-clamp-2 mt-0.5 leading-relaxed">
+                            {n.message}
+                          </p>
+
+                          {n.actionLabel && (
+                            <div className="mt-1 text-[11px] font-bold text-rose-700 flex items-center gap-1 group">
+                              <span>{n.actionLabel}</span>
+                              <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Popover Footer */}
+                <div className="px-4 py-2.5 border-t border-neutral-100 bg-neutral-50/80 text-center">
                   <button
+                    type="button"
                     onClick={() => {
-                      navigate('/admin/notification');
+                      navigate("/admin/notification");
                       setShowNotificationsDropdown(false);
                     }}
-                    className="w-full text-center text-xs text-rose-600 hover:rose-700 font-bold py-1"
+                    className="w-full text-center text-xs text-rose-700 hover:text-rose-800 font-bold py-1 transition-colors"
                   >
-                    Manage All Notifications
+                    Broadcast & Notification Desk →
                   </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Profile Button */}
+          {/* Admin Profile Button */}
           <button
-            onClick={() => navigate('/admin/profile')}
-            className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
-            aria-label="Profile"
+            onClick={() => navigate("/admin/profile")}
+            className="p-2.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Admin Profile Settings"
+            title="My Profile"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" />
+              <circle cx="12" cy="7" r="4" />
             </svg>
           </button>
 
           {/* Logout Button */}
           <button
             onClick={handleLogout}
-            className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
-            aria-label="Logout"
+            className="p-2.5 text-neutral-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Logout from Admin Portal"
+            title="Logout"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9M16 17L21 12M21 12L16 7M21 12H9"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
           </button>
         </div>
@@ -364,6 +381,3 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
     </header>
   );
 }
-
-
-

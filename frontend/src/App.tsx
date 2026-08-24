@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { Suspense, lazy, startTransition } from "react";
+import { Suspense, lazy } from "react";
 import { CartProvider } from "./context/CartContext";
 import { OrdersProvider } from "./context/OrdersContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -13,6 +13,7 @@ import IconLoader from "./components/loaders/IconLoader";
 import RouteLoaderTrigger from "./components/loaders/RouteLoaderTrigger";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RequireCustomer from "./components/RequireCustomer";
 import PublicRoute from "./components/PublicRoute";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -78,6 +79,9 @@ const DeliverySignUp = lazy(() => import("./modules/delivery/pages/DeliverySignU
 // Lazy load seller routes
 const SellerLayout = lazy(() => import("./modules/seller/components/SellerLayout"));
 const SellerDashboard = lazy(() => import("./modules/seller/pages/SellerDashboard"));
+const SellerPOSBilling = lazy(() => import("./modules/seller/pages/SellerPOSBilling"));
+const SellerBills = lazy(() => import("./modules/seller/pages/SellerBills"));
+const SellerBillDetail = lazy(() => import("./modules/seller/pages/SellerBillDetail"));
 const SellerOrders = lazy(() => import("./modules/seller/pages/SellerOrders"));
 const SellerOrderDetail = lazy(() => import("./modules/seller/pages/SellerOrderDetail"));
 const SellerCategory = lazy(() => import("./modules/seller/pages/SellerCategory"));
@@ -91,6 +95,7 @@ const SellerSalesReport = lazy(() => import("./modules/seller/pages/SellerSalesR
 const SellerReturnRequest = lazy(() => import("./modules/seller/pages/SellerReturnRequest"));
 const SellerAccountSettings = lazy(() => import("./modules/seller/pages/SellerAccountSettings"));
 const SellerProfile = lazy(() => import("./modules/seller/pages/SellerProfile"));
+const SellerWhatsApp = lazy(() => import("./modules/seller/pages/SellerWhatsApp"));
 const SellerLogin = lazy(() => import("./modules/seller/pages/SellerLogin"));
 const SellerSignUp = lazy(() => import("./modules/seller/pages/SellerSignUp"));
 
@@ -117,8 +122,6 @@ const AdminManageDeliveryBoy = lazy(() => import("./modules/admin/pages/AdminMan
 const AdminFundTransfer = lazy(() => import("./modules/admin/pages/AdminFundTransfer"));
 const AdminCashCollection = lazy(() => import("./modules/admin/pages/AdminCashCollection"));
 const AdminReturnRequest = lazy(() => import("./modules/admin/pages/AdminReturnRequest"));
-const AdminPaymentList = lazy(() => import("./modules/admin/pages/AdminPaymentList"));
-const AdminSmsGateway = lazy(() => import("./modules/admin/pages/AdminSmsGateway"));
 const AdminSystemUser = lazy(() => import("./modules/admin/pages/AdminSystemUser"));
 const AdminUsers = lazy(() => import("./modules/admin/pages/AdminUsers"));
 const AdminFAQ = lazy(() => import("./modules/admin/pages/AdminFAQ"));
@@ -299,6 +302,9 @@ function App() {
                               <SellerLayout>
                                 <Routes>
                                 <Route path="/" element={<SellerDashboard />} />
+                                <Route path="pos" element={<SellerPOSBilling />} />
+                                <Route path="bills" element={<SellerBills />} />
+                                <Route path="bills/:id" element={<SellerBillDetail />} />
                                 <Route path="orders" element={<SellerOrders />} />
                                 <Route path="orders/:id" element={<SellerOrderDetail />} />
                                 <Route path="category" element={<SellerCategory />} />
@@ -314,6 +320,7 @@ function App() {
                                 <Route path="reports/sales" element={<SellerSalesReport />} />
                                 <Route path="account-settings" element={<SellerAccountSettings />} />
                                 <Route path="profile" element={<SellerProfile />} />
+                                <Route path="whatsapp" element={<SellerWhatsApp />} />
                                 <Route path="ad-requests" element={<SellerAdRequests />} />
                                 </Routes>
                               </SellerLayout>
@@ -339,6 +346,7 @@ function App() {
                                 <Route path="brand" element={<AdminBrand />} />
                                 <Route path="product/taxes" element={<AdminTaxes />} />
                                 <Route path="product/list" element={<AdminStockManagement />} />
+                                <Route path="product/add" element={<AdminAddProduct />} />
                                 <Route path="product/edit/:id" element={<AdminAddProduct />} />
                                 <Route path="manage-seller/list" element={<AdminManageSellerList />} />
                                 <Route path="manage-seller/transaction" element={<AdminSellerTransaction />} />
@@ -354,8 +362,6 @@ function App() {
                                 <Route path="orders" element={<AdminOrders />} />
                                 <Route path="customers" element={<AdminManageCustomer />} />
                                 <Route path="collect-cash" element={<AdminCashCollection />} />
-                                <Route path="payment-list" element={<AdminPaymentList />} />
-                                <Route path="sms-gateway" element={<AdminSmsGateway />} />
                                 <Route path="system-user" element={<AdminSystemUser />} />
                                 <Route path="customer-app-policy" element={<AdminCustomerAppPolicy />} />
                                 <Route path="delivery-app-policy" element={<AdminDeliveryAppPolicy />} />
@@ -399,23 +405,26 @@ function App() {
                                 <Route path="/" element={<Home />} />
                                 <Route path="home" element={<Home />} />
                                 <Route path="search" element={<Search />} />
-                                <Route path="orders" element={<Orders />} />
-                                <Route path="orders/:id" element={<OrderDetail />} />
-                                <Route path="order-again" element={<OrderAgain />} />
-                                <Route path="account" element={<Account />} />
+                                {/* Pages that are meaningless without a session.
+                                    These were reachable while signed out and
+                                    simply rendered empty shells that 401'd. (#M-08) */}
+                                <Route path="orders" element={<RequireCustomer><Orders /></RequireCustomer>} />
+                                <Route path="orders/:id" element={<RequireCustomer><OrderDetail /></RequireCustomer>} />
+                                <Route path="order-again" element={<RequireCustomer><OrderAgain /></RequireCustomer>} />
+                                <Route path="account" element={<RequireCustomer><Account /></RequireCustomer>} />
                                 <Route path="about-us" element={<AboutUs />} />
                                 <Route path="faq" element={<FAQ />} />
-                                <Route path="wishlist" element={<Wishlist />} />
+                                <Route path="wishlist" element={<RequireCustomer><Wishlist /></RequireCustomer>} />
                                 <Route path="categories" element={<Categories />} />
                                 <Route path="category/:id" element={<Category />} />
-                                <Route path="address-book" element={<AddressBook />} />
+                                <Route path="address-book" element={<RequireCustomer><AddressBook /></RequireCustomer>} />
                                 <Route path="local-setu" element={<LocalSetu />} />
-                                <Route path="checkout" element={<Checkout />} />
-                                <Route path="checkout/address" element={<CheckoutAddress />} />
+                                <Route path="checkout" element={<RequireCustomer><Checkout /></RequireCustomer>} />
+                                <Route path="checkout/address" element={<RequireCustomer><CheckoutAddress /></RequireCustomer>} />
                                 <Route path="product/:id" element={<ProductDetail />} />
-                                <Route path="invoice/:id" element={<Invoice />} />
+                                <Route path="invoice/:id" element={<RequireCustomer><Invoice /></RequireCustomer>} />
                                 <Route path="cart" element={<Cart />} />
-                                <Route path="addresses" element={<Addresses />} />
+                                <Route path="addresses" element={<RequireCustomer><Addresses /></RequireCustomer>} />
                                 <Route path="store/:slug" element={<StorePage />} />
                                 <Route path="store/spiritual" element={<SpiritualStore />} />
                                 <Route path="store/pharma" element={<PharmaStore />} />

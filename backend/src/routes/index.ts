@@ -42,6 +42,7 @@ import { submitContactForm } from "../modules/website/controllers/contactControl
 
 
 import customerOrderRoutes from "./customerOrderRoutes";
+import customerReturnRoutes from "./customerReturnRoutes";
 
 const router = Router();
 
@@ -103,6 +104,9 @@ router.use("/customer", customerTrackingRoutes);
 
 // Customer orders routes
 router.use("/customer/orders", customerOrderRoutes);
+
+// Customer returns (#H-20)
+router.use("/customer/returns", customerReturnRoutes);
 
 router.use("/customer/coupons", customerCouponRoutes);
 router.use("/customer/addresses", customerAddressRoutes);

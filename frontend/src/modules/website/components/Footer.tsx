@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../../services/api/config';
 import { useToast } from '../../../context/ToastContext';
-import { motion, AnimatePresence } from 'framer-motion';
-
 const Footer = () => {
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
@@ -11,15 +9,61 @@ const Footer = () => {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [messageError, setMessageError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    let hasError = false;
+
+    const name = formData.name.trim();
+    if (!name) {
+      setNameError('Name is required');
+      hasError = true;
+    } else if (name.length < 2) {
+      setNameError('Name must be at least 2 characters');
+      hasError = true;
+    } else if (!/^[A-Za-z\s]+$/.test(name)) {
+      setNameError('Name must contain only letters and spaces');
+      hasError = true;
+    } else {
+      setNameError('');
+    }
+
+    const email = formData.email.trim();
+    if (!email) {
+      setEmailError('Email is required');
+      hasError = true;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Please enter a valid email address');
+      hasError = true;
+    } else {
+      setEmailError('');
+    }
+
+    const message = formData.message.trim();
+    if (!message) {
+      setMessageError('Message is required');
+      hasError = true;
+    } else if (message.length < 10) {
+      setMessageError('Message must be at least 10 characters');
+      hasError = true;
+    } else {
+      setMessageError('');
+    }
+
+    if (hasError) return;
+
     setIsSubmitting(true);
     try {
       const response = await api.post('/contact', formData);
       if (response.data.success) {
         showToast('Message sent successfully!', 'success');
         setFormData({ name: '', email: '', message: '' });
+        setNameError('');
+        setEmailError('');
+        setMessageError('');
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -30,10 +74,20 @@ const Footer = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    const { name, value } = e.target;
+    if (name === 'name') {
+      const filtered = value.replace(/[^A-Za-z\s]/g, '');
+      setFormData(prev => ({ ...prev, name: filtered }));
+      if (nameError) setNameError('');
+      return;
+    }
+    if (name === 'message') {
+      setFormData(prev => ({ ...prev, message: value.slice(0, 500) }));
+      if (messageError) setMessageError('');
+      return;
+    }
+    if (name === 'email' && emailError) setEmailError('');
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const socialLinks: Record<string, string> = {
@@ -120,33 +174,44 @@ const Footer = () => {
 
             <div className="mt-8">
               <form onSubmit={handleSubmit} className="space-y-3">
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Your Name"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all"
-                  required
-                />
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="Your Email"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all"
-                  required
-                />
-                <textarea
-                  name="message"
-                  value={formData.message}
-                  onChange={handleChange}
-                  placeholder="Message"
-                  rows={3}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all resize-none"
-                  required
-                ></textarea>
+                <div>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Your Name (letters only)"
+                    maxLength={60}
+                    className={`w-full bg-white/5 border rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all ${nameError ? 'border-red-500' : 'border-white/10'}`}
+                  />
+                  {nameError && <p className="text-xs text-red-400 mt-0.5">{nameError}</p>}
+                </div>
+                <div>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Your Email"
+                    className={`w-full bg-white/5 border rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all ${emailError ? 'border-red-500' : 'border-white/10'}`}
+                  />
+                  {emailError && <p className="text-xs text-red-400 mt-0.5">{emailError}</p>}
+                </div>
+                <div>
+                  <textarea
+                    name="message"
+                    value={formData.message}
+                    onChange={handleChange}
+                    placeholder="Message (min 10 characters)"
+                    rows={3}
+                    maxLength={500}
+                    className={`w-full bg-white/5 border rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#ff3d8d] transition-all resize-none ${messageError ? 'border-red-500' : 'border-white/10'}`}
+                  ></textarea>
+                  <div className="flex justify-between items-center mt-0.5">
+                    {messageError ? <p className="text-xs text-red-400">{messageError}</p> : <span />}
+                    <span className="text-xs text-neutral-500 ml-auto">{formData.message.length}/500</span>
+                  </div>
+                </div>
                 <button
                   type="submit"
                   disabled={isSubmitting}

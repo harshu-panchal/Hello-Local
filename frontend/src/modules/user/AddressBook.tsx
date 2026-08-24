@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Address,
@@ -6,8 +6,8 @@ import {
   getAddresses,
   updateAddress,
 } from "../../services/api/customerAddressService";
-
-const iconStyle = "w-5 h-5 text-amber-600 flex-shrink-0";
+import { UserEmptyState } from "./components/common";
+import { ArrowLeftIcon, LocationPinIcon, PlusIcon, ShareIcon } from "./components/common/UserIcons";
 
 function buildAddressLine(address: Address) {
   const parts = [
@@ -89,7 +89,6 @@ export default function AddressBook() {
     try {
       setBusyId(id);
       await updateAddress(id, { isDefault: true });
-      // Optimistically mark default locally
       setAddresses((prev) =>
         prev.map((addr) => ({ ...addr, isDefault: addr._id === id }))
       );
@@ -104,178 +103,127 @@ export default function AddressBook() {
     }
   };
 
-  const defaultBadge = useMemo(
-    () => (
-      <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-100 rounded-full">
-        Default
-      </span>
-    ),
-    []
-  );
-
   return (
-    <div className="min-h-screen bg-white md:bg-neutral-50 pb-24 md:pb-10">
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={() => navigate(-1)}
-          aria-label="Back"
-          className="p-2 rounded-full hover:bg-neutral-100 text-neutral-700"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18 9 12l6-6" />
-          </svg>
-        </button>
-        <div>
-          <p className="text-xs text-neutral-500">Your saved addresses</p>
-          <h1 className="text-base font-semibold text-neutral-900">
-            Address book
-          </h1>
-        </div>
-        <div className="ml-auto">
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full transition-colors touch-target-min"
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon size={18} />
+            </button>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                Address Book
+              </h1>
+              <p className="text-[10px] text-slate-400 font-medium">
+                {addresses.length} saved addresses
+              </p>
+            </div>
+          </div>
+
           <button
+            type="button"
             onClick={() => navigate("/checkout/address")}
-            className="px-3 py-1.5 text-sm font-semibold text-white bg-teal-600 rounded-full hover:bg-teal-700"
+            className="px-3.5 py-1.5 bg-[#FF2E7A] hover:bg-[#E02269] text-white rounded-full text-xs font-bold uppercase tracking-wider shadow-xs transition-opacity flex items-center gap-1 touch-target-min"
           >
-            Add new
+            <PlusIcon size={14} />
+            <span>Add New</span>
           </button>
         </div>
       </div>
 
-      <div className="px-4 md:px-6 pt-4 pb-6">
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-3.5 md:pt-6">
         {loading ? (
-          <div className="flex justify-center py-10">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600" />
+          <div className="flex flex-col items-center justify-center py-20 gap-2.5">
+            <div className="w-10 h-10 border-3 border-[#FF2E7A] border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-slate-400">Loading addresses...</p>
           </div>
         ) : error ? (
-          <div className="bg-red-50 text-red-700 border border-red-100 rounded-lg p-4 text-sm">
+          <div className="bg-[#FFF1F4] text-[#FF2E7A] border border-[#FFE4EA] rounded-xl p-3.5 text-xs font-bold">
             {error}
           </div>
         ) : addresses.length === 0 ? (
-          <div className="bg-white border border-dashed border-neutral-200 rounded-lg p-6 text-center">
-            <p className="text-neutral-700 font-semibold mb-1">
-              No addresses yet
-            </p>
-            <p className="text-sm text-neutral-500 mb-3">
-              Save an address to checkout faster next time.
-            </p>
-            <button
-              onClick={() => navigate("/checkout/address")}
-              className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 rounded-full hover:bg-teal-700"
-            >
-              Add address
-            </button>
+          <div className="py-10">
+            <UserEmptyState
+              icon={<LocationPinIcon size={32} className="text-[#FF2E7A]" />}
+              title="No saved addresses"
+              description="Save your frequently used addresses for effortless fast delivery."
+              actionText="Add New Address"
+              onAction={() => navigate("/checkout/address")}
+            />
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {addresses.map((addr) => {
               const isBusy = busyId === addr._id;
               return (
                 <div
                   key={addr._id || addr.phone}
-                  className="bg-white border border-neutral-200 rounded-xl shadow-[0_1px_6px_rgba(0,0,0,0.05)] p-3 transition hover:shadow-md"
+                  className="bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between"
                 >
-                  <div className="flex items-start gap-2">
-                    <div className="mt-0.5">
-                      <svg
-                        viewBox="0 0 24 24"
-                        className={iconStyle}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      >
-                        <path d="M3 9.5 12 3l9 6.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" />
-                        <path d="M9 21V12h6v9" />
-                      </svg>
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] flex-shrink-0">
+                      <LocationPinIcon size={16} />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center flex-wrap gap-1">
-                        <span className="text-sm font-semibold text-neutral-900">
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                          {addr.fullName || "Address"}
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                           {addr.type || "Home"}
                         </span>
-                        {addr.isDefault && defaultBadge}
+                        {addr.isDefault && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-[#16A34A] border border-emerald-200 px-2 py-0.5 rounded-full">
+                            Default
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-green-700 font-semibold mt-0.5">
-                        Saved address
-                      </p>
-                      <p className="text-sm text-neutral-800 leading-relaxed mt-2">
+
+                      <p className="text-xs text-slate-600 leading-relaxed mt-0.5">
                         {buildAddressLine(addr)}
                       </p>
-                      <p className="text-sm text-neutral-700 mt-1">
-                        Phone number: {addr.phone || "Not added"}
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">
+                        +91 {addr.phone || "Not added"}
                       </p>
-                      <div className="flex items-center gap-3 mt-3 text-teal-700">
-                        <button
-                          onClick={() => handleShare(addr)}
-                          className="flex items-center gap-1 text-sm font-semibold hover:text-teal-800"
-                          disabled={isBusy}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <circle cx="18" cy="5" r="3" />
-                            <circle cx="6" cy="12" r="3" />
-                            <circle cx="18" cy="19" r="3" />
-                            <path d="m8.59 13.51 6.83 3.98" />
-                            <path d="m15.41 6.51-6.82 3.98" />
-                          </svg>
-                          Share
-                        </button>
-                        <button
-                          onClick={() => handleMakeDefault(addr._id)}
-                          className="flex items-center gap-1 text-sm font-semibold hover:text-teal-800 disabled:text-neutral-400"
-                          disabled={isBusy || addr.isDefault}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="m9 11 3 3L22 4" />
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                          </svg>
-                          {addr.isDefault ? "Default" : "Set default"}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(addr._id)}
-                          className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700 disabled:text-neutral-400"
-                          disabled={isBusy}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M3 6h18" />
-                            <path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" />
-                            <path d="M10 11h4" />
-                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                          </svg>
-                          Remove
-                        </button>
-                      </div>
                     </div>
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-end gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleShare(addr)}
+                      disabled={isBusy}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 touch-target-min"
+                    >
+                      <ShareIcon size={12} />
+                      <span>Share</span>
+                    </button>
+                    {!addr.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => handleMakeDefault(addr._id)}
+                        disabled={isBusy}
+                        className="text-xs font-bold text-[#16A34A] hover:bg-emerald-100 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full transition-colors touch-target-min"
+                      >
+                        Set Default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(addr._id)}
+                      disabled={isBusy}
+                      className="text-xs font-bold text-[#FF2E7A] hover:text-[#E02269] hover:bg-[#FFF1F4] px-2.5 py-1 rounded-full transition-colors touch-target-min"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               );
@@ -286,4 +234,3 @@ export default function AddressBook() {
     </div>
   );
 }
-

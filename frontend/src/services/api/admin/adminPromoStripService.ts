@@ -42,6 +42,7 @@ export interface PromoStripFormData {
 export const getPromoStrips = async (params?: {
   headerCategorySlug?: string;
   isActive?: boolean;
+  search?: string;
 }): Promise<PromoStrip[]> => {
   const queryParams = new URLSearchParams();
   if (params?.headerCategorySlug) {
@@ -49,6 +50,9 @@ export const getPromoStrips = async (params?: {
   }
   if (params?.isActive !== undefined) {
     queryParams.append("isActive", params.isActive.toString());
+  }
+  if (params?.search) {
+    queryParams.append("search", params.search);
   }
 
   const response = await api.get(

@@ -94,6 +94,15 @@ export const verifySmsOtp = asyncHandler(
       isNewUser = true;
     }
 
+    // A deactivated customer must not obtain a token. Suspension was previously
+    // recorded but never enforced anywhere. (#H-17)
+    if (customer.status !== "Active") {
+      return res.status(403).json({
+        success: false,
+        message: "This account has been deactivated. Please contact support.",
+      });
+    }
+
     // Generate JWT token
     const token = generateToken(customer._id.toString(), "Customer");
 

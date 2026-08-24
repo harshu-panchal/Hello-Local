@@ -1,154 +1,35 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getActiveShopAds, ShopAd } from "../../../services/api/admin/adminShopAdService";
+import { useNavigate } from "react-router-dom";
 
 const FALLBACK_ADS: ShopAd[] = [
     {
-        _id: "dummy-1",
-        shopName: "Gourmet Garden",
-        tagline: "Fresh Organic Produce",
-        description: "100% chemical-free vegetables directly from local farms.",
-        imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1000",
-        badge: "FRESH",
-        badgeColor: "#10b981",
-        ctaText: "Shop Now",
-        ctaLink: "/products?category=Vegetables",
+        _id: "grocery-1",
+        shopName: "Farm Fresh Market",
+        tagline: "100% Organic & Chemical-Free",
+        description: "Fresh vegetables and fruits sourced directly from local farmers.",
+        imageUrl: "",
+        badge: "FARM FRESH",
+        badgeColor: "#16A34A",
+        ctaText: "Shop Fresh",
+        ctaLink: "/categories",
         order: 1,
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     },
     {
-        _id: "dummy-2",
-        shopName: "Style Haven",
-        tagline: "Latest Fashion Trends",
-        description: "Trendy & modern apparel for every occasion.",
-        imageUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1000",
-        badge: "NEW TRENDS",
-        badgeColor: "#ec4899",
-        ctaText: "Browse Looks",
-        ctaLink: "/products?category=Fashion",
-        order: 2,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-3",
-        shopName: "Kitchen Masters",
-        tagline: "Modern Cookware Essentials",
-        description: "Upgrade your kitchen with our premium collection.",
-        imageUrl: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80&w=1000",
-        badge: "PREMIUM",
-        badgeColor: "#f59e0b",
-        ctaText: "View Collection",
-        ctaLink: "/products?category=Kitchen",
-        order: 3,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-4",
-        shopName: "Electro Hub",
-        tagline: "Next-Gen Tech Gadgets",
-        description: "Innovative devices to satisfy your inner geek.",
-        imageUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=1000",
-        badge: "TECH",
-        badgeColor: "#3b82f6",
-        ctaText: "See Tech",
-        ctaLink: "/products?category=Electronics",
-        order: 4,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-5",
-        shopName: "Cozy Corners",
-        tagline: "Aesthetic Home Decor",
-        description: "Transform your house into a beautiful home.",
-        imageUrl: "https://images.unsplash.com/photo-1513519247388-193454204627?auto=format&fit=crop&q=80&w=1000",
-        badge: "AESTHETIC",
-        badgeColor: "#8b5cf6",
-        ctaText: "Decorate Now",
-        ctaLink: "/products?category=Decor",
-        order: 5,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-6",
-        shopName: "The Shoe Box",
-        tagline: "Step into Comfort",
-        description: "Quality footwear for daily wear and athletics.",
-        imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=1000",
-        badge: "COMFORT",
-        badgeColor: "#ef4444",
-        ctaText: "Shop Shoes",
-        ctaLink: "/products?category=Footwear",
-        order: 6,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-7",
-        shopName: "Beauty Bliss",
-        tagline: "Organic Skincare Rituals",
-        description: "Nourish your skin with the power of nature.",
-        imageUrl: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=1000",
-        badge: "GLOW",
-        badgeColor: "#14b8a6",
-        ctaText: "Get Glowing",
-        ctaLink: "/products?category=Beauty",
-        order: 7,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-8",
-        shopName: "Daily Delights",
-        tagline: "Essential Staples Box",
-        description: "Everything you need for your pantry in one go.",
-        imageUrl: "https://images.unsplash.com/photo-1534723452862-4c874e70d6f2?auto=format&fit=crop&q=80&w=1000",
-        badge: "ESSENTIAL",
-        badgeColor: "#fbbf24",
+        _id: "grocery-2",
+        shopName: "Daily Dairy & Bakery",
+        tagline: "Morning Milk, Bread & Eggs",
+        description: "Delivered to your doorstep within 15 minutes every morning.",
+        imageUrl: "",
+        badge: "DAILY ESSENTIAL",
+        badgeColor: "#FF2E7A",
         ctaText: "Order Now",
-        ctaLink: "/products?category=Grocery",
-        order: 8,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-9",
-        shopName: "Fit Nation",
-        tagline: "Achieve Your Goals",
-        description: "Premium fitness gear for serious athletes.",
-        imageUrl: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&q=80&w=1000",
-        badge: "ATHLETIC",
-        badgeColor: "#4338ca",
-        ctaText: "Go Fit",
-        ctaLink: "/products?category=Fitness",
-        order: 9,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "dummy-10",
-        shopName: "Pet Paradise",
-        tagline: "Happy Pets, Happy You",
-        description: "Best treats and accessories for your furry friends.",
-        imageUrl: "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?auto=format&fit=crop&q=80&w=1000",
-        badge: "HAPPY PETS",
-        badgeColor: "#65a30d",
-        ctaText: "Shop Pets",
-        ctaLink: "/products?category=Pets",
-        order: 10,
+        ctaLink: "/shop-by-stores",
+        order: 2,
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -161,6 +42,7 @@ const swipePower = (offset: number, velocity: number) => {
 };
 
 export default function ShopAdCarousel() {
+    const navigate = useNavigate();
     const [ads, setAds] = useState<ShopAd[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -215,10 +97,8 @@ export default function ShopAdCarousel() {
 
     if (loading && ads.length === 0) {
         return (
-            <div className="w-full">
-                <div className="h-[220px] md:h-[360px] w-full bg-neutral-200 animate-pulse overflow-hidden relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                </div>
+            <div className="w-full max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2">
+                <div className="h-32 sm:h-40 w-full bg-slate-100 animate-pulse rounded-2xl" />
             </div>
         );
     }
@@ -228,8 +108,8 @@ export default function ShopAdCarousel() {
     const currentAd = ads[currentIndex];
 
     return (
-        <div className="relative group w-full select-none">
-            <div className="relative h-[220px] md:h-[360px] w-full overflow-hidden bg-neutral-900">
+        <div className="relative group w-full max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2 select-none">
+            <div className="relative h-[130px] sm:h-[160px] md:h-[180px] w-full overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-2xs border border-slate-100">
                 <AnimatePresence initial={false} custom={direction}>
                     <motion.div
                         key={currentIndex}
@@ -240,7 +120,7 @@ export default function ShopAdCarousel() {
                         drag="x"
                         dragConstraints={{ left: 0, right: 0 }}
                         dragElastic={1}
-                        onDragEnd={(e, { offset, velocity }) => {
+                        onDragEnd={(_, { offset, velocity }) => {
                             const swipe = swipePower(offset.x, velocity.x);
                             if (swipe < -swipeConfidenceThreshold) {
                                 handleNext();
@@ -252,121 +132,49 @@ export default function ShopAdCarousel() {
                             x: { type: "spring", stiffness: 300, damping: 30 },
                             opacity: { duration: 0.2 }
                         }}
-                        className="absolute inset-0"
+                        className="absolute inset-0 w-full h-full flex items-center justify-between p-4 sm:p-6 md:p-8 cursor-pointer"
+                        onClick={() => {
+                            if (currentAd.ctaLink) {
+                                navigate(currentAd.ctaLink);
+                            }
+                        }}
                     >
-                        {/* Dynamic Light Pink Animated Background Overlay */}
-                        <motion.div
-                            animate={{
-                                opacity: [0.1, 0.25, 0.1],
-                                scale: [1, 1.1, 1],
-                            }}
-                            transition={{
-                                duration: 8,
-                                repeat: Infinity,
-                                ease: "easeInOut"
-                            }}
-                            className="absolute inset-0 z-0"
-                            style={{
-                                background: 'radial-gradient(circle at 50% 50%, rgba(251, 207, 232, 0.4) 0%, transparent 70%)',
-                                filter: 'blur(40px)'
-                            }}
-                        />
-
-                        {/* Background Image with optimized loading */}
-                        <div className="absolute inset-0">
+                        {/* Background Image if available */}
+                        {currentAd.imageUrl && (
                             <img
                                 src={currentAd.imageUrl}
-                                alt=""
-                                className="w-full h-full object-cover scale-105"
+                                alt={currentAd.shopName}
+                                className="absolute inset-0 w-full h-full object-cover opacity-25 mix-blend-luminosity"
                             />
-                            {/* Sophisticated Gradient Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/10 z-0" />
+                        )}
+
+                        {/* Content */}
+                        <div className="relative z-10 max-w-[70%] sm:max-w-[60%]">
+                            {currentAd.badge && (
+                                <span
+                                    className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full text-white uppercase tracking-wider mb-1 shadow-2xs"
+                                    style={{ backgroundColor: currentAd.badgeColor || '#FF2E7A' }}
+                                >
+                                    {currentAd.badge}
+                                </span>
+                            )}
+                            <h3 className="text-sm sm:text-lg md:text-xl font-bold text-white leading-tight">
+                                {currentAd.shopName}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-slate-300 font-medium line-clamp-1 mt-0.5">
+                                {currentAd.tagline || currentAd.description}
+                            </p>
                         </div>
 
-                        {/* Content Area */}
-                        <div className="absolute inset-0 flex flex-col justify-end p-5 md:p-12 z-10">
-                            <div className="max-w-[85%] space-y-2">
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.1 }}
-                                >
-                                    {currentAd.badge && (
-                                        <span
-                                            className="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase text-white shadow-lg"
-                                            style={{ backgroundColor: currentAd.badgeColor || '#e11d48' }}
-                                        >
-                                            {currentAd.badge}
-                                        </span>
-                                    )}
-                                </motion.div>
-
-                                <motion.h3
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.2 }}
-                                    className="text-2xl md:text-5xl font-black text-white leading-tight drop-shadow-md"
-                                >
-                                    {currentAd.shopName}
-                                </motion.h3>
-
-                                <motion.p
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.3 }}
-                                    className="text-white/90 text-sm md:text-lg font-medium line-clamp-1 md:line-clamp-2 drop-shadow"
-                                >
-                                    {currentAd.tagline}
-                                </motion.p>
-
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.4 }}
-                                    className="pt-3 md:pt-5"
-                                >
-                                    <a
-                                        href={currentAd.ctaLink || "#"}
-                                        className="inline-flex items-center gap-2 md:gap-3 bg-white text-neutral-900 px-6 py-2.5 md:px-8 md:py-3.5 rounded-full text-[11px] md:text-sm font-black uppercase tracking-wider hover:bg-neutral-100 transition-all hover:scale-[1.02] active:scale-95 shadow-xl"
-                                        onClick={(e) => { if (!currentAd.ctaLink) e.preventDefault(); }}
-                                    >
-                                        {currentAd.ctaText || "Visit Shop"}
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M5 12h14M12 5l7 7-7 7" />
-                                        </svg>
-                                    </a>
-                                </motion.div>
-                            </div>
+                        {/* CTA */}
+                        <div className="relative z-10">
+                            <span className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#FF2E7A] hover:bg-[#E02269] text-white shadow-xs">
+                                <span>{currentAd.ctaText || "Explore"}</span>
+                            </span>
                         </div>
                     </motion.div>
                 </AnimatePresence>
-
-                {/* Pagination Dots - Centered and more refined */}
-                {ads.length > 1 && (
-                    <div className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-                        {ads.map((_, i) => (
-                            <button
-                                key={i}
-                                onClick={() => {
-                                    if (intervalRef.current) clearInterval(intervalRef.current);
-                                    setDirection(i > currentIndex ? 1 : -1);
-                                    setCurrentIndex(i);
-                                }}
-                                className={`h-1.5 transition-all duration-300 rounded-full ${i === currentIndex
-                                    ? "bg-white w-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]"
-                                    : "bg-white/40 w-1.5 hover:bg-white/60"
-                                    }`}
-                            />
-                        ))}
-                    </div>
-                )}
             </div>
-
-            <style>{`
-                @keyframes shimmer {
-                    100% { transform: translateX(100%); }
-                }
-            `}</style>
         </div>
     );
 }

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Tax from "../../../models/Tax";
+import Product from "../../../models/Product";
 
 /**
  * Get all taxes
@@ -18,8 +19,9 @@ export const getTaxes = asyncHandler(async (req: Request, res: Response) => {
     const query: any = {};
 
     // Search filter
-    if (search) {
-        query.name = { $regex: search, $options: "i" };
+    if (search && typeof search === "string" && search.trim()) {
+        const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        query.name = { $regex: escapedSearch, $options: "i" };
     }
 
     // Status filter
@@ -79,25 +81,36 @@ export const getTaxById = asyncHandler(async (req: Request, res: Response) => {
  */
 export const createTax = asyncHandler(async (req: Request, res: Response) => {
     const { name, percentage } = req.body;
+    const trimmedName = (name || "").trim();
 
-    if (!name || percentage === undefined) {
+    if (!trimmedName || percentage === undefined) {
         return res.status(400).json({
             success: false,
-            message: "Name and percentage are required",
+            message: "Tax title and percentage are required",
         });
     }
 
-    // Check if tax with same name already exists
-    const existingTax = await Tax.findOne({ name });
-    if (existingTax) {
-        return res.status(409).json({
+    if (trimmedName.length < 2) {
+        return res.status(400).json({
             success: false,
-            message: "Tax with this name already exists",
+            message: "Tax title must be at least 2 characters",
+        });
+    }
+
+    // Case-insensitive duplicate check
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingTax = await Tax.findOne({
+        name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    });
+    if (existingTax) {
+        return res.status(400).json({
+            success: false,
+            message: "A tax rate with this title already exists",
         });
     }
 
     const tax = await Tax.create({
-        name,
+        name: trimmedName,
         percentage,
     });
 
@@ -125,15 +138,26 @@ export const updateTax = asyncHandler(async (req: Request, res: Response) => {
     }
 
     // Check if name is being changed and if it conflicts with another tax
-    if (name && name !== tax.name) {
-        const existingTax = await Tax.findOne({ name, _id: { $ne: id } });
-        if (existingTax) {
-            return res.status(409).json({
+    if (name) {
+        const trimmedName = name.trim();
+        if (trimmedName.length < 2) {
+            return res.status(400).json({
                 success: false,
-                message: "Tax with this name already exists",
+                message: "Tax title must be at least 2 characters",
             });
         }
-        tax.name = name;
+        const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const existingTax = await Tax.findOne({
+            _id: { $ne: id },
+            name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+        });
+        if (existingTax) {
+            return res.status(400).json({
+                success: false,
+                message: "A tax rate with this title already exists",
+            });
+        }
+        tax.name = trimmedName;
     }
 
     if (percentage !== undefined) {
@@ -200,6 +224,21 @@ export const deleteTax = asyncHandler(async (req: Request, res: Response) => {
         return res.status(404).json({
             success: false,
             message: "Tax not found",
+        });
+    }
+
+    // Referential integrity check: check if any products are using this tax rate
+    const productCount = await Product.countDocuments({
+        $or: [
+            { tax: tax.name },
+            { tax: id },
+        ],
+    });
+
+    if (productCount > 0) {
+        return res.status(400).json({
+            success: false,
+            message: `Cannot delete tax "${tax.name}" because it is currently assigned to ${productCount} active product(s)`,
         });
     }
 

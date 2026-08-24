@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Order from '../models/Order';
 import Customer from '../models/Customer';
 
@@ -89,15 +90,37 @@ export async function verifyDeliveryOtp(orderId: string, otp: string): Promise<{
       throw new Error('Customer delivery OTP not found. Please contact support.');
     }
 
-    // Verify OTP against customer's permanent OTP
-    // Developer bypass for testing
-    const isMockOtp = (process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_OTP === 'true') && otp === '9999';
-    if (!isMockOtp && customerOtp !== otp) {
+    // Brute-force guard. A 4-digit OTP has 10,000 values and this endpoint used
+    // to accept unlimited guesses from the assigned courier. (#H-16)
+    const MAX_DELIVERY_OTP_ATTEMPTS = 5;
+    const attempts = (order as any).deliveryOtpAttempts || 0;
+    if (attempts >= MAX_DELIVERY_OTP_ATTEMPTS) {
+      throw new Error(
+        'Too many incorrect attempts. Ask the customer to refresh their delivery OTP.',
+      );
+    }
+
+    // Verify against the customer's OTP.
+    //
+    // A hardcoded master OTP ('9999') used to be accepted whenever NODE_ENV was
+    // not exactly 'production', which defeated proof of delivery entirely.
+    // There is no bypass. (#C-07)
+    const submitted = String(otp).trim();
+    if (!/^[0-9]{4}$/.test(submitted)) {
+      throw new Error('Invalid OTP. Please check and try again.');
+    }
+
+    const a = Buffer.from(String(customerOtp), 'utf8');
+    const b = Buffer.from(submitted, 'utf8');
+    const matches = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!matches) {
+      await Order.updateOne({ _id: orderId }, { $inc: { deliveryOtpAttempts: 1 } });
       throw new Error('Invalid OTP. Please check and try again.');
     }
 
     // Mark order as delivered
     order.deliveryOtpVerified = true;
+    (order as any).deliveryOtpAttempts = 0;
     order.status = 'Delivered';
     order.deliveryBoyStatus = 'Delivered';
     if (order.paymentMethod === 'COD') {
@@ -106,6 +129,28 @@ export async function verifyDeliveryOtp(orderId: string, otp: string): Promise<{
     order.deliveredAt = new Date();
     order.invoiceEnabled = true;
     await order.save();
+
+    // Rotate the customer's delivery OTP.
+    //
+    // It is a single permanent code reused for every order, so once it leaked
+    // (to a courier, over the phone, from a screenshot) it stayed valid forever.
+    // Rotating on each successful delivery bounds that exposure to one order.
+    // (#H-16)
+    try {
+      const customerId =
+        order.customer && typeof order.customer === 'object' && '_id' in (order.customer as any)
+          ? (order.customer as any)._id
+          : order.customer;
+      if (customerId) {
+        await Customer.updateOne(
+          { _id: customerId },
+          { $set: { deliveryOtp: crypto.randomInt(1000, 10000).toString() } },
+        );
+      }
+    } catch (rotateErr) {
+      // Never fail a completed delivery because rotation failed.
+      console.error('Failed to rotate customer delivery OTP:', rotateErr);
+    }
 
     return {
       success: true,

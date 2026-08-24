@@ -30,6 +30,27 @@ export default {
           dark: '#FFB020',
         },
         cream: '#FFF7E0',
+        hl: {
+          coral: '#FF5364',
+          'coral-hover': '#E84354',
+          'pink-bg': '#FFF0F3',
+          'pink-light': '#FFE8EC',
+          purple: '#4F39F6',
+          'purple-dark': '#2D1B69',
+          'purple-deep': '#1F104F',
+          'purple-light': '#F5F3FF',
+          green: '#10B981',
+          'green-light': '#EAFBF3',
+          gold: '#FFAE1A',
+          'gold-light': '#FFF8EB',
+          dark: '#1E1E2D',
+          muted: '#6B7280',
+        },
+      },
+      boxShadow: {
+        'hl-card': '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03)',
+        'hl-elevated': '0 10px 25px -3px rgba(255, 83, 100, 0.25)',
+        'hl-purple': '0 10px 25px -3px rgba(79, 57, 246, 0.25)',
       },
       fontFamily: {
         // 'Outfit' lacks the ₹ (U+20B9) glyph — fall back to fonts that have it

@@ -41,9 +41,31 @@ export const createProduct = asyncHandler(
       });
     }
 
-    // 2. Map fields to match Product model
+    // Only fields a seller is allowed to set.
+    //
+    // The payload used to be spread wholesale into the model, so a seller could
+    // set `rating: 5`, `reviewsCount: 999`, `approvedBy`, `approvedAt` or
+    // `commission` on their own listings and game search placement. (#H-22)
+    const SELLER_WRITABLE_FIELDS = [
+      "productName", "smallDescription", "description",
+      "mainImage", "galleryImages",
+      "price", "discPrice", "compareAtPrice", "stock", "sku", "barcode",
+      "variationType", "variations",
+      "publish", "popular", "dealOfDay",
+      "manufacturer", "madeIn", "fssaiLicNo", "foodType", "totalAllowedQuantity",
+      "isReturnable", "maxReturnDays", "returnPolicyText",
+      "seoTitle", "seoKeywords", "seoDescription", "seoImageAlt",
+      "pack", "shelfLife", "marketer", "tags",
+      "isShopByStoreOnly", "shopId", "tax",
+    ];
+
+    const safeData: Record<string, any> = {};
+    for (const f of SELLER_WRITABLE_FIELDS) {
+      if (productData[f] !== undefined) safeData[f] = productData[f];
+    }
+
     const newProductData: any = {
-      ...productData,
+      ...safeData,
       seller: sellerId, // Map sellerId to seller
       headerCategoryId: productData.headerCategoryId, // Map headerCategoryId
       category: productData.categoryId, // Map categoryId to category
@@ -427,6 +449,12 @@ export const updateProduct = asyncHandler(
 export const deleteProduct = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
+
+    // (#H-23) the approval gate previously covered only create and update.
+    const approvalError = await ensureSellerApproved(sellerId);
+    if (approvalError) {
+      return res.status(403).json({ success: false, message: approvalError });
+    }
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -526,6 +554,11 @@ export const updateStock = asyncHandler(async (req: Request, res: Response) => {
 export const updateProductStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
+
+    const approvalError = await ensureSellerApproved(sellerId);
+    if (approvalError) {
+      return res.status(403).json({ success: false, message: approvalError });
+    }
     const { id } = req.params;
     const { publish, popular, dealOfDay } = req.body;
 
@@ -568,6 +601,11 @@ export const updateProductStatus = asyncHandler(
 export const bulkUpdateStock = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
+
+    const approvalError = await ensureSellerApproved(sellerId);
+    if (approvalError) {
+      return res.status(403).json({ success: false, message: approvalError });
+    }
     const { updates } = req.body; // Array of { productId, variationId, stock }
 
     if (!Array.isArray(updates)) {

@@ -1,4 +1,5 @@
 import api, { setAuthToken, removeAuthToken } from '../config';
+import { setStoredUser } from '../session';
 
 export interface SendOTPResponse {
   success: boolean;
@@ -6,31 +7,6 @@ export interface SendOTPResponse {
 }
 
 export interface VerifyOTPResponse {
-  success: boolean;
-  message: string;
-  data: {
-    token: string;
-    user: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      mobile: string;
-      email: string;
-      role: string;
-    };
-  };
-}
-
-export interface RegisterData {
-  firstName: string;
-  lastName: string;
-  mobile: string;
-  email: string;
-  password: string;
-  role?: string;
-}
-
-export interface RegisterResponse {
   success: boolean;
   message: string;
   data: {
@@ -62,21 +38,7 @@ export const verifyOTP = async (mobile: string, otp: string): Promise<VerifyOTPR
 
   if (response.data.success && response.data.data.token) {
     setAuthToken(response.data.data.token);
-    localStorage.setItem('userData', JSON.stringify(response.data.data.user));
-  }
-
-  return response.data;
-};
-
-/**
- * Register new admin
- */
-export const register = async (data: RegisterData): Promise<RegisterResponse> => {
-  const response = await api.post<RegisterResponse>('/auth/admin/register', data);
-
-  if (response.data.success && response.data.data.token) {
-    setAuthToken(response.data.data.token);
-    localStorage.setItem('userData', JSON.stringify(response.data.data.user));
+    setStoredUser(response.data.data.user, 'admin');
   }
 
   return response.data;
@@ -102,24 +64,4 @@ export interface AdminProfileResponse {
   };
 }
 
-/**
- * Get admin profile
- */
-export const getAdminProfile = async (): Promise<AdminProfileResponse> => {
-  const response = await api.get<AdminProfileResponse>('/auth/admin/profile');
-  return response.data;
-};
 
-/**
- * Update admin profile
- */
-export const updateAdminProfile = async (data: {
-  name?: string;
-  mobile?: string;
-  profileImage?: string;
-  currentPassword?: string;
-  newPassword?: string;
-}): Promise<AdminProfileResponse> => {
-  const response = await api.put<AdminProfileResponse>('/auth/admin/profile', data);
-  return response.data;
-};

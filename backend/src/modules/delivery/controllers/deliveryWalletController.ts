@@ -1,20 +1,20 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
 import {
   getWalletTransactions,
   createWithdrawalRequest,
   getWithdrawalRequests,
 } from "../../../services/walletManagementService";
-import {
-  getCommissionSummary,
-  processPendingCODPayouts,
-} from "../../../services/commissionService";
+import { getCommissionSummary } from "../../../services/commissionService";
 import Delivery from "../../../models/Delivery";
+import { createRazorpayOrder } from "../../../services/paymentService";
 import {
-  createRazorpayOrder,
-  verifyPaymentSignature,
-} from "../../../services/paymentService";
-import WalletTransaction from "../../../models/WalletTransaction";
+  assertGatewayPayment,
+  PaymentVerificationError,
+} from "../../../services/razorpayVerificationService";
+import {
+  settleCourierCodDebt,
+  CodSettlementError,
+} from "../../../services/codSettlementService";
 
 /**
  * Get delivery boy wallet balance and pending admin payout
@@ -55,9 +55,9 @@ export const getBalance = async (req: Request, res: Response) => {
 export const createAdminPayoutOrder = async (req: Request, res: Response) => {
   try {
     const deliveryBoyId = req.user!.userId;
-    const { amount } = req.body;
+    const requested = Math.round(Number(req.body.amount) * 100) / 100;
 
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(requested) || requested <= 0) {
       return res.status(400).json({
         success: false,
         message: "Invalid payout amount",
@@ -68,30 +68,51 @@ export const createAdminPayoutOrder = async (req: Request, res: Response) => {
     if (!deliveryBoy) {
       return res.status(404).json({
         success: false,
-        message: "Delivery boy not found",
+        message: "Delivery partner not found",
       });
     }
 
-    if ((deliveryBoy.pendingAdminPayout || 0) < amount) {
+    const pending = Math.round((deliveryBoy.pendingAdminPayout || 0) * 100) / 100;
+    if (requested > pending + 0.01) {
       return res.status(400).json({
         success: false,
-        message: "Payout amount exceeds pending amount",
+        message: `Payout amount (${requested}) exceeds the outstanding amount (${pending})`,
       });
     }
 
-    const receipt = `PAYOUT-ADMIN-${Date.now()}`;
-    const result = await createRazorpayOrder(receipt, amount);
-
-    if (!result.success) {
+    const result = await createRazorpayOrder(
+      `PAYOUT-${deliveryBoyId}`,
+      requested,
+    );
+    if (!result.success || !result.data) {
       return res.status(400).json(result);
     }
 
+    // Persist the issued intent so verification can bind the payment to this
+    // courier and this amount. Without it, a signature from any other Razorpay
+    // order would be accepted. (#C-03)
+    await Delivery.updateOne(
+      { _id: deliveryBoyId },
+      {
+        $set: {
+          codPayoutIntent: {
+            razorpayOrderId: result.data.razorpayOrderId,
+            amount: requested,
+            createdAt: new Date(),
+          },
+        },
+      },
+    );
+
     return res.status(200).json(result);
   } catch (error: any) {
-    console.error("Error creating admin payout order:", error);
+    console.error("Error creating admin payout order:", error?.message || error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to create payout order",
+      message:
+        error instanceof PaymentVerificationError
+          ? error.message
+          : "Failed to create payout order",
     });
   }
 };
@@ -100,119 +121,85 @@ export const createAdminPayoutOrder = async (req: Request, res: Response) => {
  * Verify admin payout payment
  */
 export const verifyAdminPayout = async (req: Request, res: Response) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const deliveryBoyId = req.user!.userId;
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
-    // Ensure amount is a number and rounded
-    const amount = Math.round(Number(req.body.amount) * 100) / 100;
 
-    const isValid = verifyPaymentSignature(
-      razorpayOrderId,
-      razorpayPaymentId,
-      razorpaySignature,
-    );
-
-    if (!isValid) {
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
       return res.status(400).json({
         success: false,
-        message: "Invalid payment signature",
+        message: "Missing required payment verification parameters",
       });
     }
 
-    // Update delivery boy pendingAdminPayout
-    const deliveryBoy = await Delivery.findById(deliveryBoyId).session(session);
+    const deliveryBoy = await Delivery.findById(deliveryBoyId);
     if (!deliveryBoy) {
-      throw new Error("Delivery boy not found");
+      return res.status(404).json({
+        success: false,
+        message: "Delivery partner not found",
+      });
     }
 
-    // Round pending payout for comparison
-    const currentPending = Math.round((deliveryBoy.pendingAdminPayout || 0) * 100) / 100;
-
-    // Validate amount doesn't significantly exceed pending (using a small epsilon)
-    if (amount > currentPending + 0.01) {
-      throw new Error(
-        `Payment amount (₹${amount}) exceeds pending admin payout (₹${currentPending})`
-      );
+    const intent = (deliveryBoy as any).codPayoutIntent;
+    if (!intent?.razorpayOrderId) {
+      return res.status(400).json({
+        success: false,
+        message: "No payout was started. Please start the payout again.",
+      });
     }
 
-    // Record transaction first
-    const reference = `PAYOUT-${razorpayPaymentId}`;
-    const transaction = new WalletTransaction({
-      userId: deliveryBoyId,
-      userType: "DELIVERY_BOY",
-      amount: amount,
-      type: "Debit",
-      description: "Payout to Admin via Razorpay",
-      status: "Completed",
-      reference,
+    // The settled amount is derived from the gateway, never from the request
+    // body. Previously `req.body.amount` was trusted, which let a courier clear
+    // any debt with a token payment. (#C-03)
+    const assertion = await assertGatewayPayment({
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+      expectedAmount: Number(intent.amount),
+      expectedRazorpayOrderId: intent.razorpayOrderId,
     });
-    await transaction.save({ session });
 
-    // Update Platform Wallet
-    const PlatformWallet = (await import("../../../models/PlatformWallet")).default;
-    let platformWallet = await PlatformWallet.findOne().session(session);
-
-    if (!platformWallet) {
-      const walletArray = await PlatformWallet.create([{
-        totalPlatformEarning: 0,
-        currentPlatformBalance: 0,
-        totalAdminEarning: 0,
-        pendingFromDeliveryBoy: 0,
-        sellerPendingPayouts: 0,
-        deliveryBoyPendingPayouts: 0,
-      }], { session });
-      platformWallet = walletArray[0];
-    }
-
-    // Update platform wallet with the payment
-    platformWallet.totalPlatformEarning += amount; // Total money received
-    platformWallet.currentPlatformBalance += amount; // Current balance increases
-    platformWallet.pendingFromDeliveryBoy = Math.max(0, platformWallet.pendingFromDeliveryBoy - amount);
-
-    await platformWallet.save({ session });
-
-    // Distribute funds to sellers now that admin has received the money
-    // This will handle admin commissioned portion correctly per order
-    const payoutResult = await processPendingCODPayouts(deliveryBoyId, amount, session);
-
-    // Update delivery boy after distributing (to be safe with intermediate states)
-    deliveryBoy.pendingAdminPayout = Math.max(0, currentPending - amount);
-    await deliveryBoy.save({ session });
-
-    await session.commitTransaction();
-
-    console.log(`[Pay to Admin] Delivery boy ${deliveryBoyId} paid ${amount}:`, {
-      newPending: deliveryBoy.pendingAdminPayout,
-      processedOrders: payoutResult.processedCount,
-      platformBalance: platformWallet.currentPlatformBalance,
+    const result = await settleCourierCodDebt({
+      deliveryBoyId,
+      amount: assertion.amount,
+      source: "RAZORPAY",
+      reference: `PAYOUT-${assertion.razorpayPaymentId}`,
     });
+
+    // Consume the intent so it cannot be reused.
+    await Delivery.updateOne(
+      { _id: deliveryBoyId },
+      { $unset: { codPayoutIntent: "" } },
+    );
+
+    console.log(
+      `[Pay to Admin] Courier ${deliveryBoyId} settled ${result.amountSettled}; ` +
+        `remaining=${result.pendingAdminPayout}; orders released=${result.processedOrders}`,
+    );
 
     return res.status(200).json({
       success: true,
       message: "Payout successful",
       data: {
-        pendingAdminPayout: deliveryBoy.pendingAdminPayout,
-        amountPaid: amount,
-        platformBalance: platformWallet.currentPlatformBalance,
+        pendingAdminPayout: result.pendingAdminPayout,
+        cashCollected: result.cashCollected,
+        amountPaid: result.amountSettled,
+        ordersSettled: result.processedOrders,
       },
     });
   } catch (error: any) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
-    console.error("Error verifying admin payout:", error);
-    return res.status(500).json({
+    const status =
+      error instanceof PaymentVerificationError ||
+      error instanceof CodSettlementError
+        ? error.statusCode
+        : 500;
+    console.error("Error verifying admin payout:", error?.message || error);
+    return res.status(status).json({
       success: false,
-      message: error.message || "Failed to verify payout",
+      message: error?.message || "Failed to verify payout",
     });
-  } finally {
-    session.endSession();
   }
 };
-
 
 /**
  * Get delivery boy wallet transactions

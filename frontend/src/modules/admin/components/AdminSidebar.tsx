@@ -163,6 +163,24 @@ const menuSections: MenuSection[] = [
             ),
           },
           {
+            label: "Add Product",
+            path: "/admin/product/add",
+            icon: (
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            ),
+          },
+          {
             label: "Taxes",
             path: "/admin/product/taxes",
             icon: (
@@ -868,44 +886,6 @@ const menuSections: MenuSection[] = [
         ),
       },
       {
-        label: "Payment List",
-        path: "/admin/payment-list",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-            <path d="M8 7H16M8 11H16M8 15H12"></path>
-            <circle cx="18" cy="6" r="1.5" fill="currentColor"></circle>
-            <rect x="16" y="4" width="4" height="4" rx="0.5"></rect>
-          </svg>
-        ),
-      },
-      {
-        label: "SMS Gateway",
-        path: "/admin/sms-gateway",
-        icon: (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round">
-            <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"></path>
-            <path d="M8 9H16M8 13H12"></path>
-          </svg>
-        ),
-      },
-      {
         label: "System User",
         path: "/admin/system-user",
         icon: (
@@ -1029,7 +1009,13 @@ export default function AdminSidebar({ onClose }: AdminSidebarProps) {
     .filter((section) => section.items.length > 0);
 
   return (
-    <aside className="w-64 bg-rose-700 h-screen flex flex-col">
+    <aside
+      data-lenis-prevent="true"
+      data-lenis-prevent-wheel="true"
+      data-lenis-prevent-touch="true"
+      style={{ touchAction: "pan-y" }}
+      className="w-64 bg-rose-700 h-screen flex flex-col"
+    >
       {/* Close button - only show on mobile */}
       <div className="flex justify-end p-4 border-b border-rose-600 lg:hidden">
         <button
@@ -1107,6 +1093,10 @@ export default function AdminSidebar({ onClose }: AdminSidebarProps) {
 
       {/* Navigation Menu */}
       <nav
+        data-lenis-prevent="true"
+        data-lenis-prevent-wheel="true"
+        data-lenis-prevent-touch="true"
+        style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
         className="flex-1 py-4 overflow-y-auto admin-sidebar-nav">
         <style>{`
           .admin-sidebar-nav::-webkit-scrollbar {

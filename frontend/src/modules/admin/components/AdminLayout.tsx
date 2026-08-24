@@ -25,6 +25,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
       {/* Sidebar - Fixed */}
       <div
+        data-lenis-prevent="true"
+        data-lenis-prevent-wheel="true"
+        data-lenis-prevent-touch="true"
         className={`fixed left-0 top-0 h-screen z-50 transition-transform duration-300 ease-in-out w-64 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -40,7 +43,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <AdminHeader onMenuClick={toggleSidebar} isSidebarOpen={isSidebarOpen} />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-neutral-50">{children}</main>
+        <main
+          data-lenis-prevent="true"
+          data-lenis-prevent-wheel="true"
+          data-lenis-prevent-touch="true"
+          className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-neutral-50"
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

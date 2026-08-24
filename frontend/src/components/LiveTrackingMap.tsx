@@ -1,7 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-// @ts-ignore - react-leaflet types may not be available
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
-// @ts-ignore - leaflet types may not be available
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { motion } from 'framer-motion'

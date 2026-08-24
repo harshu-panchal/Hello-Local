@@ -26,6 +26,14 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      /* firebase@12.8.0 points its `firebase/messaging` subpath at
+         `dist/messaging/index.d.ts`, which the published package does not
+         contain. The real declarations live in @firebase/messaging (the package
+         that subpath re-exports), so resolve them directly. This restores real
+         types rather than silencing the error with `any`. (#C-10) */
+      "firebase/messaging": [
+        "./node_modules/@firebase/messaging/dist/index-public.d.ts"
       ]
     }
   },

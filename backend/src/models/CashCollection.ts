@@ -2,7 +2,8 @@ import mongoose, { Schema, model, Document, Types } from "mongoose";
 
 export interface ICashCollection extends Document {
     deliveryBoy: Types.ObjectId;
-    order: Types.ObjectId;
+    /** Optional: lump-sum COD settlements are not tied to a single order. */
+    order?: Types.ObjectId;
     amount: number;
     remark?: string;
     collectedBy: Types.ObjectId;
@@ -21,7 +22,6 @@ const cashCollectionSchema = new Schema<ICashCollection>(
         order: {
             type: Schema.Types.ObjectId,
             ref: "Order",
-            required: [true, "Order is required"],
         },
         amount: {
             type: Number,

@@ -7,6 +7,7 @@ export interface DeliveryBoy {
   _id: string;
   name: string;
   mobile: string;
+  email?: string;
   dateOfBirth?: string;
   address: string;
   city: string;
@@ -36,6 +37,7 @@ export interface DeliveryBoy {
 export interface CreateDeliveryBoyData {
   name: string;
   mobile: string;
+  email?: string;
   password: string;
   dateOfBirth?: string;
   address: string;
@@ -78,7 +80,8 @@ export interface CashCollection {
   _id: string;
   deliveryBoyId: string;
   deliveryBoyName: string;
-  orderId: string;
+  orderId?: string;
+  orderNumber?: string;
   total: number;
   amount: number;
   remark?: string;
@@ -242,6 +245,34 @@ export const getDeliveryBoyCashCollections = async (
   const response = await api.get<ApiResponse<CashCollection[]>>(
     `/admin/delivery/${deliveryBoyId}/cash-collections`,
     { params }
+  );
+  return response.data;
+};
+
+export interface CourierCashSettlement {
+  amountCollected: number;
+  cashCollected: number;
+  pendingAdminPayout: number;
+  ordersSettled: number;
+  reference: string;
+}
+
+/**
+ * Record a physical COD cash handover from a courier.
+ *
+ * This is the settlement endpoint: it reduces the courier's outstanding payout,
+ * credits the platform wallet and releases the seller commissions held against
+ * those orders. The admin screen previously had no way to call it — the handler
+ * behind the button was an `alert("...would be implemented here")`.
+ */
+export const collectCashFromCourier = async (
+  deliveryBoyId: string,
+  amount: number,
+  notes?: string
+): Promise<ApiResponse<CourierCashSettlement>> => {
+  const response = await api.post<ApiResponse<CourierCashSettlement>>(
+    `/admin/delivery/${deliveryBoyId}/collect-cash`,
+    { amount, notes }
   );
   return response.data;
 };

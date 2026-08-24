@@ -274,7 +274,10 @@ const SellerSchema = new Schema<ISeller>(
     balance: {
       type: Number,
       default: 0,
-      min: [0, 'Balance cannot be negative'],
+      // No min: a commission reversal on a cancelled or returned order can
+      // legitimately take a balance below zero — the money was already paid out
+      // and is owed back. Ordinary debits are still guarded by a conditional
+      // $gte check in debitWallet, so only clawbacks can go negative. (#H-07)
     },
     categories: {
       type: [String],

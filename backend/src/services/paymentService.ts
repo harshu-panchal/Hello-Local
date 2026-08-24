@@ -1,140 +1,76 @@
-import Razorpay from 'razorpay';
-import crypto from 'crypto';
 import Payment from '../models/Payment';
 import Order from '../models/Order';
 import mongoose from 'mongoose';
 import SellerAdRequest from '../models/SellerAdRequest';
 import { sendNotificationToUser } from './firebaseAdmin';
-
-// Initialize Razorpay instance
-const getRazorpayInstance = () => {
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-    if (!keyId || !keySecret) {
-        throw new Error('Razorpay credentials not configured');
-    }
-
-    return new Razorpay({
-        key_id: keyId,
-        key_secret: keySecret,
-    });
-};
+import {
+    assertGatewayPayment,
+    getRazorpayInstance,
+    verifyWebhookSignature,
+    PaymentVerificationError,
+} from './razorpayVerificationService';
 
 /**
- * Create a Razorpay order
+ * Create a Razorpay order (payment intent) and persist its id against the
+ * record being paid for, so that verification can prove the payment belongs
+ * to THIS record. (#C-01)
+ *
+ * There is no dummy/mock fallback: a missing credential is a hard failure.
+ * The previous fallback returned a fabricated `mock_order_*` which, combined
+ * with the signature bypass, allowed free checkout. (#C-02)
  */
 export const createRazorpayOrder = async (
-    orderId: string,
+    receipt: string,
     amount: number,
     currency: string = 'INR'
 ) => {
     try {
-        const keyId = process.env.RAZORPAY_KEY_ID;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
-        const isProduction = process.env.NODE_ENV === 'production';
-        const bypassAllowed = process.env.RAZORPAY_BYPASS === 'true' || !isProduction;
+        const razorpay = getRazorpayInstance();
 
-        // Dev/Testing bypass: if credentials are missing, return a dummy order only when bypass is allowed
-        if (!keyId || !keySecret) {
-            if (!bypassAllowed) {
-                throw new Error('Razorpay credentials not configured');
-            }
-            console.warn('⚠️ Razorpay credentials not configured. Returning DUMMY order for testing.');
-            return {
-                success: true,
-                data: {
-                    razorpayOrderId: 'mock_order_' + Date.now(),
-                    razorpayKey: 'rzp_test_dummy_key',
-                    amount: Math.round(amount * 100),
-                    currency,
-                    receipt: orderId,
-                },
-            };
+        const amountMinor = Math.round(Number(amount) * 100);
+        if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
+            return { success: false, message: 'Invalid payment amount' };
         }
 
-        const razorpay = new Razorpay({
-            key_id: keyId,
-            key_secret: keySecret,
-        });
-
-        const options = {
-            amount: Math.round(amount * 100), // Amount in paise
+        const razorpayOrder = await razorpay.orders.create({
+            amount: amountMinor,
             currency,
-            receipt: orderId,
-            notes: {
-                orderId,
-            },
-        };
-
-        const razorpayOrder = await razorpay.orders.create(options);
+            receipt: String(receipt).slice(0, 40), // Razorpay caps receipt length
+            notes: { receipt: String(receipt) },
+        });
 
         return {
             success: true,
             data: {
                 razorpayOrderId: razorpayOrder.id,
-                razorpayKey: keyId,
+                razorpayKey: process.env.RAZORPAY_KEY_ID,
                 amount: razorpayOrder.amount,
                 currency: razorpayOrder.currency,
                 receipt: razorpayOrder.receipt,
             },
         };
     } catch (error: any) {
-        console.error('Error creating Razorpay order:', error);
+        console.error('Error creating Razorpay order:', error?.message || error);
         return {
             success: false,
-            message: error.message || 'Failed to create Razorpay order',
+            message:
+                error instanceof PaymentVerificationError
+                    ? error.message
+                    : 'Failed to create payment order',
         };
     }
 };
 
 /**
- * Verify Razorpay payment signature
- */
-export const verifyPaymentSignature = (
-    razorpayOrderId: string,
-    razorpayPaymentId: string,
-    razorpaySignature: string
-): boolean => {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const bypassAllowed = process.env.RAZORPAY_BYPASS === 'true' || !isProduction;
-
-    // Development/Testing bypass
-    if (razorpayPaymentId.startsWith('mock_')) {
-        if (!bypassAllowed) {
-            console.error('❌ Blocked mock payment bypass attempt in production mode');
-            return false;
-        }
-        console.log('✅ Bypassing payment signature verification for MOCK payment');
-        return true;
-    }
-
-    try {
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-        if (!keySecret) {
-            throw new Error('Razorpay key secret not configured');
-        }
-
-        const body = razorpayOrderId + '|' + razorpayPaymentId;
-        const expectedSignature = crypto
-            .createHmac('sha256', keySecret)
-            .update(body)
-            .digest('hex');
-
-        return expectedSignature === razorpaySignature;
-    } catch (error) {
-        console.error('Error verifying payment signature:', error);
-        return false;
-    }
-};
-
-/**
- * Capture payment and update order or ad request.
+ * Capture (confirm) a payment.
  *
- * Uses a MongoDB session/transaction when available (replica-set).
- * Falls back to plain saves when sessions are not supported (standalone dev DB)
- * so that the notification path is never silently skipped.
+ * Every one of these checks is required; removing any one of them reopens a
+ * free-order path:
+ *   - the caller must own the record (enforced by the route),
+ *   - `razorpayOrderId` must equal the intent we issued for this record,
+ *   - the gateway must report the payment as `captured`,
+ *   - the captured amount must cover the amount due,
+ *   - the gateway payment id must not have been consumed already.
  */
 export const capturePayment = async (
     id: string,
@@ -144,218 +80,268 @@ export const capturePayment = async (
     type: 'Order' | 'AdRequest' = 'Order',
     io?: any
 ) => {
-    // ── Session/transaction setup (optional — standalone MongoDB doesn't support it) ──
+    try {
+        // ── Replay guard: a gateway payment id is single-use. ─────────────────
+        const alreadyConsumed = await Payment.findOne({ razorpayPaymentId });
+        if (alreadyConsumed) {
+            if (String(alreadyConsumed.order || alreadyConsumed.get('adRequest') || '') === String(id)) {
+                return {
+                    success: true,
+                    message: 'Payment already captured',
+                    data: { razorpayPaymentId, id },
+                };
+            }
+            return {
+                success: false,
+                message: 'This payment has already been used for another order.',
+            };
+        }
+
+        if (type === 'Order') {
+            return await captureOrderPayment(id, razorpayOrderId, razorpayPaymentId, razorpaySignature, io);
+        }
+        return await captureAdRequestPayment(id, razorpayOrderId, razorpayPaymentId, razorpaySignature);
+    } catch (error: any) {
+        console.error('Error capturing payment:', error?.message || error);
+        return {
+            success: false,
+            message: error?.message || 'Failed to capture payment',
+        };
+    }
+};
+
+async function captureOrderPayment(
+    id: string,
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+    io?: any
+) {
+    const order = await Order.findById(id);
+    if (!order) throw new PaymentVerificationError('Order not found', 404);
+
+    if (order.paymentStatus === 'Paid') {
+        return {
+            success: true,
+            message: 'Payment already captured',
+            data: { razorpayPaymentId, id },
+        };
+    }
+
+    // Server-authoritative verification against the gateway. (#C-01 / #C-02)
+    const assertion = await assertGatewayPayment({
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+        expectedAmount: order.total,
+        expectedRazorpayOrderId: order.razorpayOrderId,
+    });
+
+    const customerId = order.customer.toString();
+
     let session: mongoose.ClientSession | null = null;
     try {
         session = await mongoose.startSession();
         session.startTransaction();
-    } catch (sessionError) {
-        console.warn('⚠️ capturePayment: MongoDB transactions not supported. Proceeding without transaction.', sessionError);
-        session = null;
-    }
 
-    try {
-        // ── 1. Verify Razorpay signature ──────────────────────────────────────────
-        const isValid = verifyPaymentSignature(
-            razorpayOrderId,
-            razorpayPaymentId,
-            razorpaySignature
+        await Payment.create(
+            [
+                {
+                    order: id,
+                    customer: customerId,
+                    paymentMethod: 'Online',
+                    paymentGateway: 'Razorpay',
+                    razorpayOrderId: assertion.razorpayOrderId,
+                    razorpayPaymentId: assertion.razorpayPaymentId,
+                    razorpaySignature,
+                    amount: assertion.amount,
+                    currency: assertion.currency,
+                    status: 'Completed',
+                    paidAt: new Date(),
+                    gatewayResponse: {
+                        success: true,
+                        message: `Captured via ${assertion.method || 'razorpay'}`,
+                    },
+                },
+            ],
+            { session }
         );
 
-        if (!isValid) {
-            throw new Error('Invalid payment signature');
+        // Only promote Pending → Received; never downgrade a later status.
+        const updated = await Order.findOneAndUpdate(
+            { _id: id, paymentStatus: { $ne: 'Paid' } },
+            [
+                {
+                    $set: {
+                        paymentStatus: 'Paid',
+                        paymentId: assertion.razorpayPaymentId,
+                        status: {
+                            $cond: {
+                                if: { $eq: ['$status', 'Pending'] },
+                                then: 'Received',
+                                else: '$status',
+                            },
+                        },
+                    },
+                },
+            ],
+            { new: true, session }
+        );
+
+        if (!updated) {
+            // Another request captured it concurrently — abort and report success.
+            await session.abortTransaction();
+            return {
+                success: true,
+                message: 'Payment already captured',
+                data: { razorpayPaymentId, id },
+            };
         }
 
-        let amount = 0;
-        let customerOrSellerId = '';
-
-        // ── 2. Handle Order payment ───────────────────────────────────────────────
-        if (type === 'Order') {
-            const order = session
-                ? await Order.findById(id).session(session)
-                : await Order.findById(id);
-
-            if (!order) throw new Error('Order not found');
-            amount = order.total;
-            customerOrSellerId = order.customer.toString();
-
-            // Guard against duplicate processing
-            if (order.paymentStatus === 'Paid') {
-                console.warn(`⚠️ capturePayment: Order ${id} is already marked as Paid. Skipping.`);
-                if (session) await session.abortTransaction();
-                return { success: true, message: 'Payment already captured', data: { razorpayPaymentId, id } };
-            }
-
-            // Create payment record
-            const payment = new Payment({
-                order: id,
-                customer: customerOrSellerId,
-                paymentMethod: 'Online',
-                paymentGateway: 'Razorpay',
-                razorpayOrderId,
-                razorpayPaymentId,
-                razorpaySignature,
-                amount,
-                currency: 'INR',
-                status: 'Completed',
-                paidAt: new Date(),
-                gatewayResponse: {
-                    success: true,
-                    message: 'Payment captured successfully',
-                },
-            });
-
-            if (session) {
-                await payment.save({ session });
-            } else {
-                await payment.save();
-            }
-
-            // Update order: mark paid and advance status from Pending → Received
-            order.paymentStatus = 'Paid';
-            order.paymentId = razorpayPaymentId;
-            if (order.status === 'Pending') {
-                order.status = 'Received'; // Payment confirmed — now visible to seller
-            }
-
-            if (session) {
-                await order.save({ session });
-                await session.commitTransaction();
-            } else {
-                await order.save();
-            }
-
-            console.log(`✅ capturePayment: Order ${id} marked Paid and Received.`);
-
-            // ── 3a. Push notification to customer: payment confirmed ───────────────
-            sendNotificationToUser(customerOrSellerId, 'Customer', {
-                title: '✅ Order Placed Successfully!',
-                body: `Your order #${order.orderNumber} has been confirmed. We'll notify you when the seller prepares it.`,
-                data: {
-                    type: 'ORDER_PLACED',
-                    orderId: id,
-                    orderNumber: order.orderNumber || '',
-                }
-            }).catch(err => console.error(`❌ Push notification failed for customer ${customerOrSellerId}:`, err));
-
-            // ── 3b. Create pending commissions (non-critical) ─────────────────────
-            try {
-                const { createPendingCommissions } = await import('./commissionService');
-                // Run in background to speed up payment capture
-                createPendingCommissions(id).catch(commError => {
-                    console.error('Failed to create pending commissions after payment:', commError);
-                });
-            } catch (importError) {
-                console.error('Failed to import commissionService:', importError);
-            }
-
-            // ── 3c. Notify sellers AFTER payment is confirmed ─────────────────────
-            // This is the correct trigger point: order is now Paid + Received.
-            if (io) {
-                try {
-                    const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
-                    // Atomically claim the one-time notify flag so only one path
-                    // (capturePayment vs webhook) actually notifies the seller. (#dup-notification)
-                    Order.findOneAndUpdate(
-                        { _id: id, sellerNotified: { $ne: true } },
-                        { $set: { sellerNotified: true } },
-                        { new: true }
-                    ).lean().then(leanOrder => {
-                        if (leanOrder) {
-                            return notifySellersOfOrderUpdate(io, leanOrder, 'NEW_ORDER').then(() => {
-                                console.log(`📤 Seller notified for paid order ${leanOrder.orderNumber}`);
-                            });
-                        }
-                        return undefined; // already notified by the other path
-                    }).catch(notifyError => {
-                        console.error('Failed to notify sellers after payment:', notifyError);
-                    });
-                } catch (importError) {
-                    console.error('Failed to import sellerNotificationService:', importError);
-                }
-            } else {
-                console.warn('⚠️ capturePayment: io not available — seller socket notification skipped.');
-            }
-
-        // ── Handle AdRequest payment ──────────────────────────────────────────────
-        } else {
-            const adReq = session
-                ? await SellerAdRequest.findById(id).session(session)
-                : await SellerAdRequest.findById(id);
-
-            if (!adReq) throw new Error('Ad Request not found');
-            amount = adReq.adPrice || adReq.requestedPrice || 0;
-            customerOrSellerId = adReq.sellerId.toString();
-
-            const payment = new Payment({
-                adRequest: id,
-                seller: customerOrSellerId,
-                paymentMethod: 'Online',
-                paymentGateway: 'Razorpay',
-                razorpayOrderId,
-                razorpayPaymentId,
-                razorpaySignature,
-                amount,
-                currency: 'INR',
-                status: 'Completed',
-                paidAt: new Date(),
-                gatewayResponse: {
-                    success: true,
-                    message: 'Payment captured successfully',
-                },
-            });
-
-            if (session) {
-                await payment.save({ session });
-            } else {
-                await payment.save();
-            }
-
-            adReq.paymentStatus = 'Paid';
-            adReq.paymentReference = razorpayPaymentId;
-            adReq.paidAt = new Date();
-            if (adReq.status === 'Approved' || adReq.status === 'Pending') {
-                adReq.status = 'PaymentVerified';
-            }
-
-            if (session) {
-                await adReq.save({ session });
-                await session.commitTransaction();
-            } else {
-                await adReq.save();
-            }
+        await session.commitTransaction();
+        console.log(`capturePayment: Order ${id} marked Paid (${assertion.amount} ${assertion.currency}).`);
+    } catch (err) {
+        if (session?.inTransaction()) {
+            try { await session.abortTransaction(); } catch { /* ignore */ }
         }
+        throw err;
+    } finally {
+        session?.endSession();
+    }
 
+    // ── Post-commit side effects (never block or fail the capture) ───────────
+    sendNotificationToUser(customerId, 'Customer', {
+        title: 'Order Placed Successfully',
+        body: `Your order #${order.orderNumber} has been confirmed. We'll notify you when the seller prepares it.`,
+        data: {
+            type: 'ORDER_PLACED',
+            orderId: id,
+            orderNumber: order.orderNumber || '',
+        },
+    }).catch(err => console.error(`Push notification failed for customer ${customerId}:`, err));
+
+    try {
+        const { createPendingCommissions } = await import('./commissionService');
+        createPendingCommissions(id).catch(commError =>
+            console.error('Failed to create pending commissions after payment:', commError)
+        );
+    } catch (importError) {
+        console.error('Failed to import commissionService:', importError);
+    }
+
+    if (io) {
+        try {
+            const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
+            // Atomically claim the one-time notify flag so only one path
+            // (capturePayment vs webhook) notifies the seller.
+            const claimed = await Order.findOneAndUpdate(
+                { _id: id, sellerNotified: { $ne: true } },
+                { $set: { sellerNotified: true } },
+                { new: true }
+            ).lean();
+            if (claimed) {
+                notifySellersOfOrderUpdate(io, claimed, 'NEW_ORDER')
+                    .then(() => console.log(`Seller notified for paid order ${claimed.orderNumber}`))
+                    .catch(err => console.error('Failed to notify sellers after payment:', err));
+            }
+        } catch (importError) {
+            console.error('Failed to import sellerNotificationService:', importError);
+        }
+    } else {
+        console.warn('capturePayment: io not available — seller socket notification skipped.');
+    }
+
+    return {
+        success: true,
+        message: 'Payment captured successfully',
+        data: { razorpayPaymentId: assertion.razorpayPaymentId, id },
+    };
+}
+
+async function captureAdRequestPayment(
+    id: string,
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string
+) {
+    const adReq = await SellerAdRequest.findById(id);
+    if (!adReq) throw new PaymentVerificationError('Ad Request not found', 404);
+
+    if (adReq.paymentStatus === 'Paid') {
         return {
             success: true,
-            message: 'Payment captured successfully',
+            message: 'Payment already captured',
             data: { razorpayPaymentId, id },
         };
-
-    } catch (error: any) {
-        if (session) {
-            try {
-                await session.abortTransaction();
-            } catch (abortErr) {
-                console.error('Error aborting transaction in capturePayment:', abortErr);
-            }
-        }
-        console.error('Error capturing payment:', error);
-        return {
-            success: false,
-            message: error.message || 'Failed to capture payment',
-        };
-    } finally {
-        if (session) {
-            try {
-                session.endSession();
-            } catch (_) { /* ignore */ }
-        }
     }
-};
+
+    const due = adReq.adPrice || adReq.requestedPrice || 0;
+    if (!due || due <= 0) {
+        throw new PaymentVerificationError('This ad request has no price set yet.');
+    }
+
+    const assertion = await assertGatewayPayment({
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+        expectedAmount: due,
+        expectedRazorpayOrderId: adReq.razorpayOrderId,
+    });
+
+    const sellerId = adReq.sellerId.toString();
+
+    let session: mongoose.ClientSession | null = null;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+
+        await Payment.create(
+            [
+                {
+                    adRequest: id,
+                    seller: sellerId,
+                    paymentMethod: 'Online',
+                    paymentGateway: 'Razorpay',
+                    razorpayOrderId: assertion.razorpayOrderId,
+                    razorpayPaymentId: assertion.razorpayPaymentId,
+                    razorpaySignature,
+                    amount: assertion.amount,
+                    currency: assertion.currency,
+                    status: 'Completed',
+                    paidAt: new Date(),
+                    gatewayResponse: { success: true, message: 'Payment captured successfully' },
+                },
+            ],
+            { session }
+        );
+
+        adReq.paymentStatus = 'Paid';
+        adReq.paymentReference = assertion.razorpayPaymentId;
+        adReq.paidAt = new Date();
+        if (adReq.status === 'Approved' || adReq.status === 'Pending') {
+            adReq.status = 'PaymentVerified';
+        }
+        await adReq.save({ session });
+
+        await session.commitTransaction();
+    } catch (err) {
+        if (session?.inTransaction()) {
+            try { await session.abortTransaction(); } catch { /* ignore */ }
+        }
+        throw err;
+    } finally {
+        session?.endSession();
+    }
+
+    return {
+        success: true,
+        message: 'Payment captured successfully',
+        data: { razorpayPaymentId: assertion.razorpayPaymentId, id },
+    };
+}
 
 /**
- * Process refund
+ * Process a refund against a recorded payment.
  */
 export const processRefund = async (
     paymentId: string,
@@ -364,26 +350,23 @@ export const processRefund = async (
 ) => {
     try {
         const payment = await Payment.findById(paymentId);
-        if (!payment) {
-            throw new Error('Payment not found');
+        if (!payment) throw new Error('Payment not found');
+        if (!payment.razorpayPaymentId) throw new Error('Razorpay payment ID not found');
+        if (payment.status === 'Refunded') {
+            return { success: true, message: 'Payment already refunded', data: { amount: payment.refundAmount } };
         }
 
-        if (!payment.razorpayPaymentId) {
-            throw new Error('Razorpay payment ID not found');
+        const refundAmount = amount ?? payment.amount;
+        if (refundAmount <= 0 || refundAmount > payment.amount + 0.01) {
+            throw new Error('Refund amount must be between 0 and the captured amount');
         }
 
         const razorpay = getRazorpayInstance();
-
-        const refundAmount = amount || payment.amount;
-
         const refund = await razorpay.payments.refund(payment.razorpayPaymentId, {
-            amount: Math.round(refundAmount * 100), // Amount in paise
-            notes: {
-                reason: reason || 'Order cancelled',
-            },
+            amount: Math.round(refundAmount * 100),
+            notes: { reason: reason || 'Order cancelled' },
         });
 
-        // Update payment record
         payment.status = 'Refunded';
         payment.refundAmount = refundAmount;
         payment.refundedAt = new Date();
@@ -393,139 +376,106 @@ export const processRefund = async (
         return {
             success: true,
             message: 'Refund processed successfully',
-            data: {
-                refundId: refund.id,
-                amount: refundAmount,
-            },
+            data: { refundId: refund.id, amount: refundAmount },
         };
     } catch (error: any) {
-        console.error('Error processing refund:', error);
-        return {
-            success: false,
-            message: error.message || 'Failed to process refund',
-        };
+        console.error('Error processing refund:', error?.message || error);
+        return { success: false, message: error?.message || 'Failed to process refund' };
     }
 };
 
 /**
- * Handle Razorpay webhook
+ * Handle a Razorpay webhook.
+ *
+ * `rawBody` MUST be the exact bytes Razorpay sent — a re-serialised parsed body
+ * does not reproduce the signed payload. (#H-10)
  */
 export const handleWebhook = async (
-    body: any,
+    rawBody: Buffer | string,
     signature: string,
     io?: any
 ): Promise<{ success: boolean; message: string }> => {
     try {
-        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-
-        if (!webhookSecret) {
-            throw new Error('Razorpay webhook secret not configured');
-        }
-
-        // Verify webhook signature
-        const expectedSignature = crypto
-            .createHmac('sha256', webhookSecret)
-            .update(JSON.stringify(body))
-            .digest('hex');
-
-        if (expectedSignature !== signature) {
+        if (!verifyWebhookSignature(rawBody, signature)) {
             throw new Error('Invalid webhook signature');
         }
 
-        const event = body.event;
-        const payload = body.payload.payment.entity;
+        const body = typeof rawBody === 'string' ? JSON.parse(rawBody) : JSON.parse(rawBody.toString('utf8'));
+        const event = body?.event;
 
-        // Handle different events
         switch (event) {
             case 'payment.captured':
-                // Payment was captured successfully
-                await handlePaymentCaptured(payload, io);
+                await handlePaymentCaptured(body?.payload?.payment?.entity, io);
                 break;
-
             case 'payment.failed':
-                // Payment failed
-                await handlePaymentFailed(payload);
+                await handlePaymentFailed(body?.payload?.payment?.entity);
                 break;
-
             case 'refund.created':
-                // Refund was created
-                await handleRefundCreated(body.payload.refund.entity);
+            case 'refund.processed':
+                // `refund.*` events carry payload.refund, not payload.payment.
+                // Reading payload.payment unconditionally used to throw here. (#H-10)
+                await handleRefundCreated(body?.payload?.refund?.entity);
                 break;
-
             default:
                 console.log('Unhandled webhook event:', event);
         }
 
-        return {
-            success: true,
-            message: 'Webhook processed successfully',
-        };
+        return { success: true, message: 'Webhook processed successfully' };
     } catch (error: any) {
-        console.error('Error handling webhook:', error);
-        return {
-            success: false,
-            message: error.message || 'Failed to process webhook',
-        };
+        console.error('Error handling webhook:', error?.message || error);
+        return { success: false, message: error?.message || 'Failed to process webhook' };
     }
 };
 
-// Helper functions for webhook events
 const handlePaymentCaptured = async (payload: any, io?: any) => {
+    if (!payload?.id) return;
     try {
         const razorpayPaymentId = payload.id;
         const razorpayOrderId = payload.order_id;
 
-        // Find payment record
         const payment = await Payment.findOne({ razorpayOrderId });
+        if (!payment) return;
+        if (payment.status === 'Completed') return; // already processed
 
-        if (payment) {
-            if (payment.status === 'Completed') return; // Prevent double processing
+        payment.status = 'Completed';
+        payment.razorpayPaymentId = razorpayPaymentId;
+        payment.paidAt = new Date();
+        await payment.save();
 
-            payment.status = 'Completed';
-            payment.razorpayPaymentId = razorpayPaymentId;
-            payment.paidAt = new Date();
-            await payment.save();
-
-            // Update order: mark paid AND advance Pending → Received
-            // (Webhook fires after capturePayment in most cases, so the $cond
-            //  only upgrades status if it is still Pending — avoids downgrading.)
-            const order = await Order.findOneAndUpdate(
-                { _id: payment.order },
-                [
-                    {
-                        $set: {
-                            paymentStatus: 'Paid',
-                            paymentId: razorpayPaymentId,
-                            // Only promote 'Pending' → 'Received'; leave other statuses alone
-                            status: {
-                                $cond: {
-                                    if: { $eq: ['$status', 'Pending'] },
-                                    then: 'Received',
-                                    else: '$status',
-                                },
+        const order = await Order.findOneAndUpdate(
+            { _id: payment.order },
+            [
+                {
+                    $set: {
+                        paymentStatus: 'Paid',
+                        paymentId: razorpayPaymentId,
+                        status: {
+                            $cond: {
+                                if: { $eq: ['$status', 'Pending'] },
+                                then: 'Received',
+                                else: '$status',
                             },
                         },
                     },
-                ],
-                { new: true }
-            );
+                },
+            ],
+            { new: true }
+        );
 
-            if (io && order) {
-                try {
-                    const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
-                    // Atomically claim the one-time notify flag (see capturePayment). (#dup-notification)
-                    const claimed = await Order.findOneAndUpdate(
-                        { _id: order._id, sellerNotified: { $ne: true } },
-                        { $set: { sellerNotified: true } },
-                        { new: true }
-                    ).lean();
-                    if (claimed) {
-                        await notifySellersOfOrderUpdate(io, claimed, 'NEW_ORDER');
-                        console.log(`📤 Webhook: seller notified for paid order ${claimed.orderNumber}`);
-                    }
-                } catch (notifyError) {
-                    console.error('Failed to notify sellers after payment webhook:', notifyError);
+        if (io && order) {
+            try {
+                const { notifySellersOfOrderUpdate } = await import('./sellerNotificationService');
+                const claimed = await Order.findOneAndUpdate(
+                    { _id: order._id, sellerNotified: { $ne: true } },
+                    { $set: { sellerNotified: true } },
+                    { new: true }
+                ).lean();
+                if (claimed) {
+                    await notifySellersOfOrderUpdate(io, claimed, 'NEW_ORDER');
+                    console.log(`Webhook: seller notified for paid order ${claimed.orderNumber}`);
                 }
+            } catch (notifyError) {
+                console.error('Failed to notify sellers after payment webhook:', notifyError);
             }
         }
     } catch (error) {
@@ -534,50 +484,41 @@ const handlePaymentCaptured = async (payload: any, io?: any) => {
 };
 
 const handlePaymentFailed = async (payload: any) => {
+    if (!payload?.order_id) return;
     try {
-        const razorpayOrderId = payload.order_id;
+        const payment = await Payment.findOne({ razorpayOrderId: payload.order_id });
+        if (!payment) return;
 
-        // Find payment record
-        const payment = await Payment.findOne({ razorpayOrderId });
+        payment.status = 'Failed';
+        payment.gatewayResponse = {
+            success: false,
+            message: payload.error_description || 'Payment failed',
+            rawResponse: payload,
+        };
+        await payment.save();
 
-        if (payment) {
-            payment.status = 'Failed';
-            payment.gatewayResponse = {
-                success: false,
-                message: payload.error_description || 'Payment failed',
-                rawResponse: payload,
-            };
-            await payment.save();
-
-            // Update order
-            await Order.findByIdAndUpdate(payment.order, {
-                paymentStatus: 'Failed',
-            });
-        }
+        await Order.findByIdAndUpdate(payment.order, { paymentStatus: 'Failed' });
     } catch (error) {
         console.error('Error handling payment failed:', error);
     }
 };
 
 const handleRefundCreated = async (payload: any) => {
+    if (!payload?.payment_id) return;
     try {
-        const razorpayPaymentId = payload.payment_id;
+        const payment = await Payment.findOne({ razorpayPaymentId: payload.payment_id });
+        if (!payment) return;
 
-        // Find payment record
-        const payment = await Payment.findOne({ razorpayPaymentId });
+        payment.status = 'Refunded';
+        payment.refundAmount = Number(payload.amount) / 100;
+        payment.refundedAt = new Date();
+        await payment.save();
 
-        if (payment) {
-            payment.status = 'Refunded';
-            payment.refundAmount = payload.amount / 100; // Convert from paise
-            payment.refundedAt = new Date();
-            await payment.save();
-
-            // Update order
-            await Order.findByIdAndUpdate(payment.order, {
-                paymentStatus: 'Refunded',
-            });
-        }
+        await Order.findByIdAndUpdate(payment.order, { paymentStatus: 'Refunded' });
     } catch (error) {
         console.error('Error handling refund created:', error);
     }
 };
+
+// Re-exported so existing importers keep working; the mock bypass is gone. (#C-02)
+export { verifyCheckoutSignature as verifyPaymentSignature } from './razorpayVerificationService';

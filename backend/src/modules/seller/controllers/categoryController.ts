@@ -25,28 +25,37 @@ export const getCategories = asyncHandler(
       query.name = { $regex: search, $options: "i" };
     }
 
-    const categories = await Category.find(query)
-      .populate("headerCategoryId", "name slug theme")
-      .sort({ name: 1 });
+    // Fetch categories + both count aggregations in parallel (3 queries total, not N*2)
+    const [categories, subcountAgg, productCountAgg] = await Promise.all([
+      Category.find(query)
+        .populate("headerCategoryId", "name slug theme")
+        .sort({ name: 1 })
+        .lean(),
+      SubCategory.aggregate([
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+      ]),
+      Product.aggregate([
+        { $match: { status: "Active", publish: true } },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+      ]),
+    ]);
 
-    // Get subcategory and product counts for each category
-    const categoriesWithCounts = await Promise.all(
-      categories.map(async (category) => {
-        const subcategoryCount = await SubCategory.countDocuments({
-          category: category._id,
-        });
-
-        const productCount = await Product.countDocuments({
-          category: category._id, // Note: Product model uses 'category', not 'categoryId'
-        });
-
-        return {
-          ...category.toObject(),
-          totalSubcategory: subcategoryCount,
-          totalProduct: productCount,
-        };
-      })
+    // Build O(1) lookup maps
+    const subCountMap = new Map<string, number>(
+      subcountAgg.map((r: any) => [r._id?.toString(), r.count])
     );
+    const productCountMap = new Map<string, number>(
+      productCountAgg.map((r: any) => [r._id?.toString(), r.count])
+    );
+
+    const categoriesWithCounts = categories.map((category: any) => {
+      const id = category._id.toString();
+      return {
+        ...category,
+        totalSubcategory: subCountMap.get(id) ?? 0,
+        totalProduct: productCountMap.get(id) ?? 0,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -274,45 +283,52 @@ export const getSubcategories = asyncHandler(
  */
 export const getAllCategoriesWithSubcategories = asyncHandler(
   async (_req: Request, res: Response) => {
-    // Get all parent categories
-    const parentCategories = await Category.find({ parentId: null }).sort({
-      name: 1,
-    });
+    // Fetch everything in parallel — 4 queries total instead of N*M
+    const [parentCategories, allSubcategories, productByCatAgg, productBySubAgg] =
+      await Promise.all([
+        Category.find({ parentId: null }).sort({ name: 1 }).lean(),
+        SubCategory.find({}).sort({ name: 1 }).lean(),
+        Product.aggregate([
+          { $match: { status: "Active", publish: true } },
+          { $group: { _id: "$category", count: { $sum: 1 } } },
+        ]),
+        Product.aggregate([
+          { $match: { status: "Active", publish: true } },
+          { $group: { _id: "$subcategory", count: { $sum: 1 } } },
+        ]),
+      ]);
 
-    // Get all subcategories grouped by parent
-    const categoriesWithSubcategories = await Promise.all(
-      parentCategories.map(async (category) => {
-        const subcategories = await SubCategory.find({
-          category: category._id,
-        }).sort({ name: 1 });
-
-        // Get product counts
-        const subcategoriesWithCounts = await Promise.all(
-          subcategories.map(async (subcategory) => {
-            const productCount = await Product.countDocuments({
-              subcategory: subcategory._id,
-            });
-
-            return {
-              ...subcategory.toObject(),
-              totalProduct: productCount,
-            };
-          })
-        );
-
-        const subcategoryCount = subcategories.length;
-        const productCount = await Product.countDocuments({
-          category: category._id,
-        });
-
-        return {
-          ...category.toObject(),
-          totalSubcategory: subcategoryCount,
-          totalProduct: productCount,
-          subcategories: subcategoriesWithCounts,
-        };
-      })
+    // O(1) lookup maps
+    const productByCatMap = new Map<string, number>(
+      productByCatAgg.map((r: any) => [r._id?.toString(), r.count])
     );
+    const productBySubMap = new Map<string, number>(
+      productBySubAgg.map((r: any) => [r._id?.toString(), r.count])
+    );
+
+    // Group subcategories by parent category id
+    const subsByParent = new Map<string, any[]>();
+    for (const sub of allSubcategories) {
+      const key = (sub as any).category?.toString();
+      if (!key) continue;
+      if (!subsByParent.has(key)) subsByParent.set(key, []);
+      subsByParent.get(key)!.push(sub);
+    }
+
+    const categoriesWithSubcategories = parentCategories.map((category: any) => {
+      const id = category._id.toString();
+      const subcategories = (subsByParent.get(id) || []).map((sub: any) => ({
+        ...sub,
+        totalProduct: productBySubMap.get(sub._id.toString()) ?? 0,
+      }));
+
+      return {
+        ...category,
+        totalSubcategory: subcategories.length,
+        totalProduct: productByCatMap.get(id) ?? 0,
+        subcategories,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -362,26 +378,29 @@ export const getAllSubcategories = asyncHandler(
       .skip(skip)
       .limit(limitNum);
 
-    // Get product counts and format response
-    const subcategoriesWithCounts = await Promise.all(
-      subcategories.map(async (subcategory) => {
-        const productCount = await Product.countDocuments({
-          subcategory: subcategory._id, // Note: Product model uses 'subcategory', not 'subcategoryId'
-        });
-
-        const parentCategory = subcategory.category as any;
-
-        return {
-          id: subcategory._id,
-          categoryName: parentCategory?.name || "Unknown",
-          subcategoryName: subcategory.name,
-          subcategoryImage: subcategory.image || "",
-          totalProduct: productCount,
-        };
-      })
+    // Get all product counts for these subcategories in one aggregation
+    const subIds = subcategories.map((s) => s._id);
+    const [productCountAgg, total] = await Promise.all([
+      Product.aggregate([
+        { $match: { subcategory: { $in: subIds } } },
+        { $group: { _id: "$subcategory", count: { $sum: 1 } } },
+      ]),
+      SubCategory.countDocuments(query),
+    ]);
+    const productCountMap = new Map<string, number>(
+      productCountAgg.map((r: any) => [r._id?.toString(), r.count])
     );
 
-    const total = await SubCategory.countDocuments(query);
+    const subcategoriesWithCounts = subcategories.map((subcategory) => {
+      const parentCategory = subcategory.category as any;
+      return {
+        id: subcategory._id,
+        categoryName: parentCategory?.name || "Unknown",
+        subcategoryName: subcategory.name,
+        subcategoryImage: subcategory.image || "",
+        totalProduct: productCountMap.get(subcategory._id.toString()) ?? 0,
+      };
+    });
 
     return res.status(200).json({
       success: true,

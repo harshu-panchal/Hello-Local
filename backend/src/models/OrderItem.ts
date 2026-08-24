@@ -25,6 +25,9 @@ export interface IOrderItem extends Document {
   orderId?: string;
   commissionRate: number;
   commissionAmount: number;
+  /** Tax snapshot at order time, so an invoice never re-derives it. (#H-04) */
+  taxRate: number;
+  taxAmount: number;
 
   createdAt: Date;
   updatedAt: Date;
@@ -99,6 +102,16 @@ const OrderItemSchema = new Schema<IOrderItem>(
     commissionRate: {
       type: Number,
       default: 0,
+    },
+    taxRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    taxAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     commissionAmount: {
       type: Number,

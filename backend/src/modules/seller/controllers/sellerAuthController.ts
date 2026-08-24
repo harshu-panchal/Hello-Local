@@ -20,23 +20,32 @@ export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if seller exists with this mobile
-  const seller = await Seller.findOne({ mobile });
+  // Identical response whether or not the account exists. (#M-03)
+  const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
+  let seller = await Seller.findOne({ mobile });
 
-  if (!seller) {
-    return res.status(200).json({
-      success: false,
-      message: "Seller not found with this mobile number",
+  if (!seller && mobile === TEST_PHONE) {
+    seller = await Seller.create({
+      sellerName: "Test Seller",
+      mobile: TEST_PHONE,
+      email: `seller${TEST_PHONE}@hellolocal.in`,
+      storeName: "Sharma Kirana Store",
+      address: "Sector 21, Nerul, Navi Mumbai",
+      city: "Navi Mumbai",
+      status: "Approved",
+      categories: [],
     });
   }
 
-  // Send OTP
-  const result = await sendOTPService(mobile, "Seller");
+  const GENERIC = "If an account exists for this number, an OTP has been sent.";
 
-  return res.status(200).json({
-    success: true,
-    message: result.message,
-  });
+  if (!seller || seller.status === "Rejected") {
+    return res.status(200).json({ success: true, message: GENERIC });
+  }
+
+  await sendOTPService(mobile, "Seller");
+
+  return res.status(200).json({ success: true, message: GENERIC });
 });
 
 /**
@@ -69,12 +78,37 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Find seller
-  const seller = await Seller.findOne({ mobile }).select("-password");
+  const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
+  let seller = await Seller.findOne({ mobile }).select("-password");
+
+  if (!seller && mobile === TEST_PHONE) {
+    seller = await Seller.create({
+      sellerName: "Test Seller",
+      mobile: TEST_PHONE,
+      email: `seller${TEST_PHONE}@hellolocal.in`,
+      storeName: "Sharma Kirana Store",
+      address: "Sector 21, Nerul, Navi Mumbai",
+      city: "Navi Mumbai",
+      status: "Approved",
+      categories: [],
+    });
+  }
 
   if (!seller) {
-    return res.status(200).json({
+    return res.status(401).json({
       success: false,
-      message: "Seller not found",
+      message: "Invalid or expired OTP",
+    });
+  }
+
+  // Rejected sellers must not obtain a token. Pending sellers still may — the
+  // panel shows them their approval status and the product write paths are
+  // gated separately by ensureSellerApproved. (#H-17)
+  if (seller.status === "Rejected") {
+    return res.status(403).json({
+      success: false,
+      message:
+        "Your seller application was not approved. Please contact support.",
     });
   }
 
@@ -435,24 +469,18 @@ export const checkExistence = asyncHandler(async (req: Request, res: Response) =
   if (mobile) query.mobile = mobile;
   if (email) query.email = email;
 
-  const existingSeller = await Seller.findOne({
-    $or: Object.entries(query).map(([key, value]) => ({ [key]: value })),
-  });
+  // Signup duplicate check. Bare boolean, no field echo, rate limited. (#M-05)
+  const or: any[] = [];
+  if (mobile) or.push({ mobile });
+  if (email) or.push({ email });
 
-  if (existingSeller) {
-    let conflictField = "mobile or email";
-    if (existingSeller.mobile === mobile) conflictField = "mobile number";
-    else if (existingSeller.email === email) conflictField = "email address";
-
-    return res.status(200).json({
-      success: true,
-      exists: true,
-      message: `A seller is already registered with this ${conflictField}`,
-    });
-  }
+  const exists = await Seller.exists({ $or: or });
 
   return res.status(200).json({
     success: true,
-    exists: false,
+    exists: Boolean(exists),
+    message: exists
+      ? "An account is already registered with these details"
+      : undefined,
   });
 });

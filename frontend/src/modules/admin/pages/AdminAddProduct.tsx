@@ -27,10 +27,12 @@ import {
   getHeaderCategoriesPublic,
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
+import { useToast } from "../../../context/ToastContext";
 
 export default function AdminAddProduct() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     productName: "",
     headerCategory: "",
@@ -426,7 +428,7 @@ export default function AdminAddProduct() {
         const compressedMain = await compressImage(mainImageFile);
         const mainImageResult = await uploadImage(
           compressedMain,
-          "dhakadsnazzy/products"
+          "hellolocal/products"
         );
         mainImageUrl = mainImageResult.secureUrl;
         setFormData((prev) => ({
@@ -442,7 +444,7 @@ export default function AdminAddProduct() {
         );
         const galleryResults = await uploadImages(
           compressedGallery,
-          "dhakadsnazzy/products/gallery"
+          "hellolocal/products/gallery"
         );
         galleryImageUrls = galleryResults.map((result) => result.secureUrl);
         setFormData((prev) => ({ ...prev, galleryImageUrls }));
@@ -458,15 +460,15 @@ export default function AdminAddProduct() {
       // Prepare product data for API
       const tagsArray = formData.tags
         ? formData.tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean)
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0)
         : [];
 
       const productData = {
         productName: formData.productName,
         headerCategoryId: formData.headerCategory || undefined,
-        category: formData.category || undefined,
+        category: formData.category,
         subcategory: formData.subcategory || undefined,
         subSubCategory: formData.subSubCategory || undefined,
         brand: formData.brand || undefined,
@@ -509,51 +511,12 @@ export default function AdminAddProduct() {
       }
 
       if (response.success) {
-        setSuccessMessage(
-          id ? "Product updated successfully!" : "Product added successfully!"
-        );
+        const msg = id ? "Product updated successfully!" : "Product added successfully!";
+        setSuccessMessage(msg);
+        showToast(msg, "success");
         setTimeout(() => {
-          // Reset form or navigate
-          if (!id) {
-            setFormData({
-              productName: "",
-              headerCategory: "",
-              category: "",
-              subcategory: "",
-              subSubCategory: "",
-              publish: "No",
-              popular: "No",
-              dealOfDay: "No",
-              brand: "",
-              tags: "",
-              smallDescription: "",
-              seoTitle: "",
-              seoKeywords: "",
-              seoImageAlt: "",
-              seoDescription: "",
-              variationType: "",
-              manufacturer: "",
-              madeIn: "",
-              tax: "",
-              isReturnable: "No",
-              maxReturnDays: "",
-              fssaiLicNo: "",
-              totalAllowedQuantity: "10",
-              mainImageUrl: "",
-              galleryImageUrls: [],
-              isShopByStoreOnly: "No",
-              shopId: "",
-            });
-            setVariations([]);
-            setMainImageFile(null);
-            setMainImagePreview("");
-            setGalleryImageFiles([]);
-            setGalleryImagePreviews([]);
-          }
-          setSuccessMessage("");
-          // Navigate to product list
           navigate("/admin/product/list");
-        }, 1500);
+        }, 1000);
       } else {
         setUploadError(response.message || "Failed to create product");
       }

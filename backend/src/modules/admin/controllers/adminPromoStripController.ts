@@ -113,16 +113,25 @@ export const createPromoStrip = asyncHandler(async (req: Request, res: Response)
  * Get all PromoStrips
  */
 export const getAllPromoStrips = asyncHandler(async (req: Request, res: Response) => {
-  const { headerCategorySlug, isActive, sortBy = "order", sortOrder = "asc" } = req.query;
+  const { headerCategorySlug, isActive, search, sortBy = "order", sortOrder = "asc" } = req.query;
 
   let query: any = {};
 
-  if (headerCategorySlug) {
+  if (headerCategorySlug && headerCategorySlug !== "all" && headerCategorySlug !== "All") {
     query.headerCategorySlug = (headerCategorySlug as string).toLowerCase();
   }
 
   if (isActive !== undefined) {
     query.isActive = isActive === "true";
+  }
+
+  if (search && typeof search === "string" && search.trim()) {
+    const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    query.$or = [
+      { heading: { $regex: safe, $options: "i" } },
+      { saleText: { $regex: safe, $options: "i" } },
+      { headerCategorySlug: { $regex: safe, $options: "i" } },
+    ];
   }
 
   const sort: any = {};

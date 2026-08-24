@@ -2,10 +2,9 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 
 import mongoose from "mongoose";
-import WithdrawRequest from "../../../models/WithdrawRequest";
 import Delivery from "../../../models/Delivery";
 import AppSettings from "../../../models/AppSettings";
-import { debitWallet } from "../../../services/walletManagementService";
+import { createWithdrawalRequest } from "../../../services/walletManagementService";
 
 /**
  * Get Earnings History
@@ -120,45 +119,28 @@ export const requestWithdrawal = asyncHandler(async (req: Request, res: Response
         });
     }
 
-    // 4. Check for existing pending request
-    const existingRequest = await WithdrawRequest.findOne({
-        userId: deliveryBoy._id,
-        status: "Pending"
-    });
-
-    if (existingRequest) {
-        return res.status(400).json({
-            success: false,
-            message: "You already have a pending withdrawal request"
-        });
-    }
-
-    // 5. Deduct Balance Immediately
-    const debitResult = await debitWallet(
+    // Delegate to the single authoritative withdrawal path.
+    //
+    // This handler used to duplicate the logic: it checked for a pending request,
+    // then debited, then created the request as three separate un-transacted
+    // steps, so a failure between them lost the money or the request. It also
+    // diverged from the seller path. `createWithdrawalRequest` performs the
+    // validation, the reservation and the record creation atomically. (#M-12)
+    const created = await createWithdrawalRequest(
         deliveryBoy._id.toString(),
         "DELIVERY_BOY",
         withdrawalAmount,
-        "Withdrawal Request"
+        "Bank Transfer"
     );
 
-    if (!debitResult.success) {
+    if (!created.success) {
         return res.status(400).json({
             success: false,
-            message: debitResult.message || "Failed to process withdrawal deduction"
+            message: created.message
         });
     }
 
-    // 6. Create Withdrawal Request
-    const accountDetails = `${deliveryBoy.bankName} - ${deliveryBoy.accountNumber} (${deliveryBoy.ifscCode})`;
-
-    const withdrawRequest = await WithdrawRequest.create({
-        userId: deliveryBoy._id,
-        userType: "DELIVERY_BOY",
-        amount: withdrawalAmount,
-        status: "Pending",
-        paymentMethod: "Bank Transfer",
-        accountDetails: accountDetails
-    });
+    const withdrawRequest = created.data!;
 
     return res.status(201).json({
         success: true,

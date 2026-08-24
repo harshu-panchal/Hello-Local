@@ -43,6 +43,8 @@ router.post("/orders/:id/check-customer-proximity", deliveryOrderController.chec
 
 // Earnings
 router.get("/earnings", deliveryEarningController.getEarningsHistory);
-router.post("/withdraw", deliveryEarningController.requestWithdrawal);
+// POST /delivery/withdraw was a second, divergent withdrawal implementation.
+// The frontend only ever calls /delivery/wallet/withdraw, and both now share
+// createWithdrawalRequest, so the duplicate route is removed.
 
 export default router;

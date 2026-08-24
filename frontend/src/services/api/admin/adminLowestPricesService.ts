@@ -31,8 +31,14 @@ export interface LowestPricesProductResponse {
 }
 
 // Get all lowest prices products
-export const getLowestPricesProducts = async (): Promise<LowestPricesProductResponse> => {
-    const response = await api.get<LowestPricesProductResponse>("/admin/lowest-prices-products");
+export const getLowestPricesProducts = async (params?: {
+    search?: string;
+    isActive?: boolean;
+}): Promise<LowestPricesProductResponse> => {
+    const response = await api.get<LowestPricesProductResponse>(
+        "/admin/lowest-prices-products",
+        { params }
+    );
     return response.data;
 };
 

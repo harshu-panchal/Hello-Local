@@ -21,6 +21,7 @@ export const getProducts = async (req: Request, res: Response) => {
       minDiscount,
       latitude, // User location latitude
       longitude, // User location longitude
+      foodType,  // "Veg" | "Non-Veg" — filter by food type
     } = req.query;
 
     const query: any = {
@@ -171,6 +172,11 @@ export const getProducts = async (req: Request, res: Response) => {
 
     if (minDiscount) {
       query.discount = { $gte: Number(minDiscount) };
+    }
+
+    // Filter by food type — only apply when explicitly set to Veg or Non-Veg
+    if (foodType === "Veg" || foodType === "Non-Veg") {
+      query.foodType = foodType;
     }
 
     if (search) {

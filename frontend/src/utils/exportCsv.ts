@@ -4,7 +4,7 @@
 //   1. SYLK misdetection — Excel treats any file whose first two bytes are the
 //      literal characters "ID" as an old SYLK spreadsheet and refuses to open it.
 //      Quoting every field means the data starts with a `"` instead, avoiding this.
-//   2. Encoding — a real UTF-8 BOM (﻿) so Excel renders ₹ and other glyphs.
+//   2. Encoding — a real UTF-8 BOM (U+FEFF) so Excel renders ₹ and other glyphs.
 //   3. Line endings — CRLF (\r\n), which Excel parses most reliably.
 //   4. Escaping — every value is wrapped in quotes with internal quotes doubled,
 //      so commas, quotes, and newlines inside a value never break the columns.

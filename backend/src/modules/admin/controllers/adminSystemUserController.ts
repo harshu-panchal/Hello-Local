@@ -23,13 +23,15 @@ export const getAllSystemUsers = asyncHandler(
       query.role = role;
     }
 
-    // Search filter
+    // Search filter. The term is escaped so a crafted pattern cannot be used
+    // as a regular expression against the collection.
     if (search) {
+      const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       query.$or = [
-        { firstName: { $regex: search as string, $options: "i" } },
-        { lastName: { $regex: search as string, $options: "i" } },
-        { email: { $regex: search as string, $options: "i" } },
-        { mobile: { $regex: search as string, $options: "i" } },
+        { firstName: { $regex: safe, $options: "i" } },
+        { lastName: { $regex: safe, $options: "i" } },
+        { email: { $regex: safe, $options: "i" } },
+        { mobile: { $regex: safe, $options: "i" } },
       ];
     }
 
@@ -58,6 +60,7 @@ export const getAllSystemUsers = asyncHandler(
         mobile: admin.mobile,
         email: admin.email,
         role: admin.role,
+        status: admin.status,
         createdAt: admin.createdAt,
         updatedAt: admin.updatedAt,
       })),
@@ -196,7 +199,7 @@ export const createSystemUser = asyncHandler(
 export const updateSystemUser = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { firstName, lastName, mobile, email, password, role } = req.body;
+    const { firstName, lastName, mobile, email, password, role, status } = req.body;
 
     // Find the admin
     const admin = await Admin.findById(id);
@@ -260,12 +263,56 @@ export const updateSystemUser = asyncHandler(
       });
     }
 
+    const currentUserId = req.user!.userId;
+    const isSelf = String(admin._id) === String(currentUserId);
+
+    // Defence in depth behind the Super Admin route guard.
+    //
+    // 1. No self-role changes — a compromised Super Admin session should not be
+    //    able to silently entrench, and an Admin reaching here must not promote.
+    if (role && isSelf && role !== admin.role) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot change your own role.",
+      });
+    }
+
+    // 2. Never let one admin set another admin's password. Account recovery goes
+    //    through the OTP login flow, not through a peer. (#C-05)
+    if (password && !isSelf) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You cannot set another admin's password. They can sign in with an OTP.",
+      });
+    }
+
+    // 3. Never demote the last remaining Super Admin.
+    if (role && admin.role === "Super Admin" && role !== "Super Admin") {
+      const superAdminCount = await Admin.countDocuments({ role: "Super Admin" });
+      if (superAdminCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot demote the last Super Admin",
+        });
+      }
+    }
+
     // Update fields
     if (firstName) admin.firstName = firstName;
     if (lastName) admin.lastName = lastName;
     if (email) admin.email = email;
     if (mobile) admin.mobile = mobile;
     if (role) admin.role = role as "Admin" | "Super Admin";
+    if (status && ["Active", "Inactive"].includes(status)) {
+      if (isSelf && status !== "Active") {
+        return res.status(403).json({
+          success: false,
+          message: "You cannot deactivate your own account.",
+        });
+      }
+      admin.status = status as "Active" | "Inactive";
+    }
     if (password) {
       if (password.length < 6) {
         return res.status(400).json({
@@ -291,9 +338,34 @@ export const updateSystemUser = asyncHandler(
         mobile: updatedAdmin!.mobile,
         email: updatedAdmin!.email,
         role: updatedAdmin!.role,
+        status: updatedAdmin!.status,
         updatedAt: updatedAdmin!.updatedAt,
       },
     });
+  }
+);
+
+/**
+ * Duplicate check for the system-user form. Super Admin only (route-enforced),
+ * returns a bare boolean. (#M-05)
+ */
+export const checkAdminExistence = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { mobile, email } = req.query;
+
+    if (!mobile && !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Mobile or email is required",
+      });
+    }
+
+    const or: any[] = [];
+    if (mobile) or.push({ mobile });
+    if (email) or.push({ email });
+
+    const exists = await Admin.exists({ $or: or });
+    return res.status(200).json({ success: true, exists: Boolean(exists) });
   }
 );
 

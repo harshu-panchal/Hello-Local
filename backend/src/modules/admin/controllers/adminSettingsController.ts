@@ -13,8 +13,8 @@ export const getAppSettings = asyncHandler(
     // Create default settings if none exist
     if (!settings) {
       settings = await AppSettings.create({
-        appName: "Dhakad Snazzy",
-        contactEmail: "contact@dhakadsnazzy.com",
+        appName: "Hello Local",
+        contactEmail: "support@hellolocal.com",
         contactPhone: "1234567890",
       });
     }
@@ -134,8 +134,8 @@ export const updateSMSGatewaySettings = asyncHandler(
 
     if (!settings) {
       settings = await AppSettings.create({
-        appName: "Dhakad Snazzy",
-        contactEmail: "contact@dhakadsnazzy.com",
+        appName: "Hello Local",
+        contactEmail: "support@hellolocal.com",
         contactPhone: "1234567890",
         smsGateway,
       });

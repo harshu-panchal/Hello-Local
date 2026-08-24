@@ -7,6 +7,8 @@ export interface IAdmin extends Document {
   mobile: string;
   email: string;
   role: 'Super Admin' | 'Admin';
+  /** Suspended admins keep their record but cannot authenticate. (#H-17) */
+  status: 'Active' | 'Inactive';
   password: string;
   createdAt: Date;
   updatedAt: Date;
@@ -58,6 +60,11 @@ const AdminSchema = new Schema<IAdmin>(
       required: [true, 'Role is required'],
       enum: ['Super Admin', 'Admin'],
       default: 'Admin',
+    },
+    status: {
+      type: String,
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
     },
     password: {
       type: String,

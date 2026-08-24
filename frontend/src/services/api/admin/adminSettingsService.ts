@@ -71,14 +71,12 @@ export interface AppSettings {
   companyCountry?: string;
   paymentMethods: PaymentMethods;
   paymentGateways?: PaymentGateways;
-  smsGateway?: SMSGatewaySettings;
   defaultCommission: number;
   deliveryCharges: number;
   platformFee?: number;
   freeDeliveryThreshold?: number;
   deliveryConfig?: {
     isDistanceBased: boolean;
-    googleMapsKey?: string;
     baseCharge: number;
     baseDistance: number;
     kmRate: number;
@@ -115,10 +113,6 @@ export interface UpdateAppSettingsData extends Partial<AppSettings> { }
 
 export interface UpdatePaymentMethodsData {
   paymentMethods: PaymentMethod[];
-}
-
-export interface UpdateSMSGatewaySettingsData {
-  smsGateway: SMSGatewaySettings;
 }
 
 /**
@@ -162,31 +156,6 @@ export const updatePaymentMethods = async (
 ): Promise<ApiResponse<PaymentMethod[]>> => {
   const response = await api.put<ApiResponse<PaymentMethod[]>>(
     "/admin/settings/payment-methods",
-    data
-  );
-  return response.data;
-};
-
-/**
- * Get SMS gateway settings
- */
-export const getSMSGatewaySettings = async (): Promise<
-  ApiResponse<SMSGatewaySettings | null>
-> => {
-  const response = await api.get<ApiResponse<SMSGatewaySettings | null>>(
-    "/admin/settings/sms-gateway"
-  );
-  return response.data;
-};
-
-/**
- * Update SMS gateway settings
- */
-export const updateSMSGatewaySettings = async (
-  data: UpdateSMSGatewaySettingsData
-): Promise<ApiResponse<SMSGatewaySettings>> => {
-  const response = await api.put<ApiResponse<SMSGatewaySettings>>(
-    "/admin/settings/sms-gateway",
     data
   );
   return response.data;

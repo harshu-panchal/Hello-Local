@@ -8,6 +8,8 @@ export interface IOtp extends Document {
   userType: UserType;
   expiresAt: Date;
   isVerified: boolean;
+  /** Failed verification attempts. The record is destroyed past the cap. (#H-16) */
+  attempts: number;
   createdAt: Date;
 }
 
@@ -42,6 +44,11 @@ const OtpSchema = new Schema<IOtp>(
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    attempts: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {

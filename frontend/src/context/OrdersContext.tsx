@@ -116,10 +116,12 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
           quantity: item.quantity,
           variant: item.variant, // Pass variant if available
         })),
-        fees: {
-          deliveryFee: order.fees?.deliveryFee || 0,
-          platformFee: order.fees?.platformFee || 0,
-        },
+        // The coupon and tip used to be dropped here while the checkout screen
+        // showed a discounted grand total, so the customer was charged the
+        // undiscounted amount and the courier never received the tip. The
+        // server recomputes every figure; these are inputs, not amounts. (#C-11)
+        couponCode: order.couponCode || undefined,
+        tipAmount: order.tipAmount || 0,
       };
 
       const response = await createOrder(payload);

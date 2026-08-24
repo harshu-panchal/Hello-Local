@@ -12,6 +12,7 @@ interface CacheEntry<T> {
 class Cache {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default
+  private readonly MAX_SIZE = 500; // evict oldest entry when limit is reached
 
   /**
    * Check if a key exists and is not expired.
@@ -48,6 +49,13 @@ class Cache {
    * Set cache data
    */
   set<T>(key: string, data: T, ttl: number = this.DEFAULT_TTL): void {
+    // Evict the oldest entry when at capacity (Map preserves insertion order)
+    if (this.cache.size >= this.MAX_SIZE && !this.cache.has(key)) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
     this.cache.set(key, {
       data,
       timestamp: Date.now(),

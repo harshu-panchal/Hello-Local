@@ -6,11 +6,11 @@ import {
   verifyOTP,
 } from "../../../services/api/auth/deliveryAuthService";
 import { uploadDocument } from "../../../services/api/uploadService";
-import { validateDocumentFile } from "../../../utils/imageUpload";
 import api from "../../../services/api/config";
 import OTPInput from "../../../components/OTPInput";
 import { useAuth } from "../../../context/AuthContext";
 import { normalizeMobile } from "../../../utils/phone";
+import { clearSession } from '../../../services/api/session';
 
 
 export default function DeliverySignUp() {
@@ -253,12 +253,16 @@ export default function DeliverySignUp() {
         accountNumber: formData.accountNumber || undefined,
         ifscCode: formData.ifscCode || undefined,
         bonusType: formData.bonusType || undefined,
+        // These were uploaded to Cloudinary a few lines above and then never
+        // sent, so every courier's ID documents were orphaned and the admin
+        // had nothing to verify against.
+        drivingLicense: drivingLicenseUrl || undefined,
+        nationalIdentityCard: nationalIdentityCardUrl || undefined,
       });
 
       if (response.success) {
         // Clear token from registration (we'll get it after OTP verification)
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("userData");
+        clearSession('delivery');
         // Registration successful, now send SMS OTP for verification
         try {
           const otpRes = await sendOTP(formData.mobile);

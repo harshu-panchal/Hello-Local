@@ -30,10 +30,10 @@ export interface CreateOrderData {
         [key: string]: any;
     };
     paymentMethod: string;
-    fees?: {
-        deliveryFee: number;
-        platformFee: number;
-    };
+    /** Coupon code to validate and apply server-side. (#C-11) */
+    couponCode?: string;
+    /** Delivery tip, in rupees. (#C-11) */
+    tipAmount?: number;
 }
 
 export interface OrderResponse {

@@ -64,10 +64,11 @@ export const getAllShops = asyncHandler(async (req: Request, res: Response) => {
     }
 
     // Search filter
-    if (search) {
+    if (search && typeof search === "string" && search.trim()) {
+        const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         query.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { storeId: { $regex: search, $options: 'i' } },
+            { name: { $regex: safe, $options: 'i' } },
+            { storeId: { $regex: safe, $options: 'i' } },
         ];
     }
 
@@ -82,7 +83,7 @@ export const getAllShops = asyncHandler(async (req: Request, res: Response) => {
     const shops = await Shop.find(query)
         .populate('headerCategoryId', 'name')
         .populate('category', 'name')
-        .populate('subCategory', 'subcategoryName')
+        .populate('subCategory', 'name')
         .populate('subSubCategory', 'name')
         .sort(sort);
 
@@ -103,7 +104,7 @@ export const getShopById = asyncHandler(async (req: Request, res: Response) => {
         .populate("products")
         .populate('headerCategoryId', 'name')
         .populate('category', 'name')
-        .populate('subCategory', 'subcategoryName')
+        .populate('subCategory', 'name')
         .populate('subSubCategory', 'name');
 
     if (!shop) {
@@ -146,7 +147,7 @@ export const updateShop = asyncHandler(async (req: Request, res: Response) => {
     .populate("products")
     .populate('headerCategoryId', 'name')
     .populate('category', 'name')
-    .populate('subCategory', 'subcategoryName')
+    .populate('subCategory', 'name')
     .populate('subSubCategory', 'name');
 
     if (!shop) {

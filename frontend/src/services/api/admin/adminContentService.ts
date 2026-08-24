@@ -8,7 +8,8 @@ export interface FAQ {
   question: string;
   answer: string;
   category?: string;
-  isActive: boolean;
+  status?: "Active" | "Inactive";
+  isActive?: boolean;
   order: number;
   createdAt?: string;
   updatedAt?: string;
@@ -18,6 +19,7 @@ export interface CreateFAQData {
   question: string;
   answer: string;
   category?: string;
+  status?: "Active" | "Inactive";
   isActive?: boolean;
   order?: number;
 }
@@ -26,6 +28,7 @@ export interface UpdateFAQData {
   question?: string;
   answer?: string;
   category?: string;
+  status?: "Active" | "Inactive";
   isActive?: boolean;
   order?: number;
 }
@@ -96,6 +99,16 @@ export const deleteFAQ = async (id: string): Promise<ApiResponse<void>> => {
   return response.data;
 };
 
+export const updateFAQStatus = async (
+  id: string,
+  status: "Active" | "Inactive"
+): Promise<ApiResponse<FAQ>> => {
+  const response = await api.patch<ApiResponse<FAQ>>(`/admin/faqs/${id}/status`, {
+    status,
+  });
+  return response.data;
+};
+
 
 export interface ContentNotification {
   _id: string;
@@ -105,20 +118,8 @@ export interface ContentNotification {
   createdAt: string;
 }
 
-export const getContentNotifications = async (): Promise<ApiResponse<ContentNotification[]>> => {
-  const response = await api.get("/admin/content/notifications");
-  return response.data;
-};
 
-export const createContentNotification = async (data: any): Promise<ApiResponse<ContentNotification>> => {
-  const response = await api.post("/admin/content/notifications", data);
-  return response.data;
-};
 
-export const deleteContentNotification = async (id: string): Promise<ApiResponse<null>> => {
-  const response = await api.delete(`/admin/content/notifications/${id}`);
-  return response.data;
-};
 
 /**
  * Policy APIs

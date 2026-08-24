@@ -22,6 +22,7 @@ export interface User {
 export interface MiscReturnRequest {
   _id: string;
   orderId: string;
+  orderNumber?: string;
   orderItemId: string;
   userId: string;
   userName: string;
@@ -258,18 +259,7 @@ export const updateHeaderCategoryOrder = async (
   return response.data;
 };
 
-/**
- * Home Section APIs
- */
-export const getHomeSections = async (): Promise<ApiResponse<MiscHomeSection[]>> => {
-  const response = await api.get('/admin/cms/home-sections');
-  return response.data;
-};
 
-export const updateHomeSections = async (sections: MiscHomeSection[]): Promise<ApiResponse<MiscHomeSection[]>> => {
-  const response = await api.put('/admin/cms/home-sections', { sections });
-  return response.data;
-};
 
 export const updateHomeSection = async (
   id: string,

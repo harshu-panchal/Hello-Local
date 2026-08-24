@@ -20,27 +20,20 @@ export const sendOTP = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Check if admin exists with this mobile
+  // Look the admin up, but do NOT reveal whether one exists: a distinct 404
+  // let anyone enumerate valid admin mobile numbers. The response is identical
+  // either way and an OTP is only actually dispatched to a real account. (#M-03)
   const admin = await Admin.findOne({ mobile });
-  
-  // Special bypass for testing
-  const isBypass = mobile === '9111966732';
 
-  if (!admin && !isBypass) {
-    console.log(`[AdminAuth] sendOTP failed: Mobile ${mobile} not found`);
-    return res.status(404).json({
-      success: false,
-      message: "Admin not found with this mobile number",
-    });
+  const GENERIC = "If an account exists for this number, an OTP has been sent.";
+
+  if (!admin || admin.status !== "Active") {
+    return res.status(200).json({ success: true, message: GENERIC });
   }
 
-  // Send OTP - for login, always use default OTP
-  const result = await sendOTPService(mobile, "Admin", true);
+  await sendOTPService(mobile, "Admin", true);
 
-  return res.status(200).json({
-    success: true,
-    message: result.message,
-  });
+  return res.status(200).json({ success: true, message: GENERIC });
 });
 
 /**
@@ -73,24 +66,20 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Find admin
-  let admin = await Admin.findOne({ mobile }).select("-password");
+  const admin = await Admin.findOne({ mobile }).select("-password");
 
-  // Special bypass for testing: Auto-create if doesn't exist
-  if (!admin && mobile === '9111966732') {
-    admin = await Admin.create({
-      firstName: "Test",
-      lastName: "Admin",
-      mobile: mobile,
-      email: "test_admin@hellolocal.com",
-      password: "bypass_password_not_used",
-      role: "Super Admin"
+  if (!admin) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired OTP",
     });
   }
 
-  if (!admin) {
-    return res.status(404).json({
+  // A suspended admin holds a valid record but must not receive a token. (#H-17)
+  if (admin.status !== "Active") {
+    return res.status(403).json({
       success: false,
-      message: "Admin not found",
+      message: "This admin account has been deactivated. Contact a Super Admin.",
     });
   }
 
@@ -115,70 +104,12 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * Register new admin (optional - typically admins are created by super admin)
- */
-export const register = asyncHandler(async (req: Request, res: Response) => {
-  const { firstName, lastName, mobile, email, password, role } = req.body;
-
-  // Validation
-  if (!firstName || !lastName || !mobile || !email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "All fields are required",
-    });
-  }
-
-  if (!/^[0-9]{10}$/.test(mobile)) {
-    return res.status(400).json({
-      success: false,
-      message: "Valid 10-digit mobile number is required",
-    });
-  }
-
-  // Check if admin already exists
-  const existingAdmin = await Admin.findOne({
-    $or: [{ mobile }, { email }],
-  });
-
-  if (existingAdmin) {
-    return res.status(409).json({
-      success: false,
-      message: "Admin already exists with this mobile or email",
-    });
-  }
-
-  // Create new admin
-  const admin = await Admin.create({
-    firstName,
-    lastName,
-    mobile,
-    email,
-    password,
-    role: role || "Admin",
-  });
-
-  // Generate token
-  const token = generateToken(admin._id.toString(), "Admin", admin.role);
-
-  return res.status(201).json({
-    success: true,
-    message: "Admin registered successfully",
-    data: {
-      token,
-      user: {
-        id: admin._id,
-        firstName: admin.firstName,
-        lastName: admin.lastName,
-        mobile: admin.mobile,
-        email: admin.email,
-        role: admin.role,
-      },
-    },
-  });
-});
-
-/**
- * Check if admin already exists
+ * Admin existence lookup.
+ *
+ * There is no public admin signup, so this endpoint had no legitimate caller
+ * and served only to enumerate admin accounts. It now requires an authenticated
+ * Super Admin (enforced on the route) and is used by the system-user screen to
+ * warn about duplicates before submitting. (#M-05)
  */
 export const checkExistence = asyncHandler(async (req: Request, res: Response) => {
   const { mobile, email } = req.query;
@@ -190,28 +121,11 @@ export const checkExistence = asyncHandler(async (req: Request, res: Response) =
     });
   }
 
-  const query: any = {};
-  if (mobile) query.mobile = mobile;
-  if (email) query.email = email;
+  const or: any[] = [];
+  if (mobile) or.push({ mobile });
+  if (email) or.push({ email });
 
-  const existingAdmin = await Admin.findOne({
-    $or: Object.entries(query).map(([key, value]) => ({ [key]: value })),
-  });
+  const exists = await Admin.exists({ $or: or });
 
-  if (existingAdmin) {
-    let conflictField = "mobile or email";
-    if (existingAdmin.mobile === mobile) conflictField = "mobile number";
-    else if (existingAdmin.email === email) conflictField = "email address";
-
-    return res.status(200).json({
-      success: true,
-      exists: true,
-      message: `An admin is already registered with this ${conflictField}`,
-    });
-  }
-
-  return res.status(200).json({
-    success: true,
-    exists: false,
-  });
+  return res.status(200).json({ success: true, exists: Boolean(exists) });
 });

@@ -1,74 +1,116 @@
-import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import {
+  ArrowLeftIcon,
+  TruckIcon,
+  SparklesIcon,
+  ShieldCheckIcon,
+  PackageIcon,
+  ZapIcon,
+  DropletIcon,
+  WrenchIcon,
+  ScaleIcon,
+  AcademicCapIcon,
+} from './components/common/UserIcons';
 
 const services = [
-    { id: 1, name: 'Parcel Delivery', icon: '📦', bgColor: 'bg-rose-100', iconColor: 'text-rose-600' },
-    { id: 2, name: 'Local Cab', icon: '🚕', bgColor: 'bg-orange-100', iconColor: 'text-orange-600' },
-    { id: 3, name: 'Electrician', icon: '⚡', bgColor: 'bg-yellow-100', iconColor: 'text-yellow-600' },
-    { id: 4, name: 'Plumber', icon: '💧', bgColor: 'bg-blue-100', iconColor: 'text-blue-600' },
-    { id: 5, name: 'Deep Cleaning', icon: '✨', bgColor: 'bg-purple-100', iconColor: 'text-purple-600' },
-    { id: 6, name: 'Laundry', icon: '👕', bgColor: 'bg-indigo-100', iconColor: 'text-indigo-600' },
-    { id: 7, name: 'Lawyers', icon: '⚖️', bgColor: 'bg-slate-200', iconColor: 'text-slate-700' },
-    { id: 8, name: 'Security', icon: '🛡️', bgColor: 'bg-red-100', iconColor: 'text-red-600' },
-    { id: 9, name: 'Tutors', icon: '🎓', bgColor: 'bg-amber-100', iconColor: 'text-amber-700' },
+  { id: 1, name: 'Parcel Delivery', icon: <TruckIcon size={22} className="text-[#FF2E7A]" />, bgColor: 'bg-[#FFF1F4]' },
+  { id: 2, name: 'Local Cab', icon: <PackageIcon size={22} className="text-[#FF8A00]" />, bgColor: 'bg-orange-50' },
+  { id: 3, name: 'Electrician', icon: <ZapIcon size={22} className="text-amber-600" />, bgColor: 'bg-amber-50' },
+  { id: 4, name: 'Plumber', icon: <DropletIcon size={22} className="text-blue-600" />, bgColor: 'bg-blue-50' },
+  { id: 5, name: 'Deep Cleaning', icon: <SparklesIcon size={22} className="text-purple-600" />, bgColor: 'bg-purple-50' },
+  { id: 6, name: 'Laundry', icon: <WrenchIcon size={22} className="text-indigo-600" />, bgColor: 'bg-indigo-50' },
+  { id: 7, name: 'Legal Advice', icon: <ScaleIcon size={22} className="text-slate-700" />, bgColor: 'bg-slate-100' },
+  { id: 8, name: 'Security', icon: <ShieldCheckIcon size={22} className="text-[#16A34A]" />, bgColor: 'bg-emerald-50' },
+  { id: 9, name: 'Home Tutors', icon: <AcademicCapIcon size={22} className="text-rose-600" />, bgColor: 'bg-rose-50' },
 ];
 
 export default function LocalSetu() {
-    return (
-        <div className="min-h-screen bg-gray-50 pb-24 relative overflow-hidden">
-            {/* Header */}
-            <div className="px-4 py-4 bg-white shadow-sm flex items-center justify-between sticky top-0 z-10">
-                <h1 className="text-xl font-bold text-gray-800">Local SETU Services</h1>
-            </div>
+  const navigate = useNavigate();
 
-            {/* Main Grid */}
-            <div className="p-4 grid grid-cols-3 gap-y-6 gap-x-4">
-                {services.map((service, index) => (
-                    <motion.div
-                        key={service.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="flex flex-col items-center gap-2"
-                    >
-                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-sm border border-black/5 ${service.bgColor} ${service.iconColor}`}>
-                            <span className="drop-shadow-sm">{service.icon}</span>
-                        </div>
-                        <span className="text-[11px] font-semibold text-gray-700 text-center leading-tight max-w-[70px]">
-                            {service.name}
-                        </span>
-                    </motion.div>
-                ))}
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 relative overflow-hidden">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-slate-100 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon size={18} />
+            </button>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                Local SETU Services
+              </h1>
+              <p className="text-[10px] text-slate-400 font-medium">
+                On-demand verified local service professionals
+              </p>
             </div>
-
-            {/* Coming Soon Overlay */}
-            <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center p-6">
-                <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.3 }}
-                    className="bg-white px-8 py-6 rounded-3xl shadow-2xl border border-rose-100 flex flex-col items-center text-center max-w-sm"
-                >
-                    <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mb-4 text-rose-500 shadow-inner">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </div>
-                    <h2 className="text-2xl font-black text-gray-900 mb-2">Coming Soon</h2>
-                    <p className="text-gray-500 text-sm leading-relaxed mb-6 font-medium">
-                        We are working hard to bring these amazing Hyper-Local services right to your doorstep. Stay tuned!
-                    </p>
-                    <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                        <motion.div
-                            className="h-full bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233]"
-                            initial={{ width: "0%" }}
-                            animate={{ width: "65%" }}
-                            transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
-                        />
-                    </div>
-                </motion.div>
-            </div>
+          </div>
         </div>
-    );
+      </div>
+
+      {/* Services Grid (Background preview) */}
+      <div className="max-w-[1440px] mx-auto p-3.5 sm:p-6 lg:px-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5 sm:gap-3.5">
+        {services.map((service, index) => (
+          <motion.div
+            key={service.id}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.03 }}
+            className="bg-white rounded-2xl border border-slate-100 p-3 shadow-2xs flex flex-col items-center gap-1.5 text-center"
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center border border-slate-100 ${service.bgColor}`}>
+              {service.icon}
+            </div>
+            <span className="text-xs font-bold text-slate-800 leading-tight line-clamp-2">
+              {service.name}
+            </span>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Coming Soon Overlay Card */}
+      <div className="absolute inset-0 top-12 bg-slate-950/20 backdrop-blur-xs z-20 flex flex-col items-center justify-center p-4">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 22, delay: 0.1 }}
+          className="bg-white px-5 sm:px-7 py-6 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center text-center max-w-sm"
+        >
+          <div className="w-14 h-14 bg-[#FFF1F4] border border-[#FFE4EA] rounded-full flex items-center justify-center mb-3 text-[#FF2E7A] shadow-xs">
+            <SparklesIcon size={26} />
+          </div>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <span className="text-lg font-bold tracking-tight text-[#FF8A00]">Hello</span>
+            <span className="text-lg font-bold tracking-tight text-[#FF2E7A]">Local</span>
+            <span className="text-sm font-bold text-slate-400 ml-1">SETU</span>
+          </div>
+          <h2 className="text-base font-bold text-slate-900 mb-1">Coming Soon</h2>
+          <p className="text-slate-500 text-xs leading-relaxed mb-4 font-medium">
+            We are onboarding verified neighborhood technicians, helpers, and local service providers. This service will unlock soon in your area.
+          </p>
+          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-5">
+            <motion.div
+              className="h-full bg-[#FF2E7A]"
+              initial={{ width: "0%" }}
+              animate={{ width: "70%" }}
+              transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="w-full min-h-[44px] bg-[#FF2E7A] hover:bg-[#E02269] text-white font-bold text-xs uppercase tracking-wider rounded-full shadow-xs transition-opacity flex items-center justify-center"
+          >
+            Back to Shopping
+          </button>
+        </motion.div>
+      </div>
+    </div>
+  );
 }
