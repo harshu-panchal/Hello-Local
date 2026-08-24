@@ -67,12 +67,14 @@ export const createProduct = asyncHandler(
     const newProductData: any = {
       ...safeData,
       seller: sellerId, // Map sellerId to seller
-      headerCategoryId: productData.headerCategoryId, // Map headerCategoryId
-      category: productData.categoryId, // Map categoryId to category
-      subcategory: productData.subcategoryId,
-      brand: productData.brandId,
-      mainImage: productData.mainImageUrl, // Map mainImageUrl to mainImage
-      galleryImages: productData.galleryImageUrls,
+      headerCategoryId: productData.headerCategoryId || null,
+      category: productData.categoryId || productData.category,
+      subcategory: productData.subcategoryId || productData.subcategory || null,
+      subSubCategory: productData.subSubCategoryId || productData.subSubCategory || null,
+      brand: productData.brandId || productData.brand || null,
+      tax: productData.taxId || productData.tax || null,
+      mainImage: productData.mainImageUrl || productData.mainImage,
+      galleryImages: productData.galleryImageUrls || productData.galleryImages || [],
     };
 
     // Map variations: Ensure 'title' from frontend is mapped to 'value' (or name) expected by Schema
@@ -488,6 +490,12 @@ export const deleteProduct = asyncHandler(
  */
 export const updateStock = asyncHandler(async (req: Request, res: Response) => {
   const sellerId = (req as any).user.userId;
+
+  const approvalError = await ensureSellerApproved(sellerId);
+  if (approvalError) {
+    return res.status(403).json({ success: false, message: approvalError });
+  }
+
   const { id, variationId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -535,6 +543,14 @@ export const updateStock = asyncHandler(async (req: Request, res: Response) => {
   }
   if (status) {
     variation.status = status;
+  }
+
+  // Recalculate top-level aggregate stock
+  if (product.variations && product.variations.length > 0) {
+    product.stock = product.variations.reduce(
+      (acc: number, curr: any) => acc + (parseInt(curr.stock) || 0),
+      0
+    );
   }
 
   // Mark variations as modified since we updated a sub-document field

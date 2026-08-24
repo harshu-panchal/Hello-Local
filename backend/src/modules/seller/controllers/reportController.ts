@@ -50,10 +50,24 @@ export const getSalesReport = asyncHandler(
             }
         }
 
-        // Search filter (on product name)
+        // Search filter (on product name, variant, or order/bill numbers)
         if (search) {
             const s = String(search).trim();
-            query.productName = { $regex: s, $options: "i" };
+            const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+            const matchingSearchOrders = await Order.find({
+                $or: [
+                    { orderNumber: { $regex: escaped, $options: "i" } },
+                    { billNumber: { $regex: escaped, $options: "i" } },
+                    { invoiceNumber: { $regex: escaped, $options: "i" } },
+                ]
+            }).distinct("_id");
+
+            query.$or = [
+                { productName: { $regex: escaped, $options: "i" } },
+                { variantTitle: { $regex: escaped, $options: "i" } },
+                { order: { $in: matchingSearchOrders } },
+            ];
         }
 
         // Pagination

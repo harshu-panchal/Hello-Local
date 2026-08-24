@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import jsPDF from "jspdf";
 import { BillData } from "../../../services/api/orderService";
+import { useToast } from "../../../context/ToastContext";
 
 interface PrintableBillModalProps {
   bill: BillData | null;
@@ -15,6 +16,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
   onClose,
   onNewSale,
 }) => {
+  const { showToast } = useToast();
   const [printFormat, setPrintFormat] = useState<"thermal" | "a4">("thermal");
 
   if (!isOpen || !bill) return null;
@@ -376,6 +378,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
     doc.text(`Grand Total: Rs.${bill.pricing.total.toFixed(2)}`, 140, yPos);
 
     doc.save(`Bill_${bill.billNumber}.pdf`);
+    showToast(`Invoice Bill_${bill.billNumber}.pdf downloaded!`, "success");
   };
 
   /**
@@ -402,6 +405,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
       : `https://wa.me/?text=${message}`;
 
     window.open(url, "_blank");
+    showToast(phone.length >= 10 ? "WhatsApp invoice opened for customer" : "WhatsApp sharing link generated", "info");
   };
 
   return (

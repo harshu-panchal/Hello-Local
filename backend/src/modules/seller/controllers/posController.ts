@@ -265,7 +265,9 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
   const grandTotal = Math.max(0, Math.round((subtotal + totalTax - discountAmount) * 100) / 100);
 
   // 3. Validate Cash payment received amount
-  let receivedAmount = Number(offlinePaymentDetails.receivedAmount);
+  let receivedAmount = Number(
+    offlinePaymentDetails?.receivedAmount ?? req.body.cashReceived ?? req.body.receivedAmount
+  );
   let changeReturned = 0;
 
   if (paymentMethod === "Cash") {
@@ -308,9 +310,18 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
   // 6. Persist Order and OrderItems
   let orderCreated = false;
   try {
-    const customerName = customer?.name?.trim() || "Walk-in Customer";
-    const customerPhone = customer?.phone?.trim() || "";
-    const customerEmail = customer?.email?.trim() || "";
+    const customerName =
+      customer?.name?.trim() ||
+      req.body.customerName?.trim() ||
+      "Walk-in Customer";
+    const customerPhone =
+      customer?.phone?.trim() ||
+      req.body.customerPhone?.trim() ||
+      "";
+    const customerEmail =
+      customer?.email?.trim() ||
+      req.body.customerEmail?.trim() ||
+      "";
 
     const newOrder = new Order({
       orderNumber,
@@ -321,7 +332,7 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
       orderChannel: "OFFLINE",
       saleType: "COUNTER_POS",
       seller: new mongoose.Types.ObjectId(sellerId),
-      isWalkInCustomer: !customer?.name?.trim(),
+      isWalkInCustomer: !customer?.name?.trim() && !req.body.customerName?.trim(),
       customerName,
       customerPhone,
       customerEmail,
@@ -343,9 +354,18 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
       grandTotal,
       offlinePaymentDetails: {
         receivedAmount,
-        changeReturned,
-        paymentReference: offlinePaymentDetails.paymentReference?.trim() || "",
-        paymentNotes: notes?.trim() || offlinePaymentDetails.paymentNotes?.trim() || "",
+        changeReturned:
+          Number(offlinePaymentDetails?.changeReturned ?? req.body.changeDue) ||
+          changeReturned,
+        paymentReference:
+          req.body.paymentReference?.trim() ||
+          offlinePaymentDetails?.paymentReference?.trim() ||
+          "",
+        paymentNotes:
+          notes?.trim() ||
+          req.body.orderNotes?.trim() ||
+          offlinePaymentDetails?.paymentNotes?.trim() ||
+          "",
       },
       items: [],
     });

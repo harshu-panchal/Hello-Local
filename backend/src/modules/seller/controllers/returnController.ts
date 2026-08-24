@@ -1,57 +1,112 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Return from "../../../models/Return";
-// import Order from "../../../models/Order";
+import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 
 export const getReturnRequests = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = req.user?.userId;
-    const { status, page = 1, limit = 10 } = req.query;
+    const {
+      status,
+      page = 1,
+      limit = 10,
+      search,
+      dateFrom,
+      dateTo,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
 
     const query: any = {};
-    if (status && status !== 'All Status') {
+    if (status && status !== "All Status") {
       query.status = status;
     }
 
     // Find return requests where the associated OrderItem belongs to this seller
-    // 1. Find OrderItems for this seller
-    const sellerOrderItems = await OrderItem.find({ seller: sellerId }).select('_id');
-    const sellerOrderItemIds = sellerOrderItems.map(item => item._id);
+    const sellerOrderItems = await OrderItem.find({ seller: sellerId }).select("_id");
+    const sellerOrderItemIds = sellerOrderItems.map((item) => item._id);
 
-    // 2. Filter Returns by these OrderItem IDs
     query.orderItem = { $in: sellerOrderItemIds };
+
+    // Date range filter
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) {
+        query.createdAt.$gte = new Date(dateFrom as string);
+      }
+      if (dateTo) {
+        const endDay = new Date(dateTo as string);
+        endDay.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endDay;
+      }
+    }
+
+    // Multi-field search
+    if (search) {
+      const s = String(search).trim();
+      const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      const matchingItems = await OrderItem.find({
+        seller: sellerId,
+        productName: { $regex: escaped, $options: "i" },
+      }).select("_id");
+
+      const matchingOrders = await Order.find({
+        $or: [
+          { orderNumber: { $regex: escaped, $options: "i" } },
+          { customerName: { $regex: escaped, $options: "i" } },
+        ],
+      }).select("_id");
+
+      query.$and = [
+        { orderItem: { $in: sellerOrderItemIds } },
+        {
+          $or: [
+            { orderItem: { $in: matchingItems.map((i) => i._id) } },
+            { order: { $in: matchingOrders.map((o) => o._id) } },
+            { reason: { $regex: escaped, $options: "i" } },
+          ],
+        },
+      ];
+    }
+
+    const sort: any = {};
+    sort[sortBy as string] = sortOrder === "asc" ? 1 : -1;
+
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
 
     const returns = await Return.find(query)
       .populate({
-        path: 'orderItem',
-        select: 'productName productImage quantity unitPrice total sku'
+        path: "orderItem",
+        select: "productName productImage quantity unitPrice total sku",
       })
       .populate({
-        path: 'order',
-        select: 'orderNumber customerName'
+        path: "order",
+        select: "orderNumber customerName",
       })
-      .populate('customer', 'name email mobile')
-      .sort({ createdAt: -1 })
-      .skip((Number(page) - 1) * Number(limit))
-      .limit(Number(limit));
+      .populate("customer", "name email mobile")
+      .sort(sort)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
 
     const total = await Return.countDocuments(query);
 
     // Map to frontend friendly format
-    const formattedReturns = returns.map(ret => {
+    const formattedReturns = returns.map((ret) => {
       const item = ret.orderItem as any;
       const order = ret.order as any;
       return {
         id: ret._id,
-        productName: item?.productName || 'Unknown Product',
-        customerName: order?.customerName || 'Unknown Customer',
-        orderId: order?.orderNumber || 'Unknown Order',
+        productName: item?.productName || "Unknown Product",
+        customerName: order?.customerName || (ret.customer as any)?.name || "Unknown Customer",
+        orderId: order?.orderNumber || "Unknown Order",
         amount: item?.total || 0,
         status: ret.status,
         date: ret.createdAt,
         returnReason: ret.reason,
-        image: item?.productImage
+        image: item?.productImage,
       };
     });
 
@@ -60,9 +115,9 @@ export const getReturnRequests = asyncHandler(
       data: formattedReturns,
       pagination: {
         total,
-        page: Number(page),
-        pages: Math.ceil(total / Number(limit))
-      }
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+      },
     });
   }
 );

@@ -9,10 +9,10 @@ interface SellerTodayOverviewProps {
 }
 
 export default function SellerTodayOverview({
-  ordersCount = 32,
-  revenueAmount = 8450,
-  viewsCount = 512,
-  newCustomersCount = 21,
+  ordersCount = 0,
+  revenueAmount = 0,
+  viewsCount = 0,
+  newCustomersCount = 0,
 }: SellerTodayOverviewProps) {
   const currentDate = new Date().toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -40,7 +40,6 @@ export default function SellerTodayOverview({
           label="Orders"
           value={ordersCount}
           variant="purple"
-          trend={{ value: '18%', isPositive: true }}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
@@ -55,7 +54,6 @@ export default function SellerTodayOverview({
           label="Revenue"
           value={`₹${Number(revenueAmount || 0).toLocaleString('en-IN')}`}
           variant="emerald"
-          trend={{ value: '22%', isPositive: true }}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
@@ -70,7 +68,6 @@ export default function SellerTodayOverview({
           label="Views"
           value={viewsCount}
           variant="amber"
-          trend={{ value: '15%', isPositive: true }}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -79,12 +76,11 @@ export default function SellerTodayOverview({
           }
         />
 
-        {/* 4. New Customers */}
+        {/* 4. Customers */}
         <SellerStatCard
           label="Customers"
           value={newCustomersCount}
           variant="default"
-          trend={{ value: '10%', isPositive: true }}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />

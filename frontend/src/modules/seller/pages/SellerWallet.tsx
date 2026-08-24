@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../../context/ToastContext';
 import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
@@ -9,6 +9,7 @@ import {
   getSellerWithdrawals,
   getSellerCommissions,
 } from '../../../services/api/sellerWalletService';
+import { exportToCsv } from '../../../utils/exportCsv';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerStatCard } from '../components/common/SellerStatCard';
 import { SellerTabs } from '../components/common/SellerTabs';
@@ -30,6 +31,9 @@ export default function SellerWallet() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any>({ commissions: [], total: 0, paid: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Bank Transfer' | 'UPI'>('Bank Transfer');
@@ -37,13 +41,19 @@ export default function SellerWallet() {
 
   const MIN_WITHDRAWAL = 100;
 
+  // 300ms Search Debouncing
   useEffect(() => {
-    fetchWalletData();
-  }, []);
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
-  const fetchWalletData = async () => {
+  const fetchWalletData = useCallback(async (isManualRefresh = false) => {
     try {
-      setLoading(true);
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
       const [balanceRes, transactionsRes, withdrawalsRes, commissionsRes, profileRes] = await Promise.all([
         getSellerWalletBalance(),
         getSellerWalletTransactions(),
@@ -60,12 +70,21 @@ export default function SellerWallet() {
         const p = profileRes.data || {};
         setHasBankDetails(Boolean(p.accountNumber && p.ifsc));
       }
+
+      if (isManualRefresh) {
+        showToast('Wallet data refreshed successfully', 'success');
+      }
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to load wallet data', 'error');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    fetchWalletData();
+  }, [fetchWalletData]);
 
   const handleWithdrawRequest = async () => {
     try {
@@ -110,6 +129,98 @@ export default function SellerWallet() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  // Filtered Datasets
+  const filteredTransactions = useMemo(() => {
+    if (!debouncedSearch.trim()) return transactions;
+    const q = debouncedSearch.toLowerCase().trim();
+    return transactions.filter(
+      (tx) =>
+        tx.description?.toLowerCase().includes(q) ||
+        tx.type?.toLowerCase().includes(q) ||
+        tx.amount?.toString().includes(q)
+    );
+  }, [transactions, debouncedSearch]);
+
+  const filteredWithdrawals = useMemo(() => {
+    if (!debouncedSearch.trim()) return withdrawals;
+    const q = debouncedSearch.toLowerCase().trim();
+    return withdrawals.filter(
+      (w) =>
+        w.status?.toLowerCase().includes(q) ||
+        w.paymentMethod?.toLowerCase().includes(q) ||
+        w.amount?.toString().includes(q)
+    );
+  }, [withdrawals, debouncedSearch]);
+
+  const filteredCommissions = useMemo(() => {
+    const list = commissions.commissions || [];
+    if (!debouncedSearch.trim()) return list;
+    const q = debouncedSearch.toLowerCase().trim();
+    return list.filter((c: any) => {
+      const orderNum = c.orderId?.orderNumber || c.orderId?._id || '';
+      return (
+        orderNum.toLowerCase().includes(q) ||
+        c.status?.toLowerCase().includes(q) ||
+        c.sellerAmount?.toString().includes(q) ||
+        c.commissionAmount?.toString().includes(q)
+      );
+    });
+  }, [commissions.commissions, debouncedSearch]);
+
+  const handleExport = () => {
+    if (activeTab === 'transactions') {
+      if (filteredTransactions.length === 0) {
+        showToast('No transactions to export', 'info');
+        return;
+      }
+      exportToCsv(
+        ['Date', 'Type', 'Description', 'Amount (₹)'],
+        filteredTransactions.map((tx) => [
+          formatDate(tx.createdAt),
+          tx.type?.toUpperCase(),
+          tx.description || 'Transaction',
+          tx.amount?.toFixed(2),
+        ]),
+        'wallet_transactions'
+      );
+      showToast('Transactions exported successfully!', 'success');
+    } else if (activeTab === 'withdrawals') {
+      if (filteredWithdrawals.length === 0) {
+        showToast('No withdrawal records to export', 'info');
+        return;
+      }
+      exportToCsv(
+        ['Date', 'Amount (₹)', 'Payout Method', 'Status'],
+        filteredWithdrawals.map((w) => [
+          formatDate(w.createdAt),
+          w.amount?.toFixed(2),
+          w.paymentMethod || 'Bank Transfer',
+          w.status,
+        ]),
+        'payout_requests'
+      );
+      showToast('Payout records exported successfully!', 'success');
+    } else if (activeTab === 'commissions') {
+      if (filteredCommissions.length === 0) {
+        showToast('No commission records to export', 'info');
+        return;
+      }
+      exportToCsv(
+        ['Date', 'Order #', 'Order Amount (₹)', 'Admin Fee (₹)', 'Net Earning (₹)', 'Status'],
+        filteredCommissions.map((c: any) => [
+          formatDate(c.createdAt),
+          c.orderId?.orderNumber || c.orderId?._id || 'N/A',
+          c.orderAmount?.toFixed(2),
+          c.commissionAmount?.toFixed(2),
+          c.sellerAmount?.toFixed(2),
+          c.status || 'Paid',
+        ]),
+        'commissions_breakdown'
+      );
+      showToast('Commissions exported successfully!', 'success');
+    }
   };
 
   // 1. Transaction Columns
@@ -223,35 +334,63 @@ export default function SellerWallet() {
     },
   ];
 
+  const handleOpenWithdraw = () => {
+    if (!hasBankDetails) {
+      showToast('Please add bank details in Profile Settings before withdrawing', 'error');
+      navigate('/seller/profile');
+      return;
+    }
+    setShowWithdrawModal(true);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <SellerPageHeader
         title="Seller Wallet & Payouts"
         subtitle="Manage earnings, track admin commissions, and request bank payouts."
         breadcrumbs={[{ label: "Wallet" }]}
         action={
-          <SellerButton
-            variant="primary"
-            size="md"
-            onClick={() => {
-              if (!hasBankDetails) {
-                showToast('Please add bank details in Profile Settings before withdrawing', 'error');
-                navigate('/seller/profile');
-                return;
+          <div className="flex flex-wrap items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => fetchWalletData(true)}
+              isLoading={refreshing}
+              className="min-h-[44px]"
+              icon={<span>🔄</span>}
+            >
+              Refresh
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={handleExport}
+              className="min-h-[44px]"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
               }
-              setShowWithdrawModal(true);
-            }}
-            disabled={balance < MIN_WITHDRAWAL}
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="19" x2="12" y2="5"></line>
-                <polyline points="5 12 12 5 19 12"></polyline>
-              </svg>
-            }
-          >
-            Request Payout
-          </SellerButton>
+            >
+              Export CSV
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={handleOpenWithdraw}
+              disabled={balance < MIN_WITHDRAWAL}
+              className="min-h-[44px]"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="19" x2="12" y2="5"></line>
+                  <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+              }
+            >
+              Request Payout
+            </SellerButton>
+          </div>
         }
       />
 
@@ -291,34 +430,58 @@ export default function SellerWallet() {
             variant="secondary"
             size="sm"
             onClick={() => navigate('/seller/profile')}
-            className="flex-shrink-0"
+            className="flex-shrink-0 min-h-[40px]"
           >
             Update Bank Info
           </SellerButton>
         </div>
       )}
 
-      {/* Wallet Tabs */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-2 sm:p-3 shadow-xs">
-        <SellerTabs
-          tabs={[
-            { id: 'transactions', label: 'Wallet Transactions' },
-            { id: 'withdrawals', label: 'Payout Requests' },
-            { id: 'commissions', label: 'Commissions Breakdown' },
-          ]}
-          activeTab={activeTab}
-          onChange={(t) => setActiveTab(t as Tab)}
-        />
+      {/* Wallet Tabs & Search Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <SellerTabs
+            tabs={[
+              { id: 'transactions', label: `Transactions (${transactions.length})` },
+              { id: 'withdrawals', label: `Payout Requests (${withdrawals.length})` },
+              { id: 'commissions', label: `Commissions (${(commissions.commissions || []).length})` },
+            ]}
+            activeTab={activeTab}
+            onChange={(t) => {
+              setActiveTab(t as Tab);
+              setSearchQuery('');
+            }}
+          />
+
+          <div className="relative min-w-[240px]">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${activeTab}...`}
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold p-1 min-h-[32px] min-w-[32px]"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Tab Contents */}
       {activeTab === 'transactions' && (
         <SellerDataTable
-          data={transactions}
+          data={filteredTransactions}
           columns={transactionColumns}
           keyExtractor={(tx, i) => tx._id || i.toString()}
           isLoading={loading}
-          emptyTitle="No transactions yet"
+          emptyTitle="No transactions found"
           emptyDescription="Your wallet activity and order credits will appear here."
           renderMobileCard={(tx) => (
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
@@ -347,12 +510,12 @@ export default function SellerWallet() {
 
       {activeTab === 'withdrawals' && (
         <SellerDataTable
-          data={withdrawals}
+          data={filteredWithdrawals}
           columns={withdrawalColumns}
           keyExtractor={(w, i) => w._id || i.toString()}
           isLoading={loading}
-          emptyTitle="No payout requests"
-          emptyDescription="You have not requested any wallet withdrawals yet."
+          emptyTitle="No payout requests found"
+          emptyDescription="You have not requested any wallet withdrawals matching your query."
           renderMobileCard={(w) => (
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
               <div>
@@ -368,11 +531,11 @@ export default function SellerWallet() {
 
       {activeTab === 'commissions' && (
         <SellerDataTable
-          data={commissions.commissions || []}
+          data={filteredCommissions}
           columns={commissionColumns}
           keyExtractor={(c, i) => c._id || i.toString()}
           isLoading={loading}
-          emptyTitle="No commission entries"
+          emptyTitle="No commission entries found"
           emptyDescription="Platform fees associated with online orders will be tracked here."
           renderMobileCard={(c) => (
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
@@ -406,6 +569,7 @@ export default function SellerWallet() {
               size="md"
               onClick={() => setShowWithdrawModal(false)}
               disabled={isSubmitting}
+              className="min-h-[44px]"
             >
               Cancel
             </SellerButton>
@@ -415,6 +579,7 @@ export default function SellerWallet() {
               onClick={handleWithdrawRequest}
               isLoading={isSubmitting}
               disabled={!withdrawAmount || parseFloat(withdrawAmount) < MIN_WITHDRAWAL || parseFloat(withdrawAmount) > balance}
+              className="min-h-[44px]"
             >
               Submit Request
             </SellerButton>
@@ -433,6 +598,32 @@ export default function SellerWallet() {
               className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
             />
           </SellerFormField>
+
+          {/* Quick Preset Amount Chips */}
+          <div>
+            <span className="text-[11px] font-bold text-slate-500 block mb-1.5">Quick Select Amount:</span>
+            <div className="flex flex-wrap gap-2">
+              {[500, 1000, 2000, 5000].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  disabled={amt > balance}
+                  onClick={() => setWithdrawAmount(amt.toString())}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-purple-50 hover:border-purple-300 text-xs font-bold text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+                >
+                  ₹{amt}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setWithdrawAmount(balance.toString())}
+                disabled={balance < MIN_WITHDRAWAL}
+                className="px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-xs font-bold text-purple-700 disabled:opacity-30 transition-colors min-h-[36px]"
+              >
+                Max (₹{balance.toFixed(2)})
+              </button>
+            </div>
+          </div>
 
           <SellerFormField label="Payout Method">
             <div className="grid grid-cols-2 gap-3">

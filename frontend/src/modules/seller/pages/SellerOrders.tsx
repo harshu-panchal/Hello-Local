@@ -8,7 +8,7 @@ import { SellerDataTable, ColumnDef } from '../components/common/SellerDataTable
 import { SellerFilterBar } from '../components/common/SellerFilterBar';
 import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
 import { SellerButton } from '../components/common/SellerButton';
-import { SellerSelect } from '../components/common/SellerSelect';
+import { useToast } from '../../../context/ToastContext';
 
 type SortField = 'orderId' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -16,11 +16,13 @@ type SortDirection = 'asc' | 'desc';
 export default function SellerOrders() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { showToast } = useToast();
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+  const [, setError] = useState<string>('');
   const [newOrderBadge, setNewOrderBadge] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -61,14 +63,18 @@ export default function SellerOrders() {
         setTotalOrders(response.pagination?.total ?? response.data.length);
         setTotalPages(response.pagination?.pages ?? Math.ceil((response.pagination?.total ?? response.data.length) / parseInt(entriesPerPage)));
       } else {
-        setError(response.message || 'Failed to fetch orders');
+        const msg = response.message || 'Failed to fetch orders';
+        setError(msg);
+        showToast(msg, 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to fetch orders');
+      const msg = err.response?.data?.message || err.message || 'Failed to fetch orders';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, status, entriesPerPage, debouncedSearch, currentPage, sortField, sortDirection]);
+  }, [dateFrom, dateTo, status, entriesPerPage, debouncedSearch, currentPage, sortField, sortDirection, showToast]);
 
   // Initial fetch + re-fetch on filter/page change
   useEffect(() => {
@@ -80,7 +86,7 @@ export default function SellerOrders() {
     const timeoutId = setTimeout(() => {
       setDebouncedSearch(searchQuery);
       setCurrentPage(1);
-    }, 400);
+    }, 300);
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
@@ -111,7 +117,7 @@ export default function SellerOrders() {
     }
   };
 
-  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
+  const handleStatusUpdate = async (orderId: string, orderNumber: string, newStatus: string) => {
     setUpdatingId(orderId);
     try {
       const response = await updateOrderStatus(orderId, { status: newStatus as any });
@@ -119,24 +125,22 @@ export default function SellerOrders() {
         setOrders(prev =>
           prev.map(o => (o.id === orderId ? { ...o, status: newStatus as any } : o))
         );
+        showToast(`Order #${orderNumber} marked as ${newStatus}`, 'success');
       } else {
-        alert(response.message || 'Failed to update order status');
+        showToast(response.message || 'Failed to update order status', 'error');
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to update order status');
+      showToast(err.response?.data?.message || err.message || 'Failed to update order status', 'error');
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const handleClearDate = () => {
-    setDateFrom('');
-    setDateTo('');
-    setCurrentPage(1);
-  };
-
   const handleExport = () => {
-    if (orders.length === 0) return;
+    if (orders.length === 0) {
+      showToast('No orders available to export', 'info');
+      return;
+    }
     const headers = ['Order ID', 'Delivery Date', 'Order Date', 'Status', 'Amount'];
     const csvContent = [
       headers.join(','),
@@ -152,6 +156,7 @@ export default function SellerOrders() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast('Orders report exported successfully!', 'success');
   };
 
   const handleJumpToNewOrder = () => {
@@ -226,8 +231,8 @@ export default function SellerOrders() {
           <select
             value={order.status}
             disabled={updatingId === order.id}
-            onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-            className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 disabled:opacity-50 min-h-[36px]"
+            onChange={(e) => handleStatusUpdate(order.id, order.orderId, e.target.value)}
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 disabled:opacity-50 min-h-[44px]"
           >
             <option value="Received">Received</option>
             <option value="Accepted">Accepted</option>
@@ -238,7 +243,7 @@ export default function SellerOrders() {
             <option value="Cancelled">Cancelled</option>
           </select>
           {updatingId === order.id && (
-            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />
           )}
         </div>
       ),
@@ -252,7 +257,7 @@ export default function SellerOrders() {
           variant="outline"
           size="sm"
           onClick={() => navigate(`/seller/orders/${order.id}`)}
-          className="min-h-[34px] px-3"
+          className="min-h-[44px] px-3.5"
         >
           View Details
         </SellerButton>
@@ -283,7 +288,7 @@ export default function SellerOrders() {
         breadcrumbs={[{ label: "Orders List" }]}
         action={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold shadow-2xs">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               Live Orders
             </span>
@@ -373,7 +378,7 @@ export default function SellerOrders() {
               <select
                 value={order.status}
                 disabled={updatingId === order.id}
-                onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                onChange={(e) => handleStatusUpdate(order.id, order.orderId, e.target.value)}
                 className="flex-1 rounded-xl border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
               >
                 <option value="Received">Received</option>

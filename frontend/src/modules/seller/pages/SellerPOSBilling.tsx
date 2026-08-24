@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   getPOSProducts,
   createOfflineSale,
@@ -10,8 +11,12 @@ import { PrintableBillModal } from "../components/PrintableBillModal";
 import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerInput } from "../components/common/SellerInput";
 import { SellerButton } from "../components/common/SellerButton";
+import { useToast } from "../../../context/ToastContext";
 
 export default function SellerPOSBilling() {
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+
   const [products, setProducts] = useState<POSProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -30,6 +35,7 @@ export default function SellerPOSBilling() {
   const [successBill, setSuccessBill] = useState<BillData | null>(null);
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState<boolean>(false);
+  const [showClearCartModal, setShowClearCartModal] = useState<boolean>(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,7 +56,9 @@ export default function SellerPOSBilling() {
         setProducts(res.data);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || "Failed to load products for POS");
+      const msg = err?.response?.data?.message || err?.message || "Failed to load products for POS";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -60,7 +68,7 @@ export default function SellerPOSBilling() {
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && searchQuery.trim()) {
       const trimmed = searchQuery.trim().toLowerCase();
-      // Look for exact match by barcode or SKU
+      // Look for exact match by barcode, SKU, or exact title
       const matched = products.find(
         (p) =>
           p.barcode?.toLowerCase() === trimmed ||
@@ -89,7 +97,7 @@ export default function SellerPOSBilling() {
     const variantTitle = selectedVar ? (selectedVar.value || selectedVar.name) : undefined;
 
     if (availableStock <= 0) {
-      alert(`"${product.productName}" is out of stock!`);
+      showToast(`"${product.productName}" is out of stock!`, "info");
       return;
     }
 
@@ -103,7 +111,7 @@ export default function SellerPOSBilling() {
       if (existingIndex > -1) {
         const existing = prev[existingIndex];
         if (existing.quantity >= availableStock) {
-          alert(`Cannot add more. Only ${availableStock} units in stock.`);
+          showToast(`Cannot add more. Only ${availableStock} units in stock.`, "info");
           return prev;
         }
         const updated = [...prev];
@@ -119,6 +127,7 @@ export default function SellerPOSBilling() {
           taxAmount,
           total,
         };
+        showToast(`Updated ${product.productName} (${newQty})`, "info");
         return updated;
       }
 
@@ -138,10 +147,11 @@ export default function SellerPOSBilling() {
         subtotal,
         taxAmount,
         total,
-        mainImage: (product as any).mainImage || (product as any).image || '',
+        mainImage: (product as any).mainImage || (product as any).image || "",
         availableStock: (product as any).stockQuantity || (product as any).stock || 0,
       };
 
+      showToast(`Added ${product.productName} to bill`, "success");
       return [...prev, newItem];
     });
   };
@@ -167,7 +177,7 @@ export default function SellerPOSBilling() {
       }
 
       if (newQty > varStock) {
-        alert(`Cannot add more. Max stock available is ${varStock}`);
+        showToast(`Cannot add more. Max stock available is ${varStock}`, "info");
         return prev;
       }
 
@@ -189,18 +199,23 @@ export default function SellerPOSBilling() {
   // Remove specific line item
   const removeCartItem = (index: number) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
+    showToast("Item removed from cart", "info");
   };
 
-  // Clear entire cart
-  const clearCart = () => {
-    if (cart.length > 0 && confirm("Are you sure you want to clear the active sale cart?")) {
-      setCart([]);
-      setDiscount(0);
-      setCashReceived("");
-      setPaymentReference("");
-      setCustomerName("");
-      setCustomerPhone("");
-      setIsWalkIn(true);
+  // Clear entire cart confirmation
+  const handleConfirmClearCart = () => {
+    setCart([]);
+    setDiscount(0);
+    setCashReceived("");
+    setPaymentReference("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setIsWalkIn(true);
+    setOrderNotes("");
+    setShowClearCartModal(false);
+    showToast("Active sale cart cleared", "info");
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
     }
   };
 
@@ -251,18 +266,18 @@ export default function SellerPOSBilling() {
   // Complete & Submit Offline Sale
   const handleCompleteSale = async () => {
     if (cart.length === 0) {
-      alert("Active cart is empty! Add products before checking out.");
+      showToast("Active cart is empty! Add products before checking out.", "error");
       return;
     }
 
     if (!isWalkIn && customerPhone && customerPhone.length < 10) {
-      alert("Please enter a valid 10-digit mobile number for WhatsApp receipt.");
+      showToast("Please enter a valid 10-digit mobile number for WhatsApp receipt.", "error");
       return;
     }
 
     const parsedCash = paymentMethod === "Cash" ? parseFloat(cashReceived) || grandTotal : undefined;
     if (paymentMethod === "Cash" && parsedCash !== undefined && parsedCash < grandTotal) {
-      alert(`Cash received (₹${parsedCash}) cannot be less than Grand Total (₹${grandTotal}).`);
+      showToast(`Cash received (₹${parsedCash}) cannot be less than Grand Total (₹${grandTotal}).`, "error");
       return;
     }
 
@@ -292,9 +307,12 @@ export default function SellerPOSBilling() {
       const res = await createOfflineSale(payload);
 
       if (res.success && (res.data || (res as any).bill)) {
-        setSuccessBill(res.data || (res as any).bill);
+        const generatedBill = res.data || (res as any).bill;
+        setSuccessBill(generatedBill);
         setIsBillModalOpen(true);
         setIsMobileCartOpen(false);
+
+        showToast(`Bill #${generatedBill.billNumber} generated successfully!`, "success");
 
         // Reset POS Billing form
         setCart([]);
@@ -309,10 +327,14 @@ export default function SellerPOSBilling() {
         // Refresh product stock list in background
         fetchProducts();
       } else {
-        setError(res.message || "Failed to generate bill");
+        const msg = res.message || "Failed to generate bill";
+        setError(msg);
+        showToast(msg, "error");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || "Failed to create offline sale");
+      const msg = err?.response?.data?.message || err?.message || "Failed to create offline sale";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -320,11 +342,21 @@ export default function SellerPOSBilling() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header with Direct Navigation to Bills History */}
       <SellerPageHeader
         title="POS / Quick Billing"
-        subtitle="Rapid barcode scanning, walk-in billing & instant invoice printing."
+        subtitle="Rapid barcode scanning, walk-in counter sales & instant tax invoices."
         breadcrumbs={[{ label: "POS Billing" }]}
+        action={
+          <button
+            type="button"
+            onClick={() => navigate("/seller/bills")}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl min-h-[44px] transition-colors shadow-2xs"
+          >
+            <span>🧾</span>
+            <span>View Bills History</span>
+          </button>
+        }
       />
 
       {/* Main POS Interface Layout */}
@@ -359,7 +391,7 @@ export default function SellerPOSBilling() {
                 variant="outline"
                 size="md"
                 onClick={() => fetchProducts(searchQuery)}
-                className="flex-shrink-0 min-h-[44px]"
+                className="flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="Refresh product catalog"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -378,7 +410,7 @@ export default function SellerPOSBilling() {
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all whitespace-nowrap min-h-[36px] ${
+                  className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all whitespace-nowrap min-h-[40px] flex items-center justify-center ${
                     selectedCategory === cat
                       ? "bg-purple-600 text-white shadow-xs"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -486,7 +518,7 @@ export default function SellerPOSBilling() {
                                   e.stopPropagation();
                                   addToCart(prod, v.id || v.value);
                                 }}
-                                className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold border transition-colors min-h-[30px] ${
+                                className={`rounded-lg px-2 py-1.5 text-[10px] font-bold border transition-colors min-h-[36px] flex items-center justify-center ${
                                   v.stock <= 0
                                     ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
                                     : "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-600 hover:text-white"
@@ -504,7 +536,7 @@ export default function SellerPOSBilling() {
                             e.stopPropagation();
                             addToCart(prod);
                           }}
-                          className="mt-2 w-full rounded-lg bg-slate-100 group-hover:bg-purple-600 group-hover:text-white py-1.5 text-[11px] font-bold text-slate-700 transition-colors min-h-[34px]"
+                          className="mt-2 w-full rounded-xl bg-slate-100 group-hover:bg-purple-600 group-hover:text-white py-2 text-xs font-bold text-slate-700 transition-colors min-h-[40px] flex items-center justify-center"
                         >
                           + Add to Bill
                         </button>
@@ -540,16 +572,18 @@ export default function SellerPOSBilling() {
             <div className="flex items-center gap-2">
               {cart.length > 0 && (
                 <button
-                  onClick={clearCart}
-                  className="text-xs text-white/80 hover:text-white underline underline-offset-2 transition-colors min-h-[36px] px-2"
+                  type="button"
+                  onClick={() => setShowClearCartModal(true)}
+                  className="text-xs text-white/80 hover:text-white underline underline-offset-2 transition-colors min-h-[36px] px-2 font-bold"
                 >
                   Clear
                 </button>
               )}
               {isMobileCartOpen && (
                 <button
+                  type="button"
                   onClick={() => setIsMobileCartOpen(false)}
-                  className="lg:hidden p-1.5 text-white/80 hover:text-white rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  className="lg:hidden p-2 text-white/80 hover:text-white rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center font-bold"
                   aria-label="Close cart"
                 >
                   ✕
@@ -592,17 +626,21 @@ export default function SellerPOSBilling() {
                   </div>
 
                   {/* Qty Steppers */}
-                  <div className="flex items-center rounded-lg border border-slate-300 bg-white overflow-hidden shadow-2xs">
+                  <div className="flex items-center rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs">
                     <button
+                      type="button"
                       onClick={() => updateQuantity(idx, -1)}
-                      className="px-2.5 py-1 hover:bg-slate-100 text-slate-700 font-bold transition-colors min-h-[36px]"
+                      className="px-3 py-1.5 hover:bg-slate-100 text-slate-700 font-bold transition-colors min-h-[38px] min-w-[34px] flex items-center justify-center"
+                      aria-label="Decrease quantity"
                     >
                       -
                     </button>
-                    <span className="px-2 font-bold text-slate-900 text-xs">{item.quantity}</span>
+                    <span className="px-2.5 font-bold text-slate-900 text-xs">{item.quantity}</span>
                     <button
+                      type="button"
                       onClick={() => updateQuantity(idx, 1)}
-                      className="px-2.5 py-1 hover:bg-slate-100 text-slate-700 font-bold transition-colors min-h-[36px]"
+                      className="px-3 py-1.5 hover:bg-slate-100 text-slate-700 font-bold transition-colors min-h-[38px] min-w-[34px] flex items-center justify-center"
+                      aria-label="Increase quantity"
                     >
                       +
                     </button>
@@ -612,8 +650,9 @@ export default function SellerPOSBilling() {
                   <div className="w-16 text-right">
                     <div className="font-bold text-slate-900">₹{item.total.toFixed(2)}</div>
                     <button
+                      type="button"
                       onClick={() => removeCartItem(idx)}
-                      className="text-[10px] text-rose-500 hover:text-rose-700 font-bold"
+                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold transition-colors"
                     >
                       Remove
                     </button>
@@ -667,8 +706,9 @@ export default function SellerPOSBilling() {
                 {(["Cash", "UPI", "Card"] as const).map((mode) => (
                   <button
                     key={mode}
+                    type="button"
                     onClick={() => setPaymentMethod(mode)}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all min-h-[40px] ${
+                    className={`py-2.5 rounded-xl text-xs font-bold border transition-all min-h-[42px] ${
                       paymentMethod === mode
                         ? "bg-purple-600 text-white border-purple-600 shadow-xs"
                         : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
@@ -690,7 +730,7 @@ export default function SellerPOSBilling() {
                     value={cashReceived}
                     onChange={(e) => setCashReceived(e.target.value)}
                     placeholder={grandTotal.toString()}
-                    className="w-28 rounded-lg border border-purple-300 bg-white px-2 py-1 text-right text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-400 min-h-[36px]"
+                    className="w-28 rounded-lg border border-purple-300 bg-white px-2 py-1 text-right text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-400 min-h-[38px]"
                   />
                 </div>
 
@@ -704,8 +744,9 @@ export default function SellerPOSBilling() {
                   ].map((b, i) => (
                     <button
                       key={i}
+                      type="button"
                       onClick={() => setCashReceived(b.val.toString())}
-                      className="flex-1 rounded-lg bg-white border border-purple-200 py-1 text-[10px] font-bold text-purple-800 hover:bg-purple-100 transition-colors min-h-[32px]"
+                      className="flex-1 rounded-lg bg-white border border-purple-200 py-1.5 text-[10px] font-bold text-purple-800 hover:bg-purple-100 transition-colors min-h-[34px]"
                     >
                       {b.label}
                     </button>
@@ -713,7 +754,7 @@ export default function SellerPOSBilling() {
                 </div>
 
                 {changeDue > 0 && (
-                  <div className="flex items-center justify-between text-xs font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-lg">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-1.5 rounded-lg">
                     <span>Change to Return:</span>
                     <span>₹{changeDue.toFixed(2)}</span>
                   </div>
@@ -778,6 +819,7 @@ export default function SellerPOSBilling() {
               disabled={submitting || cart.length === 0}
               isLoading={submitting}
               onClick={handleCompleteSale}
+              className="min-h-[48px]"
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="20 6 9 17 4 12"></polyline>
@@ -803,11 +845,48 @@ export default function SellerPOSBilling() {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setIsMobileCartOpen(true)}
             className="px-4 py-2 bg-white text-purple-900 rounded-xl font-bold text-xs shadow-md min-h-[44px] flex items-center"
           >
             Checkout Cart →
           </button>
+        </div>
+      )}
+
+      {/* Clear Cart Confirmation Modal */}
+      {showClearCartModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Clear Active Cart?</h3>
+                <p className="text-xs text-slate-500">All {cart.length} items will be removed.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowClearCartModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl min-h-[40px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearCart}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl min-h-[40px] transition-colors"
+              >
+                Yes, Clear Cart
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

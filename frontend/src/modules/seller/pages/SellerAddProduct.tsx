@@ -29,6 +29,7 @@ import {
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerCard } from "../components/common/SellerCard";
 import { SellerButton } from "../components/common/SellerButton";
@@ -38,6 +39,7 @@ export default function SellerAddProduct() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuth();
+  const { showToast } = useToast();
 
   const isApproved = ((user as any)?.status ?? "Approved") === "Approved";
   const [formData, setFormData] = useState({
@@ -349,7 +351,9 @@ export default function SellerAddProduct() {
 
   const addVariation = () => {
     if (!variationForm.title || !variationForm.price) {
-      setUploadError("Please fill in variation title and price");
+      const msg = "Please fill in variation title and price";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
@@ -358,7 +362,9 @@ export default function SellerAddProduct() {
     const stock = parseInt(variationForm.stock || "0");
 
     if (discPrice > price) {
-      setUploadError("Discounted price cannot be greater than price");
+      const msg = "Discounted price cannot be greater than regular price";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
@@ -371,6 +377,7 @@ export default function SellerAddProduct() {
     };
 
     setVariations([...variations, newVariation]);
+    showToast(`Added variant: ${variationForm.title}`, "info");
     setVariationForm({
       title: "",
       price: "",
@@ -383,6 +390,7 @@ export default function SellerAddProduct() {
 
   const removeVariation = (index: number) => {
     setVariations((prev) => prev.filter((_, i) => i !== index));
+    showToast("Variant removed", "info");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -390,43 +398,59 @@ export default function SellerAddProduct() {
     setUploadError("");
 
     if (!isApproved) {
-      setUploadError("Your seller account is awaiting admin approval. You can add products once approved.");
+      const msg = "Your seller account is awaiting admin approval. You can add products once approved.";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
     if (!formData.productName.trim()) {
-      setUploadError("Please enter a product name.");
+      const msg = "Please enter a product name.";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
     if (!formData.publish) {
-      setUploadError("Please select a product status (Published or Unpublished).");
+      const msg = "Please select a product status (Published or Unpublished).";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
     if (formData.isShopByStoreOnly !== "Yes") {
       if (!formData.headerCategory) {
-        setUploadError("Please select a header category.");
+        const msg = "Please select a header category.";
+        setUploadError(msg);
+        showToast(msg, "error");
         return;
       }
       if (!formData.category) {
-        setUploadError("Please select a category.");
+        const msg = "Please select a category.";
+        setUploadError(msg);
+        showToast(msg, "error");
         return;
       }
     }
 
     if (!mainImageFile && !formData.mainImageUrl) {
-      setUploadError("Please add a product main image.");
+      const msg = "Please add a product main image.";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
     if (formData.madeIn.trim() && !/^[A-Za-z\s]+$/.test(formData.madeIn.trim())) {
-      setUploadError("Made In should contain only alphabets.");
+      const msg = "Made In should contain only alphabets.";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
     if (formData.fssaiLicNo.trim() && !/^[0-9/]{8,}$/.test(formData.fssaiLicNo.trim())) {
-      setUploadError("Please enter a valid FSSAI Lic. No. (e.g. 21/001/00012345).");
+      const msg = "Please enter a valid FSSAI Lic. No. (e.g. 21/001/00012345).";
+      setUploadError(msg);
+      showToast(msg, "error");
       return;
     }
 
@@ -440,7 +464,7 @@ export default function SellerAddProduct() {
         const compressedMain = await compressImage(mainImageFile);
         const mainImageResult = await uploadImage(
           compressedMain,
-          "dhakadsnazzy/products"
+          "hellolocal/products"
         );
         mainImageUrl = mainImageResult.secureUrl;
         setFormData((prev) => ({
@@ -455,14 +479,16 @@ export default function SellerAddProduct() {
         );
         const galleryResults = await uploadImages(
           compressedGallery,
-          "dhakadsnazzy/products/gallery"
+          "hellolocal/products/gallery"
         );
         galleryImageUrls = galleryResults.map((result) => result.secureUrl);
         setFormData((prev) => ({ ...prev, galleryImageUrls }));
       }
 
       if (variations.length === 0) {
-        setUploadError("Please add at least one product variation");
+        const msg = "Please add at least one product variation";
+        setUploadError(msg);
+        showToast(msg, "error");
         setUploading(false);
         return;
       }
@@ -537,22 +563,22 @@ export default function SellerAddProduct() {
       }
 
       if (response.success) {
-        setSuccessMessage(
-          id
-            ? "Product updated successfully!"
-            : "Product created successfully!"
-        );
+        const successMsg = id ? "Product updated successfully!" : "Product created successfully!";
+        setSuccessMessage(successMsg);
+        showToast(successMsg, "success");
         setTimeout(() => {
           navigate("/seller/product/list");
-        }, 1500);
+        }, 1200);
       } else {
-        setUploadError(response.message || "Failed to save product");
+        const msg = response.message || "Failed to save product";
+        setUploadError(msg);
+        showToast(msg, "error");
       }
     } catch (err: any) {
       console.error("Error saving product:", err);
-      setUploadError(
-        err.response?.data?.message || err.message || "Failed to save product"
-      );
+      const msg = err.response?.data?.message || err.message || "Failed to save product";
+      setUploadError(msg);
+      showToast(msg, "error");
     } finally {
       setUploading(false);
     }
@@ -572,6 +598,17 @@ export default function SellerAddProduct() {
           { label: "Products", path: "/seller/product/list" },
           { label: id ? "Edit Product" : "Add Product" },
         ]}
+        action={
+          <SellerButton
+            variant="outline"
+            size="md"
+            onClick={() => navigate('/seller/product/list')}
+            className="min-h-[44px]"
+            icon={<span>📋</span>}
+          >
+            View Product List
+          </SellerButton>
+        }
       />
 
       {/* Account Approval Warning Banner */}

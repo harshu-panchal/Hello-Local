@@ -6,10 +6,12 @@ import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerCard } from "../components/common/SellerCard";
 import { SellerButton } from "../components/common/SellerButton";
 import { SellerStatusBadge } from "../components/common/SellerStatusBadge";
+import { useToast } from "../../../context/ToastContext";
 
 export default function SellerBillDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [bill, setBill] = useState<BillData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -25,16 +27,20 @@ export default function SellerBillDetail() {
         if (res.success && res.data) {
           setBill(res.data);
         } else {
-          setError(res.message || "Failed to fetch bill details");
+          const msg = res.message || "Failed to fetch bill details";
+          setError(msg);
+          showToast(msg, "error");
         }
       } catch (err: any) {
-        setError(err?.response?.data?.message || err?.message || "Failed to fetch bill details");
+        const msg = err?.response?.data?.message || err?.message || "Failed to fetch bill details";
+        setError(msg);
+        showToast(msg, "error");
       } finally {
         setLoading(false);
       }
     };
     fetchBill();
-  }, [id]);
+  }, [id, showToast]);
 
   if (loading) {
     return (
@@ -51,13 +57,13 @@ export default function SellerBillDetail() {
 
   if (error || !bill) {
     return (
-      <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 max-w-md mx-auto my-12 space-y-4">
+      <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 max-w-md mx-auto my-12 space-y-4 shadow-sm">
         <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-xl font-bold">
           !
         </div>
         <h2 className="text-lg font-bold text-slate-900">Error Loading Bill</h2>
         <p className="text-xs sm:text-sm text-slate-600">{error || "Bill not found"}</p>
-        <SellerButton variant="primary" size="md" onClick={() => navigate("/seller/bills")} fullWidth>
+        <SellerButton variant="primary" size="md" onClick={() => navigate("/seller/bills")} fullWidth className="min-h-[44px]">
           Back to Bills
         </SellerButton>
       </div>

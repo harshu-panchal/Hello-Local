@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useToast } from '../../../context/ToastContext';
 import { uploadImage } from '../../../services/api/uploadService';
 import {
@@ -8,7 +8,7 @@ import {
   cancelAdRequest,
   getAdAvailability,
 } from '../../../services/api/sellerAdRequestService';
-import RazorpayCheckout from '../../../components/RazorpayCheckout';
+import { exportToCsv } from '../../../utils/exportCsv';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerCard } from '../components/common/SellerCard';
 import { SellerStatCard } from '../components/common/SellerStatCard';
@@ -69,10 +69,15 @@ export default function SellerAdRequests() {
 
   const [adRequests, setAdRequests] = useState<AdRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+
   const [availability, setAvailability] = useState<{
     activeAds: number;
     maxAds: number;
@@ -86,17 +91,14 @@ export default function SellerAdRequests() {
     duration?: number;
   } | null>(null);
   const [paymentUploading, setPaymentUploading] = useState(false);
-  const [razorpayData, setRazorpayData] = useState<{ id: string; amount: number } | null>(null);
-  const [sellerDetails, setSellerDetails] = useState({ name: '', email: '', phone: '' });
 
+  // 300ms Search Debouncing
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    setSellerDetails({
-      name: user.name || '',
-      email: user.email || '',
-      phone: user.phone || '9999999999',
-    });
-  }, []);
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   const [form, setForm] = useState<FormState>({
     shopName: '',
@@ -131,25 +133,32 @@ export default function SellerAdRequests() {
     paymentNote: '',
   });
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (isManualRefresh = false) => {
     try {
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
       const [adsRes, availRes] = await Promise.all([
         getMyAdRequests(),
         getAdAvailability(form.startDate, form.durationDays),
       ]);
       if (adsRes.success) setAdRequests(adsRes.data);
       if (availRes.success) setAvailability(availRes.data);
+
+      if (isManualRefresh) {
+        showToast('Advertisements & slot capacity refreshed', 'success');
+      }
     } catch {
       showToast('Failed to load advertisements data', 'error');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [form.startDate, form.durationDays, showToast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isPaymentProof = false) => {
     const file = e.target.files?.[0];
@@ -166,7 +175,7 @@ export default function SellerAdRequests() {
       } else {
         setUploadingImage(true);
       }
-      const res = await uploadImage(file, 'advertisements');
+      const res = await uploadImage(file, 'hellolocal/shop-ads');
       if (res.secureUrl) {
         if (isPaymentProof) {
           setProofForm((prev) => ({ ...prev, paymentScreenshotUrl: res.secureUrl }));
@@ -263,30 +272,93 @@ export default function SellerAdRequests() {
     }
   };
 
+  // Filtered Ad Campaigns
+  const filteredAds = useMemo(() => {
+    return adRequests.filter((ad) => {
+      const matchesSearch =
+        !debouncedSearch.trim() ||
+        ad.shopName?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        ad.tagline?.toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesStatus = statusFilter === 'All' || ad.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [adRequests, debouncedSearch, statusFilter]);
+
+  const handleExport = () => {
+    if (filteredAds.length === 0) {
+      showToast('No advertising records to export', 'info');
+      return;
+    }
+
+    exportToCsv(
+      ['Shop Name', 'Tagline', 'Duration (Days)', 'Cost (₹)', 'Status', 'Payment Status', 'Start Date', 'Expiry Date', 'Created Date'],
+      filteredAds.map((ad) => [
+        ad.shopName,
+        ad.tagline,
+        ad.durationDays,
+        ad.adPrice || ad.requestedPrice || 0,
+        ad.status,
+        ad.paymentStatus,
+        ad.startDate ? new Date(ad.startDate).toLocaleDateString('en-IN') : '—',
+        ad.expiresAt ? new Date(ad.expiresAt).toLocaleDateString('en-IN') : '—',
+        new Date(ad.createdAt).toLocaleDateString('en-IN'),
+      ]),
+      'seller_ad_campaigns'
+    );
+    showToast('Ad campaigns exported successfully!', 'success');
+  };
+
   const liveAdsCount = adRequests.filter((a) => a.status === 'Live').length;
   const pendingAdsCount = adRequests.filter((a) => a.status === 'Pending' || a.status === 'PaymentPending').length;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 sm:space-y-6 pb-12">
       {/* Header */}
       <SellerPageHeader
         title="Promotions & Store Ads"
-        subtitle="Boost local store visits with featured homepage ad banners."
+        subtitle="Boost local store visits with featured homepage billboard ad banners."
         breadcrumbs={[{ label: "Ad Requests" }]}
         action={
-          <SellerButton
-            variant="primary"
-            size="md"
-            onClick={() => setShowForm(!showForm)}
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            }
-          >
-            {showForm ? 'View My Ads' : '+ Create New Banner'}
-          </SellerButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => fetchData(true)}
+              isLoading={refreshing}
+              className="min-h-[44px]"
+              icon={<span>🔄</span>}
+            >
+              Refresh
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={handleExport}
+              disabled={adRequests.length === 0}
+              className="min-h-[44px]"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+              }
+            >
+              Export CSV
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={() => setShowForm(!showForm)}
+              className="min-h-[44px]"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              }
+            >
+              {showForm ? 'View My Ads' : '+ Create New Banner'}
+            </SellerButton>
+          </div>
         }
       />
 
@@ -308,7 +380,7 @@ export default function SellerAdRequests() {
           variant="default"
         />
         <SellerStatCard
-          label="Total Banner Requests"
+          label="Total Campaigns"
           value={adRequests.length}
           variant="default"
         />
@@ -325,7 +397,7 @@ export default function SellerAdRequests() {
                   value={form.shopName}
                   onChange={(e) => setForm({ ...form, shopName: e.target.value })}
                   placeholder="e.g., Sharma Fresh Mart"
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                 />
               </SellerFormField>
 
@@ -335,7 +407,7 @@ export default function SellerAdRequests() {
                   value={form.tagline}
                   onChange={(e) => setForm({ ...form, tagline: e.target.value })}
                   placeholder="e.g., Flat 20% Off On All Fresh Fruits Today!"
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                 />
               </SellerFormField>
 
@@ -371,7 +443,7 @@ export default function SellerAdRequests() {
 
               <div>
                 <SellerFormField label="Duration (Days)">
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {DURATIONS.map((d) => (
                       <button
                         key={d}
@@ -383,7 +455,7 @@ export default function SellerAdRequests() {
                             requestedPrice: getPriceForDuration(d).toString(),
                           })
                         }
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[36px] ${
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all min-h-[40px] ${
                           form.durationDays === d
                             ? 'bg-purple-600 text-white shadow-xs'
                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -403,7 +475,7 @@ export default function SellerAdRequests() {
                     value={form.startDate}
                     min={new Date().toISOString().split('T')[0]}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                   />
                 </SellerFormField>
               </div>
@@ -415,6 +487,7 @@ export default function SellerAdRequests() {
                 variant="outline"
                 size="lg"
                 onClick={() => setShowForm(false)}
+                className="min-h-[44px]"
               >
                 Cancel
               </SellerButton>
@@ -424,6 +497,7 @@ export default function SellerAdRequests() {
                 size="lg"
                 disabled={submitting || uploadingImage}
                 isLoading={submitting}
+                className="min-h-[44px]"
               >
                 Submit Ad Request (₹{form.requestedPrice})
               </SellerButton>
@@ -433,17 +507,54 @@ export default function SellerAdRequests() {
       ) : (
         /* AD REQUESTS LIST */
         <div className="space-y-4">
-          <h3 className="text-base font-black text-slate-900 px-1">My Advertisement Campaigns</h3>
+          {/* Filter Bar */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-bold">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Live">Live</option>
+                <option value="Pending">Pending Review</option>
+                <option value="Approved">Approved / Ready to Pay</option>
+                <option value="PaymentPending">Payment Under Verification</option>
+                <option value="Expired">Expired</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+
+            <div className="relative min-w-[240px] flex-1 max-w-md">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search shop name or tagline..."
+                className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold p-1 min-h-[32px] min-w-[32px]"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
               <div className="h-44 bg-slate-200 rounded-2xl" />
               <div className="h-44 bg-slate-200 rounded-2xl" />
             </div>
-          ) : adRequests.length === 0 ? (
+          ) : filteredAds.length === 0 ? (
             <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center max-w-lg mx-auto space-y-3">
               <span className="text-4xl">📢</span>
-              <h3 className="text-base font-bold text-slate-900">No banner ads requested</h3>
+              <h3 className="text-base font-bold text-slate-900">No banner ads found</h3>
               <p className="text-xs sm:text-sm text-slate-500">
                 Promote your shop to thousands of nearby buyers by requesting a featured billboard banner.
               </p>
@@ -451,13 +562,14 @@ export default function SellerAdRequests() {
                 variant="primary"
                 size="md"
                 onClick={() => setShowForm(true)}
+                className="min-h-[44px]"
               >
                 + Create First Banner
               </SellerButton>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {adRequests.map((ad) => (
+              {filteredAds.map((ad) => (
                 <div
                   key={ad._id}
                   className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col justify-between"
@@ -488,6 +600,7 @@ export default function SellerAdRequests() {
                         variant="primary"
                         size="sm"
                         onClick={() => setProofForm({ ...proofForm, adId: ad._id })}
+                        className="min-h-[40px]"
                       >
                         Submit Payment Proof
                       </SellerButton>
@@ -497,6 +610,7 @@ export default function SellerAdRequests() {
                         variant="outline"
                         size="sm"
                         onClick={() => setShowCancelConfirm(ad._id)}
+                        className="min-h-[40px]"
                       >
                         Cancel Request
                       </SellerButton>
@@ -518,13 +632,14 @@ export default function SellerAdRequests() {
         size="sm"
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
-            <SellerButton variant="outline" size="md" onClick={() => setShowCancelConfirm(null)}>
+            <SellerButton variant="outline" size="md" onClick={() => setShowCancelConfirm(null)} className="min-h-[44px]">
               No, Keep It
             </SellerButton>
             <SellerButton
               variant="danger"
               size="md"
               onClick={() => showCancelConfirm && handleCancelAd(showCancelConfirm)}
+              className="min-h-[44px]"
             >
               Yes, Cancel
             </SellerButton>
@@ -545,10 +660,10 @@ export default function SellerAdRequests() {
         size="md"
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
-            <SellerButton variant="outline" size="md" onClick={() => setProofForm({ ...proofForm, adId: null })}>
+            <SellerButton variant="outline" size="md" onClick={() => setProofForm({ ...proofForm, adId: null })} className="min-h-[44px]">
               Close
             </SellerButton>
-            <SellerButton variant="primary" size="md" onClick={handleProofSubmit}>
+            <SellerButton variant="primary" size="md" onClick={handleProofSubmit} isLoading={paymentUploading} className="min-h-[44px]">
               Confirm Submission
             </SellerButton>
           </div>
@@ -559,7 +674,7 @@ export default function SellerAdRequests() {
             <select
               value={proofForm.paymentMethod}
               onChange={(e) => setProofForm({ ...proofForm, paymentMethod: e.target.value })}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[42px]"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
             >
               <option value="UPI">UPI Transfer</option>
               <option value="Bank Transfer">NEFT / RTGS</option>
@@ -573,7 +688,7 @@ export default function SellerAdRequests() {
               value={proofForm.paymentReference}
               onChange={(e) => setProofForm({ ...proofForm, paymentReference: e.target.value })}
               placeholder="e.g. UPI Ref / Bank UTR Number"
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
             />
           </SellerFormField>
 
@@ -582,7 +697,7 @@ export default function SellerAdRequests() {
               type="file"
               accept="image/*"
               onChange={(e) => handleImageUpload(e, true)}
-              className="w-full text-xs text-slate-600"
+              className="w-full text-xs text-slate-600 min-h-[44px]"
             />
             {proofForm.paymentScreenshotUrl && (
               <p className="text-[11px] text-emerald-600 font-bold mt-1">✓ Screenshot attached</p>

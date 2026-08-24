@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getSellerProfile, updateSellerProfile } from '../../../services/api/auth/sellerAuthService';
 import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import { getCategories, Category } from '../../../services/api/categoryService';
 import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 import LocationPickerMap from '../../../components/LocationPickerMap';
@@ -13,11 +14,11 @@ import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
 
 export default function SellerAccountSettings() {
   const { user, updateUser } = useAuth();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -50,11 +51,6 @@ export default function SellerAccountSettings() {
     status: '',
   });
 
-  useEffect(() => {
-    fetchProfile();
-    fetchCategories();
-  }, []);
-
   const fetchCategories = async () => {
     try {
       const res = await getCategories();
@@ -64,9 +60,11 @@ export default function SellerAccountSettings() {
     }
   };
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async (isManualRefresh = false) => {
     try {
-      setLoading(true);
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
       const response = await getSellerProfile();
       if (response.success) {
         const data = response.data;
@@ -78,15 +76,24 @@ export default function SellerAccountSettings() {
           searchLocation: data.searchLocation || data.address || '',
           serviceRadiusKm: (data.serviceRadiusKm || 10).toString(),
         });
+        if (isManualRefresh) {
+          showToast('Account settings refreshed', 'success');
+        }
       } else {
-        setError(response.message || 'Failed to fetch profile');
+        showToast(response.message || 'Failed to fetch profile', 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error loading profile');
+      showToast(err.response?.data?.message || 'Error loading profile', 'error');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    fetchProfile();
+    fetchCategories();
+  }, [fetchProfile]);
 
   const validateField = (name: string, value: string): string => {
     const v = (value || '').trim();
@@ -145,8 +152,6 @@ export default function SellerAccountSettings() {
     e.preventDefault();
     try {
       setSaveLoading(true);
-      setError('');
-      setSuccessMsg(null);
 
       const fieldsToCheck = ['sellerName', 'email', 'mobile', 'storeName', 'city', 'accountName', 'bankName', 'accountNumber', 'ifsc', 'panCard', 'taxNumber'];
       const newErrors: Record<string, string> = {};
@@ -156,20 +161,20 @@ export default function SellerAccountSettings() {
       });
       if (Object.keys(newErrors).length > 0) {
         setFieldErrors(newErrors);
-        setError('Please fix the highlighted fields before saving');
+        showToast('Please fix the highlighted fields before saving', 'error');
         setSaveLoading(false);
         return;
       }
 
       if (sellerData.searchLocation && (!sellerData.latitude || !sellerData.longitude)) {
-        setError('Please select a valid location using the map picker');
+        showToast('Please select a valid location using the map picker', 'error');
         setSaveLoading(false);
         return;
       }
 
       const radius = parseFloat(sellerData.serviceRadiusKm);
       if (isNaN(radius) || radius < 0.1 || radius > 100) {
-        setError('Service radius must be between 0.1 and 100 kilometers');
+        showToast('Service radius must be between 0.1 and 100 kilometers', 'error');
         setSaveLoading(false);
         return;
       }
@@ -182,7 +187,7 @@ export default function SellerAccountSettings() {
       const response = await updateSellerProfile(updateData);
       if (response.success) {
         setIsEditing(false);
-        setSuccessMsg('Account settings updated successfully!');
+        showToast('Account settings updated successfully!', 'success');
         const data = response.data;
         const locationCoords = data.location?.coordinates || [];
         setSellerData({
@@ -200,35 +205,17 @@ export default function SellerAccountSettings() {
           });
         }
       } else {
-        setError(response.message || 'Failed to update profile');
+        showToast(response.message || 'Failed to update profile', 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error updating profile');
+      showToast(err.response?.data?.message || 'Error updating profile', 'error');
     } finally {
       setSaveLoading(false);
     }
   };
 
-  const handleLocationSelect = (place: { address: string; latitude: number; longitude: number }) => {
-    setSellerData((prev) => ({
-      ...prev,
-      address: place.address,
-      searchLocation: place.address,
-      latitude: place.latitude.toString(),
-      longitude: place.longitude.toString(),
-    }));
-  };
-
-  const handleCoordinatesChange = (lat: number, lng: number) => {
-    setSellerData((prev) => ({
-      ...prev,
-      latitude: lat.toString(),
-      longitude: lng.toString(),
-    }));
-  };
-
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 sm:space-y-6 pb-12">
       {/* Header */}
       <SellerPageHeader
         title="Account & Store Settings"
@@ -238,12 +225,23 @@ export default function SellerAccountSettings() {
           { label: "Account Settings" },
         ]}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => fetchProfile(true)}
+              isLoading={refreshing}
+              className="min-h-[44px]"
+              icon={<span>🔄</span>}
+            >
+              Refresh
+            </SellerButton>
             {!isEditing ? (
               <SellerButton
                 variant="primary"
                 size="md"
                 onClick={() => setIsEditing(true)}
+                className="min-h-[44px]"
                 icon={
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -261,6 +259,7 @@ export default function SellerAccountSettings() {
                   setIsEditing(false);
                   fetchProfile();
                 }}
+                className="min-h-[44px]"
               >
                 Cancel
               </SellerButton>
@@ -268,20 +267,6 @@ export default function SellerAccountSettings() {
           </div>
         }
       />
-
-      {/* Messages */}
-      {error && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm font-bold flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-rose-500 hover:text-rose-800">✕</button>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-bold">
-          ✓ {successMsg}
-        </div>
-      )}
 
       {/* Settings Tab Strip */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-2 sm:p-3 shadow-xs">
@@ -312,7 +297,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.sellerName}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -323,7 +308,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.email}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -334,12 +319,12 @@ export default function SellerAccountSettings() {
                     value={sellerData.mobile}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
                 <SellerFormField label="Verification Status">
-                  <div className="pt-1.5">
+                  <div className="pt-2">
                     <SellerStatusBadge status={sellerData.status || 'Approved'} size="md" />
                   </div>
                 </SellerFormField>
@@ -358,7 +343,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.storeName}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -368,7 +353,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.category}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   >
                     <option value="">Select Category</option>
                     {categories.map((c) => (
@@ -387,7 +372,7 @@ export default function SellerAccountSettings() {
                       value={sellerData.address}
                       disabled={!isEditing}
                       onChange={handleInputChange}
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                     />
                   </SellerFormField>
                 </div>
@@ -399,7 +384,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.city}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -412,7 +397,7 @@ export default function SellerAccountSettings() {
                       disabled={!isEditing}
                       onChange={handleInputChange}
                       placeholder="Tell local buyers about your store specialities..."
-                      className="w-full rounded-xl border border-slate-300 p-3 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50"
+                      className="w-full rounded-xl border border-slate-300 p-3 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[80px]"
                     />
                   </SellerFormField>
                 </div>
@@ -431,7 +416,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.accountName}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -442,7 +427,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.bankName}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -453,7 +438,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.accountNumber}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -465,7 +450,7 @@ export default function SellerAccountSettings() {
                     disabled={!isEditing}
                     onChange={handleInputChange}
                     placeholder="e.g. SBIN0000456"
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -477,7 +462,7 @@ export default function SellerAccountSettings() {
                     disabled={!isEditing}
                     onChange={handleInputChange}
                     placeholder="e.g. ABCDE1234F"
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
 
@@ -488,7 +473,7 @@ export default function SellerAccountSettings() {
                     value={sellerData.taxNumber}
                     disabled={!isEditing}
                     onChange={handleInputChange}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-mono text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                   />
                 </SellerFormField>
               </div>
@@ -515,10 +500,10 @@ export default function SellerAccountSettings() {
                             }));
                           }}
                           placeholder="Search landmark, street, or address..."
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                         />
                       ) : (
-                        <p className="text-xs sm:text-sm font-bold text-slate-800 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                        <p className="text-xs sm:text-sm font-bold text-slate-800 p-3 bg-slate-50 rounded-xl border border-slate-200">
                           {sellerData.searchLocation || sellerData.address || 'Location not specified'}
                         </p>
                       )}
@@ -535,12 +520,12 @@ export default function SellerAccountSettings() {
                       value={sellerData.serviceRadiusKm}
                       disabled={!isEditing}
                       onChange={handleInputChange}
-                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[42px]"
+                      className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 disabled:bg-slate-50 min-h-[44px]"
                     />
                   </SellerFormField>
 
                   <SellerFormField label="Coordinates (Lat / Long)">
-                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-600">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-600">
                       {sellerData.latitude && sellerData.longitude
                         ? `${parseFloat(sellerData.latitude).toFixed(5)}, ${parseFloat(sellerData.longitude).toFixed(5)}`
                         : 'No coordinates pinned'}
@@ -580,6 +565,7 @@ export default function SellerAccountSettings() {
                   setIsEditing(false);
                   fetchProfile();
                 }}
+                className="min-h-[44px]"
               >
                 Cancel
               </SellerButton>
@@ -589,6 +575,7 @@ export default function SellerAccountSettings() {
                 size="lg"
                 disabled={saveLoading}
                 isLoading={saveLoading}
+                className="min-h-[44px]"
               >
                 Save Settings
               </SellerButton>

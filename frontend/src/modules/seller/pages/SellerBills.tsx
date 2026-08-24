@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getSellerBills,
@@ -14,9 +14,12 @@ import { SellerTabs } from "../components/common/SellerTabs";
 import { SellerDataTable, ColumnDef } from "../components/common/SellerDataTable";
 import { SellerStatusBadge } from "../components/common/SellerStatusBadge";
 import { SellerButton } from "../components/common/SellerButton";
+import { useToast } from "../../../context/ToastContext";
 
 export default function SellerBills() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
+
   const [bills, setBills] = useState<any[]>([]);
   const [stats, setStats] = useState<BillSummaryStats>({
     totalRevenue: 0,
@@ -34,6 +37,7 @@ export default function SellerBills() {
   const [channel, setChannel] = useState<"ALL" | "ONLINE" | "OFFLINE">("ALL");
   const [paymentMethod, setPaymentMethod] = useState<string>("All");
   const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [page, setPage] = useState<number>(1);
@@ -44,11 +48,22 @@ export default function SellerBills() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [loadingBillId, setLoadingBillId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchBills();
-  }, [channel, paymentMethod, dateFrom, dateTo, page]);
+  // Cancel Offline Sale Modal State
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [cancellingBill, setCancellingBill] = useState<{ id: string; billNumber: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>("");
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
-  const fetchBills = async () => {
+  // 300ms Search Debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  const fetchBills = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -57,7 +72,7 @@ export default function SellerBills() {
         paymentMethod: paymentMethod === "All" ? undefined : paymentMethod,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         page,
         limit: 20,
       });
@@ -70,17 +85,17 @@ export default function SellerBills() {
         }
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || "Failed to load bills");
+      const msg = err?.response?.data?.message || err?.message || "Failed to load bills";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [channel, paymentMethod, dateFrom, dateTo, debouncedSearch, page, showToast]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
+  useEffect(() => {
     fetchBills();
-  };
+  }, [fetchBills]);
 
   const handleOpenBillPrint = async (orderId: string) => {
     setLoadingBillId(orderId);
@@ -90,30 +105,79 @@ export default function SellerBills() {
         setSelectedBill(res.data);
         setIsModalOpen(true);
       } else {
-        alert(res.message || "Failed to fetch bill details");
+        showToast(res.message || "Failed to fetch bill details", "error");
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || err?.message || "Failed to fetch bill details");
+      showToast(err?.response?.data?.message || err?.message || "Failed to fetch bill details", "error");
     } finally {
       setLoadingBillId(null);
     }
   };
 
-  const handleCancelOfflineSale = async (orderId: string) => {
-    const reason = prompt("Please enter reason for cancelling this offline sale (stock will be restored):");
-    if (reason === null) return;
-
+  const handleConfirmCancelSale = async () => {
+    if (!cancellingBill) return;
+    setIsCancelling(true);
     try {
-      const res = await cancelOfflineSale(orderId, reason || "Customer return");
+      const res = await cancelOfflineSale(cancellingBill.id, cancelReason || "Customer return / cancelled by seller");
       if (res.success) {
-        alert("Sale cancelled and stock restored successfully!");
+        showToast(`Sale #${cancellingBill.billNumber} cancelled & stock restored!`, "success");
+        setShowCancelModal(false);
+        setCancellingBill(null);
+        setCancelReason("");
         fetchBills();
       } else {
-        alert(res.message || "Failed to cancel sale");
+        showToast(res.message || "Failed to cancel sale", "error");
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || err?.message || "Failed to cancel sale");
+      showToast(err?.response?.data?.message || err?.message || "Failed to cancel sale", "error");
+    } finally {
+      setIsCancelling(false);
     }
+  };
+
+  const handleExportCSV = () => {
+    if (bills.length === 0) {
+      showToast("No bills available to export", "info");
+      return;
+    }
+
+    const headers = [
+      "Bill Number",
+      "Date",
+      "Channel",
+      "Customer Name",
+      "Customer Phone",
+      "Payment Mode",
+      "Status",
+      "Subtotal",
+      "Tax",
+      "Discount",
+      "Total Amount",
+    ];
+
+    const rows = bills.map((b) => [
+      `"${b.billNumber || b.orderNumber || b._id}"`,
+      `"${b.createdAt ? new Date(b.createdAt).toLocaleDateString("en-IN") : ""}"`,
+      `"${b.channel || "OFFLINE"}"`,
+      `"${b.customerName || "Walk-in Customer"}"`,
+      `"${b.customerPhone || ""}"`,
+      `"${b.paymentMethod || "Cash"}"`,
+      `"${b.status || "Delivered"}"`,
+      `"${(b.subtotal || 0).toFixed(2)}"`,
+      `"${(b.tax || 0).toFixed(2)}"`,
+      `"${(b.discount || 0).toFixed(2)}"`,
+      `"${(b.totalAmount || b.total || 0).toFixed(2)}"`,
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Seller_Bills_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Tax invoices report exported successfully!", "success");
   };
 
   const formatDate = (dateStr?: string) => {
@@ -136,9 +200,9 @@ export default function SellerBills() {
         <div>
           <span
             onClick={() => navigate(`/seller/bills/${b._id}`)}
-            className="font-bold text-purple-700 hover:text-purple-900 cursor-pointer block"
+            className="font-bold text-purple-700 hover:text-purple-900 cursor-pointer block text-xs"
           >
-            #{b.billNumber || b.orderId?.slice(-6).toUpperCase()}
+            #{b.billNumber || b.orderId?.slice(-6).toUpperCase() || b._id?.slice(-6).toUpperCase()}
           </span>
           <span className="text-[10px] text-slate-400 block">{formatDate(b.createdAt)}</span>
         </div>
@@ -164,8 +228,8 @@ export default function SellerBills() {
       header: "Customer",
       render: (b) => (
         <div>
-          <span className="font-bold text-slate-900 block">{b.customerName || "Walk-in Customer"}</span>
-          {b.customerPhone && <span className="text-xs text-slate-400 block">{b.customerPhone}</span>}
+          <span className="font-bold text-slate-900 block text-xs">{b.customerName || "Walk-in Customer"}</span>
+          {b.customerPhone && <span className="text-[11px] text-slate-400 block">{b.customerPhone}</span>}
         </div>
       ),
     },
@@ -173,8 +237,8 @@ export default function SellerBills() {
       key: "paymentMethod",
       header: "Payment",
       render: (b) => (
-        <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
           {b.paymentMethod || "Cash"}
         </span>
       ),
@@ -184,11 +248,11 @@ export default function SellerBills() {
       header: "Amount",
       render: (b) => (
         <div>
-          <span className="font-black text-slate-900 text-sm block">
+          <span className="font-black text-slate-900 text-xs block">
             ₹{Number(b.totalAmount || b.total || 0).toFixed(2)}
           </span>
           {b.discount > 0 && (
-            <span className="text-[10px] text-emerald-600 block">Saved ₹{b.discount.toFixed(2)}</span>
+            <span className="text-[10px] text-emerald-600 font-bold block">Saved ₹{b.discount.toFixed(2)}</span>
           )}
         </div>
       ),
@@ -205,15 +269,17 @@ export default function SellerBills() {
       render: (b) => (
         <div className="flex items-center justify-end gap-1.5">
           <button
+            type="button"
             onClick={() => handleOpenBillPrint(b._id)}
             disabled={loadingBillId === b._id}
-            className="p-1.5 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            className="p-2 rounded-xl text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="Reprint Bill"
+            aria-label={`Reprint Bill ${b.billNumber || b._id}`}
           >
             {loadingBillId === b._id ? (
-              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="6 9 6 2 18 2 18 9" />
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                 <rect x="6" y="14" width="12" height="8" />
@@ -221,22 +287,29 @@ export default function SellerBills() {
             )}
           </button>
           <button
+            type="button"
             onClick={() => navigate(`/seller/bills/${b._id}`)}
-            className="p-1.5 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            className="p-2 rounded-xl text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="View Details"
+            aria-label={`View Details for ${b.billNumber || b._id}`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
           {b.channel === "OFFLINE" && b.status !== "Cancelled" && (
             <button
-              onClick={() => handleCancelOfflineSale(b._id)}
-              className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+              type="button"
+              onClick={() => {
+                setCancellingBill({ id: b._id, billNumber: b.billNumber || b._id.slice(-6).toUpperCase() });
+                setShowCancelModal(true);
+              }}
+              className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               title="Cancel Sale & Restore Stock"
+              aria-label={`Cancel Sale ${b.billNumber || b._id}`}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="15" y1="9" x2="9" y2="15" />
                 <line x1="9" y1="9" x2="15" y2="15" />
@@ -256,19 +329,30 @@ export default function SellerBills() {
         subtitle="Manage, reprint, and track both Online and Offline in-store sales bills."
         breadcrumbs={[{ label: "Bills & Invoices" }]}
         action={
-          <SellerButton
-            variant="primary"
-            size="md"
-            onClick={() => navigate("/seller/pos")}
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            }
-          >
-            + Create New Bill (POS)
-          </SellerButton>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl min-h-[44px] transition-colors shadow-2xs"
+            >
+              <span>📥</span>
+              <span>Export CSV</span>
+            </button>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={() => navigate("/seller/pos")}
+              className="min-h-[44px]"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              }
+            >
+              + Create New Bill (POS)
+            </SellerButton>
+          </div>
         }
       />
 
@@ -330,7 +414,7 @@ export default function SellerBills() {
                 setPaymentMethod(e.target.value);
                 setPage(1);
               }}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[36px]"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[40px]"
             >
               <option value="All">All Modes</option>
               <option value="Cash">Cash</option>
@@ -343,34 +427,49 @@ export default function SellerBills() {
         </div>
 
         {/* Date and Search Row */}
-        <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 items-center">
           <div>
             <input
               type="date"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-600 min-h-[40px]"
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-600 min-h-[44px]"
             />
           </div>
           <div>
             <input
               type="date"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-600 min-h-[40px]"
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-600 min-h-[44px]"
             />
           </div>
-          <div className="sm:col-span-2 flex gap-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search Bill #, Customer Name or Phone..."
-              className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-600 min-h-[40px]"
-            />
-            <SellerButton type="submit" variant="secondary" size="sm" className="min-h-[40px] px-4">
-              Filter
-            </SellerButton>
+          <div className="sm:col-span-2 flex gap-2 relative">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search Bill #, Customer Name or Phone..."
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-800 outline-none focus:border-purple-600 min-h-[44px] pr-8"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-base"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
             {(dateFrom || dateTo || search || paymentMethod !== "All" || channel !== "ALL") && (
               <SellerButton
                 type="button"
@@ -384,13 +483,13 @@ export default function SellerBills() {
                   setChannel("ALL");
                   setPage(1);
                 }}
-                className="min-h-[40px]"
+                className="min-h-[44px]"
               >
                 Reset
               </SellerButton>
             )}
           </div>
-        </form>
+        </div>
       </div>
 
       {/* Bills Data Table with Mobile Card View */}
@@ -409,7 +508,7 @@ export default function SellerBills() {
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-bold text-purple-700 text-sm block">
-                  #{b.billNumber || b.orderId?.slice(-6).toUpperCase()}
+                  #{b.billNumber || b.orderId?.slice(-6).toUpperCase() || b._id?.slice(-6).toUpperCase()}
                 </span>
                 <span className="text-[10px] text-slate-400">{formatDate(b.createdAt)}</span>
               </div>
@@ -441,6 +540,7 @@ export default function SellerBills() {
                 size="sm"
                 fullWidth
                 onClick={() => handleOpenBillPrint(b._id)}
+                className="min-h-[44px]"
                 icon={
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="6 9 6 2 18 2 18 9" />
@@ -456,6 +556,7 @@ export default function SellerBills() {
                 size="sm"
                 fullWidth
                 onClick={() => navigate(`/seller/bills/${b._id}`)}
+                className="min-h-[44px]"
               >
                 Details
               </SellerButton>
@@ -463,6 +564,60 @@ export default function SellerBills() {
           </div>
         )}
       />
+
+      {/* Cancel Offline Sale Confirmation Modal */}
+      {showCancelModal && cancellingBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">Cancel Sale #{cancellingBill.billNumber}?</h3>
+                <p className="text-xs text-slate-500">Inventory items will be restored automatically.</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">Cancellation Reason</label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Enter reason for customer return or cancellation..."
+                className="w-full rounded-xl border border-slate-300 p-3 text-xs text-slate-900 outline-none focus:border-purple-600 min-h-[80px]"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancellingBill(null);
+                }}
+                disabled={isCancelling}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl min-h-[44px]"
+              >
+                Keep Bill
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancelSale}
+                disabled={isCancelling}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl min-h-[44px] transition-colors flex items-center gap-2"
+              >
+                {isCancelling ? "Cancelling..." : "Yes, Cancel & Restock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Selected Bill Print Modal */}
       <PrintableBillModal

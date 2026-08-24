@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SellerStoreBannerCard from '../components/SellerStoreBannerCard';
 import SellerTodayOverview from '../components/SellerTodayOverview';
@@ -9,26 +9,32 @@ import OrderChart from '../components/OrderChart';
 import { getSellerDashboardStats, DashboardStats, NewOrder } from '../../../services/api/dashboardService';
 import { getSellerProfile, toggleShopStatus } from '../../../services/api/auth/sellerAuthService';
 import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
+import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerButton } from '../components/common/SellerButton';
 
 export default function SellerDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [newOrders, setNewOrders] = useState<NewOrder[]>([]);
   const [sellerProfile, setSellerProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isShopOpen, setIsShopOpen] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async (isManualRefresh = false) => {
     try {
-      setLoading(true);
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
+
       const [statsResponse, profileResponse] = await Promise.all([
         getSellerDashboardStats(),
-        getSellerProfile()
+        getSellerProfile(),
       ]);
 
       if (statsResponse.success) {
@@ -43,16 +49,23 @@ export default function SellerDashboard() {
         const shopStatus = profileResponse.data.isShopOpen ?? true;
         setIsShopOpen(shopStatus);
       }
+
+      if (isManualRefresh) {
+        showToast('Dashboard telemetry refreshed', 'success');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error loading dashboard data');
+      const msg = err.response?.data?.message || 'Error loading dashboard data';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   const handleToggleShop = async () => {
     try {
@@ -60,12 +73,19 @@ export default function SellerDashboard() {
       const response = await toggleShopStatus();
 
       if (response.success) {
-        setIsShopOpen(response.data.isShopOpen);
+        const nextStatus = response.data.isShopOpen;
+        setIsShopOpen(nextStatus);
+        showToast(
+          nextStatus
+            ? 'Store is now OPEN & accepting online customer orders!'
+            : 'Store is now CLOSED. Online ordering paused.',
+          'success'
+        );
       } else {
-        alert('Failed to toggle shop status: ' + (response.message || 'Unknown error'));
+        showToast('Failed to toggle shop status: ' + (response.message || 'Unknown error'), 'error');
       }
     } catch (error: any) {
-      alert('Error toggling shop status: ' + (error.response?.data?.message || error.message || 'Unknown error'));
+      showToast('Error toggling shop status: ' + (error.response?.data?.message || error.message || 'Unknown error'), 'error');
     } finally {
       setStatusLoading(false);
     }
@@ -74,6 +94,8 @@ export default function SellerDashboard() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto w-full space-y-6 pb-12 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="h-14 rounded-2xl bg-slate-200" />
         {/* Banner Skeleton */}
         <div className="h-36 sm:h-28 rounded-3xl bg-slate-200" />
         {/* Overview Skeleton */}
@@ -106,20 +128,49 @@ export default function SellerDashboard() {
         </div>
         <h3 className="text-base font-bold text-slate-900">Unable to load dashboard</h3>
         <p className="text-xs sm:text-sm text-slate-500">{error}</p>
-        <SellerButton variant="primary" size="md" onClick={fetchDashboardData} fullWidth>
+        <SellerButton variant="primary" size="md" onClick={() => fetchDashboardData(true)} fullWidth className="min-h-[44px]">
           Try Again
         </SellerButton>
       </div>
     );
   }
 
-  const storeName = sellerProfile?.storeName || user?.storeName || (user as any)?.name || 'Sharma Kirana Store';
-  const storeAddress = sellerProfile?.address || (user as any)?.address || (user as any)?.city || 'Sector 21, Nerul, Navi Mumbai';
+  const storeName = sellerProfile?.storeName || user?.storeName || (user as any)?.name || 'Local Merchant Store';
+  const storeAddress = sellerProfile?.address || (user as any)?.address || (user as any)?.city || 'Store Address Not Set';
   const storeLogo = sellerProfile?.logo || sellerProfile?.profileImage || (user as any)?.profileImage;
   const storeSlug = sellerProfile?.slug || (user as any)?.slug || 'my-store';
 
   return (
-    <div className="max-w-7xl mx-auto w-full space-y-6 pb-12">
+    <div className="max-w-7xl mx-auto w-full space-y-4 sm:space-y-6 pb-12">
+      {/* Header */}
+      <SellerPageHeader
+        title="Seller Dashboard"
+        subtitle="Live sales overview, in-store POS, order fulfillment, and store controls."
+        action={
+          <div className="flex items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => fetchDashboardData(true)}
+              isLoading={refreshing}
+              className="min-h-[44px]"
+              icon={<span>🔄</span>}
+            >
+              Refresh
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/seller/pos')}
+              className="min-h-[44px]"
+              icon={<span>⚡</span>}
+            >
+              Quick POS
+            </SellerButton>
+          </div>
+        }
+      />
+
       {/* 1. Royal Purple Store Identity Banner Card - Full Width */}
       <SellerStoreBannerCard
         storeName={storeName}
@@ -132,10 +183,10 @@ export default function SellerDashboard() {
 
       {/* 2. Today's Overview (2x2 on Mobile, 4x1 on Desktop) */}
       <SellerTodayOverview
-        ordersCount={stats?.totalOrders ?? 32}
-        revenueAmount={stats?.totalRevenue ?? 8450}
-        viewsCount={stats?.totalUser ? stats.totalUser * 24 : 512}
-        newCustomersCount={stats?.totalUser ?? 21}
+        ordersCount={stats?.totalOrders ?? 0}
+        revenueAmount={stats?.totalRevenue ?? 0}
+        viewsCount={stats?.totalUser ? stats.totalUser * 12 : 0}
+        newCustomersCount={stats?.totalUser ?? 0}
       />
 
       {/* 3. Responsive Desktop / Mobile Layout Split */}

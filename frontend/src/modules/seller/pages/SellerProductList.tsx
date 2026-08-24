@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { getProducts, deleteProduct, Product } from "../../../services/api/productService";
 import {
@@ -11,13 +11,18 @@ import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerDataTable, ColumnDef } from "../components/common/SellerDataTable";
 import { SellerButton } from "../components/common/SellerButton";
 import { SellerModal } from "../components/common/SellerModal";
+import { useToast } from "../../../context/ToastContext";
 
 export default function SellerProductList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showToast } = useToast();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Products");
   const [stockFilter, setStockFilter] = useState("All Products");
@@ -27,12 +32,20 @@ export default function SellerProductList() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [totalPages, setTotalPages] = useState(1);
   const [allCategories, setAllCategories] = useState<apiCategory[]>([]);
-  const { user } = useAuth();
 
   // Delete modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 300ms Search Debouncing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // Fetch categories
   useEffect(() => {
@@ -50,7 +63,7 @@ export default function SellerProductList() {
   }, []);
 
   // Fetch products
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -61,8 +74,8 @@ export default function SellerProductList() {
         sortOrder: sortDirection,
       };
 
-      if (searchTerm) {
-        params.search = searchTerm;
+      if (debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim();
       }
       if (categoryFilter) {
         params.category = categoryFilter;
@@ -87,32 +100,25 @@ export default function SellerProductList() {
           setTotalPages(Math.ceil(response.data.length / rowsPerPage));
         }
       } else {
-        setError(response.message || "Failed to fetch products");
+        const msg = response.message || "Failed to fetch products";
+        setError(msg);
+        showToast(msg, "error");
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.message || err.message || "Failed to fetch products"
-      );
+      const msg = err.response?.data?.message || err.message || "Failed to fetch products";
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, rowsPerPage, sortColumn, sortDirection, debouncedSearch, categoryFilter, statusFilter, stockFilter, showToast]);
 
   useEffect(() => {
     fetchProducts();
-  }, [
-    currentPage,
-    rowsPerPage,
-    searchTerm,
-    categoryFilter,
-    statusFilter,
-    stockFilter,
-    sortColumn,
-    sortDirection,
-  ]);
+  }, [fetchProducts]);
 
-  const handleDeleteClick = (productId: string) => {
-    setProductToDelete(productId);
+  const handleDeleteClick = (productId: string, productName: string) => {
+    setProductToDelete({ id: productId, name: productName });
     setDeleteModalOpen(true);
   };
 
@@ -121,19 +127,22 @@ export default function SellerProductList() {
 
     setDeleting(true);
     try {
-      const response = await deleteProduct(productToDelete);
+      const response = await deleteProduct(productToDelete.id);
       if (
         response.success ||
         response.message === "Product deleted successfully"
       ) {
-        fetchProducts();
+        showToast(`Product "${productToDelete.name}" deleted successfully`, "success");
         setDeleteModalOpen(false);
         setProductToDelete(null);
+        fetchProducts();
       } else {
-        alert(response.message || "Failed to delete product");
+        const msg = response.message || "Failed to delete product";
+        showToast(msg, "error");
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || error.message || "Error deleting product");
+      const msg = error.response?.data?.message || error.message || "Error deleting product";
+      showToast(msg, "error");
     } finally {
       setDeleting(false);
     }
@@ -144,10 +153,29 @@ export default function SellerProductList() {
   };
 
   // Flatten products with variations for display
-  const allVariations = products.flatMap((product) => {
-    if (!product.variations || product.variations.length === 0) {
-      return [{
-        variationId: `${product._id}-default`,
+  const allVariations = useMemo(() => {
+    return products.flatMap((product) => {
+      if (!product.variations || product.variations.length === 0) {
+        return [{
+          variationId: `${product._id}-default`,
+          productName: product.productName,
+          sellerName: user?.storeName || "",
+          productImage:
+            product.mainImage ||
+            product.mainImageUrl ||
+            "/assets/product-placeholder.jpg",
+          brandName: (product.brand as any)?.name || "-",
+          category: (product.category as any)?.name || "-",
+          subCategory: (product.subcategory as any)?.name || "-",
+          price: (product as any).price || 0,
+          discPrice: (product as any).discPrice || 0,
+          variation: "Default",
+          isPopular: product.popular,
+          productId: product._id,
+        }];
+      }
+      return product.variations.map((variation, index) => ({
+        variationId: variation._id || `${product._id}-${index}`,
         productName: product.productName,
         sellerName: user?.storeName || "",
         productImage:
@@ -157,50 +185,35 @@ export default function SellerProductList() {
         brandName: (product.brand as any)?.name || "-",
         category: (product.category as any)?.name || "-",
         subCategory: (product.subcategory as any)?.name || "-",
-        price: (product as any).price || 0,
-        discPrice: (product as any).discPrice || 0,
-        variation: "Default",
+        price: variation.price,
+        discPrice: variation.discPrice,
+        variation:
+          variation.title || variation.value || variation.name || "Default",
         isPopular: product.popular,
         productId: product._id,
-      }];
-    }
-    return product.variations.map((variation, index) => ({
-      variationId: variation._id || `${product._id}-${index}`,
-      productName: product.productName,
-      sellerName: user?.storeName || "",
-      productImage:
-        product.mainImage ||
-        product.mainImageUrl ||
-        "/assets/product-placeholder.jpg",
-      brandName: (product.brand as any)?.name || "-",
-      category: (product.category as any)?.name || "-",
-      subCategory: (product.subcategory as any)?.name || "-",
-      price: variation.price,
-      discPrice: variation.discPrice,
-      variation:
-        variation.title || variation.value || variation.name || "Default",
-      isPopular: product.popular,
-      productId: product._id,
-    }));
-  });
-
-  const filteredVariations = allVariations;
-
-  if (sortColumn) {
-    filteredVariations.sort((a, b) => {
-      let aVal: any = a[sortColumn as keyof typeof a];
-      let bVal: any = b[sortColumn as keyof typeof b];
-      if (typeof aVal === "string") {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
-      }
-      if (sortDirection === "asc") {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
+      }));
     });
-  }
+  }, [products, user?.storeName]);
+
+  const filteredVariations = useMemo(() => {
+    const list = [...allVariations];
+    if (sortColumn) {
+      list.sort((a, b) => {
+        let aVal: any = a[sortColumn as keyof typeof a];
+        let bVal: any = b[sortColumn as keyof typeof b];
+        if (typeof aVal === "string") {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+        if (sortDirection === "asc") {
+          return aVal > bVal ? 1 : -1;
+        } else {
+          return aVal < bVal ? 1 : -1;
+        }
+      });
+    }
+    return list;
+  }, [allVariations, sortColumn, sortDirection]);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -212,7 +225,10 @@ export default function SellerProductList() {
   };
 
   const handleExport = () => {
-    if (filteredVariations.length === 0) return;
+    if (filteredVariations.length === 0) {
+      showToast("No products available to export", "info");
+      return;
+    }
     exportToCsv(
       ["Product Name", "Category", "SubCategory", "Price", "Discount Price", "Variation"],
       filteredVariations.map((v) => [
@@ -223,8 +239,22 @@ export default function SellerProductList() {
         v.discPrice,
         v.variation,
       ]),
-      "products"
+      "products_catalog"
     );
+    showToast("Products catalog exported successfully!", "success");
+  };
+
+  const hasActiveFilters = Boolean(
+    searchTerm || categoryFilter || statusFilter !== "All Products" || stockFilter !== "All Products"
+  );
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setDebouncedSearch("");
+    setCategoryFilter("");
+    setStatusFilter("All Products");
+    setStockFilter("All Products");
+    setCurrentPage(1);
   };
 
   const columns: ColumnDef<any>[] = [
@@ -295,23 +325,23 @@ export default function SellerProductList() {
       header: "Actions",
       align: "right",
       render: (v) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-1.5">
           <button
             onClick={() => handleEdit(v.productId)}
-            className="p-1.5 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            className="p-2 rounded-xl text-slate-600 hover:text-purple-700 hover:bg-purple-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center border border-transparent hover:border-purple-200"
             title="Edit Product"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
           </button>
           <button
-            onClick={() => handleDeleteClick(v.productId)}
-            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            onClick={() => handleDeleteClick(v.productId, v.productName)}
+            className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center border border-transparent hover:border-rose-200"
             title="Delete Product"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
@@ -322,31 +352,42 @@ export default function SellerProductList() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <SellerPageHeader
         title="Products Catalog"
         subtitle="Manage product listings, variations, pricing, and availability."
         breadcrumbs={[{ label: "Products List" }]}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <SellerButton
               variant="outline"
               size="md"
               onClick={handleExport}
               disabled={filteredVariations.length === 0}
+              className="min-h-[44px]"
               icon={
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
                 </svg>
               }
             >
-              Export
+              Export CSV
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => navigate("/seller/stock-management")}
+              className="min-h-[44px]"
+              icon={<span>📊</span>}
+            >
+              Stock Management
             </SellerButton>
             <SellerButton
               variant="primary"
               size="md"
               onClick={() => navigate("/seller/product/add")}
+              className="min-h-[44px]"
               icon={
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -364,17 +405,23 @@ export default function SellerProductList() {
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {/* Search Input */}
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 relative">
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search product title, SKU, or brand..."
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-purple-600 min-h-[40px]"
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold p-1 min-h-[32px] min-w-[32px]"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* Category Dropdown */}
@@ -385,7 +432,7 @@ export default function SellerProductList() {
                 setCategoryFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[40px]"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
             >
               <option value="">All Categories</option>
               {allCategories.map((c) => (
@@ -404,7 +451,7 @@ export default function SellerProductList() {
                 setStockFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[40px]"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
             >
               <option value="All Products">All Stock</option>
               <option value="In Stock">In Stock</option>
@@ -412,6 +459,19 @@ export default function SellerProductList() {
             </select>
           </div>
         </div>
+
+        {hasActiveFilters && (
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+            <span className="text-slate-500">Active filters applied</span>
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="text-purple-600 hover:text-purple-800 font-bold hover:underline"
+            >
+              Reset all filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Products Data Table with Mobile Card View */}
@@ -433,7 +493,7 @@ export default function SellerProductList() {
           setCurrentPage(1);
         }}
         emptyTitle="No products found"
-        emptyDescription="Try adjusting your filters or click '+ Add Product' to create a new item."
+        emptyDescription={error || "Try adjusting your filters or click '+ Add Product' to create a new item."}
         renderMobileCard={(v) => (
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -469,9 +529,10 @@ export default function SellerProductList() {
             <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
               <SellerButton
                 variant="outline"
-                size="sm"
+                size="md"
                 fullWidth
                 onClick={() => handleEdit(v.productId)}
+                className="min-h-[44px]"
                 icon={
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -483,9 +544,10 @@ export default function SellerProductList() {
               </SellerButton>
               <SellerButton
                 variant="danger"
-                size="sm"
+                size="md"
                 fullWidth
-                onClick={() => handleDeleteClick(v.productId)}
+                onClick={() => handleDeleteClick(v.productId, v.productName)}
+                className="min-h-[44px]"
                 icon={
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3 6 5 6 21 6" />
@@ -500,7 +562,7 @@ export default function SellerProductList() {
         )}
       />
 
-      {/* Delete Product Confirmation Modal */}
+      {/* Delete Product Confirmation Modal with Preview */}
       <SellerModal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
@@ -514,6 +576,7 @@ export default function SellerProductList() {
               size="md"
               onClick={() => setDeleteModalOpen(false)}
               disabled={deleting}
+              className="min-h-[44px]"
             >
               Cancel
             </SellerButton>
@@ -522,15 +585,23 @@ export default function SellerProductList() {
               size="md"
               onClick={confirmDelete}
               isLoading={deleting}
+              className="min-h-[44px]"
             >
               Delete Product
             </SellerButton>
           </div>
         }
       >
-        <p className="text-xs sm:text-sm text-slate-600">
-          The product will be removed from your catalog and will no longer be visible to customers on HelloLocal.
-        </p>
+        <div className="space-y-3">
+          {productToDelete && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs sm:text-sm font-bold text-rose-900">
+              Product: <span className="font-black text-rose-950">{productToDelete.name}</span>
+            </div>
+          )}
+          <p className="text-xs sm:text-sm text-slate-600">
+            The product and all its variations will be permanently removed from your storefront and will no longer be available for customer purchase.
+          </p>
+        </div>
       </SellerModal>
     </div>
   );

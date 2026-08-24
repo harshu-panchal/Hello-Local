@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
+import { useToast } from '../../../context/ToastContext';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerCard } from '../components/common/SellerCard';
 import { SellerButton } from '../components/common/SellerButton';
@@ -8,59 +9,96 @@ import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
 
 export default function SellerProfile() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await getSellerProfile();
-        if (active) {
-          if (res?.success && res.data) setProfile(res.data);
-          else setError(res?.message || 'Failed to load profile');
+  const fetchProfile = useCallback(async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError('');
+
+      const res = await getSellerProfile();
+      if (res?.success && res.data) {
+        setProfile(res.data);
+        if (isManualRefresh) {
+          showToast('Profile refreshed successfully', 'success');
         }
-      } catch (err: any) {
-        if (active) setError(err.response?.data?.message || err.message || 'Failed to load profile');
-      } finally {
-        if (active) setLoading(false);
+      } else {
+        const msg = res?.message || 'Failed to load profile';
+        setError(msg);
+        showToast(msg, 'error');
       }
-    })();
-    return () => { active = false; };
-  }, []);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to load profile';
+      setError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const maskAccount = (acc?: string) =>
     acc && acc.length > 4 ? `••••••••${acc.slice(-4)}` : acc || '—';
 
   const InfoRow = ({ label, value }: { label: string; value?: any }) => (
-    <div className="flex flex-col sm:flex-row sm:items-center py-2.5 border-b border-slate-100 last:border-0 gap-1 sm:gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center py-3 border-b border-slate-100 last:border-0 gap-1 sm:gap-4">
       <span className="w-full sm:w-48 text-xs font-bold text-slate-500">{label}</span>
       <span className="text-xs sm:text-sm font-semibold text-slate-900 break-words">{value || '—'}</span>
     </div>
   );
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 sm:space-y-6 pb-12">
       {/* Header */}
       <SellerPageHeader
         title="Seller Store Profile"
         subtitle="Manage your business information, public store profile, and payout details."
         breadcrumbs={[{ label: "Profile" }]}
         action={
-          <SellerButton
-            variant="primary"
-            size="md"
-            onClick={() => navigate('/seller/account-settings')}
-            icon={
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-            }
-          >
-            Edit Settings
-          </SellerButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => fetchProfile(true)}
+              isLoading={refreshing}
+              className="min-h-[44px]"
+              icon={<span>🔄</span>}
+            >
+              Refresh
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => navigate('/seller/wallet')}
+              className="min-h-[44px]"
+              icon={<span>💳</span>}
+            >
+              Wallet & Payouts
+            </SellerButton>
+            <SellerButton
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/seller/account-settings')}
+              className="min-h-[44px]"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              }
+            >
+              Edit Settings
+            </SellerButton>
+          </div>
         }
       />
 
@@ -104,7 +142,7 @@ export default function SellerProfile() {
               variant="outline"
               size="md"
               onClick={() => navigate('/seller/account-settings')}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto min-h-[44px]"
             >
               Account Settings
             </SellerButton>

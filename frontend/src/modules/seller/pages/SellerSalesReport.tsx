@@ -1,13 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getSalesReport, SalesReport } from '../../../services/api/reportService';
+import { exportToCsv } from '../../../utils/exportCsv';
+import { useToast } from '../../../context/ToastContext';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerTabs } from '../components/common/SellerTabs';
 import { SellerFilterBar } from '../components/common/SellerFilterBar';
 import { SellerDataTable, ColumnDef } from '../components/common/SellerDataTable';
+import { SellerStatCard } from '../components/common/SellerStatCard';
+import { SellerButton } from '../components/common/SellerButton';
 
 export default function SellerSalesReport() {
+  const { showToast } = useToast();
   const [reports, setReports] = useState<SalesReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [channel, setChannel] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
   const [paymentMethod, setPaymentMethod] = useState<string>('All');
@@ -23,10 +29,12 @@ export default function SellerSalesReport() {
     pages: 0,
   });
 
-  const fetchReports = useCallback(async () => {
+  const fetchReports = useCallback(async (isManualRefresh = false) => {
     try {
-      setLoading(true);
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
+
       const response = await getSalesReport({
         channel: channel === 'ALL' ? undefined : channel,
         paymentMethod: paymentMethod === 'All' ? undefined : paymentMethod,
@@ -45,15 +53,23 @@ export default function SellerSalesReport() {
           total: response.pagination.total,
           pages: response.pagination.pages,
         });
+        if (isManualRefresh) {
+          showToast('Sales report updated', 'success');
+        }
       } else {
-        setError(response.message || 'Failed to fetch sales reports');
+        const msg = response.message || 'Failed to fetch sales reports';
+        setError(msg);
+        showToast(msg, 'error');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error loading sales reports');
+      const msg = err.response?.data?.message || 'Error loading sales reports';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [channel, paymentMethod, fromDate, toDate, searchTerm, currentPage, rowsPerPage, sortColumn, sortDirection]);
+  }, [channel, paymentMethod, fromDate, toDate, searchTerm, currentPage, rowsPerPage, sortColumn, sortDirection, showToast]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -62,6 +78,42 @@ export default function SellerSalesReport() {
 
     return () => clearTimeout(timeoutId);
   }, [fetchReports]);
+
+  // Aggregate KPI summary metrics
+  const summaryMetrics = useMemo(() => {
+    const totalRev = reports.reduce((sum, r) => sum + (r.total || (r as any).subtotal || 0), 0);
+    const totalQty = reports.reduce((sum, r) => sum + (r.quantity || 1), 0);
+    const posRev = reports.filter(r => r.channel === 'OFFLINE').reduce((sum, r) => sum + (r.total || (r as any).subtotal || 0), 0);
+    const onlineRev = reports.filter(r => r.channel !== 'OFFLINE').reduce((sum, r) => sum + (r.total || (r as any).subtotal || 0), 0);
+
+    return { totalRev, totalQty, posRev, onlineRev };
+  }, [reports]);
+
+  const handleExport = () => {
+    if (reports.length === 0) {
+      showToast('No sales records to export', 'info');
+      return;
+    }
+
+    exportToCsv(
+      ['Order / Bill #', 'Date', 'Channel', 'Product Name', 'Variant', 'Quantity', 'Unit Price (₹)', 'Tax (₹)', 'Payment Method', 'Status', 'Total (₹)'],
+      reports.map((r: any) => [
+        r.orderNumber || r.billNumber || r.orderId,
+        formatDate(r.date),
+        r.channel === 'OFFLINE' ? 'POS (Offline)' : 'Online Order',
+        r.product || r.productName,
+        r.variant || r.variantTitle || 'Standard',
+        r.quantity || 1,
+        (r.price || 0).toFixed(2),
+        (r.taxAmount || 0).toFixed(2),
+        r.paymentMethod || 'N/A',
+        r.status || 'Delivered',
+        (r.total || r.subtotal || 0).toFixed(2),
+      ]),
+      'seller_sales_report'
+    );
+    showToast('Sales report exported successfully!', 'success');
+  };
 
   const handleSort = (column: string) => {
     const columnMap: Record<string, string> = {
@@ -124,13 +176,13 @@ export default function SellerSalesReport() {
       header: 'Channel',
       render: (r) => (
         <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
             r.channel === 'OFFLINE'
               ? 'bg-purple-100 text-purple-800 border border-purple-200'
               : 'bg-sky-100 text-sky-800 border border-sky-200'
           }`}
         >
-          {r.channel === 'OFFLINE' ? 'Offline (POS)' : 'Online Order'}
+          {r.channel === 'OFFLINE' ? 'POS (In-Store)' : 'Online App'}
         </span>
       ),
     },
@@ -172,13 +224,66 @@ export default function SellerSalesReport() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <SellerPageHeader
         title="Sales & Revenue Reports"
         subtitle="Analyze detailed product sales performance across Online and Offline POS channels."
         breadcrumbs={[{ label: "Sales Report" }]}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={() => fetchReports(true)}
+              isLoading={refreshing}
+              className="min-h-[44px]"
+              icon={<span>🔄</span>}
+            >
+              Refresh
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
+              onClick={handleExport}
+              disabled={reports.length === 0}
+              className="min-h-[44px]"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+              }
+            >
+              Export CSV
+            </SellerButton>
+          </div>
+        }
       />
+
+      {/* KPI Overview Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <SellerStatCard
+          label="Page Revenue"
+          value={`₹${summaryMetrics.totalRev.toFixed(2)}`}
+          variant="purple"
+          subtext={`${pagination.total} Total Ledger Entries`}
+        />
+        <SellerStatCard
+          label="Units Sold"
+          value={summaryMetrics.totalQty.toString()}
+          variant="default"
+        />
+        <SellerStatCard
+          label="POS Store Share"
+          value={`₹${summaryMetrics.posRev.toFixed(2)}`}
+          variant="emerald"
+        />
+        <SellerStatCard
+          label="Online App Share"
+          value={`₹${summaryMetrics.onlineRev.toFixed(2)}`}
+          variant="default"
+        />
+      </div>
 
       {/* Channel Switcher Tabs & Filters */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-4">
@@ -204,7 +309,7 @@ export default function SellerSalesReport() {
                 setPaymentMethod(e.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[36px]"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 min-h-[44px]"
             >
               <option value="All">All Modes</option>
               <option value="Cash">Cash</option>
@@ -220,7 +325,7 @@ export default function SellerSalesReport() {
         <SellerFilterBar
           searchQuery={searchTerm}
           onSearchChange={(q) => setSearchTerm(q)}
-          searchPlaceholder="Search by Order #, product name, or variant..."
+          searchPlaceholder="Search by Order #, Bill #, product name, or variant..."
           dateRange={{ startDate: fromDate, endDate: toDate }}
           onDateRangeChange={(r) => {
             setFromDate(r.startDate);

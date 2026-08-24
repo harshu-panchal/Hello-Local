@@ -1,17 +1,33 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getCategories, Category } from '../../../services/api/categoryService';
 import { exportToCsv } from '../../../utils/exportCsv';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerFilterBar } from '../components/common/SellerFilterBar';
 import { SellerDataTable, ColumnDef } from '../components/common/SellerDataTable';
+import { SellerButton } from '../components/common/SellerButton';
+import { useToast } from '../../../context/ToastContext';
 
 export default function SellerCategory() {
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // 300ms Search Debouncing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // Fetch categories from API
   useEffect(() => {
@@ -20,29 +36,33 @@ export default function SellerCategory() {
       setError('');
       try {
         const params: any = {};
-        if (searchTerm.trim()) {
-          params.search = searchTerm.trim();
+        if (debouncedSearch.trim()) {
+          params.search = debouncedSearch.trim();
         }
 
         const response = await getCategories(params);
         if (response.success && response.data) {
           setCategories(response.data);
         } else {
-          setError(response.message || 'Failed to fetch categories');
+          const msg = response.message || 'Failed to fetch categories';
+          setError(msg);
+          showToast(msg, 'error');
         }
       } catch (err: any) {
-        setError(err.response?.data?.message || err.message || 'Failed to fetch categories');
+        const msg = err.response?.data?.message || err.message || 'Failed to fetch categories';
+        setError(msg);
+        showToast(msg, 'error');
       } finally {
         setLoading(false);
       }
     };
 
     fetchCategories();
-  }, [searchTerm]);
+  }, [debouncedSearch, showToast]);
 
   // Client-side filtering for display
   const filteredCategories = categories.filter(cat =>
-    cat.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
+    cat.name.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredCategories.length / rowsPerPage));
@@ -52,12 +72,11 @@ export default function SellerCategory() {
     safePage * rowsPerPage
   );
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, rowsPerPage]);
-
   const handleExport = () => {
-    if (filteredCategories.length === 0) return;
+    if (filteredCategories.length === 0) {
+      showToast('No categories available to export', 'info');
+      return;
+    }
     exportToCsv(
       ['ID', 'Category Name', 'Total Subcategory'],
       filteredCategories.map(cat => [
@@ -67,6 +86,7 @@ export default function SellerCategory() {
       ]),
       'categories'
     );
+    showToast('Categories exported successfully!', 'success');
   };
 
   const columns: ColumnDef<Category>[] = [
@@ -99,20 +119,36 @@ export default function SellerCategory() {
       header: 'Total Subcategories',
       align: 'center',
       render: (cat) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-          {cat.totalSubcategory || 0} Subcategories
-        </span>
+        <button
+          type="button"
+          onClick={() => navigate('/seller/subcategory')}
+          className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors min-h-[32px]"
+          title="View mapped subcategories"
+        >
+          {cat.totalSubcategory || 0} Subcategories →
+        </button>
       ),
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <SellerPageHeader
         title="Categories"
         subtitle="Browse available store categories and view attached subcategories."
         breadcrumbs={[{ label: "Categories" }]}
+        action={
+          <SellerButton
+            variant="outline"
+            size="md"
+            onClick={() => navigate('/seller/subcategory')}
+            className="min-h-[44px]"
+            icon={<span>📂</span>}
+          >
+            View Subcategories
+          </SellerButton>
+        }
       />
 
       {/* Filter Toolbar */}
@@ -120,6 +156,8 @@ export default function SellerCategory() {
         searchQuery={searchTerm}
         onSearchChange={(q) => setSearchTerm(q)}
         searchPlaceholder="Search categories..."
+        onClear={searchTerm ? () => setSearchTerm('') : undefined}
+        hasActiveFilters={Boolean(searchTerm)}
         onExport={handleExport}
         exportLabel="Export CSV"
       />
@@ -157,9 +195,13 @@ export default function SellerCategory() {
               </div>
             </div>
 
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 flex-shrink-0">
-              {cat.totalSubcategory || 0} Subcats
-            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/seller/subcategory')}
+              className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 flex-shrink-0 min-h-[36px]"
+            >
+              {cat.totalSubcategory || 0} Subcats →
+            </button>
           </div>
         )}
       />
