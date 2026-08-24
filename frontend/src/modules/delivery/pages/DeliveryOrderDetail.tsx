@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getOrderDetails, updateOrderStatus, getSellerLocationsForOrder, sendDeliveryOtp, verifyDeliveryOtp, checkSellerProximity, confirmSellerPickup, checkCustomerProximity } from '../../../services/api/delivery/deliveryService';
 import deliveryIcon from '@assets/deliveryboy/deliveryIcon.png';
 import GoogleMapsTracking from '../../../components/GoogleMapsTracking';
+import { useToast } from '../../../context/ToastContext';
 
 // Helper to get delivery icon URL (works in both dev and production)
 const getDeliveryIconUrl = () => {
@@ -90,6 +91,7 @@ type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked up' | 'Out f
 export default function DeliveryOrderDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [order, setOrder] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -162,9 +164,9 @@ export default function DeliveryOrderDetail() {
             setOtpSending(true);
             await sendDeliveryOtp(id);
             setShowOtpInput(true);
-            alert('OTP sent to customer successfully');
+            showToast('OTP sent to customer successfully', 'success');
         } catch (err: any) {
-            alert(err.message || 'Failed to send OTP');
+            showToast(err.message || 'Failed to send OTP', 'error');
         } finally {
             setOtpSending(false);
         }
@@ -172,18 +174,18 @@ export default function DeliveryOrderDetail() {
 
     const handleVerifyOtp = async () => {
         if (!id || !otpValue) {
-            alert('Please enter OTP');
+            showToast('Please enter the 4-digit OTP', 'error');
             return;
         }
         try {
             setOtpVerifying(true);
             const result = await verifyDeliveryOtp(id, otpValue);
-            alert(result.message || 'OTP verified successfully. Order marked as delivered.');
+            showToast(result.message || 'OTP verified successfully. Order marked as delivered.', 'success');
             await fetchOrder(); // Refresh order data
             setShowOtpInput(false);
             setOtpValue('');
         } catch (err: any) {
-            alert(err.message || 'Failed to verify OTP');
+            showToast(err.message || 'Failed to verify OTP', 'error');
         } finally {
             setOtpVerifying(false);
         }
@@ -192,17 +194,17 @@ export default function DeliveryOrderDetail() {
     // Handle seller pickup confirmation
     const handleSellerPickup = async (sellerId: string) => {
         if (!id || !deliveryBoyLocation) {
-            alert('Location not available');
+            showToast('Current GPS location not available', 'error');
             return;
         }
 
         try {
             setPickupLoading(prev => ({ ...prev, [sellerId]: true }));
             const result = await confirmSellerPickup(id, sellerId, deliveryBoyLocation.lat, deliveryBoyLocation.lng);
-            alert(result.message || 'Pickup confirmed successfully');
+            showToast(result.message || 'Pickup confirmed successfully', 'success');
             await fetchOrder(); // Refresh order data
         } catch (err: any) {
-            alert(err.message || 'Failed to confirm pickup');
+            showToast(err.message || 'Failed to confirm pickup', 'error');
         } finally {
             setPickupLoading(prev => ({ ...prev, [sellerId]: false }));
         }
@@ -382,7 +384,7 @@ export default function DeliveryOrderDetail() {
                 socket.on('order-cancelled', (data: any) => {
                     if (isMounted && data.orderId === id) {
                         console.log('Order cancelled event received:', data);
-                        alert(data.message || 'Order has been cancelled');
+                        showToast(data.message || 'Order has been cancelled', 'info');
                         // Update order status locally
                         setOrder((prev: any) => prev ? { ...prev, status: 'Cancelled' } : null);
                         // Optional: Navigate back or force re-fetch
@@ -515,12 +517,14 @@ export default function DeliveryOrderDetail() {
             // Verify the update was successful and update local state
             if (updatedOrder && updatedOrder.data) {
                 setOrder(updatedOrder.data);
+                showToast(`Order status updated to ${newStatus}`, 'success');
             } else {
                 // Fallback - re-fetch everything
                 await fetchOrder();
+                showToast(`Order status updated to ${newStatus}`, 'success');
             }
         } catch (err: any) {
-            alert(err.message || "Failed to update status");
+            showToast(err.message || "Failed to update status", 'error');
             setLoading(false);
         }
     };
