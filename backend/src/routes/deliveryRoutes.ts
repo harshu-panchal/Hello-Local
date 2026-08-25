@@ -23,8 +23,9 @@ router.put("/notifications/:id/read", deliveryNotificationController.markNotific
 // Dashboard Stats
 router.get("/dashboard/stats", deliveryDashboardController.getDashboardStats);
 
-// Help & Support
+// Help & Support & Legal Policy
 router.get("/help", deliveryDashboardController.getHelpSupport);
+router.get("/policy", deliveryDashboardController.getDeliveryAppPolicy);
 
 // Orders
 router.get("/orders/history", deliveryOrderController.getAllOrdersHistory);

@@ -143,7 +143,7 @@ export default function DeliverySettings() {
                 <button
                   onClick={() => option.onChange(!option.value)}
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none min-h-[44px] min-w-[48px] justify-center ${
-                    option.value ? 'bg-emerald-600' : 'bg-slate-300'
+                    option.value ? 'bg-rose-600' : 'bg-slate-300'
                   }`}
                   aria-label={`Toggle ${option.title}`}
                 >

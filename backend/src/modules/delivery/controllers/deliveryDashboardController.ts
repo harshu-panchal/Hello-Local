@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Delivery from "../../../models/Delivery";
 import Order from "../../../models/Order";
+import AppSettings from "../../../models/AppSettings";
 import mongoose from "mongoose";
 
 /**
@@ -319,3 +320,43 @@ export const getHelpSupport = asyncHandler(
     });
   },
 );
+
+/**
+ * Get Delivery Partner App Legal Policy
+ * GET /api/v1/delivery/policy
+ */
+export const getDeliveryAppPolicy = asyncHandler(
+  async (_req: Request, res: Response) => {
+    const settings = await AppSettings.findOne();
+    const fallbackPolicy = `Hello Local Delivery Partner Terms of Service & App Policy
+
+1. Partner Code of Conduct
+All delivery partners must maintain professional, courteous behavior when interacting with customers and merchant staff.
+
+2. Road Safety & Traffic Regulations
+Delivery partners must strictly obey local road safety rules, wear approved safety helmets, and adhere to speed limits at all times.
+
+3. Secure Order Fulfillment & Verification
+Always confirm the 4-digit Customer Delivery OTP prior to marking any order as Delivered. For Cash on Delivery (COD) orders, verify that the exact cash amount is collected.
+
+4. Financial Settlements & Wallet Integrity
+Earnings and commission payouts are processed directly into your registered bank account in accordance with verified KYC documentation. COD collections must be settled in timely fashion according to platform terms.
+
+5. Support & Emergency Assistance
+For any operational difficulties, navigation issues, or customer escalations, contact the dedicated 24/7 Delivery Support Helpline immediately.`;
+
+    const policy = settings?.deliveryAppPolicy || fallbackPolicy;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        policy,
+        version: "1.0.0",
+        build: "2026.08.25",
+        platform: "Hello Local Delivery Partner Network",
+        lastUpdated: settings?.updatedAt || new Date(),
+      },
+    });
+  },
+);
+

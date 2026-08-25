@@ -124,7 +124,7 @@ export default function DeliveryHelp() {
                     <p className="text-slate-500 text-[11px] font-medium">{option.value}</p>
                   </div>
                 </div>
-                <span className="text-emerald-700 font-black text-xs bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                <span className="text-rose-700 font-black text-xs bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
                   Tap to Connect
                 </span>
               </button>
@@ -146,7 +146,7 @@ export default function DeliveryHelp() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search delivery questions..."
-              className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all min-h-[44px]"
+              className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-rose-500 outline-none transition-all min-h-[44px]"
             />
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
             {searchQuery && (
@@ -171,7 +171,7 @@ export default function DeliveryHelp() {
                       className="w-full flex items-center justify-between text-left gap-2 py-1.5 focus:outline-none min-h-[44px]"
                     >
                       <p className="text-slate-900 text-xs sm:text-sm font-bold">{item.question}</p>
-                      <span className={`text-slate-400 text-xs font-bold transition-transform duration-200 ${isOpen ? 'rotate-180 text-emerald-600' : ''}`}>
+                      <span className={`text-slate-400 text-xs font-bold transition-transform duration-200 ${isOpen ? 'rotate-180 text-rose-600' : ''}`}>
                         ▼
                       </span>
                     </button>
@@ -200,7 +200,7 @@ export default function DeliveryHelp() {
             else if (email) window.location.href = `mailto:${email.value}`;
             else showToast('Support line available during operational hours', 'info');
           }}
-          className="w-full bg-emerald-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-emerald-700 transition-all shadow-xs active:scale-[0.98] min-h-[44px]"
+          className="w-full bg-rose-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-rose-700 transition-all shadow-xs active:scale-[0.98] min-h-[44px]"
         >
           📞 Call Partner Helpline
         </button>

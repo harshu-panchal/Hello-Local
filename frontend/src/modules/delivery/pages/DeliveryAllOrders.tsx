@@ -140,7 +140,7 @@ export default function DeliveryAllOrders() {
                     <div className="text-right">
                       <span className="text-slate-900 font-black text-sm">₹{Number(order.totalAmount || 0).toLocaleString('en-IN')}</span>
                       {order.deliveryEarning > 0 && (
-                        <p className="text-emerald-600 text-[11px] font-bold">+ ₹{order.deliveryEarning} Earned</p>
+                        <p className="text-rose-600 text-[11px] font-bold">+ ₹{order.deliveryEarning} Earned</p>
                       )}
                     </div>
                   </div>

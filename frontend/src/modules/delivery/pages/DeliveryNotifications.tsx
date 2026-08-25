@@ -90,7 +90,7 @@ export default function DeliveryNotifications() {
       case 'Order':
       case 'order':
         return (
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 border border-emerald-100">
+          <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0 border border-rose-100">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
               <line x1="3" y1="6" x2="21" y2="6" />
@@ -172,7 +172,7 @@ export default function DeliveryNotifications() {
             <div>
               <h2 className="text-slate-900 text-xl font-black tracking-tight">Notifications</h2>
               {unreadCount > 0 && (
-                <p className="text-[11px] text-emerald-700 font-bold">{unreadCount} unread alert{unreadCount !== 1 ? 's' : ''}</p>
+                <p className="text-[11px] text-rose-700 font-bold">{unreadCount} unread alert{unreadCount !== 1 ? 's' : ''}</p>
               )}
             </div>
           </div>
@@ -182,7 +182,7 @@ export default function DeliveryNotifications() {
               <button
                 onClick={handleMarkAllAsRead}
                 disabled={markingAll}
-                className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all min-h-[40px]"
+                className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition-all min-h-[40px]"
               >
                 {markingAll ? 'Clearing...' : 'Mark all read'}
               </button>
@@ -225,7 +225,7 @@ export default function DeliveryNotifications() {
                 className={`rounded-3xl p-4 shadow-2xs border transition-all cursor-pointer active:scale-[0.99] ${
                   notification.isRead
                     ? 'bg-white border-slate-200/80 hover:shadow-xs'
-                    : 'bg-emerald-50/60 border-emerald-200/80 hover:bg-emerald-50'
+                    : 'bg-rose-50/60 border-rose-200/80 hover:bg-rose-50'
                 }`}
               >
                 <div className="flex gap-3 items-start">
@@ -236,7 +236,7 @@ export default function DeliveryNotifications() {
                         {notification.title}
                       </h3>
                       {!notification.isRead && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 flex-shrink-0 animate-pulse" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-600 flex-shrink-0 animate-pulse" />
                       )}
                     </div>
                     <p className="text-slate-600 text-xs mt-1 leading-relaxed line-clamp-2 font-medium">
@@ -245,7 +245,7 @@ export default function DeliveryNotifications() {
                     <div className="flex items-center justify-between pt-2 text-[10px] text-slate-400 font-medium">
                       <span>{formatTime(notification.createdAt)}</span>
                       {notification.link || notification.type === 'Order' || notification.type === 'order' ? (
-                        <span className="text-emerald-700 font-bold hover:underline">View Order →</span>
+                        <span className="text-rose-700 font-bold hover:underline">View Order →</span>
                       ) : null}
                     </div>
                   </div>

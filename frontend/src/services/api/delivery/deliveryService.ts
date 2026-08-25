@@ -313,3 +313,13 @@ export const markAllNotificationsRead = async () => {
     throw handleApiError(error);
   }
 };
+
+export const getDeliveryAppPolicy = async () => {
+  try {
+    const response = await api.get(`${BASE_URL}/policy`);
+    return response.data.data;
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};
+

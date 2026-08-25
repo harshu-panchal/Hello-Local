@@ -296,7 +296,7 @@ export default function DeliveryDashboard() {
         </div>
         <button
           onClick={() => fetchStats(true)}
-          className="px-4 py-2 bg-emerald-600 text-white rounded-2xl font-bold text-xs shadow-xs"
+          className="px-4 py-2 bg-rose-600 text-white rounded-2xl font-bold text-xs shadow-xs hover:bg-rose-700 transition-colors"
         >
           🔄 Try Again
         </button>
@@ -349,9 +349,9 @@ export default function DeliveryDashboard() {
         {/* Wallet Balance Card */}
         <div
           onClick={() => navigate("/delivery/wallet")}
-          className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-5 text-white shadow-xs cursor-pointer active:scale-[0.99] transition-all min-h-[44px]">
+          className="bg-gradient-to-br from-rose-600 to-pink-700 rounded-3xl p-5 text-white shadow-xs cursor-pointer active:scale-[0.99] transition-all min-h-[44px]">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Available Wallet Balance</p>
+            <p className="text-rose-100 text-xs font-bold uppercase tracking-wider">Available Wallet Balance</p>
             <div className="bg-white/20 p-2 rounded-xl backdrop-blur-xs">
               <svg
                 width="18"
@@ -371,7 +371,7 @@ export default function DeliveryDashboard() {
             <p className="text-2xl font-black">
               ₹ {stats?.walletBalance?.toFixed(2) || "0.00"}
             </p>
-            <p className="text-emerald-100 text-xs font-bold flex items-center gap-1">
+            <p className="text-rose-100 text-xs font-bold flex items-center gap-1">
               View Wallet
               <svg
                 width="12"
@@ -392,13 +392,13 @@ export default function DeliveryDashboard() {
         <div
           onClick={() => isOnline && navigate("/delivery/sellers-in-range")}
           className={`p-4 rounded-3xl border cursor-pointer transition-all active:scale-[0.99] shadow-2xs min-h-[44px] ${
-            isOnline ? "bg-emerald-50/80 border-emerald-200/80 hover:bg-emerald-100/70" : "bg-white border-slate-200/80"
+            isOnline ? "bg-rose-50/80 border-rose-200/80 hover:bg-rose-100/70" : "bg-white border-slate-200/80"
           }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div
                 className={`p-2.5 rounded-2xl ${
-                  isOnline ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
+                  isOnline ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-400"
                 }`}>
                 <svg
                   width="22"
@@ -413,7 +413,7 @@ export default function DeliveryDashboard() {
               </div>
               <div>
                 <h3
-                  className={`text-xs sm:text-sm font-black ${isOnline ? "text-emerald-950" : "text-slate-700"}`}>
+                  className={`text-xs sm:text-sm font-black ${isOnline ? "text-rose-950" : "text-slate-700"}`}>
                   {isOnline ? "Active Service Areas" : "Courier Offline"}
                 </h3>
                 <p className="text-[11px] text-slate-500 font-medium">
@@ -426,10 +426,10 @@ export default function DeliveryDashboard() {
             {isOnline && (
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
                 </span>
-                <span className="text-lg font-black text-emerald-800">
+                <span className="text-lg font-black text-rose-800">
                   {sellersInRangeCount}
                 </span>
               </div>
@@ -459,7 +459,7 @@ export default function DeliveryDashboard() {
             icon={pendingOrderIcon}
             title="Today's Pending Order"
             value={stats?.pendingOrders || 0}
-            accentColor="#16a34a"
+            accentColor="#e11d48"
             onClick={() => navigate("/delivery/orders/pending")}
           />
           <DashboardCard
@@ -492,7 +492,7 @@ export default function DeliveryDashboard() {
           rightIcon={cashBalanceIcon}
           rightLabel="Total Earning"
           rightValue={`₹ ${stats?.totalEarning?.toFixed(2) || "0.00"}`}
-          accentColor="#16a34a"
+          accentColor="#e11d48"
         />
 
         {/* Today's Pending Order Section */}
@@ -503,7 +503,7 @@ export default function DeliveryDashboard() {
             </h2>
             <button
               onClick={() => navigate("/delivery/orders/today")}
-              className="text-xs font-bold text-emerald-700 hover:underline min-h-[36px] flex items-center"
+              className="text-xs font-bold text-rose-600 hover:underline min-h-[36px] flex items-center"
             >
               View all orders →
             </button>
@@ -529,7 +529,7 @@ export default function DeliveryDashboard() {
                       className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
                         order.status === "Ready for pickup"
                           ? "bg-amber-100 text-amber-800"
-                          : "bg-emerald-100 text-emerald-800"
+                          : "bg-rose-50 text-rose-700 border border-rose-200"
                       }`}>
                       {order.status}
                     </span>

@@ -211,7 +211,7 @@ export default function DeliveryProfile() {
         {/* Profile Card */}
         <div className="bg-white rounded-3xl p-6 shadow-2xs border border-slate-200/80 text-center space-y-3">
           <div className="flex flex-col items-center">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white text-2xl font-black shadow-sm mb-3">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-rose-600 to-pink-700 flex items-center justify-center text-white text-2xl font-black shadow-sm mb-3">
               {initials}
             </div>
 
@@ -222,7 +222,7 @@ export default function DeliveryProfile() {
                     type="text"
                     value={profileData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
-                    className={`w-full text-center text-slate-900 text-base font-bold px-3 py-2 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                    className={`w-full text-center text-slate-900 text-base font-bold px-3 py-2 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px] ${
                       fieldErrors.name ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                     }`}
                     placeholder="Full Name"
@@ -241,7 +241,7 @@ export default function DeliveryProfile() {
                 <h3 className="text-slate-900 text-lg font-black">{profileData.name}</h3>
                 <p className="text-slate-500 text-xs font-semibold">{profileData.phone}</p>
                 <div className="flex items-center gap-2 pt-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                     ★ {profileData.rating} Rating
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
@@ -261,7 +261,7 @@ export default function DeliveryProfile() {
               <span className="text-xl">🪪</span>
               <div>
                 <p className="text-xs font-bold text-slate-800">Driving License</p>
-                <span className="text-[10px] font-black text-emerald-700">
+                <span className="text-[10px] font-black text-rose-700">
                   {profileData.hasDrivingLicense ? '✓ Verified' : 'Uploaded'}
                 </span>
               </div>
@@ -271,7 +271,7 @@ export default function DeliveryProfile() {
               <span className="text-xl">📄</span>
               <div>
                 <p className="text-xs font-bold text-slate-800">National ID / Aadhaar</p>
-                <span className="text-[10px] font-black text-emerald-700">
+                <span className="text-[10px] font-black text-rose-700">
                   {profileData.hasNationalId ? '✓ Verified' : 'Uploaded'}
                 </span>
               </div>
@@ -293,7 +293,7 @@ export default function DeliveryProfile() {
                     type="email"
                     value={profileData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px] ${
                       fieldErrors.email ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                     }`}
                   />
@@ -311,7 +311,7 @@ export default function DeliveryProfile() {
                   value={profileData.address}
                   onChange={(e) => handleInputChange('address', e.target.value)}
                   rows={2}
-                  className="w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none min-h-[50px]"
+                  className="w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none min-h-[50px]"
                 />
               ) : (
                 <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.address || 'Not Set'}</p>
@@ -325,7 +325,7 @@ export default function DeliveryProfile() {
                   type="text"
                   value={profileData.vehicleNumber}
                   onChange={(e) => handleInputChange('vehicleNumber', e.target.value)}
-                  className="w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
+                  className="w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px]"
                   placeholder="e.g. MH12AB1234"
                 />
               ) : (
@@ -339,7 +339,7 @@ export default function DeliveryProfile() {
                 <select
                   value={profileData.vehicleType}
                   onChange={(e) => handleInputChange('vehicleType', e.target.value)}
-                  className="w-full text-slate-900 text-xs sm:text-sm font-bold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
+                  className="w-full text-slate-900 text-xs sm:text-sm font-bold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px]"
                 >
                   <option value="Bike">Bike</option>
                   <option value="Scooter">Scooter</option>
@@ -368,7 +368,7 @@ export default function DeliveryProfile() {
                     type="text"
                     value={profileData.accountName}
                     onChange={(e) => handleInputChange('accountName', e.target.value)}
-                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px] ${
                       fieldErrors.accountName ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                     }`}
                     placeholder="e.g. Ravi Kumar"
@@ -388,7 +388,7 @@ export default function DeliveryProfile() {
                     type="text"
                     value={profileData.bankName}
                     onChange={(e) => handleInputChange('bankName', e.target.value)}
-                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px] ${
                       fieldErrors.bankName ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                     }`}
                     placeholder="e.g. HDFC Bank"
@@ -409,7 +409,7 @@ export default function DeliveryProfile() {
                     value={profileData.accountNumber}
                     onChange={(e) => handleInputChange('accountNumber', e.target.value)}
                     maxLength={18}
-                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 min-h-[44px] ${
                       fieldErrors.accountNumber ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                     }`}
                     placeholder="9–18 digits"
@@ -432,7 +432,7 @@ export default function DeliveryProfile() {
                     value={profileData.ifscCode}
                     onChange={(e) => handleInputChange('ifscCode', e.target.value.toUpperCase())}
                     maxLength={11}
-                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 uppercase min-h-[44px] ${
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500 uppercase min-h-[44px] ${
                       fieldErrors.ifscCode ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                     }`}
                     placeholder="e.g. HDFC0001234"
@@ -473,7 +473,7 @@ export default function DeliveryProfile() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 bg-emerald-600 text-white rounded-2xl py-3 text-xs font-black hover:bg-emerald-700 transition-all shadow-xs active:scale-98 min-h-[44px]"
+              className="flex-1 bg-rose-600 text-white rounded-2xl py-3 text-xs font-black hover:bg-rose-700 transition-all shadow-xs active:scale-98 min-h-[44px]"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -481,7 +481,7 @@ export default function DeliveryProfile() {
         ) : (
           <button
             onClick={handleEdit}
-            className="w-full bg-emerald-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-emerald-700 transition-all shadow-xs active:scale-[0.98] min-h-[44px]"
+            className="w-full bg-rose-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-rose-700 transition-all shadow-xs active:scale-[0.98] min-h-[44px]"
           >
             ✏️ Edit Profile & Bank Details
           </button>

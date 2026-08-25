@@ -192,13 +192,13 @@ export default function OrderNotificationCard({
             onTouchStart={handleUserInteraction}
             style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}
         >
-            <div className="bg-white rounded-xl shadow-2xl border-2 border-teal-500 p-4 sm:p-6">
+            <div className="bg-white rounded-xl shadow-2xl border-2 border-rose-500 p-4 sm:p-6">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                     <div className="flex items-center gap-3">
                         <div className="relative">
-                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                            <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-ping opacity-75"></div>
+                            <div className="w-3 h-3 bg-rose-600 rounded-full animate-pulse"></div>
+                            <div className="absolute inset-0 w-3 h-3 bg-rose-600 rounded-full animate-ping opacity-75"></div>
                         </div>
                         <h3 className="text-base sm:text-lg font-bold text-neutral-900">New Order!</h3>
                     </div>
@@ -229,15 +229,15 @@ export default function OrderNotificationCard({
 
                     <div>
                         <p className="text-xs sm:text-sm text-neutral-600">Order Amount</p>
-                        <p className="text-lg sm:text-xl font-bold text-teal-600">₹{notification.total.toFixed(2)}</p>
+                        <p className="text-lg sm:text-xl font-bold text-slate-900">₹{notification.total.toFixed(2)}</p>
                     </div>
 
                     {/* Earning */}
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3 -mx-1">
-                        <p className="text-xs sm:text-sm text-green-700 font-medium flex items-center gap-1">
-                            <span className="text-green-600">💰</span> Your Earning
+                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 rounded-lg p-3 -mx-1">
+                        <p className="text-xs sm:text-sm text-rose-700 font-medium flex items-center gap-1">
+                            <span className="text-rose-600">💰</span> Your Earning
                         </p>
-                        <p className="text-xl sm:text-2xl font-bold text-green-600">
+                        <p className="text-xl sm:text-2xl font-bold text-rose-600">
                             ₹{notification.deliveryBoyEarning?.toFixed(2) || '0.00'}
                         </p>
                     </div>
@@ -256,7 +256,7 @@ export default function OrderNotificationCard({
                     <button
                         onClick={(e) => { e.stopPropagation(); handleAccept(); }}
                         disabled={isProcessing}
-                        className="flex-1 px-4 py-3 sm:py-3 bg-teal-600 active:bg-teal-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                        className="flex-1 px-4 py-3 sm:py-3 bg-rose-600 active:bg-rose-700 hover:bg-rose-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                         {isProcessing ? 'Processing…' : 'Accept'}

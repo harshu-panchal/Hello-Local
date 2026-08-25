@@ -1,12 +1,16 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { updateStatus, getDeliveryProfile, updateGeneralLocation, getSellersInRadius } from '../../../services/api/delivery/deliveryService';
 
-interface SellerInRange {
+export interface SellerInRange {
   _id: string;
   storeName: string;
   address: string;
   serviceRadiusKm: number;
   distanceFromDeliveryBoy: number;
+  location?: {
+    type: string;
+    coordinates: [number, number]; // [lng, lat]
+  };
 }
 
 interface DeliveryStatusContextType {
@@ -18,6 +22,7 @@ interface DeliveryStatusContextType {
   sellersInRange: SellerInRange[];
   locationError: string | null;
   isLoadingSellers: boolean;
+  refreshSellersInRange: () => Promise<void>;
 }
 
 const DeliveryStatusContext = createContext<DeliveryStatusContextType | undefined>(undefined);
@@ -123,6 +128,45 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
     console.error("Location error:", error);
   };
 
+  const refreshSellersInRange = async () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      return;
+    }
+    setIsLoadingSellers(true);
+    setLocationError(null);
+
+    return new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCurrentLocation({ latitude, longitude });
+          try {
+            await updateGeneralLocation(latitude, longitude);
+            const data = await getSellersInRadius(latitude, longitude);
+            setSellersInRangeCount(data.count || 0);
+            setSellersInRange(data.sellers || []);
+          } catch (error) {
+            console.error("Failed to refresh sellers in radius", error);
+          } finally {
+            setIsLoadingSellers(false);
+            resolve();
+          }
+        },
+        (error) => {
+          handleLocationError(error);
+          setIsLoadingSellers(false);
+          resolve();
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        }
+      );
+    });
+  };
+
   const toggleStatus = async () => {
     const newStatus = !isOnline;
     // Optimistic update
@@ -151,7 +195,8 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
       sellersInRangeCount,
       sellersInRange,
       locationError,
-      isLoadingSellers
+      isLoadingSellers,
+      refreshSellersInRange,
     }}>
       {children}
     </DeliveryStatusContext.Provider>
@@ -165,4 +210,3 @@ export function useDeliveryStatus() {
   }
   return context;
 }
-

@@ -366,6 +366,7 @@ export const getSellersInRadius = asyncHandler(
           address: 1,
           serviceRadiusKm: 1,
           distanceFromDeliveryBoy: 1,
+          location: 1,
         },
       },
     ]);

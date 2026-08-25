@@ -142,9 +142,9 @@ export default function DeliveryEarnings() {
         )}
 
         {/* Current Wallet Balance Card */}
-        <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-md space-y-3 relative overflow-hidden">
+        <div className="bg-gradient-to-br from-rose-600 to-pink-700 rounded-3xl p-6 text-white shadow-md space-y-3 relative overflow-hidden">
           <div className="flex items-center justify-between">
-            <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Available For Withdrawal</p>
+            <p className="text-rose-100 text-xs font-bold uppercase tracking-wider">Available For Withdrawal</p>
             <div className="bg-white/20 p-2 rounded-xl text-white">
               <svg
                 width="20"
@@ -164,7 +164,7 @@ export default function DeliveryEarnings() {
           <p className="text-4xl font-black tracking-tight">
             ₹{availableBal.toFixed(2)}
           </p>
-          <div className="flex items-center justify-between pt-1 text-xs text-emerald-100 font-medium">
+          <div className="flex items-center justify-between pt-1 text-xs text-rose-100 font-medium">
             <span>Ready for instant bank transfer</span>
             <button
               onClick={() => navigate("/delivery/wallet")}
@@ -189,7 +189,7 @@ export default function DeliveryEarnings() {
 
           <div className="bg-white rounded-2xl p-4 shadow-2xs border border-slate-200/80 space-y-1">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Today's Earnings</p>
-            <p className="text-xl font-black text-emerald-600">
+            <p className="text-xl font-black text-rose-600">
               ₹{Number(stats?.todayEarning || 0).toFixed(2)}
             </p>
             <p className="text-[11px] text-slate-500 font-medium">
@@ -256,7 +256,7 @@ export default function DeliveryEarnings() {
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 placeholder="0.00"
-                className="w-full border border-slate-300 rounded-2xl pl-8 pr-4 py-2.5 text-slate-900 font-black text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none min-h-[44px]"
+                className="w-full border border-slate-300 rounded-2xl pl-8 pr-4 py-2.5 text-slate-900 font-black text-base focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none min-h-[44px]"
                 min="0"
                 step="0.01"
               />
@@ -278,7 +278,7 @@ export default function DeliveryEarnings() {
                 <button
                   type="button"
                   onClick={() => setWithdrawAmount(availableBal.toString())}
-                  className="px-3 py-1 rounded-xl text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors min-h-[32px]"
+                  className="px-3 py-1 rounded-xl text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-800 transition-colors min-h-[32px]"
                 >
                   Max (₹{availableBal.toFixed(2)})
                 </button>
@@ -289,7 +289,7 @@ export default function DeliveryEarnings() {
           <button
             onClick={handleWithdraw}
             disabled={isWithdrawing || !withdrawAmount}
-            className="w-full bg-emerald-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-emerald-700 transition-all shadow-xs active:scale-98 disabled:opacity-50 min-h-[44px]"
+            className="w-full bg-rose-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-rose-700 transition-all shadow-xs active:scale-98 disabled:opacity-50 min-h-[44px]"
           >
             {isWithdrawing ? "Processing..." : "Submit Payout Request"}
           </button>

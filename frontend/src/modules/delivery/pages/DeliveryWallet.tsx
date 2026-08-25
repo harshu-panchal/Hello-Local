@@ -185,7 +185,7 @@ export default function DeliveryWallet() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 pb-20">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-rose-600"></div>
       </div>
     );
   }
@@ -233,10 +233,10 @@ export default function DeliveryWallet() {
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-md relative overflow-hidden space-y-4"
+          className="bg-gradient-to-br from-rose-600 to-pink-700 rounded-3xl p-6 text-white shadow-md relative overflow-hidden space-y-4"
         >
           <div className="relative z-10 flex items-center justify-between">
-            <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">
+            <p className="text-rose-100 text-xs font-bold uppercase tracking-wider">
               Available For Payout
             </p>
             <div className="bg-white/20 p-2 rounded-xl text-white">
@@ -262,14 +262,14 @@ export default function DeliveryWallet() {
 
           <button
             onClick={() => setShowWithdrawModal(true)}
-            className="w-full bg-white text-emerald-800 py-3.5 rounded-2xl font-black text-sm hover:bg-emerald-50 transition-all shadow-sm active:scale-[0.98] min-h-[44px] relative z-10"
+            className="w-full bg-white text-rose-700 py-3.5 rounded-2xl font-black text-sm hover:bg-rose-50 transition-all shadow-sm active:scale-[0.98] min-h-[44px] relative z-10"
           >
             ⚡ Request Payout Withdrawal
           </button>
 
           {/* Decorative shapes */}
           <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-          <div className="absolute -left-8 -bottom-8 w-36 h-36 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none"></div>
+          <div className="absolute -left-8 -bottom-8 w-36 h-36 bg-pink-400/20 rounded-full blur-2xl pointer-events-none"></div>
         </motion.div>
 
         {/* Admin Payout Card (COD Collection Debt) */}
@@ -337,7 +337,7 @@ export default function DeliveryWallet() {
           </div>
           <div className="bg-white rounded-2xl p-3.5 shadow-2xs border border-slate-200/80 text-center">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Paid Out</p>
-            <p className="text-sm sm:text-base font-black text-emerald-600">
+            <p className="text-sm sm:text-base font-black text-rose-600">
               ₹{Number(commissions.paid || 0).toFixed(2)}
             </p>
           </div>
@@ -356,7 +356,7 @@ export default function DeliveryWallet() {
               onClick={() => setActiveTab("transactions")}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all min-h-[40px] ${
                 activeTab === "transactions"
-                  ? "bg-white text-emerald-700 shadow-2xs"
+                  ? "bg-white text-rose-700 shadow-2xs"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
@@ -366,7 +366,7 @@ export default function DeliveryWallet() {
               onClick={() => setActiveTab("withdrawals")}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all min-h-[40px] ${
                 activeTab === "withdrawals"
-                  ? "bg-white text-emerald-700 shadow-2xs"
+                  ? "bg-white text-rose-700 shadow-2xs"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
@@ -376,7 +376,7 @@ export default function DeliveryWallet() {
               onClick={() => setActiveTab("commissions")}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all min-h-[40px] ${
                 activeTab === "commissions"
-                  ? "bg-white text-emerald-700 shadow-2xs"
+                  ? "bg-white text-rose-700 shadow-2xs"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
@@ -414,7 +414,7 @@ export default function DeliveryWallet() {
                       </div>
                       <p
                         className={`font-black text-sm ${
-                          txn.type === "Credit" ? "text-emerald-600" : "text-rose-600"
+                          txn.type === "Credit" ? "text-rose-600" : "text-slate-600"
                         }`}
                       >
                         {txn.type === "Credit" ? "+" : "-"}₹
@@ -451,7 +451,7 @@ export default function DeliveryWallet() {
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             withdrawal.status === "Completed"
-                              ? "bg-emerald-100 text-emerald-800"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
                               : withdrawal.status === "Approved"
                                 ? "bg-blue-100 text-blue-800"
                                 : withdrawal.status === "Rejected"
@@ -502,7 +502,7 @@ export default function DeliveryWallet() {
                             Rate: {comm.rate}% • Order: ₹{Number(comm.orderAmount || 0).toFixed(2)}
                           </p>
                         </div>
-                        <p className="font-black text-sm text-emerald-600">
+                        <p className="font-black text-sm text-rose-600">
                           +₹{Number(comm.amount || 0).toFixed(2)}
                         </p>
                       </div>
@@ -545,7 +545,7 @@ export default function DeliveryWallet() {
                   type="number"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full border border-slate-300 rounded-2xl pl-8 pr-4 py-2.5 text-slate-900 font-black text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none min-h-[44px]"
+                  className="w-full border border-slate-300 rounded-2xl pl-8 pr-4 py-2.5 text-slate-900 font-black text-base focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none min-h-[44px]"
                   placeholder="0.00"
                   min="0"
                   step="0.01"
@@ -568,7 +568,7 @@ export default function DeliveryWallet() {
                   <button
                     type="button"
                     onClick={() => setWithdrawAmount(balance.toString())}
-                    className="px-3 py-1 rounded-xl text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors min-h-[32px]"
+                    className="px-3 py-1 rounded-xl text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-800 transition-colors min-h-[32px]"
                   >
                     Max (₹{balance.toFixed(2)})
                   </button>
@@ -587,7 +587,7 @@ export default function DeliveryWallet() {
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="w-full border border-slate-300 rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none min-h-[44px]"
+                className="w-full border border-slate-300 rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:ring-2 focus:ring-rose-500 outline-none min-h-[44px]"
               >
                 <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
                 <option value="UPI">UPI Transfer</option>
@@ -607,7 +607,7 @@ export default function DeliveryWallet() {
               </button>
               <button
                 onClick={handleWithdrawRequest}
-                className="flex-1 bg-emerald-600 text-white rounded-2xl py-3 text-xs font-black hover:bg-emerald-700 transition-all shadow-sm active:scale-98 disabled:opacity-50 min-h-[44px]"
+                className="flex-1 bg-rose-600 text-white rounded-2xl py-3 text-xs font-black hover:bg-rose-700 transition-all shadow-sm active:scale-98 disabled:opacity-50 min-h-[44px]"
                 disabled={isSubmitting || !withdrawAmount}
               >
                 {isSubmitting ? "Submitting..." : "Submit Payout Request"}
