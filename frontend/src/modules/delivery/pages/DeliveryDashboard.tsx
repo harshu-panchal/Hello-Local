@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import DeliveryHeader from "../components/DeliveryHeader";
 import SummaryBar from "../components/SummaryBar";
 import DashboardCard from "../components/DashboardCard";
@@ -7,33 +7,47 @@ import DeliveryBottomNav from "../components/DeliveryBottomNav";
 import { getDashboardStats } from "../../../services/api/delivery/deliveryService";
 import { useDeliveryStatus } from "../context/DeliveryStatusContext";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 
 export default function DeliveryDashboard() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const { isOnline, sellersInRangeCount, locationError } = useDeliveryStatus();
   const { user } = useAuth();
-  // New partners start "Inactive" until an admin approves them. (#98/#139)
   const isPendingApproval = ((user as any)?.status ?? "Active") === "Inactive";
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data = await getDashboardStats();
-        setStats(data);
-      } catch (err: any) {
-        setError(err.message || "Failed to load dashboard data");
-      } finally {
-        setLoading(false);
+  const fetchStats = useCallback(async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      const data = await getDashboardStats();
+      setStats(data);
+      setError("");
+
+      if (isManualRefresh) {
+        showToast("Dashboard telemetry refreshed", "success");
       }
-    };
+    } catch (err: any) {
+      console.error("Failed to load dashboard data", err);
+      const errMsg = err.message || "Failed to load dashboard data";
+      setError(errMsg);
+      showToast(errMsg, "error");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [showToast]);
 
+  useEffect(() => {
     fetchStats();
-  }, []);
+  }, [fetchStats]);
 
-  // Icons for dashboard cards (Keep existing SVGs)
+  // Icons for dashboard cards
   const pendingOrderIcon = (
     <svg
       width="32"
@@ -259,36 +273,68 @@ export default function DeliveryDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center pb-20">
-        <p className="text-neutral-500">Loading dashboard...</p>
+      <div className="min-h-screen bg-slate-100 pb-20">
+        <DeliveryHeader />
+        <div className="px-4 py-4 space-y-3 animate-pulse max-w-lg mx-auto">
+          <div className="h-20 bg-slate-200 rounded-3xl" />
+          <div className="h-24 bg-slate-200 rounded-3xl" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-28 bg-slate-200 rounded-3xl" />
+            <div className="h-28 bg-slate-200 rounded-3xl" />
+          </div>
+        </div>
         <DeliveryBottomNav />
       </div>
     );
   }
 
-  if (error) {
+  if (error && !stats) {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center pb-20">
-        <p className="text-red-500">{error}</p>
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="p-4 bg-rose-50 text-rose-600 rounded-3xl border border-rose-200 max-w-sm">
+          <p className="text-sm font-bold">{error}</p>
+        </div>
+        <button
+          onClick={() => fetchStats(true)}
+          className="px-4 py-2 bg-emerald-600 text-white rounded-2xl font-bold text-xs shadow-xs"
+        >
+          🔄 Try Again
+        </button>
         <DeliveryBottomNav />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-neutral-100 pb-20">
+    <div className="min-h-screen bg-slate-100 pb-24">
       {/* Header */}
       <DeliveryHeader />
 
-      {/* Pending admin approval banner (#139) */}
+      {/* Pending admin approval banner */}
       {isPendingApproval && (
-        <div className="mx-4 mt-4 bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg text-sm">
-          <span className="font-semibold">Pending for Admin Approval.</span>{' '}
-          Your account is under review. Some features stay disabled until an admin approves you.
+        <div className="mx-4 mt-3 bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl text-xs font-bold shadow-2xs">
+          ⚠️ <span className="underline">Pending Admin Approval</span>: Your account is under review. Full dispatch privileges will activate once approved.
         </div>
       )}
 
-      <div className="px-4 py-4 space-y-4">
+      <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
+        {/* Top Actions & Live Refresh */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-slate-900 text-lg font-black tracking-tight">Command Center</h2>
+            <p className="text-[11px] text-slate-500 font-semibold">Real-time delivery telemetry</p>
+          </div>
+
+          <button
+            onClick={() => fetchStats(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl shadow-2xs hover:bg-slate-50 active:scale-95 transition-all min-h-[40px]"
+          >
+            <span className={refreshing ? 'animate-spin' : ''}>🔄</span>
+            <span>Refresh</span>
+          </button>
+        </div>
+
         {/* Daily Collection & Cash Balance Bar */}
         <SummaryBar
           leftIcon={dailyCollectionIcon}
@@ -303,10 +349,10 @@ export default function DeliveryDashboard() {
         {/* Wallet Balance Card */}
         <div
           onClick={() => navigate("/delivery/wallet")}
-          className="bg-gradient-to-br from-rose-500 to-rose-700 rounded-xl p-4 text-white shadow-md cursor-pointer active:scale-[0.98] transition-transform">
+          className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-5 text-white shadow-xs cursor-pointer active:scale-[0.99] transition-all min-h-[44px]">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-rose-100 text-xs">Available Wallet Balance</p>
-            <div className="bg-rose-400/30 p-1.5 rounded-lg">
+            <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Available Wallet Balance</p>
+            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-xs">
               <svg
                 width="18"
                 height="18"
@@ -322,14 +368,14 @@ export default function DeliveryDashboard() {
             </div>
           </div>
           <div className="flex items-end justify-between">
-            <p className="text-2xl font-bold">
+            <p className="text-2xl font-black">
               ₹ {stats?.walletBalance?.toFixed(2) || "0.00"}
             </p>
-            <p className="text-rose-100 text-[10px] flex items-center gap-1">
-              View Details
+            <p className="text-emerald-100 text-xs font-bold flex items-center gap-1">
+              View Wallet
               <svg
-                width="10"
-                height="10"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -345,48 +391,52 @@ export default function DeliveryDashboard() {
         {/* Real-time Seller Radius Indicator */}
         <div
           onClick={() => isOnline && navigate("/delivery/sellers-in-range")}
-          className={`p-4 rounded-xl border cursor-pointer transition-all active:scale-95 ${isOnline ? "bg-rose-50 border-rose-100 hover:bg-rose-100" : "bg-neutral-50 border-neutral-200"}`}>
+          className={`p-4 rounded-3xl border cursor-pointer transition-all active:scale-[0.99] shadow-2xs min-h-[44px] ${
+            isOnline ? "bg-emerald-50/80 border-emerald-200/80 hover:bg-emerald-100/70" : "bg-white border-slate-200/80"
+          }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div
-                className={`p-2 rounded-full ${isOnline ? "bg-rose-100 text-rose-600" : "bg-neutral-200 text-neutral-400"}`}>
+                className={`p-2.5 rounded-2xl ${
+                  isOnline ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
+                }`}>
                 <svg
-                  width="24"
-                  height="24"
+                  width="22"
+                  height="22"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2">
+                  strokeWidth="2.2">
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
               </div>
               <div>
                 <h3
-                  className={`text-sm font-semibold ${isOnline ? "text-rose-900" : "text-neutral-500"}`}>
-                  {isOnline ? "Active Service Areas" : "Offline"}
+                  className={`text-xs sm:text-sm font-black ${isOnline ? "text-emerald-950" : "text-slate-700"}`}>
+                  {isOnline ? "Active Service Areas" : "Courier Offline"}
                 </h3>
-                <p className="text-xs text-neutral-500">
+                <p className="text-[11px] text-slate-500 font-medium">
                   {isOnline
-                    ? `You are currently in ${sellersInRangeCount} seller radius`
-                    : "Go online to track service areas"}
+                    ? `You are within range of ${sellersInRangeCount} store${sellersInRangeCount !== 1 ? 's' : ''}`
+                    : "Go online to receive incoming order alerts"}
                 </p>
               </div>
             </div>
             {isOnline && (
               <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
                 </span>
-                <span className="text-xl font-bold text-rose-600">
+                <span className="text-lg font-black text-emerald-800">
                   {sellersInRangeCount}
                 </span>
               </div>
             )}
           </div>
           {locationError && isOnline && (
-            <div className="mt-3 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-600 flex items-center gap-2">
+            <div className="mt-2.5 p-2 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
               <svg
                 width="14"
                 height="14"
@@ -404,7 +454,7 @@ export default function DeliveryDashboard() {
         </div>
 
         {/* Dashboard Cards Grid */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <DashboardCard
             icon={pendingOrderIcon}
             title="Today's Pending Order"
@@ -446,43 +496,53 @@ export default function DeliveryDashboard() {
         />
 
         {/* Today's Pending Order Section */}
-        <div className="mt-6">
-          <h2 className="text-neutral-900 text-lg font-semibold mb-4">
-            Todays Pending Order
-          </h2>
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-slate-900 text-sm font-black">
+              Today's In-Flight Queue
+            </h2>
+            <button
+              onClick={() => navigate("/delivery/orders/today")}
+              className="text-xs font-bold text-emerald-700 hover:underline min-h-[36px] flex items-center"
+            >
+              View all orders →
+            </button>
+          </div>
+
           {stats?.pendingOrdersList && stats.pendingOrdersList.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {stats.pendingOrdersList.map((order: any) => (
                 <div
                   key={order.id}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-neutral-200 cursor-pointer"
+                  className="bg-white rounded-3xl p-4 shadow-2xs border border-slate-200/80 cursor-pointer active:scale-[0.99] transition-all min-h-[44px]"
                   onClick={() => navigate(`/delivery/orders/${order.id}`)}>
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-1.5">
                     <div>
-                      <p className="text-neutral-900 font-semibold text-sm">
+                      <p className="text-slate-900 font-black text-xs sm:text-sm">
                         {order.orderId}
                       </p>
-                      <p className="text-neutral-600 text-xs mt-1">
+                      <p className="text-slate-500 text-xs font-medium mt-0.5">
                         {order.customerName}
                       </p>
                     </div>
                     <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${order.status === "Ready for pickup"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-blue-100 text-blue-700"
-                        }`}>
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                        order.status === "Ready for pickup"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-emerald-100 text-emerald-800"
+                      }`}>
                       {order.status}
                     </span>
                   </div>
-                  <p className="text-neutral-600 text-xs mb-2">
-                    {order.address}
+                  <p className="text-slate-600 text-xs mb-2 font-medium line-clamp-1">
+                    📍 {order.address}
                   </p>
-                  <div className="flex items-center justify-between">
-                    <p className="text-neutral-900 font-bold">
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                    <p className="text-slate-900 font-black">
                       ₹ {order.totalAmount}
                     </p>
                     {order.estimatedDeliveryTime && (
-                      <p className="text-neutral-500 text-xs">
+                      <p className="text-slate-400 text-[11px] font-medium">
                         ETA: {order.estimatedDeliveryTime}
                       </p>
                     )}
@@ -491,8 +551,10 @@ export default function DeliveryDashboard() {
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-xl p-8 min-h-[200px] flex items-center justify-center shadow-sm border border-neutral-200">
-              <p className="text-neutral-500 text-sm">No pending orders</p>
+            <div className="bg-white rounded-3xl p-8 min-h-[160px] flex flex-col items-center justify-center text-center shadow-2xs border border-slate-200/80 space-y-1.5">
+              <span className="text-2xl">📦</span>
+              <p className="text-slate-700 text-xs font-bold">No in-flight orders</p>
+              <p className="text-slate-400 text-[11px]">When orders are assigned to you, they will appear here.</p>
             </div>
           )}
         </div>

@@ -4,10 +4,12 @@ import { sendOTP, verifyOTP } from '../../../services/api/auth/deliveryAuthServi
 import OTPInput from '../../../components/OTPInput';
 import { useAuth } from '../../../context/AuthContext';
 import { normalizeMobile } from '../../../utils/phone';
+import { useToast } from '../../../context/ToastContext';
 
 export default function DeliveryLogin() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [mobileNumber, setMobileNumber] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [showOTP, setShowOTP] = useState(false);
@@ -32,7 +34,11 @@ export default function DeliveryLogin() {
 
   const handleMobileLogin = async () => {
     const err = validateMobile(mobileNumber);
-    if (err) { setMobileError(err); return; }
+    if (err) {
+      setMobileError(err);
+      showToast(err, 'error');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -43,16 +49,19 @@ export default function DeliveryLogin() {
       if (response.success && response.sessionId) {
         setSessionId(response.sessionId);
         setShowOTP(true);
+        showToast('4-digit OTP sent to your mobile', 'success');
       } else {
-        setError(response.message || 'Failed to initiate OTP');
+        const msg = response.message || 'Failed to initiate OTP';
+        setError(msg);
+        showToast(msg, 'error');
       }
     } catch (err: any) {
       const status = err.response?.status;
       const message = err.response?.data?.message || 'Failed to send OTP. Please try again.';
 
       setError(message);
+      showToast(message, 'error');
 
-      // Check for 400 Bad Request specific to user not found (or based on message content)
       if (status === 400 && (message.toLowerCase().includes('not found') || message.toLowerCase().includes('register'))) {
         setIsNotRegistered(true);
       }
@@ -68,40 +77,37 @@ export default function DeliveryLogin() {
     try {
       const response = await verifyOTP(mobileNumber, otp, sessionId);
       if (response.success && response.data) {
-        // Update auth context
         login(response.data.token, {
           ...response.data.user,
           userType: 'Delivery'
         });
+        showToast('Login successful! Welcome back', 'success');
         navigate('/delivery');
       }
     } catch (err: any) {
-      // Also handle 401 Unauthorized for verify step
       const message = err.response?.data?.message || 'Invalid OTP. Please try again.';
       setError(message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center px-4 py-8">
-      {/* Back arrow removed (#126) */}
-
       {/* Login Card */}
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
         {/* Header Section */}
-        <div className="px-6 py-4 text-center border-b border-rose-700" style={{ backgroundColor: '#ff4d8d' }}>
-          <div className="mb-4">
+        <div className="px-6 py-5 text-center border-b border-rose-700 bg-rose-600">
+          <div className="mb-3">
             <img
               src="/logo.png?v=4"
               alt="Hello Local"
-              className="h-20 w-auto mx-auto object-contain drop-shadow-md bg-white/20 p-2 rounded-xl"
+              className="h-16 w-auto mx-auto object-contain drop-shadow-md bg-white/20 p-2 rounded-2xl"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Delivery Login</h1>
-          <p className="text-rose-50 text-sm -mt-2">Access your delivery dashboard</p>
+          <h1 className="text-xl font-black text-white">Delivery Partner Login</h1>
+          <p className="text-rose-100 text-xs mt-0.5">Access your courier dashboard & orders</p>
         </div>
 
         {/* Login Form */}
@@ -110,19 +116,19 @@ export default function DeliveryLogin() {
             /* Mobile Login Form */
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Mobile Number
                 </label>
-                <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-200 transition-all">
-                  <div className="px-3 py-2.5 text-sm font-medium text-neutral-600 border-r border-neutral-300 bg-neutral-50">
+                <div className="flex items-center bg-white border border-slate-300 rounded-2xl overflow-hidden focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-200 transition-all min-h-[44px]">
+                  <div className="px-3.5 py-2.5 text-xs font-bold text-slate-600 border-r border-slate-200 bg-slate-50">
                     +91
                   </div>
                   <input
                     type="tel"
                     value={mobileNumber}
                     onChange={handleMobileChange}
-                    placeholder="Enter mobile number"
-                    className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
+                    placeholder="Enter 10-digit mobile number"
+                    className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm placeholder:text-slate-400 focus:outline-none"
                     maxLength={10}
                     disabled={loading}
                   />
@@ -130,16 +136,16 @@ export default function DeliveryLogin() {
               </div>
 
               {mobileError && (
-                <p className="text-xs text-red-600 mt-1">{mobileError}</p>
+                <p className="text-xs text-rose-600 font-semibold">{mobileError}</p>
               )}
 
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-100 flex flex-col gap-2">
+                <div className="text-xs text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-200 flex flex-col gap-2 font-medium">
                   <span>{error}</span>
                   {isNotRegistered && (
                     <button
                       onClick={() => navigate('/delivery/signup')}
-                      className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 py-1.5 px-3 rounded self-start transition-colors"
+                      className="text-xs font-black text-white bg-rose-600 hover:bg-rose-700 py-1.5 px-3 rounded-xl self-start transition-colors"
                     >
                       Register Now
                     </button>
@@ -150,47 +156,48 @@ export default function DeliveryLogin() {
               <button
                 onClick={handleMobileLogin}
                 disabled={mobileNumber.length !== 10 || !!mobileError || loading}
-                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${mobileNumber.length === 10 && !mobileError && !loading
-                  ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-md'
-                  : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
-                  }`}
+                className={`w-full py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all min-h-[44px] ${
+                  mobileNumber.length === 10 && !mobileError && !loading
+                    ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-md active:scale-[0.98]'
+                    : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                }`}
               >
-                {loading ? 'Sending...' : 'Continue'}
+                {loading ? 'Sending OTP...' : 'Continue with OTP'}
               </button>
             </div>
           ) : (
             /* OTP Verification Form */
             <div className="space-y-4">
               <div className="text-center">
-                <p className="text-sm text-neutral-600 mb-2">
-                  Enter the 4-digit OTP sent to
+                <p className="text-xs text-slate-600 mb-1 font-medium">
+                  Enter the 4-digit SMS OTP sent to
                 </p>
-                <p className="text-sm font-semibold text-neutral-800">+91 {mobileNumber}</p>
+                <p className="text-sm font-black text-slate-900">+91 {mobileNumber}</p>
               </div>
 
               <OTPInput onComplete={handleOTPComplete} disabled={loading} />
 
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-2 rounded text-center">
+                <div className="text-xs text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-200 font-semibold text-center">
                   {error}
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => {
                     setShowOTP(false);
                     setError('');
                   }}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors border border-neutral-300"
+                  className="flex-1 py-3 rounded-2xl font-bold text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200 min-h-[44px]"
                 >
                   Change Number
                 </button>
                 <button
                   onClick={handleMobileLogin}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-rose-600 text-white hover:bg-rose-700 transition-colors"
+                  className="flex-1 py-3 rounded-2xl font-black text-xs bg-rose-600 text-white hover:bg-rose-700 transition-all min-h-[44px]"
                 >
                   {loading ? 'Verifying...' : 'Resend OTP'}
                 </button>
@@ -198,15 +205,13 @@ export default function DeliveryLogin() {
             </div>
           )}
 
-
-
           {/* Sign Up Link */}
-          <div className="text-center pt-4 border-t border-neutral-200">
-            <p className="text-sm text-neutral-600">
+          <div className="text-center pt-3 border-t border-slate-100">
+            <p className="text-xs text-slate-600 font-medium">
               Don't have a delivery partner account?{' '}
               <button
                 onClick={() => navigate('/delivery/signup')}
-                className="text-rose-600 hover:text-rose-700 font-semibold"
+                className="text-rose-600 hover:underline font-black"
               >
                 Sign Up
               </button>
@@ -215,16 +220,15 @@ export default function DeliveryLogin() {
         </div>
       </div>
 
-      {/* Footer Text — clickable terms, hidden on the OTP step (#127, #183) */}
+      {/* Footer Text */}
       {!showOTP && (
-        <p className="mt-6 text-xs text-neutral-500 text-center max-w-md">
+        <p className="mt-6 text-[11px] text-slate-500 text-center max-w-md">
           By continuing, you agree to Hello Local's{' '}
-          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline">Terms of Service</button>
+          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline font-semibold">Terms of Service</button>
           {' '}and{' '}
-          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline">Privacy Policy</button>
+          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline font-semibold">Privacy Policy</button>
         </p>
       )}
     </div>
   );
 }
-
