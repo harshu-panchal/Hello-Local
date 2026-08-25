@@ -17,6 +17,7 @@ router.put("/settings", deliveryProfileController.updateSettings);
 
 // Notifications
 router.get("/notifications", deliveryNotificationController.getNotifications);
+router.put("/notifications/read-all", deliveryNotificationController.markAllNotificationsRead);
 router.put("/notifications/:id/read", deliveryNotificationController.markNotificationRead);
 
 // Dashboard Stats

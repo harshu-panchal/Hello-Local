@@ -304,3 +304,12 @@ export const markNotificationRead = async (id: string) => {
     throw handleApiError(error);
   }
 };
+
+export const markAllNotificationsRead = async () => {
+  try {
+    const response = await api.put(`${BASE_URL}/notifications/read-all`);
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};

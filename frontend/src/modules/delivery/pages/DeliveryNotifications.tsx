@@ -1,33 +1,87 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DeliveryHeader from '../components/DeliveryHeader';
-import { getNotifications, markNotificationRead } from '../../../services/api/delivery/deliveryService';
+import DeliveryBottomNav from '../components/DeliveryBottomNav';
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '../../../services/api/delivery/deliveryService';
+import { useToast } from '../../../context/ToastContext';
+
+type Tab = 'All' | 'Unread' | 'Orders';
 
 export default function DeliveryNotifications() {
+  const navigate = useNavigate();
+  const { showToast } = useToast();
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>('All');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+
+  const fetchNotifications = useCallback(async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      const data = await getNotifications();
+      setNotifications(data || []);
+
+      if (isManualRefresh) {
+        showToast('Notifications refreshed', 'success');
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch notifications", error);
+      showToast(error.message || 'Failed to load notifications', 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+  }, [fetchNotifications]);
 
-  const fetchNotifications = async () => {
+  const handleMarkAsRead = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     try {
-      const data = await getNotifications();
-      setNotifications(data);
-    } catch (error) {
-      console.error("Failed to fetch notifications", error);
-    } finally {
-      setLoading(false);
+      await markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+    } catch (error: any) {
+      console.error("Failed to mark as read", error);
     }
   };
 
-  const handleMarkAsRead = async (id: string) => {
+  const handleMarkAllAsRead = async () => {
     try {
-      await markNotificationRead(id);
-      // Update local state to show as read
-      setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
-    } catch (error) {
-      console.error("Failed to mark as read", error);
+      setMarkingAll(true);
+      await markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      showToast('All notifications marked as read', 'success');
+    } catch (error: any) {
+      showToast(error.message || 'Failed to mark all as read', 'error');
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  const handleNotificationClick = async (notification: any) => {
+    if (!notification.isRead) {
+      await handleMarkAsRead(notification._id);
+    }
+
+    // Deep-link to order if related
+    if (notification.link) {
+      navigate(notification.link);
+    } else if (notification.type === 'Order' || notification.type === 'order') {
+      const orderIdMatch = notification.message?.match(/#?([A-Za-z0-9-_]{8,})/);
+      if (orderIdMatch && orderIdMatch[1]) {
+        navigate(`/delivery/orders/${orderIdMatch[1]}`);
+      } else {
+        navigate('/delivery/orders/today');
+      }
     }
   };
 
@@ -36,31 +90,32 @@ export default function DeliveryNotifications() {
       case 'Order':
       case 'order':
         return (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M5 8V6C5 4.34315 6.34315 3 8 3H16C17.6569 3 19 4.34315 19 6V8H21C21.5523 8 22 8.44772 22 9V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V9C2 8.44772 2.44772 8 3 8H5Z"
-              stroke="#16a34a"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-            <path
-              d="M7 8V6C7 5.44772 7.44772 5 8 5H16C16.5523 5 17 5.44772 17 6V8"
-              stroke="#16a34a"
-              strokeWidth="2"
-              strokeLinecap="round"
-              fill="none"
-            />
-            <circle cx="9" cy="13" r="1" fill="#16a34a" />
-            <circle cx="15" cy="13" r="1" fill="#16a34a" />
-          </svg>
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 border border-emerald-100">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
+            </svg>
+          </div>
+        );
+      case 'Payment':
+      case 'payment':
+        return (
+          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 border border-blue-100">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+          </div>
         );
       default:
         return (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 22C13.1 22 14 21.1 14 20H10C10 21.1 10.9 22 12 22ZM18 16V11C18 7.93 16.36 5.36 13.5 4.68V4C13.5 3.17 12.83 2 12 2C11.17 2 10.5 3.17 10.5 4V4.68C7.63 5.36 6 7.92 6 11V16L4 18V19H20V18L18 16Z" fill="#F97316" />
-          </svg>
+          <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0 border border-amber-100">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </div>
         );
     }
   };
@@ -76,45 +131,141 @@ export default function DeliveryNotifications() {
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
+  const filteredNotifications = notifications.filter((n) => {
+    if (activeTab === 'Unread') return !n.isRead;
+    if (activeTab === 'Orders') return n.type === 'Order' || n.type === 'order';
+    return true;
+  });
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 pb-20">
+        <DeliveryHeader />
+        <div className="px-4 py-4 space-y-3 animate-pulse max-w-lg mx-auto">
+          <div className="h-8 bg-slate-200 rounded-xl w-1/3" />
+          <div className="h-24 bg-slate-200 rounded-3xl" />
+          <div className="h-24 bg-slate-200 rounded-3xl" />
+        </div>
+        <DeliveryBottomNav />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-neutral-100 pb-20">
+    <div className="min-h-screen bg-slate-100 pb-24">
       <DeliveryHeader />
-      <div className="px-4 py-4">
-        <h2 className="text-neutral-900 text-xl font-semibold mb-4">Notifications</h2>
-        {loading ? (
-          <p className="text-center text-neutral-500">Loading...</p>
-        ) : notifications.length > 0 ? (
-          <div className="space-y-3">
-            {notifications.map((notification) => (
-              <div key={notification._id}
-                onClick={() => !notification.isRead && handleMarkAsRead(notification._id)}
-                className={`bg-white rounded-xl p-4 shadow-sm border ${notification.isRead ? 'border-neutral-200' : 'border-orange-200 bg-orange-50'}`}>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 mt-1">
-                    {getNotificationIcon(notification.type)}
+      <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
+        {/* Header & Actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-slate-200 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-700"
+              aria-label="Go back"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18L9 12L15 6" />
+              </svg>
+            </button>
+            <div>
+              <h2 className="text-slate-900 text-xl font-black tracking-tight">Notifications</h2>
+              {unreadCount > 0 && (
+                <p className="text-[11px] text-emerald-700 font-bold">{unreadCount} unread alert{unreadCount !== 1 ? 's' : ''}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllAsRead}
+                disabled={markingAll}
+                className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all min-h-[40px]"
+              >
+                {markingAll ? 'Clearing...' : 'Mark all read'}
+              </button>
+            )}
+            <button
+              onClick={() => fetchNotifications(true)}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl shadow-2xs hover:bg-slate-50 active:scale-95 transition-all min-h-[40px]"
+            >
+              <span className={refreshing ? 'animate-spin' : ''}>🔄</span>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Category Tabs */}
+        <div className="flex bg-slate-200/70 p-1 rounded-2xl gap-1">
+          {(['All', 'Unread', 'Orders'] as Tab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all min-h-[36px] ${
+                activeTab === tab
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {tab} {tab === 'Unread' && unreadCount > 0 ? `(${unreadCount})` : ''}
+            </button>
+          ))}
+        </div>
+
+        {/* Notification List */}
+        {filteredNotifications.length > 0 ? (
+          <div className="space-y-2.5">
+            {filteredNotifications.map((notification) => (
+              <div
+                key={notification._id}
+                onClick={() => handleNotificationClick(notification)}
+                className={`rounded-3xl p-4 shadow-2xs border transition-all cursor-pointer active:scale-[0.99] ${
+                  notification.isRead
+                    ? 'bg-white border-slate-200/80 hover:shadow-xs'
+                    : 'bg-emerald-50/60 border-emerald-200/80 hover:bg-emerald-50'
+                }`}
+              >
+                <div className="flex gap-3 items-start">
+                  {getNotificationIcon(notification.type)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <h3 className="text-slate-900 text-xs sm:text-sm font-black truncate">
+                        {notification.title}
+                      </h3>
+                      {!notification.isRead && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 flex-shrink-0 animate-pulse" />
+                      )}
+                    </div>
+                    <p className="text-slate-600 text-xs mt-1 leading-relaxed line-clamp-2 font-medium">
+                      {notification.message}
+                    </p>
+                    <div className="flex items-center justify-between pt-2 text-[10px] text-slate-400 font-medium">
+                      <span>{formatTime(notification.createdAt)}</span>
+                      {notification.link || notification.type === 'Order' || notification.type === 'order' ? (
+                        <span className="text-emerald-700 font-bold hover:underline">View Order →</span>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className={`text-sm font-semibold ${notification.isRead ? 'text-neutral-900' : 'text-neutral-900'}`}>{notification.title}</h3>
-                    <p className="text-neutral-600 text-xs mt-1 line-clamp-2">{notification.message}</p>
-                    <p className="text-neutral-400 text-[10px] mt-2">{formatTime(notification.createdAt)}</p>
-                  </div>
-                  {!notification.isRead && (
-                    <div className="w-2 h-2 rounded-full bg-orange-500 mt-2"></div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-xl p-8 min-h-[400px] flex items-center justify-center shadow-sm border border-neutral-200">
-            <p className="text-neutral-500 text-sm">No notifications</p>
+          <div className="bg-white rounded-3xl p-8 min-h-[300px] flex flex-col items-center justify-center text-center shadow-2xs border border-slate-200/80 space-y-2">
+            <span className="text-3xl">🔔</span>
+            <h4 className="text-sm font-bold text-slate-800">
+              {activeTab === 'Unread' ? 'No unread notifications' : 'No notifications yet'}
+            </h4>
+            <p className="text-xs text-slate-500 max-w-xs">
+              When order assignments, wallet transactions, or system updates occur, they will appear here.
+            </p>
           </div>
         )}
       </div>
+      <DeliveryBottomNav />
     </div>
   );
 }
-
-
-
-

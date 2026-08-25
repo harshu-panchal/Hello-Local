@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DeliveryHeader from '../components/DeliveryHeader';
 import DeliveryBottomNav from '../components/DeliveryBottomNav';
 import { useDeliveryUser } from '../context/DeliveryUserContext';
 import { getDeliveryProfile, updateProfile } from '../../../services/api/delivery/deliveryService';
+import { useToast } from '../../../context/ToastContext';
 
 export default function DeliveryProfile() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
-  const { userName, setUserName } = useDeliveryUser();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { setUserName } = useDeliveryUser();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [profileData, setProfileData] = useState({
@@ -16,52 +21,76 @@ export default function DeliveryProfile() {
     phone: '',
     email: '',
     address: '',
+    city: '',
     vehicleNumber: '',
     vehicleType: 'Bike',
     joinDate: '',
     totalDeliveries: 0,
-    rating: 0,
+    rating: 4.8,
     accountName: '',
     bankName: '',
     accountNumber: '',
     ifscCode: '',
+    status: 'Active',
+    hasDrivingLicense: false,
+    hasNationalId: false,
   });
 
-  // Fetch profile data on mount
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const data = await getDeliveryProfile();
-        setProfileData({
-          name: data.name,
-          phone: data.mobile,
-          email: data.email,
-          address: data.address,
-          vehicleNumber: data.vehicleNumber || '',
-          vehicleType: data.vehicleType || 'Bike',
-          joinDate: new Date(data.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-          totalDeliveries: data.totalDeliveredCount || 0, // Assuming backend sends this or we need to fetch dashboard stats
-          rating: 4.8, // Mock for now
-          accountName: data.accountName || '',
-          bankName: data.bankName || '',
-          accountNumber: data.accountNumber || '',
-          ifscCode: data.ifscCode || '',
-        });
+  const fetchProfile = useCallback(async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      const data = await getDeliveryProfile();
+      setProfileData({
+        name: data.name || '',
+        phone: data.mobile || '',
+        email: data.email || '',
+        address: data.address || '',
+        city: data.city || '',
+        vehicleNumber: data.vehicleNumber || '',
+        vehicleType: data.vehicleType || 'Bike',
+        joinDate: data.createdAt ? new Date(data.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A',
+        totalDeliveries: data.totalDeliveredCount || 0,
+        rating: 4.8,
+        accountName: data.accountName || '',
+        bankName: data.bankName || '',
+        accountNumber: data.accountNumber || '',
+        ifscCode: data.ifscCode || '',
+        status: data.status || 'Active',
+        hasDrivingLicense: Boolean(data.drivingLicense),
+        hasNationalId: Boolean(data.nationalIdentityCard),
+      });
+
+      if (data.name) {
         setUserName(data.name);
-      } catch (error) {
-        console.error("Failed to fetch profile", error);
       }
-    };
+
+      if (isManualRefresh) {
+        showToast('Profile & KYC details refreshed', 'success');
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch profile", error);
+      showToast(error.message || 'Failed to load profile data', 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [setUserName, showToast]);
+
+  useEffect(() => {
     fetchProfile();
-  }, [setUserName]);
+  }, [fetchProfile]);
 
   const handleEdit = () => {
     setIsEditing(true);
+    setFieldErrors({});
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setFieldErrors({});
+    fetchProfile();
   };
 
   const handleSave = async () => {
@@ -90,15 +119,18 @@ export default function DeliveryProfile() {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      showToast('Please fix the validation errors before saving', 'error');
       return;
     }
 
     setFieldErrors({});
     try {
+      setSaving(true);
       await updateProfile({
         name: profileData.name,
         email: profileData.email,
         address: profileData.address,
+        city: profileData.city,
         vehicleNumber: profileData.vehicleNumber,
         vehicleType: profileData.vehicleType,
         accountName: profileData.accountName,
@@ -106,11 +138,15 @@ export default function DeliveryProfile() {
         accountNumber: profileData.accountNumber,
         ifscCode: profileData.ifscCode,
       });
+
       setUserName(profileData.name);
       setIsEditing(false);
-    } catch (error) {
+      showToast('Profile updated successfully', 'success');
+    } catch (error: any) {
       console.error("Failed to update profile", error);
-      setFieldErrors({ _global: 'Failed to update profile. Please try again.' });
+      showToast(error.message || 'Failed to update profile', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -125,126 +161,185 @@ export default function DeliveryProfile() {
     setProfileData((prev) => ({ ...prev, [field]: value }));
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 pb-20">
+        <DeliveryHeader />
+        <div className="px-4 py-4 space-y-3 animate-pulse max-w-lg mx-auto">
+          <div className="h-8 bg-slate-200 rounded-xl w-1/3" />
+          <div className="h-44 bg-slate-200 rounded-3xl" />
+          <div className="h-44 bg-slate-200 rounded-3xl" />
+        </div>
+        <DeliveryBottomNav />
+      </div>
+    );
+  }
+
+  const initials = profileData.name
+    ? profileData.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'DP';
+
   return (
-    <div className="min-h-screen bg-neutral-100 pb-20">
+    <div className="min-h-screen bg-slate-100 pb-24">
       <DeliveryHeader />
-      <div className="px-4 py-4">
-        <div className="flex items-center mb-4">
+      <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
+        {/* Header with Live Refresh */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-slate-200 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-700"
+              aria-label="Go back"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18L9 12L15 6" />
+              </svg>
+            </button>
+            <h2 className="text-slate-900 text-xl font-black tracking-tight">Delivery Profile</h2>
+          </div>
+
           <button
-            onClick={() => navigate(-1)}
-            className="mr-3 p-2 hover:bg-neutral-200 rounded-full transition-colors"
+            onClick={() => fetchProfile(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl shadow-2xs hover:bg-slate-50 active:scale-95 transition-all min-h-[40px]"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M15 18L9 12L15 6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <span className={refreshing ? 'animate-spin' : ''}>🔄</span>
+            <span>Refresh</span>
           </button>
-          <h2 className="text-neutral-900 text-xl font-semibold">Profile</h2>
         </div>
 
         {/* Profile Card */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-neutral-200 mb-4">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mb-4">
-              <span className="text-white text-3xl font-bold">
-                {profileData.name.split(' ').map(n => n[0]).join('')}
-              </span>
+        <div className="bg-white rounded-3xl p-6 shadow-2xs border border-slate-200/80 text-center space-y-3">
+          <div className="flex flex-col items-center">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white text-2xl font-black shadow-sm mb-3">
+              {initials}
             </div>
+
             {isEditing ? (
-              <div className="w-full max-w-xs">
-                <input
-                  type="text"
-                  value={profileData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className={`w-full text-center text-neutral-900 text-xl font-semibold mb-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.name ? 'border-red-400' : 'border-neutral-300'}`}
-                  placeholder="Full Name"
-                />
-                {fieldErrors.name && <p className="text-xs text-red-500 text-center mb-1">{fieldErrors.name}</p>}
+              <div className="w-full max-w-xs space-y-2">
+                <div>
+                  <input
+                    type="text"
+                    value={profileData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    className={`w-full text-center text-slate-900 text-base font-bold px-3 py-2 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                      fieldErrors.name ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
+                    placeholder="Full Name"
+                  />
+                  {fieldErrors.name && <p className="text-xs text-rose-600 text-center mt-1 font-semibold">{fieldErrors.name}</p>}
+                </div>
                 <input
                   type="tel"
                   value={profileData.phone}
                   disabled
-                  className="w-full text-center text-neutral-400 text-sm px-3 py-2 border border-neutral-200 rounded-lg bg-neutral-50 cursor-not-allowed"
+                  className="w-full text-center text-slate-400 text-xs font-semibold px-3 py-2 border border-slate-200 rounded-2xl bg-slate-50 cursor-not-allowed min-h-[40px]"
                 />
               </div>
             ) : (
               <>
-                <h3 className="text-neutral-900 text-xl font-semibold mb-1">{profileData.name}</h3>
-                <p className="text-neutral-600 text-sm">{profileData.phone}</p>
+                <h3 className="text-slate-900 text-lg font-black">{profileData.name}</h3>
+                <p className="text-slate-500 text-xs font-semibold">{profileData.phone}</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                    ★ {profileData.rating} Rating
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                    {profileData.status} Partner
+                  </span>
+                </div>
               </>
             )}
-            <div className="flex items-center gap-1 mt-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                  fill="#22c55e"
-                />
-              </svg>
-              <span className="text-neutral-900 font-semibold">{profileData.rating}</span>
+          </div>
+        </div>
+
+        {/* KYC Verification Status */}
+        <div className="bg-white rounded-3xl p-5 shadow-2xs border border-slate-200/80 space-y-3">
+          <h3 className="text-slate-900 font-black text-sm">KYC & Document Verification</h3>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-2.5">
+              <span className="text-xl">🪪</span>
+              <div>
+                <p className="text-xs font-bold text-slate-800">Driving License</p>
+                <span className="text-[10px] font-black text-emerald-700">
+                  {profileData.hasDrivingLicense ? '✓ Verified' : 'Uploaded'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-2.5">
+              <span className="text-xl">📄</span>
+              <div>
+                <p className="text-xs font-bold text-slate-800">National ID / Aadhaar</p>
+                <span className="text-[10px] font-black text-emerald-700">
+                  {profileData.hasNationalId ? '✓ Verified' : 'Uploaded'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Profile Details */}
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
-          <div className="p-4 border-b border-neutral-200">
-            <h3 className="text-neutral-900 font-semibold">Personal Information</h3>
+        {/* Personal & Vehicle Information */}
+        <div className="bg-white rounded-3xl shadow-2xs border border-slate-200/80 overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h3 className="text-slate-900 font-black text-sm">Personal & Vehicle Information</h3>
           </div>
-          <div className="divide-y divide-neutral-200">
+          <div className="divide-y divide-slate-100">
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Email</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Email Address</p>
               {isEditing ? (
-                <>
+                <div>
                   <input
                     type="email"
                     value={profileData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.email ? 'border-red-400' : 'border-neutral-300'}`}
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                      fieldErrors.email ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
                   />
-                  {fieldErrors.email && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.email}</p>}
-                </>
+                  {fieldErrors.email && <p className="text-xs text-rose-600 mt-1 font-semibold">{fieldErrors.email}</p>}
+                </div>
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.email}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.email || 'Not Set'}</p>
               )}
             </div>
+
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Address</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Residential Address</p>
               {isEditing ? (
                 <textarea
                   value={profileData.address}
                   onChange={(e) => handleInputChange('address', e.target.value)}
                   rows={2}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                  className="w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none min-h-[50px]"
                 />
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.address}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.address || 'Not Set'}</p>
               )}
             </div>
+
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Vehicle Number</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Vehicle License Number</p>
               {isEditing ? (
                 <input
                   type="text"
                   value={profileData.vehicleNumber}
                   onChange={(e) => handleInputChange('vehicleNumber', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
+                  placeholder="e.g. MH12AB1234"
                 />
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.vehicleNumber}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.vehicleNumber || 'Not Set'}</p>
               )}
             </div>
+
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Vehicle Type</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Vehicle Type</p>
               {isEditing ? (
                 <select
                   value={profileData.vehicleType}
                   onChange={(e) => handleInputChange('vehicleType', e.target.value)}
-                  className="w-full text-neutral-900 text-sm px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full text-slate-900 text-xs sm:text-sm font-bold px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
                 >
                   <option value="Bike">Bike</option>
                   <option value="Scooter">Scooter</option>
@@ -252,130 +347,143 @@ export default function DeliveryProfile() {
                   <option value="Cycle">Cycle</option>
                 </select>
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.vehicleType}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.vehicleType}</p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Bank Details */}
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mt-4">
-          <div className="p-4 border-b border-neutral-200">
-            <h3 className="text-neutral-900 font-semibold">Bank Details</h3>
+        {/* Bank & Payout KYC Details */}
+        <div className="bg-white rounded-3xl shadow-2xs border border-slate-200/80 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-slate-900 font-black text-sm">Settlement Bank Details</h3>
+            <span className="text-[10px] text-slate-400 font-bold">For Commission Payouts</span>
           </div>
-          <div className="divide-y divide-neutral-200">
+          <div className="divide-y divide-slate-100">
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Account Holder Name</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Account Holder Name</p>
               {isEditing ? (
-                <>
+                <div>
                   <input
                     type="text"
                     value={profileData.accountName}
                     onChange={(e) => handleInputChange('accountName', e.target.value)}
-                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.accountName ? 'border-red-400' : 'border-neutral-300'}`}
-                    placeholder="Letters only (e.g. Ravi Kumar)"
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                      fieldErrors.accountName ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
+                    placeholder="e.g. Ravi Kumar"
                   />
-                  {fieldErrors.accountName && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.accountName}</p>}
-                </>
+                  {fieldErrors.accountName && <p className="text-xs text-rose-600 mt-1 font-semibold">{fieldErrors.accountName}</p>}
+                </div>
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.accountName || 'Not Set'}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.accountName || 'Not Set'}</p>
               )}
             </div>
+
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Bank Name</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Bank Name</p>
               {isEditing ? (
-                <>
+                <div>
                   <input
                     type="text"
                     value={profileData.bankName}
                     onChange={(e) => handleInputChange('bankName', e.target.value)}
-                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.bankName ? 'border-red-400' : 'border-neutral-300'}`}
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                      fieldErrors.bankName ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
                     placeholder="e.g. HDFC Bank"
                   />
-                  {fieldErrors.bankName && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.bankName}</p>}
-                </>
+                  {fieldErrors.bankName && <p className="text-xs text-rose-600 mt-1 font-semibold">{fieldErrors.bankName}</p>}
+                </div>
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.bankName || 'Not Set'}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.bankName || 'Not Set'}</p>
               )}
             </div>
+
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">Account Number</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">Account Number</p>
               {isEditing ? (
-                <>
+                <div>
                   <input
                     type="text"
                     value={profileData.accountNumber}
                     onChange={(e) => handleInputChange('accountNumber', e.target.value)}
                     maxLength={18}
-                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.accountNumber ? 'border-red-400' : 'border-neutral-300'}`}
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] ${
+                      fieldErrors.accountNumber ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
                     placeholder="9–18 digits"
                   />
-                  {fieldErrors.accountNumber && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.accountNumber}</p>}
-                </>
+                  {fieldErrors.accountNumber && <p className="text-xs text-rose-600 mt-1 font-semibold">{fieldErrors.accountNumber}</p>}
+                </div>
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.accountNumber ? `XXXX${profileData.accountNumber.slice(-4)}` : 'Not Set'}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">
+                  {profileData.accountNumber ? `XXXX${profileData.accountNumber.slice(-4)}` : 'Not Set'}
+                </p>
               )}
             </div>
+
             <div className="p-4">
-              <p className="text-neutral-500 text-xs mb-1">IFSC Code</p>
+              <p className="text-slate-500 text-xs font-bold mb-1">IFSC Code</p>
               {isEditing ? (
-                <>
+                <div>
                   <input
                     type="text"
                     value={profileData.ifscCode}
                     onChange={(e) => handleInputChange('ifscCode', e.target.value.toUpperCase())}
                     maxLength={11}
-                    className={`w-full text-neutral-900 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.ifscCode ? 'border-red-400' : 'border-neutral-300'}`}
+                    className={`w-full text-slate-900 text-xs sm:text-sm font-semibold px-3.5 py-2.5 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 uppercase min-h-[44px] ${
+                      fieldErrors.ifscCode ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
                     placeholder="e.g. HDFC0001234"
                   />
-                  {fieldErrors.ifscCode && <p className="text-xs text-red-500 mt-0.5">{fieldErrors.ifscCode}</p>}
-                </>
+                  {fieldErrors.ifscCode && <p className="text-xs text-rose-600 mt-1 font-semibold">{fieldErrors.ifscCode}</p>}
+                </div>
               ) : (
-                <p className="text-neutral-900 text-sm">{profileData.ifscCode || 'Not Set'}</p>
+                <p className="text-slate-900 text-xs sm:text-sm font-medium">{profileData.ifscCode || 'Not Set'}</p>
               )}
             </div>
           </div>
         </div>
 
         {/* Stats Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 mt-4 p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center">
-              <p className="text-neutral-500 text-xs mb-1">Total Deliveries</p>
-              <p className="text-neutral-900 text-2xl font-bold">{profileData.totalDeliveries}</p>
+        <div className="bg-white rounded-3xl shadow-2xs border border-slate-200/80 p-4">
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Total Deliveries</p>
+              <p className="text-slate-900 text-2xl font-black">{profileData.totalDeliveries}</p>
             </div>
-            <div className="text-center">
-              <p className="text-neutral-500 text-xs mb-1">Joined On</p>
-              <p className="text-neutral-900 text-sm font-semibold">{profileData.joinDate}</p>
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Partner Since</p>
+              <p className="text-slate-900 text-sm font-bold mt-1">{profileData.joinDate}</p>
             </div>
           </div>
         </div>
 
-        {/* Edit/Save/Cancel Buttons */}
-        {fieldErrors._global && (
-          <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{fieldErrors._global}</div>
-        )}
+        {/* Edit / Save Action Bar */}
         {isEditing ? (
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-2.5 pt-2">
             <button
               onClick={handleCancel}
-              className="flex-1 bg-neutral-200 text-neutral-900 rounded-xl py-3 font-semibold hover:bg-neutral-300 transition-colors"
+              disabled={saving}
+              className="flex-1 bg-slate-200 text-slate-800 rounded-2xl py-3 text-xs font-bold hover:bg-slate-300 transition-colors min-h-[44px]"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 bg-orange-500 text-white rounded-xl py-3 font-semibold hover:bg-orange-600 transition-colors"
+              disabled={saving}
+              className="flex-1 bg-emerald-600 text-white rounded-2xl py-3 text-xs font-black hover:bg-emerald-700 transition-all shadow-xs active:scale-98 min-h-[44px]"
             >
-              Save Changes
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         ) : (
           <button
             onClick={handleEdit}
-            className="w-full mt-4 bg-orange-500 text-white rounded-xl py-3 font-semibold hover:bg-orange-600 transition-colors"
+            className="w-full bg-emerald-600 text-white rounded-2xl py-3.5 font-black text-xs sm:text-sm hover:bg-emerald-700 transition-all shadow-xs active:scale-[0.98] min-h-[44px]"
           >
-            Edit Profile
+            ✏️ Edit Profile & Bank Details
           </button>
         )}
       </div>
@@ -383,4 +491,3 @@ export default function DeliveryProfile() {
     </div>
   );
 }
-

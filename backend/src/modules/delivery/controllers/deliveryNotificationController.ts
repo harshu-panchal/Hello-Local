@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Notification from "../../../models/Notification";
-// import mongoose from "mongoose";
 
 /**
  * Get Notifications
@@ -11,7 +10,7 @@ export const getNotifications = asyncHandler(async (req: Request, res: Response)
     const deliveryId = req.user?.userId;
 
     const notifications = await Notification.find({
-        recipientType: "Delivery",
+        recipientType: { $in: ["Delivery", "All"] },
         $or: [
             { recipientId: deliveryId },
             { recipientId: null } // Broadcasts to all delivery partners
@@ -34,7 +33,14 @@ export const markNotificationRead = asyncHandler(async (req: Request, res: Respo
     const deliveryId = req.user?.userId;
 
     const notification = await Notification.findOneAndUpdate(
-        { _id: id, recipientType: "Delivery", recipientId: deliveryId },
+        {
+            _id: id,
+            recipientType: { $in: ["Delivery", "All"] },
+            $or: [
+                { recipientId: deliveryId },
+                { recipientId: null }
+            ]
+        },
         { isRead: true, readAt: new Date() },
         { new: true }
     );
@@ -48,6 +54,31 @@ export const markNotificationRead = asyncHandler(async (req: Request, res: Respo
 
     return res.status(200).json({
         success: true,
-        message: "Notification marked as read"
+        message: "Notification marked as read",
+        data: notification
+    });
+});
+
+/**
+ * Mark All Notifications as Read
+ */
+export const markAllNotificationsRead = asyncHandler(async (req: Request, res: Response) => {
+    const deliveryId = req.user?.userId;
+
+    await Notification.updateMany(
+        {
+            recipientType: { $in: ["Delivery", "All"] },
+            $or: [
+                { recipientId: deliveryId },
+                { recipientId: null }
+            ],
+            isRead: false
+        },
+        { isRead: true, readAt: new Date() }
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: "All notifications marked as read"
     });
 });
