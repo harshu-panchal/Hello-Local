@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../../context/CartContext";
 import { useLocation } from "../../hooks/useLocation";
 import { useLoading } from "../../context/LoadingContext";
+import { useToast } from "../../context/ToastContext";
 import { getProductById } from "../../services/api/customerProductService";
 import WishlistButton from "../../components/WishlistButton";
 import StarRating from "../../components/ui/StarRating";
@@ -22,6 +23,7 @@ export default function ProductDetail() {
   const routerLocation = useRouterLocation();
   const { cart, addToCart, updateQuantity } = useCart();
   const { location } = useLocation();
+  const { showToast } = useToast();
   const { startLoading, stopLoading } = useLoading();
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -204,11 +206,11 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!isAvailableAtLocation) {
-      alert("This product is not available for delivery at your location.");
+      showToast("This product is not available for delivery at your location", "error");
       return;
     }
     if (!isVariantAvailable && variantStock !== 0) {
-      alert("This variant is currently out of stock.");
+      showToast("This variant is currently out of stock", "error");
       return;
     }
 

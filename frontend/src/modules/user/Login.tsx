@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { sendOTP, verifyOTP } from '../../services/api/auth/customerAuthService';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import OTPInput from '../../components/OTPInput';
 import { normalizeMobile } from '../../utils/phone';
 import Lottie from 'lottie-react';
@@ -10,13 +11,31 @@ import { ArrowLeftIcon } from './components/common/UserIcons';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+  const { showToast } = useToast();
+
   const [mobileNumber, setMobileNumber] = useState('');
   const [showOTP, setShowOTP] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mobileError, setMobileError] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  // Destination redirect path from RequireCustomer (e.g. /checkout, /account, /orders)
+  const fromPath = (location.state as any)?.from?.pathname || (location.state as any)?.from || '/';
+
+  // 30-second countdown interval for OTP resend
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   const validateMobile = (value: string): string => {
     if (!value) return 'Mobile number is required';
@@ -48,8 +67,12 @@ export default function Login() {
         setSessionId(response.sessionId);
       }
       setShowOTP(true);
+      setResendTimer(30); // 30-second cooldown
+      showToast('4-digit verification code sent to your phone', 'success');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+      const errMsg = err.response?.data?.message || 'Failed to send OTP. Please try again.';
+      setError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -70,11 +93,22 @@ export default function Login() {
           walletAmount: response.data.user.walletAmount,
           refCode: response.data.user.refCode,
           status: response.data.user.status,
+          userType: 'Customer',
         });
-        navigate('/');
+
+        if (response.data.isNewUser) {
+          showToast('Welcome to HelloLocal! Your account has been created.', 'success');
+        } else {
+          showToast('Welcome back! Signed in successfully.', 'success');
+        }
+
+        // Return customer back to their intended destination (e.g. /checkout or /)
+        navigate(fromPath, { replace: true });
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
+      const errMsg = err.response?.data?.message || 'Invalid verification code. Please try again.';
+      setError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -85,15 +119,22 @@ export default function Login() {
       {/* Back Button */}
       <button
         type="button"
-        onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-2xs border border-slate-100 text-slate-700 hover:bg-slate-50 transition-all touch-target-min"
+        onClick={() => {
+          if (showOTP) {
+            setShowOTP(false);
+            setError('');
+          } else {
+            navigate(-1);
+          }
+        }}
+        className="absolute top-4 left-4 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-2xs border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all min-h-[44px] min-w-[44px]"
         aria-label="Go back"
       >
         <ArrowLeftIcon size={18} />
       </button>
 
       {/* Main Authentication Card */}
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden relative z-10 p-5 sm:p-7">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden relative z-10 p-6 sm:p-8">
         {/* Header & Animation */}
         <div className="flex flex-col items-center text-center">
           <div className="w-40 h-36 sm:w-48 sm:h-44 mb-1">
@@ -101,25 +142,25 @@ export default function Login() {
           </div>
 
           <div className="flex items-center justify-center gap-1 mb-1">
-            <span className="text-xl font-bold tracking-tight text-[#FF8A00]">Hello</span>
-            <span className="text-xl font-bold tracking-tight text-[#FF2E7A]">Local</span>
+            <span className="text-2xl font-black tracking-tight text-[#FF8A00]">Hello</span>
+            <span className="text-2xl font-black tracking-tight text-[#FF2E7A]">Local</span>
           </div>
 
-          <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight mb-1">
-            {showOTP ? 'Enter Verification Code' : 'India\'s Hyperlocal Marketplace'}
+          <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mb-1">
+            {showOTP ? 'Enter Verification Code' : "India's Hyperlocal Marketplace"}
           </h2>
-          <p className="text-xs text-slate-500 font-medium leading-relaxed mb-5 px-3">
+          <p className="text-xs text-slate-500 font-medium leading-relaxed mb-5 px-2">
             {showOTP
-              ? `We sent a 6-digit verification code to +91 ${mobileNumber}`
+              ? `We sent a 4-digit verification code to +91 ${mobileNumber}`
               : 'Fresh groceries & daily needs delivered to your doorstep in 15 minutes.'}
           </p>
         </div>
 
         {/* Input Section */}
         {!showOTP ? (
-          <div className="space-y-3.5">
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Mobile Number
               </label>
               <div className="relative">
@@ -130,7 +171,7 @@ export default function Login() {
                   type="tel"
                   value={mobileNumber}
                   onChange={handleMobileChange}
-                  className={`w-full pl-12 pr-3.5 py-2.5 bg-slate-50 border rounded-xl text-base sm:text-xs font-bold text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-[#FF2E7A]/25 focus:border-[#FF2E7A] transition-colors ${
+                  className={`w-full pl-12 pr-3.5 py-3 bg-slate-50 border rounded-2xl text-base sm:text-sm font-bold text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-[#FF2E7A]/15 focus:border-[#FF2E7A] transition-all min-h-[44px] ${
                     mobileError ? 'border-rose-500' : 'border-slate-200'
                   }`}
                   placeholder="Enter 10-digit number"
@@ -139,12 +180,12 @@ export default function Login() {
                 />
               </div>
               {mobileError && (
-                <p className="text-[10px] text-rose-500 mt-1 font-bold">{mobileError}</p>
+                <p className="text-[11px] text-rose-500 mt-1 font-bold">{mobileError}</p>
               )}
             </div>
 
             {error && (
-              <div className="p-2.5 bg-[#FFF1F4] border border-[#FFE4EA] rounded-xl text-xs text-[#FF2E7A] font-bold">
+              <div className="p-3 bg-[#FFF1F4] border border-[#FFE4EA] rounded-2xl text-xs text-[#FF2E7A] font-bold text-center">
                 {error}
               </div>
             )}
@@ -153,9 +194,9 @@ export default function Login() {
               type="button"
               onClick={handleContinue}
               disabled={mobileNumber.length !== 10 || !!mobileError || loading}
-              className={`w-full py-2.5 rounded-full font-bold text-xs uppercase tracking-wider shadow-xs transition-all touch-target-min flex items-center justify-center gap-1.5 ${
+              className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-xs transition-all flex items-center justify-center gap-1.5 min-h-[44px] active:scale-[0.99] ${
                 mobileNumber.length === 10 && !mobileError && !loading
-                  ? 'bg-[#FF2E7A] text-white hover:bg-[#E02269] active:scale-95'
+                  ? 'bg-[#FF2E7A] text-white hover:bg-[#E02269] shadow-md shadow-[#FF2E7A]/20'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
             >
@@ -169,7 +210,7 @@ export default function Login() {
               )}
             </button>
 
-            <p className="text-[10px] text-slate-400 text-center pt-1">
+            <p className="text-[11px] text-slate-400 text-center pt-1 font-medium">
               By continuing, you agree to our{' '}
               <button
                 type="button"
@@ -190,17 +231,17 @@ export default function Login() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex justify-center">
-              <OTPInput onComplete={handleOTPComplete} disabled={loading} />
+            <div className="flex justify-center py-2">
+              <OTPInput onComplete={handleOTPComplete} disabled={loading} length={4} />
             </div>
 
             {error && (
-              <div className="text-center text-xs text-[#FF2E7A] bg-[#FFF1F4] border border-[#FFE4EA] p-2 rounded-xl font-bold">
+              <div className="text-center text-xs text-[#FF2E7A] bg-[#FFF1F4] border border-[#FFE4EA] p-3 rounded-2xl font-bold">
                 {error}
               </div>
             )}
 
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -208,17 +249,25 @@ export default function Login() {
                   setError('');
                 }}
                 disabled={loading}
-                className="flex-1 py-2 px-3 rounded-full font-bold text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors touch-target-min"
+                className="flex-1 py-3 px-3 rounded-2xl font-bold text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors min-h-[44px] flex items-center justify-center active:scale-98"
               >
                 Change Number
               </button>
               <button
                 type="button"
                 onClick={handleContinue}
-                disabled={loading}
-                className="flex-1 py-2 px-3 rounded-full font-bold text-xs text-[#FF2E7A] bg-[#FFF1F4] border border-[#FFE4EA] hover:bg-[#FFE4EA] transition-colors touch-target-min"
+                disabled={loading || resendTimer > 0}
+                className={`flex-1 py-3 px-3 rounded-2xl font-bold text-xs transition-colors min-h-[44px] flex items-center justify-center active:scale-98 ${
+                  resendTimer > 0
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                    : 'text-[#FF2E7A] bg-[#FFF1F4] border border-[#FFE4EA] hover:bg-[#FFE4EA]'
+                }`}
               >
-                {loading ? 'Sending...' : 'Resend Code'}
+                {loading
+                  ? 'Sending...'
+                  : resendTimer > 0
+                  ? `Resend in ${resendTimer}s`
+                  : 'Resend Code'}
               </button>
             </div>
           </div>

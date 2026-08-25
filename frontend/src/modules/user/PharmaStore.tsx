@@ -2,12 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Product } from '../../types/domain';
 import { getProducts } from '../../services/api/customerProductService';
+import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
 import { UserEmptyState } from './components/common';
 import { ArrowLeftIcon, ShieldCheckIcon } from './components/common/UserIcons';
 
 export default function PharmaStore() {
   const navigate = useNavigate();
+  const { location } = useLocation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,8 +17,12 @@ export default function PharmaStore() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await getProducts({ category: 'health-pharma' });
-        setProducts(response.data as unknown as Product[]);
+        const response = await getProducts({
+          category: 'health-pharma',
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+        });
+        setProducts((response.data as unknown as Product[]) || []);
       } catch (error) {
         console.error('Failed to fetch pharma products:', error);
       } finally {
@@ -25,7 +31,7 @@ export default function PharmaStore() {
     };
 
     fetchProducts();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
@@ -46,7 +52,7 @@ export default function PharmaStore() {
                 Pharmacy & Wellness Store
               </h1>
               <p className="text-[10px] text-slate-400 font-medium">
-                Medicines, first aid, supplements & healthcare
+                Healthcare, OTC essentials & babycare
               </p>
             </div>
           </div>
@@ -57,7 +63,7 @@ export default function PharmaStore() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-2.5">
             <div className="w-10 h-10 border-3 border-[#FF2E7A] border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-slate-400">Loading healthcare products...</p>
+            <p className="text-xs font-bold text-slate-400">Loading pharmacy essentials...</p>
           </div>
         ) : products && products.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5">
@@ -69,8 +75,8 @@ export default function PharmaStore() {
           <div className="py-10">
             <UserEmptyState
               icon={<ShieldCheckIcon size={32} className="text-[#FF2E7A]" />}
-              title="No pharma products found"
-              description="Pharmacy inventory is currently updating. Please check back shortly."
+              title="No pharmacy items found in your area"
+              description="Pharmacy essentials are currently refreshing or unavailable nearby. Please check back shortly."
               actionText="Explore Marketplace"
               onAction={() => navigate('/')}
             />

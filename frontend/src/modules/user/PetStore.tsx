@@ -2,12 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Product } from '../../types/domain';
 import { getProducts } from '../../services/api/customerProductService';
+import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
 import { UserEmptyState } from './components/common';
 import { ArrowLeftIcon, SparklesIcon } from './components/common/UserIcons';
 
 export default function PetStore() {
   const navigate = useNavigate();
+  const { location } = useLocation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,8 +17,12 @@ export default function PetStore() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await getProducts({ category: 'pet' });
-        setProducts(response.data as unknown as Product[]);
+        const response = await getProducts({
+          category: 'pet',
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+        });
+        setProducts((response.data as unknown as Product[]) || []);
       } catch (error) {
         console.error('Failed to fetch pet products:', error);
       } finally {
@@ -25,7 +31,7 @@ export default function PetStore() {
     };
 
     fetchProducts();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
@@ -43,10 +49,10 @@ export default function PetStore() {
             </button>
             <div>
               <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                Pet Care & Treats Store
+                Pet Care Store
               </h1>
               <p className="text-[10px] text-slate-400 font-medium">
-                Food, toys, grooming & accessories
+                Pet food, treats, grooming & accessories
               </p>
             </div>
           </div>
@@ -69,8 +75,8 @@ export default function PetStore() {
           <div className="py-10">
             <UserEmptyState
               icon={<SparklesIcon size={32} className="text-[#FF2E7A]" />}
-              title="No pet items found"
-              description="Pet care supplies are currently updating. Please check back shortly."
+              title="No pet items found in your area"
+              description="Pet supplies are currently refreshing or unavailable nearby. Please check back shortly."
               actionText="Explore Marketplace"
               onAction={() => navigate('/')}
             />

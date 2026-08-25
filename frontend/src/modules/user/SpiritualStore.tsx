@@ -2,12 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Product } from '../../types/domain';
 import { getProducts } from '../../services/api/customerProductService';
+import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
 import { UserEmptyState } from './components/common';
 import { ArrowLeftIcon, SparklesIcon } from './components/common/UserIcons';
 
 export default function SpiritualStore() {
   const navigate = useNavigate();
+  const { location } = useLocation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,8 +17,12 @@ export default function SpiritualStore() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await getProducts({ category: 'spiritual' });
-        setProducts(response.data as unknown as Product[]);
+        const response = await getProducts({
+          category: 'spiritual',
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+        });
+        setProducts((response.data as unknown as Product[]) || []);
       } catch (error) {
         console.error('Failed to fetch spiritual products:', error);
       } finally {
@@ -25,7 +31,7 @@ export default function SpiritualStore() {
     };
 
     fetchProducts();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
@@ -69,8 +75,8 @@ export default function SpiritualStore() {
           <div className="py-10">
             <UserEmptyState
               icon={<SparklesIcon size={32} className="text-[#FF2E7A]" />}
-              title="No items found"
-              description="Spiritual items are currently refreshing. Please check back shortly."
+              title="No items found in your area"
+              description="Spiritual items are currently refreshing or unavailable nearby. Please check back shortly."
               actionText="Explore Marketplace"
               onAction={() => navigate('/')}
             />

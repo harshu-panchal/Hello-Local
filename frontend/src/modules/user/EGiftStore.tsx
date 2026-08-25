@@ -2,12 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Product } from '../../types/domain';
 import { getProducts } from '../../services/api/customerProductService';
+import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
 import { UserEmptyState } from './components/common';
 import { ArrowLeftIcon, SparklesIcon } from './components/common/UserIcons';
 
 export default function EGiftStore() {
   const navigate = useNavigate();
+  const { location } = useLocation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,8 +17,12 @@ export default function EGiftStore() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await getProducts({ category: 'egifts' });
-        setProducts(response.data as unknown as Product[]);
+        const response = await getProducts({
+          category: 'egifts',
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+        });
+        setProducts((response.data as unknown as Product[]) || []);
       } catch (error) {
         console.error('Failed to fetch egift products:', error);
       } finally {
@@ -25,7 +31,7 @@ export default function EGiftStore() {
     };
 
     fetchProducts();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
@@ -43,10 +49,10 @@ export default function EGiftStore() {
             </button>
             <div>
               <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                E-Gift Cards & Chocolates
+                E-Gift Cards & Vouchers
               </h1>
               <p className="text-[10px] text-slate-400 font-medium">
-                Gift hampers, celebration boxes & digital cards
+                Instant digital gifting & discount vouchers
               </p>
             </div>
           </div>
@@ -57,7 +63,7 @@ export default function EGiftStore() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-2.5">
             <div className="w-10 h-10 border-3 border-[#FF2E7A] border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-slate-400">Loading gift cards & hampers...</p>
+            <p className="text-xs font-bold text-slate-400">Loading gift cards...</p>
           </div>
         ) : products && products.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5">
@@ -69,8 +75,8 @@ export default function EGiftStore() {
           <div className="py-10">
             <UserEmptyState
               icon={<SparklesIcon size={32} className="text-[#FF2E7A]" />}
-              title="No e-gifts available"
-              description="Gift items are currently updating. Please check back shortly."
+              title="No gift cards found in your area"
+              description="E-Gift vouchers are currently refreshing. Please check back shortly."
               actionText="Explore Marketplace"
               onAction={() => navigate('/')}
             />

@@ -6,6 +6,7 @@ import AdPopupAutoWidget from '../modules/user/components/AdPopupAutoWidget';
 import { useLocation as useLocationContext } from '../hooks/useLocation';
 import LocationPermissionRequest from './LocationPermissionRequest';
 import { useThemeContext } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { getCategoryGradient } from '../utils/themes';
 import { getLenis } from '../utils/smoothScroll';
 import {
@@ -34,6 +35,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showLocationRequest, setShowLocationRequest] = useState(false);
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
   const { activeCategory } = useThemeContext();
+  const { showToast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
@@ -48,7 +50,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Voice search is not supported in your browser.");
+      showToast("Voice search is not supported in your browser", "info");
       return;
     }
 

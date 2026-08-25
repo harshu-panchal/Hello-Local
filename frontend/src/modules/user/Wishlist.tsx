@@ -52,8 +52,10 @@ export default function Wishlist() {
     try {
       await removeFromWishlist(productId);
       setProducts(products.filter((p) => p.id !== productId && p._id !== productId));
+      showToast('Removed from wishlist');
     } catch (error) {
       console.error('Failed to remove from wishlist:', error);
+      showToast('Failed to remove item from wishlist', 'error');
     }
   };
 

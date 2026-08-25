@@ -12,7 +12,10 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
 
   useEffect(() => {
     // Focus first input on mount
-    inputRefs.current[0]?.focus();
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleChange = (index: number, value: string) => {
@@ -37,9 +40,15 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      // Move to previous input on backspace
-      inputRefs.current[index - 1]?.focus();
+    if (e.key === 'Backspace') {
+      if (!otp[index] && index > 0) {
+        // Move to previous input on backspace if current is empty
+        inputRefs.current[index - 1]?.focus();
+      } else {
+        const newOtp = [...otp];
+        newOtp[index] = '';
+        setOtp(newOtp);
+      }
     }
   };
 
@@ -66,7 +75,7 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
   };
 
   return (
-    <div className="flex gap-2 justify-center">
+    <div className="flex gap-2.5 justify-center">
       {otp.map((digit, index) => (
         <input
           key={index}
@@ -79,10 +88,9 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={handlePaste}
           disabled={disabled}
-          className="w-12 h-12 text-center text-lg font-semibold border-2 border-neutral-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-200 outline-none transition-colors disabled:bg-neutral-100 disabled:cursor-not-allowed"
+          className="w-12 h-13 text-center text-xl font-black border-2 border-slate-200 bg-slate-50 rounded-2xl focus:bg-white focus:border-[#FF2E7A] focus:ring-4 focus:ring-[#FF2E7A]/15 outline-none transition-all disabled:bg-slate-100 disabled:cursor-not-allowed text-slate-900 shadow-2xs"
         />
       ))}
     </div>
   );
 }
-

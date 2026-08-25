@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '../../../hooks/useLocation';
+import { useToast } from '../../../context/ToastContext';
 import {
   LocationPinIcon,
   SearchIcon,
@@ -19,6 +20,7 @@ interface UserTopHeaderProps {
 export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
   const navigate = useNavigate();
   const { location: userLocation } = useLocation();
+  const { showToast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
 
@@ -60,7 +62,7 @@ export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Voice search is not supported in your browser.');
+      showToast('Voice search is not supported in your browser', 'info');
       return;
     }
 
@@ -93,7 +95,7 @@ export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
   };
 
   return (
-    <div className="w-full bg-white border-b border-slate-100">
+    <div className="w-full bg-white border-b border-slate-100 sticky top-0 z-30">
       <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-3 pb-3 space-y-2.5">
         {/* MOBILE TOP BAR (md:hidden): Location Pill | HelloLocal Wordmark | Notification Bell */}
         <div className="flex md:hidden items-center justify-between gap-2">
@@ -135,9 +137,6 @@ export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
             aria-label="Notifications"
           >
             <BellIcon size={18} className="text-slate-700" />
-            <span className="absolute 1.5 1.5 w-4 h-4 bg-[#FF2E7A] text-white rounded-full text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs">
-              3
-            </span>
           </button>
         </div>
 
