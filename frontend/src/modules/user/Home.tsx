@@ -12,6 +12,7 @@ import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryServ
 import { useLocation } from "../../hooks/useLocation";
 import { useLoading } from "../../context/LoadingContext";
 import PageLoader from "../../components/PageLoader";
+import { CategoryNavIcon } from "./components/common/UserIcons";
 
 const ShopAdCarousel = React.lazy(() => import("./components/ShopAdCarousel"));
 const LowestPricesEver = React.lazy(() => import("./components/LowestPricesEver"));
@@ -28,6 +29,7 @@ export default function Home() {
   const activeTab = activeCategory; // mapping for existing code compatibility
   const setActiveTab = setActiveCategory;
   const contentRef = useRef<HTMLDivElement>(null);
+  const categoryContentRef = useRef<HTMLDivElement>(null);
   const scrollHandledRef = useRef(false);
   const isInitialLoadRef = useRef(true);
   const SCROLL_POSITION_KEY = 'home-scroll-position';
@@ -37,6 +39,11 @@ export default function Home() {
   const handleTabChange = (tabId: string, tabName?: string) => {
     setActiveTab(tabId);
     if (tabName) setActiveTabName(tabName);
+    if (tabId !== 'all') {
+      setTimeout(() => {
+        categoryContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
   };
 
   const isFoodCategory = activeTab === 'food' || activeTab === 'dark' || activeTabName.toLowerCase() === 'food' || activeTabName.toLowerCase().includes('food') || activeTab?.toLowerCase().includes('food');
@@ -448,6 +455,7 @@ export default function Home() {
 
       {/* Main content */}
       <div
+        ref={categoryContentRef}
         className={`${!isFoodCategory ? 'bg-neutral-50' : ''} -mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 transition-colors duration-500`}
         style={{ backgroundColor: isFoodCategory ? '#FFCCCC' : undefined }}>
         {/* Dynamic Home Sections - Render sections created by admin */}
@@ -500,6 +508,28 @@ export default function Home() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Empty State when a category is selected and has 0 products */}
+        {activeTab !== "all" && !loading && filteredProducts.length === 0 && (!((homeData as any).promoCards) || (homeData as any).promoCards.length === 0) && (
+          <div className="py-12 px-4 text-center bg-white rounded-2xl border border-slate-100 mx-4 my-6 shadow-2xs">
+            <div className="w-14 h-14 rounded-full bg-[#FFF1F4] flex items-center justify-center mx-auto mb-3 text-[#FF2E7A]">
+              <CategoryNavIcon size={24} />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 capitalize">
+              No products found in {activeTabName || activeTab}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              Local sellers in your location have not added products to this category yet.
+            </p>
+            <button
+              type="button"
+              onClick={() => handleTabChange('all', 'All')}
+              className="mt-4 px-4 py-2 bg-[#FF2E7A] text-white rounded-xl text-xs font-semibold hover:bg-[#E0266A] transition-colors shadow-2xs"
+            >
+              Back to All Products
+            </button>
           </div>
         )}
 

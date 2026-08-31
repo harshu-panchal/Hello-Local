@@ -411,7 +411,7 @@ export default function Checkout() {
     }
 
     if (!selectedAddress.city || !selectedAddress.pincode) {
-      alert("Please ensure your address has city and pincode.");
+      showGlobalToast("Please ensure your address has city and pincode.", "error");
       return;
     }
 
@@ -419,8 +419,9 @@ export default function Checkout() {
     const finalLongitude = selectedAddress.longitude ?? userLocation?.longitude;
 
     if (finalLatitude == null || finalLongitude == null) {
-      alert(
-        "Location is required for delivery. Please ensure your address has location data or enable location access."
+      showGlobalToast(
+        "Location is required for delivery. Please ensure your address has location data or enable location access.",
+        "error"
       );
       return;
     }
@@ -472,7 +473,7 @@ export default function Checkout() {
         error.message ||
         error.response?.data?.message ||
         "Failed to place order. Please try again.";
-      alert(errorMessage);
+      showGlobalToast(errorMessage, "error");
     }
   };
 

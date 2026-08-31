@@ -202,7 +202,7 @@ export default function OrderDetail() {
         await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        alert("Link copied to clipboard!");
+        showToast("Link copied to clipboard!", "success");
       }
     } catch (error) {
       console.error("Error sharing:", error);
@@ -257,7 +257,7 @@ export default function OrderDetail() {
 
   const handleCancelOrder = async () => {
     if (!cancellationReason.trim()) {
-      alert("Please provide a cancellation reason");
+      showToast("Please provide a cancellation reason", "error");
       return;
     }
     if (!id) return;
@@ -266,11 +266,11 @@ export default function OrderDetail() {
       await cancelOrder(id, cancellationReason);
       setOrderStatus("Cancelled" as any);
       setShowCancelModal(false);
-      alert("Order cancelled successfully");
+      showToast("Order cancelled successfully", "success");
       handleRefresh();
     } catch (error) {
       console.error("Error cancelling order:", error);
-      alert("Failed to cancel order");
+      showToast("Failed to cancel order", "error");
     }
   };
 
@@ -279,10 +279,11 @@ export default function OrderDetail() {
       if (!id) return;
       await updateOrderNotes(id, { deliveryInstructions });
       setShowInstructionsModal(false);
+      showToast("Delivery instructions saved", "success");
       handleRefresh();
     } catch (error) {
       console.error("Failed to save instructions:", error);
-      alert("Failed to save instructions");
+      showToast("Failed to save instructions", "error");
     }
   };
 
@@ -291,10 +292,11 @@ export default function OrderDetail() {
       if (!id) return;
       await updateOrderNotes(id, { specialRequests });
       setShowSpecialRequestsModal(false);
+      showToast("Special requests saved", "success");
       handleRefresh();
     } catch (error) {
       console.error("Failed to save special requests:", error);
-      alert("Failed to save special requests");
+      showToast("Failed to save special requests", "error");
     }
   };
 

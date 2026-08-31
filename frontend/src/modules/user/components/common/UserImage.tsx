@@ -67,11 +67,8 @@ export const UserImage: React.FC<UserImageProps> = ({
 
       {/* Subtle Fallback on Error / Missing Image */}
       {status === 'error' && (
-        <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-slate-50 border border-slate-100 rounded-[inherit]">
+        <div className="w-full h-full flex items-center justify-center p-1 text-center bg-slate-50 rounded-[inherit]">
           {getFallbackSvg(categoryFallback)}
-          <span className="text-[9px] font-bold text-slate-300 mt-1 line-clamp-1 max-w-[90%]">
-            {alt || 'HelloLocal'}
-          </span>
         </div>
       )}
     </div>

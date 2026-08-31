@@ -476,14 +476,71 @@ export const ICON_LIBRARY: IconDef[] = [
                 <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" />
             </svg>
         )
+    },
+    {
+        name: 'dairy',
+        label: 'Dairy & Milk',
+        tags: ['dairy', 'milk', 'cheese', 'butter', 'paneer', 'ghee', 'curd', 'yogurt', 'cow'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 2h8v3H8z" />
+                <path d="M9 5l-2 4v11a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9l-2-4" />
+                <path d="M7 13h10" />
+                <circle cx="12" cy="17" r="1.5" />
+            </svg>
+        )
+    },
+    {
+        name: 'food',
+        label: 'Food & Meals',
+        tags: ['food', 'meal', 'restaurant', 'dining', 'cook', 'chef', 'dish', 'curry', 'rice'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+                <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+                <line x1="6" y1="1" x2="6" y2="4" />
+                <line x1="10" y1="1" x2="10" y2="4" />
+                <line x1="14" y1="1" x2="14" y2="4" />
+            </svg>
+        )
     }
 ];
 
-export const getIconByName = (name: string): React.ReactNode => {
-    const found = ICON_LIBRARY.find(icon => icon.name === name);
+export const getIconByName = (name?: string): React.ReactNode => {
+    if (!name) {
+        return (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+        );
+    }
+
+    const clean = name.trim().toLowerCase();
+    const slug = clean.replace(/[\s_]+/g, '-');
+
+    // 1. Direct name/slug match
+    let found = ICON_LIBRARY.find(icon =>
+        icon.name.toLowerCase() === clean ||
+        icon.name.toLowerCase() === slug ||
+        icon.label.toLowerCase() === clean
+    );
+
+    // 2. Tag / Partial Match
+    if (!found) {
+        found = ICON_LIBRARY.find(icon =>
+            icon.tags.some(tag => clean.includes(tag) || tag.includes(clean))
+        );
+    }
+
     return found ? found.svg : (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
         </svg>
     );
 };

@@ -72,44 +72,61 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isRequestingRef = useRef(false);
 
-  // Initialize location state and check session permission
+  // Initialize location state and check persistent permission
   useEffect(() => {
     const checkInitialPermission = async () => {
       console.log('[LocationContext] Checking initial permission status...');
 
       try {
-        // 1. Check sessionStorage for session-level permission
-        const sessionGranted = sessionStorage.getItem(SESSION_PERMISSION_KEY);
-
-        if (sessionGranted === 'true') {
-          console.log('[LocationContext] Permission already granted in this session.');
-
-          // 2. Check for cached location in localStorage
-          const cachedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-          if (cachedLocation) {
-            try {
-              const parsedLocation = JSON.parse(cachedLocation);
-              console.log('[LocationContext] Using cached location from this session:', parsedLocation.address);
+        // 1. Check for cached location in localStorage (Primary persistent storage)
+        const cachedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
+        if (cachedLocation) {
+          try {
+            const parsedLocation = JSON.parse(cachedLocation);
+            if (parsedLocation && parsedLocation.latitude && parsedLocation.longitude) {
+              console.log('[LocationContext] Using cached location from localStorage:', parsedLocation.address);
               setLocation(parsedLocation);
               setIsLocationEnabled(true);
-              setLocationPermissionStatus('session_granted');
-            } catch (e) {
-              console.error('[LocationContext] Failed to parse cached location:', e);
+              setLocationPermissionStatus('granted');
+              setIsLocationLoading(false);
+              return;
             }
-          } else {
-            // Permission granted but no location? Prompt to refresh it
-            console.log('[LocationContext] Session permission exists but no cached location.');
-            setLocationPermissionStatus('session_granted');
+          } catch (e) {
+            console.error('[LocationContext] Failed to parse cached location:', e);
           }
+        }
+
+        // 2. Check browser geolocation permission query if available
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+            if (permissionStatus.state === 'granted') {
+              console.log('[LocationContext] Browser permission is granted, requesting location silently...');
+              setLocationPermissionStatus('granted');
+              await requestLocation();
+              return;
+            } else if (permissionStatus.state === 'denied') {
+              setLocationPermissionStatus('denied');
+              setIsLocationEnabled(false);
+              setIsLocationLoading(false);
+              return;
+            }
+          } catch (permErr) {
+            console.debug('[LocationContext] permissions.query not supported or failed:', permErr);
+          }
+        }
+
+        // 3. Fallback: Check session permission
+        const sessionGranted = sessionStorage.getItem(SESSION_PERMISSION_KEY);
+        if (sessionGranted === 'true') {
+          setLocationPermissionStatus('session_granted');
         } else {
-          console.log('[LocationContext] No session-level permission found. User will be prompted.');
           setLocation(null);
           setIsLocationEnabled(false);
           setLocationPermissionStatus('prompt');
         }
       } catch (error) {
-        console.error('[LocationContext] Error checking session storage:', error);
-        // Fallback to prompt if storage is unavailable
+        console.error('[LocationContext] Error checking initial location storage:', error);
         setLocationPermissionStatus('prompt');
       } finally {
         setIsLocationLoading(false);
@@ -117,7 +134,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     };
 
     checkInitialPermission();
-  }, []);
+  }, [LOCATION_STORAGE_KEY, SESSION_PERMISSION_KEY]);
 
   // Request user's current location - OPTIMIZED for speed and accuracy
   const requestLocation = useCallback(async (): Promise<void> => {

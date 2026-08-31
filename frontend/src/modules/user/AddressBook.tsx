@@ -6,6 +6,7 @@ import {
   getAddresses,
   updateAddress,
 } from "../../services/api/customerAddressService";
+import { useToast } from "../../context/ToastContext";
 import { UserEmptyState } from "./components/common";
 import { ArrowLeftIcon, LocationPinIcon, PlusIcon, ShareIcon } from "./components/common/UserIcons";
 
@@ -22,6 +23,7 @@ function buildAddressLine(address: Address) {
 
 export default function AddressBook() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,21 +66,22 @@ export default function AddressBook() {
       }
     } else if (navigator.clipboard) {
       await navigator.clipboard.writeText(text);
-      alert("Address copied to clipboard");
+      showToast("Address copied to clipboard");
     }
   };
 
   const handleDelete = async (id?: string) => {
     if (!id) return;
-    if (!confirm("Remove this address?")) return;
     try {
       setBusyId(id);
       await deleteAddress(id);
       setAddresses((prev) => prev.filter((a) => a._id !== id));
+      showToast("Address removed successfully");
     } catch (err: any) {
       setError(
         err.response?.data?.message || err.message || "Failed to delete address"
       );
+      showToast("Failed to delete address", "error");
     } finally {
       setBusyId(null);
     }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
 import { useCart } from '../../context/CartContext';
+import { useLocation } from '../../hooks/useLocation';
 import { getProducts } from '../../services/api/customerProductService';
 import { calculateProductPrice } from '../../utils/priceUtils';
 import { UserImage, UserEmptyState } from './components/common';
@@ -23,6 +24,7 @@ const formatDate = (dateString: string) => {
 export default function OrderAgain() {
   const { orders } = useOrders();
   const { cart, addToCart, updateQuantity } = useCart();
+  const { location } = useLocation();
   const navigate = useNavigate();
   const [addedOrders, setAddedOrders] = useState<Set<string>>(new Set());
   const [bestsellerProducts, setBestsellerProducts] = useState<any[]>([]);
@@ -57,7 +59,12 @@ export default function OrderAgain() {
   useEffect(() => {
     const fetchBestsellers = async () => {
       try {
-        const response = await getProducts({ sort: 'popular', limit: 8 });
+        const response = await getProducts({
+          sort: 'popular',
+          limit: 8,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+        });
         if (response.success && response.data) {
           const mapped = (response.data as any[]).map((p) => {
             let productName = p.productName || p.name || '';
@@ -84,7 +91,7 @@ export default function OrderAgain() {
       }
     };
     fetchBestsellers();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   const hasOrders = orders && orders.length > 0;
 

@@ -9,6 +9,7 @@ import { getCategories } from '../../../services/api/customerProductService';
 import { Category } from '../../../types/domain';
 import { getHeaderCategoriesPublic } from '../../../services/api/headerCategoryService';
 import { getIconByName } from '../../../utils/iconLibrary';
+import { useToast } from '../../../context/ToastContext';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -82,6 +83,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   }, []);
   const navigate = useNavigate();
   const { location: userLocation } = useLocation();
+  const { showToast } = useToast();
   const heroRef = useRef<HTMLDivElement>(null);
   const topSectionRef = useRef<HTMLDivElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
@@ -110,7 +112,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Voice search is not supported in your browser.");
+      showToast("Voice search is not supported in your browser.", "error");
       return;
     }
 

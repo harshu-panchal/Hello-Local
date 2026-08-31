@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAddresses, deleteAddress, Address } from '../../services/api/customerAddressService';
+import { useToast } from '../../context/ToastContext';
 import { UserEmptyState } from './components/common';
 import { ArrowLeftIcon, LocationPinIcon, PlusIcon } from './components/common/UserIcons';
 
 export default function Addresses() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,13 +31,13 @@ export default function Addresses() {
 
   const handleDelete = async (id: string | undefined) => {
     if (!id) return;
-    if (!window.confirm('Are you sure you want to delete this address?')) return;
-
     try {
       await deleteAddress(id);
       setAddresses((prev) => prev.filter((a) => a._id !== id));
+      showToast('Address deleted successfully');
     } catch (error) {
       console.error('Failed to delete address:', error);
+      showToast('Failed to delete address', 'error');
     }
   };
 
