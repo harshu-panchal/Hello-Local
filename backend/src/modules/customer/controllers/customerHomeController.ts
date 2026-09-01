@@ -715,12 +715,127 @@ export const getHomeContent = async (req: Request, res: Response) => {
       }
     ];
 
+    // 12. Fetch Products for the Header Category (when a specific category tab is selected)
+    let headerCategoryProducts: any[] = [];
+    if (headerCategorySlug && headerCategorySlug !== "all") {
+      const targetHeaderCat = await HeaderCategory.findOne({
+        slug: headerCategorySlug,
+        status: "Published",
+      }).lean();
+
+      if (targetHeaderCat) {
+        // Find linked root categories
+        const linkedCategories = await Category.find({
+          headerCategoryId: targetHeaderCat._id,
+          status: "Active",
+        }).select("_id").lean();
+
+        const linkedCategoryIds = linkedCategories.map((c: any) => c._id);
+
+        // Find child categories (subcategories) under these root categories
+        const allCategoryIds = [...linkedCategoryIds];
+        const allSubcategoryIds: any[] = [];
+
+        if (linkedCategoryIds.length > 0) {
+          const childCategories = await Category.find({
+            parentId: { $in: linkedCategoryIds },
+            status: "Active",
+          }).select("_id").lean();
+
+          const subCategories = await SubCategory.find({
+            category: { $in: linkedCategoryIds },
+          }).select("_id").lean();
+
+          allCategoryIds.push(...childCategories.map((c: any) => c._id));
+          allSubcategoryIds.push(...subCategories.map((s: any) => s._id));
+        }
+
+        // Also check if any root category directly has matching slug or name
+        const directCategoryMatch = await Category.findOne({
+          slug: headerCategorySlug,
+          status: "Active",
+        }).select("_id").lean();
+
+        if (directCategoryMatch && !allCategoryIds.some(id => id.toString() === directCategoryMatch._id.toString())) {
+          allCategoryIds.push(directCategoryMatch._id);
+        }
+
+        // Build product query
+        const productFilter: any = {
+          status: "Active",
+          publish: true,
+          $or: [
+            { isShopByStoreOnly: { $ne: true } },
+            { isShopByStoreOnly: { $exists: false } },
+          ],
+        };
+
+        if (nearbySellerIds.length > 0) {
+          productFilter.seller = { $in: nearbySellerIds };
+        }
+
+        const matchOrConditions: any[] = [
+          { headerCategoryId: targetHeaderCat._id },
+        ];
+
+        if (allCategoryIds.length > 0) {
+          matchOrConditions.push({ category: { $in: allCategoryIds } });
+        }
+        if (allSubcategoryIds.length > 0) {
+          matchOrConditions.push({ subcategory: { $in: allSubcategoryIds } });
+        }
+
+        if (matchOrConditions.length > 0 && (!userLat || nearbySellerIds.length > 0)) {
+          const rawProducts = await Product.find({
+            ...productFilter,
+            $or: matchOrConditions,
+          })
+            .sort({ createdAt: -1 })
+            .limit(40)
+            .select(
+              "productName mainImage galleryImages price mrp discount rating reviewsCount pack seller variations foodType status publish category subcategory"
+            )
+            .lean();
+
+          headerCategoryProducts = rawProducts.map((p: any) => ({
+            id: p._id.toString(),
+            _id: p._id.toString(),
+            productId: p._id.toString(),
+            name: p.productName,
+            productName: p.productName,
+            mainImage: p.mainImage,
+            galleryImages: p.galleryImages || [],
+            image: p.mainImage,
+            price: p.price,
+            mrp: p.mrp || p.price,
+            discount:
+              p.discount ||
+              (p.mrp && p.price
+                ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
+                : 0),
+            rating: p.rating || 0,
+            reviewsCount: p.reviewsCount || 0,
+            reviews: p.reviewsCount || 0,
+            pack: p.pack || "",
+            foodType: p.foodType || "None",
+            seller: p.seller,
+            variations: p.variations || [],
+            isAvailable: true,
+            categoryId: p.category?.toString() || "",
+            subcategory: p.subcategory?.toString() || "",
+            type: "product",
+          }));
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: {
         bestsellers,
         lowestPrices: validLowestPricesProducts, // Admin-selected products for LowestPricesEver section
         categories,
+        products: headerCategoryProducts, // Dynamic products for the active header category
         // Dynamic sections created by admin
         homeSections: dynamicSections,
         shops,

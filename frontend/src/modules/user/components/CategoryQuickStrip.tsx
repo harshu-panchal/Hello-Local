@@ -89,7 +89,7 @@ export default function CategoryQuickStrip({ activeTab, onTabChange }: CategoryQ
           })()}
 
           {/* 2. Dynamic Categories with circular pastel image/icon containers */}
-          {categories.slice(0, 10).map((cat, idx) => {
+          {categories.map((cat, idx) => {
             const isAllActive = activeTab === 'all' || !activeTab;
             const isActive = !isAllActive && (activeTab === cat.slug || activeTab === cat.id);
             const themeStyle = pastelColors[idx % pastelColors.length];

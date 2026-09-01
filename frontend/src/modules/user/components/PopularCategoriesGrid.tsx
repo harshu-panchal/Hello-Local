@@ -77,7 +77,7 @@ export default function PopularCategoriesGrid({ categories = [] }: PopularCatego
             <button
               type="button"
               key={cat.id || cat._id || slug || idx}
-              onClick={() => navigate(`/categories?category=${slug}`)}
+              onClick={() => navigate(`/category/${slug}`)}
               className="flex flex-col items-center text-center group active:scale-95 transition-all min-h-[44px]"
             >
               <div

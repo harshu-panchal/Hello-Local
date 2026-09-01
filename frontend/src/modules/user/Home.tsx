@@ -108,9 +108,7 @@ export default function Home() {
         );
         if (response.success && response.data) {
           setHomeData(response.data);
-          if (response.data.bestsellers) {
-            setProducts(response.data.bestsellers);
-          }
+          setProducts(response.data.products || []);
         } else {
           setError("Failed to load content. Please try again.");
         }
@@ -131,18 +129,10 @@ export default function Home() {
     // Preload Logic (kept same)
     const preloadHeaderCategories = async () => {
       try {
-        // ... (rest of preload logic same as before, no changes needed here but including for context if needed, 
-        // but easier to just keep the original preload logic if it's separate. 
-        // Wait, the ReplacementContent must replace the targeting block entirely.)
-        // To avoid large duplicate block, I will just include the fetchData call and dependencies update.
       } catch (error) {
         console.debug("Failed to preload header categories:", error);
       }
     };
-
-    // We only want to preload once on mount, so we can keep the preload logic in a separate effect or just here
-    // But since this effect now runs on activeTab change, we shouldn't preload every time.
-    // Let's separate preload to a mount-only effect or use a ref.
 
   }, [location?.latitude, location?.longitude, activeTab]);
 
@@ -253,22 +243,9 @@ export default function Home() {
     };
   }, []);
 
-  // Removed duplicate saveScrollPosition
-  const getFilteredProducts = (tabId: string) => {
-    if (tabId === "all") {
-      return products;
-    }
-    return products.filter(
-      (p) =>
-        p.categoryId === tabId ||
-        (p.category && (p.category._id === tabId || p.category.slug === tabId))
-    );
-  };
-
   const filteredProducts = useMemo(() => {
-    const defaultFiltered = getFilteredProducts(activeTab);
-    return defaultFiltered.filter(p => isProductMatchDiet(p, dietPreference));
-  }, [activeTab, products, dietPreference]);
+    return (products || []).filter(p => isProductMatchDiet(p, dietPreference));
+  }, [products, dietPreference]);
 
   const filteredHomeSections = useMemo(() => {
     if (!homeData.homeSections) return [];
@@ -512,7 +489,7 @@ export default function Home() {
         )}
 
         {/* Empty State when a category is selected and has 0 products */}
-        {activeTab !== "all" && !loading && filteredProducts.length === 0 && (!((homeData as any).promoCards) || (homeData as any).promoCards.length === 0) && (
+        {activeTab !== "all" && !loading && filteredProducts.length === 0 && (!((homeData as any).promoCards) || (homeData as any).promoCards.length === 0) && (!filteredHomeSections || filteredHomeSections.length === 0) && (
           <div className="py-12 px-4 text-center bg-white rounded-2xl border border-slate-100 mx-4 my-6 shadow-2xs">
             <div className="w-14 h-14 rounded-full bg-[#FFF1F4] flex items-center justify-center mx-auto mb-3 text-[#FF2E7A]">
               <CategoryNavIcon size={24} />

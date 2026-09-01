@@ -7,12 +7,14 @@ export interface HomeContentResponse {
     bestsellers: any[];
     lowestPrices?: any[];
     categories: any[];
+    products?: any[];
     shops: any[];
     promoBanners: any[];
     trending: any[];
     cookingIdeas: any[];
     promoCards?: any[];
     promoStrip?: any; // PromoStrip data from backend
+    homeSections?: any[];
   };
 }
 
