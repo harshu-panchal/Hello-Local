@@ -9,9 +9,10 @@ import BestsellerCard from "../../../models/BestsellerCard";
 import LowestPricesProduct from "../../../models/LowestPricesProduct";
 import PromoStrip from "../../../models/PromoStrip";
 import ShopAd from "../../../models/ShopAd";
+import Seller from "../../../models/Seller";
 import mongoose from "mongoose";
 import { cache } from "../../../utils/cache";
-import { findSellersWithinRange } from "../../../utils/locationHelper";
+import { findSellersWithinRange, calculateDistance } from "../../../utils/locationHelper";
 
 // Helper function to fetch data for a home section based on its configuration
 async function fetchSectionData(
@@ -376,14 +377,122 @@ export const getHomeContent = async (req: Request, res: Response) => {
       .select("name image icon color slug")
       .sort({ order: 1 });
 
-    // 4. Shop By Store - Fetch from database
+    // 4. Shop By Store & Nearby Sellers - Fetch real location-based sellers and curated shops
+    let nearbySellersFormatted: any[] = [];
+
+    if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
+      const MAX_SERVICE_RADIUS_KM = 100;
+      const EARTH_RADIUS_KM = 6378.1;
+
+      const nearbySellersList = await Seller.find({
+        status: "Approved",
+        $or: [
+          {
+            location: {
+              $geoWithin: {
+                $centerSphere: [[userLng, userLat], MAX_SERVICE_RADIUS_KM / EARTH_RADIUS_KM],
+              },
+            },
+          },
+          { location: { $exists: false } },
+          { "location.coordinates": { $size: 0 } },
+        ],
+      })
+        .select("storeName sellerName storeBanner logo category categories address city serviceableArea latitude longitude location serviceRadiusKm isShopOpen storeDescription")
+        .lean();
+
+      const computedNearbySellers: any[] = [];
+
+      for (const seller of nearbySellersList) {
+        let sellerLat: number | null = null;
+        let sellerLng: number | null = null;
+
+        if (seller.location && seller.location.coordinates && seller.location.coordinates.length === 2) {
+          sellerLng = seller.location.coordinates[0];
+          sellerLat = seller.location.coordinates[1];
+        } else if (seller.latitude && seller.longitude) {
+          sellerLat = parseFloat(seller.latitude);
+          sellerLng = parseFloat(seller.longitude);
+        }
+
+        if (sellerLat !== null && sellerLng !== null && !isNaN(sellerLat) && !isNaN(sellerLng)) {
+          const dist = calculateDistance(userLat, userLng, sellerLat, sellerLng);
+          const radius = seller.serviceRadiusKm || 10;
+
+          if (dist <= radius) {
+            computedNearbySellers.push({
+              seller,
+              distance: Number(dist.toFixed(1)),
+            });
+          }
+        }
+      }
+
+      // Sort sellers by distance (nearest first)
+      computedNearbySellers.sort((a, b) => a.distance - b.distance);
+
+      // Populate product previews and categories for each nearby seller
+      nearbySellersFormatted = await Promise.all(
+        computedNearbySellers.slice(0, 10).map(async ({ seller, distance }) => {
+          const sellerProducts = await Product.find({
+            seller: seller._id,
+            status: "Active",
+            publish: true,
+          })
+            .select("mainImage category")
+            .limit(4)
+            .lean();
+
+          const productImages = sellerProducts.map((p: any) => p.mainImage).filter(Boolean);
+
+          let categoryDisplay = seller.category || (Array.isArray(seller.categories) ? seller.categories.join(", ") : "");
+          if (!categoryDisplay && sellerProducts.length > 0) {
+            const catIds = sellerProducts.map((p: any) => p.category).filter(Boolean);
+            if (catIds.length > 0) {
+              const foundCats = await Category.find({ _id: { $in: catIds } }).select("name").lean();
+              categoryDisplay = foundCats.map((c: any) => c.name).join(", ");
+            }
+          }
+          if (!categoryDisplay) {
+            categoryDisplay = "Local Store";
+          }
+
+          const minTime = Math.max(15, Math.round(15 + distance * 4));
+          const maxTime = minTime + 10;
+
+          return {
+            id: seller._id.toString(),
+            storeId: seller._id.toString(),
+            slug: seller._id.toString(),
+            name: seller.storeName || seller.sellerName || "Local Store",
+            storeName: seller.storeName || seller.sellerName || "Local Store",
+            category: { name: categoryDisplay },
+            categories: categoryDisplay,
+            image: seller.storeBanner || seller.logo || productImages[0] || "",
+            bannerImage: seller.storeBanner || "",
+            logo: seller.logo || "",
+            productImages,
+            distance: distance,
+            area: seller.city || seller.serviceableArea || (seller.address ? seller.address.split(",")[0].trim() : "Neighborhood"),
+            city: seller.city || "",
+            address: seller.address || "",
+            deliveryTime: `${minTime}-${maxTime} mins`,
+            rating: 4.8,
+            isShopOpen: seller.isShopOpen !== false,
+            offer: distance <= 3 ? "Free Delivery" : "Fast Delivery",
+            type: "seller",
+          };
+        })
+      );
+    }
+
+    // Also fetch curated Shop documents
     const shopDocuments = await Shop.find({ isActive: true })
       .populate("category", "name slug")
       .sort({ order: 1, createdAt: -1 })
       .lean();
 
-    // Transform shop data to match frontend expected format and include preview images
-    const shops = await Promise.all(
+    const curatedShops = await Promise.all(
       shopDocuments.map(async (shop: any) => {
         let productImages: string[] = [];
 
@@ -399,18 +508,33 @@ export const getHomeContent = async (req: Request, res: Response) => {
           productImages = shopProducts.map((p: any) => p.mainImage).filter(Boolean);
         }
 
+        let categoryName = "Department Store";
+        if (shop.category) {
+          if (Array.isArray(shop.category)) {
+            categoryName = shop.category.map((c: any) => c.name || c).join(", ");
+          } else {
+            categoryName = shop.category.name || "Department Store";
+          }
+        }
+
         return {
           id: shop.storeId || shop._id.toString(),
+          storeId: shop.storeId || shop._id.toString(),
           name: shop.name,
-          image: shop.image,
-          productImages, // Include preview images irrespective of location
+          image: shop.image || productImages[0] || "",
+          productImages,
           slug: shop.storeId || shop._id.toString(),
-          category: shop.category,
+          category: { name: categoryName },
+          categories: categoryName,
+          area: "Verified Store",
           productIds: shop.products?.map((p: any) => p?.toString()).filter(Boolean) || [],
           bgColor: shop.bgColor || "bg-neutral-50",
+          type: "shop",
         };
       })
     );
+
+    const shops = nearbySellersFormatted.length > 0 ? nearbySellersFormatted : curatedShops;
 
     // 5. Trending Items (Fetch some popular categories or products)
     const trendingCategories = await Category.find({
@@ -948,6 +1072,70 @@ export const getStoreProducts = async (req: Request, res: Response) => {
         }
       }
     } else {
+      // Check if storeId is a Seller ID
+      let seller: any = null;
+      if (mongoose.Types.ObjectId.isValid(storeId)) {
+        seller = await Seller.findById(storeId).lean();
+      }
+
+      if (seller) {
+        let categoryDisplay = seller.category || (Array.isArray(seller.categories) ? seller.categories.join(", ") : "Local Store");
+        shopData = {
+          id: seller._id.toString(),
+          name: seller.storeName || seller.sellerName,
+          image: seller.storeBanner || seller.logo || '',
+          bannerImage: seller.storeBanner || '',
+          logo: seller.logo || '',
+          description: seller.storeDescription || seller.address || '',
+          address: seller.address,
+          city: seller.city,
+          category: { name: categoryDisplay },
+          rating: 4.8,
+          isSeller: true,
+        };
+
+        const sellerProducts = await Product.find({
+          seller: seller._id,
+          status: "Active",
+          publish: true,
+        })
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .select("productName mainImage galleryImages price mrp discount rating reviewsCount pack seller variations foodType status publish category subcategory")
+          .lean();
+
+        const mappedSellerProducts = sellerProducts.map((p: any) => ({
+          id: p._id.toString(),
+          _id: p._id.toString(),
+          productId: p._id.toString(),
+          name: p.productName,
+          productName: p.productName,
+          mainImage: p.mainImage,
+          galleryImages: p.galleryImages || [],
+          image: p.mainImage,
+          price: p.price,
+          mrp: p.mrp || p.price,
+          discount: p.discount || (p.mrp && p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0),
+          rating: p.rating || 0,
+          reviewsCount: p.reviewsCount || 0,
+          reviews: p.reviewsCount || 0,
+          pack: p.pack || "",
+          foodType: p.foodType || "None",
+          seller: p.seller,
+          variations: p.variations || [],
+          isAvailable: true,
+          categoryId: p.category?.toString() || "",
+          subcategory: p.subcategory?.toString() || "",
+          type: "product",
+        }));
+
+        return res.status(200).json({
+          success: true,
+          data: mappedSellerProducts,
+          shop: shopData,
+        });
+      }
+
       // Fallback: try to match by category name (legacy support)
       const categoryId = await getCategoryIdByName(storeId);
       if (categoryId) {
