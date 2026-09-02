@@ -15,9 +15,10 @@ import {
 
 interface UserTopHeaderProps {
   onLocationClick?: () => void;
+  onPlaceClick?: () => void;
 }
 
-export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
+export default function UserTopHeader({ onLocationClick, onPlaceClick }: UserTopHeaderProps) {
   const navigate = useNavigate();
   const { location: userLocation } = useLocation();
   const { showToast } = useToast();
@@ -102,7 +103,7 @@ export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
           {/* Location Pill */}
           <button
             type="button"
-            onClick={onLocationClick || (() => navigate('/local-setu'))}
+            onClick={onLocationClick || onPlaceClick || (() => navigate('/local-setu'))}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl text-left transition-all active:scale-98 shadow-2xs max-w-[42%] min-h-[44px]"
             aria-label="Change Location"
           >
@@ -192,7 +193,7 @@ export default function UserTopHeader({ onLocationClick }: UserTopHeaderProps) {
           {/* Search by Place */}
           <button
             type="button"
-            onClick={() => navigate('/categories')}
+            onClick={onPlaceClick || onLocationClick || (() => navigate('/shop-by-stores'))}
             className="flex items-center justify-between p-2.5 sm:p-3.5 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl shadow-2xs transition-all active:scale-98 text-left group min-h-[50px]"
           >
             <div className="flex items-center gap-2.5 sm:gap-3.5">

@@ -9,6 +9,8 @@ export interface HomeContentResponse {
     categories: any[];
     products?: any[];
     shops: any[];
+    nearbySellers?: any[];
+    curatedShops?: any[];
     promoBanners: any[];
     trending: any[];
     cookingIdeas: any[];

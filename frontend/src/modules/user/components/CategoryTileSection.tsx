@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
+import { getIconByName } from "../../../utils/iconLibrary";
 
 interface CategoryTile {
   id: string;
@@ -30,6 +32,7 @@ export default function CategoryTileSection({
   showProductCount = false,
 }: CategoryTileSectionProps) {
   const navigate = useNavigate();
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const handleTileClick = (tile: CategoryTile) => {
     if (tile.subcategoryId || tile.type === "subcategory") {
@@ -95,9 +98,20 @@ export default function CategoryTileSection({
       <div className="px-4 md:px-6 lg:px-8 overflow-visible">
         <div className={`grid ${gridCols} ${gapClass} overflow-visible auto-rows-fr`}>
           {tiles.map((tile) => {
-            const images =
+            const rawImages =
               tile.productImages || (tile.image ? [tile.image] : []);
-            const hasImages = images.filter(Boolean).length > 0;
+            const validImages = rawImages.filter(
+              (img): img is string =>
+                Boolean(
+                  img &&
+                    typeof img === "string" &&
+                    !img.includes("dv1l9sb4p") &&
+                    !img.includes("undefined") &&
+                    img.trim().length > 0
+                )
+            );
+            const isBroken = imageErrors[tile.id] || false;
+            const hasValidImages = validImages.length > 0 && !isBroken;
 
             return (
               <motion.div
@@ -145,72 +159,63 @@ export default function CategoryTileSection({
                   }}
                   className={`block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow h-full ${showProductCount ? "px-2.5" : "px-1.5"
                     }`}>
-                  {/* Image - Single image for non-bestsellers, 2x2 grid for bestsellers */}
+                  {/* Image - Multi-image collage or single image with semantic vector icon fallback */}
                   <div
                     className={`w-full rounded-lg overflow-hidden ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
-                      } ${tile.bgColor || "bg-cyan-50"}`}>
-                    {hasImages ? (
-                      showProductCount ? (
-                        // Bestsellers: 2x2 grid
-                        <div className="w-full h-full grid grid-cols-2 gap-0.5 p-0.5">
-                          {images.slice(0, 4).map((img, idx) =>
-                            img ? (
-                              <img
-                                key={idx}
-                                src={img}
-                                alt=""
-                                className="w-full h-full object-contain bg-white rounded-sm"
-                                onError={(e) => {
-                                  // Hide broken image
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              <div
-                                key={idx}
-                                className="w-full h-full bg-neutral-200 rounded-sm flex items-center justify-center text-xs text-neutral-400">
-                                {idx + 1}
-                              </div>
-                            )
-                          )}
+                      } ${tile.bgColor || "bg-slate-50"}`}>
+                    {hasValidImages ? (
+                      (showProductCount || validImages.length >= 2) ? (
+                        // Multi-image collage (2x2 grid)
+                        <div className="w-full h-full grid grid-cols-2 gap-0.5 p-0.5 bg-slate-100">
+                          {validImages.slice(0, 4).map((img, idx) => (
+                            <img
+                              key={idx}
+                              src={img}
+                              alt=""
+                              className="w-full h-full object-cover bg-white rounded-sm"
+                              onError={() => {
+                                setImageErrors((prev) => ({ ...prev, [tile.id]: true }));
+                              }}
+                            />
+                          ))}
                         </div>
                       ) : (
-                        // Other sections: Single image - use contain to show full image without cropping
+                        // Single image
                         <img
-                          src={images[0]}
+                          src={validImages[0]}
                           alt={tile.name}
-                          className="w-full h-full object-contain rounded-lg"
-                          onError={(e) => {
-                            // Hide broken image and show fallback
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const parent = target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-3xl text-neutral-300">${tile.name.charAt(0)}</div>`;
-                            }
+                          className="w-full h-full object-cover rounded-lg"
+                          onError={() => {
+                            setImageErrors((prev) => ({ ...prev, [tile.id]: true }));
                           }}
                         />
                       )
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl text-neutral-300">
-                        {tile.name.charAt(0)}
+                      <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-rose-50/60 via-slate-50 to-indigo-50/50">
+                        <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-white shadow-2xs flex items-center justify-center text-[#FF2E7A] border border-slate-200/60 mb-1.5">
+                          {getIconByName(tile.slug || tile.name)}
+                        </div>
+                        {!showProductCount && (
+                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider line-clamp-1">
+                            {tile.name}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Product count - shown first (only for bestsellers) */}
-                  {showProductCount && tile.productCount && (
+                  {/* Product count - shown first (only for bestsellers with actual count > 0) */}
+                  {showProductCount && (tile.productCount ?? 0) > 0 ? (
                     <div className="mb-1.5 flex justify-center">
                       <span className="inline-block bg-neutral-100 text-neutral-600 text-[10px] font-medium px-2 py-0.5 rounded-full leading-tight">
                         +{tile.productCount} more
                       </span>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Tile name - inside card only for bestsellers */}
                   {showProductCount && (
-                    <div className="text-[11px] md:text-xs font-medium text-neutral-800 line-clamp-2 leading-snug text-center w-full block tracking-tight">
+                    <div className="text-xs md:text-sm font-semibold text-neutral-800 line-clamp-2 leading-snug text-center w-full block tracking-tight pb-1">
                       {tile.name}
                     </div>
                   )}

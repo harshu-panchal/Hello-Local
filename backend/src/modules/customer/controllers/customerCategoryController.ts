@@ -200,30 +200,69 @@ export const getCategoryById = async (req: Request, res: Response) => {
     }
 
     if (!category) {
-      // Check if it's a subcategory
+      // Check if it's a subcategory in SubCategory collection
+      let subcategory: any = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
-        const subcategory = await SubCategory.findById(id).lean();
-        if (subcategory) {
-          // Find the parent category
-          category = await Category.findById(subcategory.category).lean();
-          if (category) {
-            // Return both for the frontend to decide
-            const subcategories = await SubCategory.find({
-              category: category._id,
-            })
-              .select("name image order category")
-              .sort({
-                order: 1,
-              });
-            return res.status(200).json({
-              success: true,
-              data: {
-                category,
-                subcategories,
-                currentSubcategory: subcategory,
-              },
-            });
-          }
+        subcategory = await SubCategory.findById(id).lean();
+      }
+
+      if (!subcategory) {
+        const namePattern = id.replace(/[-_]/g, " ");
+        subcategory = await SubCategory.findOne({
+          name: { $regex: new RegExp(`^${namePattern}$`, "i") }
+        }).lean();
+      }
+
+      if (subcategory && subcategory.category) {
+        category = await Category.findById(subcategory.category).lean();
+        if (category) {
+          const subcategories = await SubCategory.find({
+            category: category._id,
+          })
+            .select("name image order category")
+            .sort({ order: 1 });
+
+          return res.status(200).json({
+            success: true,
+            data: {
+              category,
+              subcategories,
+              currentSubcategory: subcategory,
+            },
+          });
+        }
+      }
+
+      // Check if it's a child category in Category collection (where parentId exists)
+      const namePattern = id.replace(/[-_]/g, " ");
+      const childCat = await Category.findOne({
+        $or: [
+          { slug: id },
+          { slug: { $regex: new RegExp(`^${id}$`, "i") } },
+          { name: { $regex: new RegExp(`^${namePattern}$`, "i") } },
+        ],
+        parentId: { $exists: true, $ne: null },
+        status: "Active",
+      }).lean();
+
+      if (childCat && childCat.parentId) {
+        category = await Category.findById(childCat.parentId).lean();
+        if (category) {
+          const childSubs = await Category.find({
+            parentId: category._id,
+            status: "Active",
+          })
+            .select("name image order slug")
+            .sort({ order: 1 });
+
+          return res.status(200).json({
+            success: true,
+            data: {
+              category,
+              subcategories: childSubs,
+              currentSubcategory: childCat,
+            },
+          });
         }
       }
 

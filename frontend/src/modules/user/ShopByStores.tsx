@@ -4,6 +4,7 @@ import { getHomeContent } from '../../services/api/customerHomeService';
 import { useLocation } from '../../hooks/useLocation';
 import { StoreCard } from './components/common/StoreCard';
 import { UserEmptyState } from './components/common';
+import LocationPermissionRequest from '../../components/LocationPermissionRequest';
 import {
   ArrowLeftIcon,
   SearchIcon,
@@ -20,6 +21,7 @@ export default function ShopByStores() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   useEffect(() => {
     const fetchShops = async () => {
@@ -34,7 +36,18 @@ export default function ShopByStores() {
         );
 
         if (response.success && response.data) {
-          setShops(response.data.shops || []);
+          const localSellers = response.data.nearbySellers || [];
+          const specialtyShops = response.data.curatedShops || response.data.shops || [];
+
+          // Combine both local sellers and curated shops without duplicates
+          const map = new Map<string, any>();
+          [...localSellers, ...specialtyShops].forEach((item: any) => {
+            const key = item.storeId || item.id || item._id;
+            if (key && !map.has(key)) {
+              map.set(key, item);
+            }
+          });
+          setShops(Array.from(map.values()));
         } else {
           setShops([]);
         }
@@ -108,9 +121,14 @@ export default function ShopByStores() {
                 <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                   Partner Stores
                 </h1>
-                <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                <div
+                  onClick={() => setShowLocationModal(true)}
+                  className="flex items-center gap-1 text-[11px] text-slate-500 font-medium cursor-pointer hover:text-[#FF2E7A] transition-colors"
+                  title="Click to change location"
+                >
                   <LocationPinIcon size={11} className="text-[#FF2E7A]" />
-                  <span>{locationText}</span>
+                  <span className="truncate max-w-[200px]">{locationText}</span>
+                  <span className="text-[10px] text-[#FF2E7A] font-bold underline ml-0.5">Change</span>
                 </div>
               </div>
             </div>
@@ -235,6 +253,17 @@ export default function ShopByStores() {
           </div>
         )}
       </main>
+
+      {/* Location Change Modal */}
+      {showLocationModal && (
+        <LocationPermissionRequest
+          onLocationGranted={() => setShowLocationModal(false)}
+          skipable={true}
+          title="Search by Place"
+          description="Search your area, neighborhood, or city to find stores near you."
+          forceOpen={true}
+        />
+      )}
     </div>
   );
 }

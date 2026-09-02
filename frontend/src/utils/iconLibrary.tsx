@@ -100,6 +100,69 @@ export const ICON_LIBRARY: IconDef[] = [
         )
     },
     {
+        name: 'chicken',
+        label: 'Chicken',
+        tags: ['chicken', 'chicken-dishes', 'poultry', 'wings', 'drumstick', 'roast-chicken'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15.5 4.5c2.5 2.5 2 6.5-1 9.5s-7 3.5-9.5 1 2-8 5-10 4.5-1.5 5.5-.5z" />
+                <circle cx="6" cy="18" r="2" />
+                <circle cx="8" cy="20" r="2" />
+                <path d="M7 17l4-4" />
+            </svg>
+        )
+    },
+    {
+        name: 'eggs',
+        label: 'Eggs',
+        tags: ['egg', 'eggs', 'eggs-dishes', 'omelette', 'boiled-egg', 'egg-curry'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2C8.5 2 5 6.5 5 13a7 7 0 0 0 14 0c0-6.5-3.5-11-7-11z" />
+                <circle cx="12" cy="13" r="3.5" />
+            </svg>
+        )
+    },
+    {
+        name: 'biryani',
+        label: 'Biryani',
+        tags: ['biryani', 'biryani-nonveg', 'dum-biryani', 'rice-biryani', 'pulao', 'hyderabadi'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 11h16a1 1 0 0 1 1 1c0 5-3.5 9-9 9s-9-4-9-9a1 1 0 0 1 1-1z" />
+                <path d="M7 11V8a5 5 0 0 1 10 0v3" />
+                <path d="M12 2v3" />
+                <circle cx="12" cy="15" r="1.5" />
+                <circle cx="9" cy="16" r="1" />
+                <circle cx="15" cy="16" r="1" />
+            </svg>
+        )
+    },
+    {
+        name: 'mutton',
+        label: 'Mutton',
+        tags: ['mutton', 'mutton-dishes', 'lamb', 'goat', 'meat-chops', 'steak'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 5c-1.5-1.5-4-1.5-6 .5l-7.5 7.5a4 4 0 0 0 0 5.66l.34.34a4 4 0 0 0 5.66 0l7.5-7.5c2-2 2-4.5.5-6z" />
+                <circle cx="8.5" cy="15.5" r="1.5" />
+                <path d="M15 9l-2-2" />
+            </svg>
+        )
+    },
+    {
+        name: 'fish',
+        label: 'Fish',
+        tags: ['fish', 'fish-dishe', 'fish-dishes', 'seafood', 'prawns', 'crab'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 16s4-8 12-4c2-2 5-3 8-3-2 3-2 6 0 9-3 0-6-1-8-3-8 4-12-4-12-4z" />
+                <circle cx="17" cy="10" r="1" />
+                <path d="M7 12a4 4 0 0 1 3-3" />
+            </svg>
+        )
+    },
+    {
         name: 'ice-cream',
         label: 'Ice Cream',
         tags: ['ice', 'cream', 'dessert', 'summer', 'sweet', 'cone', 'cold'],
@@ -528,11 +591,26 @@ export const getIconByName = (name?: string): React.ReactNode => {
         icon.label.toLowerCase() === clean
     );
 
-    // 2. Tag / Partial Match
+    // 2. Tag / Partial Match - prioritize longest and most specific matching tag
     if (!found) {
-        found = ICON_LIBRARY.find(icon =>
-            icon.tags.some(tag => clean.includes(tag) || tag.includes(clean))
-        );
+        let bestMatch: IconDef | null = null;
+        let bestTagLength = 0;
+
+        for (const icon of ICON_LIBRARY) {
+            for (const tag of icon.tags) {
+                // Ignore overly generic single words unless clean is an exact match
+                if (['dish', 'food', 'cup'].includes(tag) && clean !== tag) {
+                    continue;
+                }
+                if (clean.includes(tag) || (tag.length >= 4 && tag.includes(clean))) {
+                    if (tag.length > bestTagLength) {
+                        bestMatch = icon;
+                        bestTagLength = tag.length;
+                    }
+                }
+            }
+        }
+        found = bestMatch || undefined;
     }
 
     return found ? found.svg : (

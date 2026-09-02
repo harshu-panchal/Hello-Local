@@ -59,15 +59,53 @@ async function fetchSectionData(
           .limit(limit || 10)
           .lean();
 
-        const mappedSubs = subcategories.map((sub: any) => ({
-          id: sub._id.toString(),
-          subcategoryId: sub._id.toString(),
-          categoryId: sub.category?.toString() || "",
-          name: sub.name,
-          image: sub.image || "",
-          slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-          type: "subcategory",
-        }));
+        const mappedSubs = await Promise.all(
+          subcategories.map(async (sub: any) => {
+            let image = sub.image || "";
+            let productImages: string[] = [];
+
+            // Fetch active products under this subcategory to extract real product preview images
+            const products = await Product.find({
+              $or: [
+                { subcategory: sub._id },
+                { subcategory: sub.name },
+              ],
+              status: "Active",
+              publish: true,
+              mainImage: { $exists: true, $ne: "" },
+            })
+              .select("mainImage")
+              .limit(4)
+              .lean();
+
+            if (products.length > 0) {
+              productImages = products.map((p: any) => p.mainImage).filter(Boolean);
+              if (!image && productImages.length > 0) {
+                image = productImages[0];
+              }
+            }
+
+            // Find parent category slug or ID
+            let parentCatSlug = "";
+            if (sub.category) {
+              const parentCat = await Category.findById(sub.category).select("slug").lean();
+              if (parentCat) {
+                parentCatSlug = parentCat.slug;
+              }
+            }
+
+            return {
+              id: sub._id.toString(),
+              subcategoryId: sub._id.toString(),
+              categoryId: parentCatSlug || (sub.category ? sub.category.toString() : ""),
+              name: sub.name,
+              image: image,
+              productImages,
+              slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+              type: "subcategory",
+            };
+          })
+        );
 
         results.push(...mappedSubs);
       }
@@ -84,14 +122,39 @@ async function fetchSectionData(
             .select("name image slug")
             .lean();
 
-          const mappedCats = foundCategories.map((c: any) => ({
-            id: c._id.toString(),
-            categoryId: c.slug || c._id.toString(),
-            name: c.name,
-            image: c.image,
-            slug: c.slug,
-            type: "category",
-          }));
+          const mappedCats = await Promise.all(
+            foundCategories.map(async (c: any) => {
+              let image = c.image || "";
+              let productImages: string[] = [];
+
+              const products = await Product.find({
+                category: c._id,
+                status: "Active",
+                publish: true,
+                mainImage: { $exists: true, $ne: "" },
+              })
+                .select("mainImage")
+                .limit(4)
+                .lean();
+
+              if (products.length > 0) {
+                productImages = products.map((p: any) => p.mainImage).filter(Boolean);
+                if (!image && productImages.length > 0) {
+                  image = productImages[0];
+                }
+              }
+
+              return {
+                id: c._id.toString(),
+                categoryId: c.slug || c._id.toString(),
+                name: c.name,
+                image: image,
+                productImages,
+                slug: c.slug,
+                type: "category",
+              };
+            })
+          );
 
           results.push(...mappedCats);
         }
@@ -109,14 +172,51 @@ async function fetchSectionData(
           .limit(limit || 10)
           .lean();
 
-        const mappedChildCats = childCategories.map((c: any) => ({
-          id: c._id.toString(),
-          categoryId: c.slug || c._id.toString(),
-          name: c.name,
-          image: c.image,
-          slug: c.slug,
-          type: "category", // navigate as category
-        }));
+        const mappedChildCats = await Promise.all(
+          childCategories.map(async (c: any) => {
+            let image = c.image || "";
+            let productImages: string[] = [];
+
+            const products = await Product.find({
+              $or: [
+                { category: c._id },
+                { subcategory: c._id },
+              ],
+              status: "Active",
+              publish: true,
+              mainImage: { $exists: true, $ne: "" },
+            })
+              .select("mainImage")
+              .limit(4)
+              .lean();
+
+            if (products.length > 0) {
+              productImages = products.map((p: any) => p.mainImage).filter(Boolean);
+              if (!image && productImages.length > 0) {
+                image = productImages[0];
+              }
+            }
+
+            let parentCatSlug = "";
+            if (c.parentId) {
+              const parentCat = await Category.findById(c.parentId).select("slug").lean();
+              if (parentCat) {
+                parentCatSlug = parentCat.slug;
+              }
+            }
+
+            return {
+              id: c._id.toString(),
+              subcategoryId: c._id.toString(),
+              categoryId: parentCatSlug || (c.parentId ? c.parentId.toString() : (c.slug || c._id.toString())),
+              name: c.name,
+              image: image,
+              productImages,
+              slug: c.slug || c._id.toString(),
+              type: "category", // navigate as category
+            };
+          })
+        );
 
         results.push(...mappedChildCats);
       }
@@ -211,14 +311,48 @@ async function fetchSectionData(
           .limit(limit || 8)
           .lean();
 
-        return fetchedCategories.map((c: any) => ({
-          id: c._id.toString(),
-          categoryId: c.slug || c._id.toString(), // Use slug for SEO-friendly URLs, fallback to _id
-          name: c.name,
-          image: c.image,
-          slug: c.slug,
-          type: "category",
-        }));
+        return await Promise.all(
+          fetchedCategories.map(async (c: any) => {
+            let image = c.image || "";
+            let productImages: string[] = [];
+
+            // Query active products under this category to extract valid product preview images
+            const products = await Product.find({
+              $or: [
+                { category: c._id },
+                { category: c._id.toString() },
+                { subcategory: c._id },
+                { subcategory: c._id.toString() },
+              ],
+              status: "Active",
+              publish: true,
+              mainImage: { $exists: true, $ne: "" },
+            })
+              .select("mainImage")
+              .limit(4)
+              .lean();
+
+            if (products.length > 0) {
+              productImages = products.map((p: any) => p.mainImage).filter(Boolean);
+              // If category image is empty or points to unauthorized dv1l9sb4p Cloudinary account, use product image
+              if (!image || image.includes("dv1l9sb4p") || image.includes("undefined")) {
+                if (productImages.length > 0) {
+                  image = productImages[0];
+                }
+              }
+            }
+
+            return {
+              id: c._id.toString(),
+              categoryId: c.slug || c._id.toString(), // Use slug for SEO-friendly URLs, fallback to _id
+              name: c.name,
+              image: image,
+              productImages,
+              slug: c.slug,
+              type: "category",
+            };
+          })
+        );
       } else {
         // If no categories specified, return empty array
         return [];
@@ -258,7 +392,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
       .limit(6)
       .lean();
 
-    // For each bestseller card, get 4 products from the associated category
+    // For each bestseller card, get products across category and child categories
     const bestsellers = await Promise.all(
       bestsellerCards.map(async (card: any) => {
         const categoryId = card.category?._id || card.category;
@@ -273,47 +407,85 @@ export const getHomeContent = async (req: Request, res: Response) => {
           };
         }
 
-        // Build product query — only from sellers within user's range
-        const productQuery: any = {
-          category: categoryId,
+        // Find child categories to ensure products in subcategories are included
+        const childCategories = await Category.find({
+          parentId: categoryId,
+        })
+          .select("_id")
+          .lean();
+
+        const allCategoryIds = [
+          categoryId,
+          ...childCategories.map((c: any) => c._id),
+        ];
+
+        const baseFilter: any = {
+          $or: [
+            { category: { $in: allCategoryIds } },
+            { subcategory: { $in: allCategoryIds } },
+          ],
           status: "Active",
           publish: true,
         };
+
+        // Try to get products from nearby sellers first
+        let categoryProducts: any[] = [];
         if (nearbySellerIds.length > 0) {
-          productQuery.seller = { $in: nearbySellerIds };
+          categoryProducts = await Product.find({
+            ...baseFilter,
+            seller: { $in: nearbySellerIds },
+          })
+            .select("productName mainImage galleryImages")
+            .sort({ createdAt: -1 })
+            .limit(4)
+            .lean();
         }
 
-        // Fetch 4 active products from the category for preview images
-        const categoryProducts = await Product.find(productQuery)
-          .select("productName mainImage galleryImages")
-          .sort({ createdAt: -1 })
-          .limit(4)
-          .lean();
+        // If nearby sellers haven't stocked this category yet, fall back to active catalog products for preview images
+        if (categoryProducts.length === 0) {
+          categoryProducts = await Product.find(baseFilter)
+            .select("productName mainImage galleryImages")
+            .sort({ createdAt: -1 })
+            .limit(4)
+            .lean();
+        }
 
-        // Extract exactly 4 product images (prefer mainImage, fallback to galleryImages[0])
+        // Filter valid images (skipping broken Cloudinary URLs)
+        const isValidImg = (img?: string) =>
+          img &&
+          typeof img === "string" &&
+          !img.includes("dv1l9sb4p") &&
+          !img.includes("undefined") &&
+          img.trim().length > 0;
+
         const productImages: string[] = [];
         categoryProducts.forEach((product: any) => {
-          if (productImages.length < 4 && product.mainImage) {
+          if (productImages.length < 4 && isValidImg(product.mainImage)) {
             productImages.push(product.mainImage);
           }
         });
 
-        // If we have less than 4 products, try to use gallery images
         if (productImages.length < 4) {
           categoryProducts.forEach((product: any) => {
-            if (
-              productImages.length < 4 &&
-              product.galleryImages &&
-              product.galleryImages.length > 0
-            ) {
-              productImages.push(product.galleryImages[0]);
+            if (productImages.length < 4 && product.galleryImages && product.galleryImages.length > 0) {
+              const validGallery = product.galleryImages.find(isValidImg);
+              if (validGallery && !productImages.includes(validGallery)) {
+                productImages.push(validGallery);
+              }
             }
           });
         }
 
-        // Ensure we have exactly 4 images (pad with first image if needed)
-        while (productImages.length < 4 && productImages[0]) {
-          productImages.push(productImages[0]);
+        // Count total products in this department
+        let totalCount = 0;
+        if (nearbySellerIds.length > 0) {
+          totalCount = await Product.countDocuments({
+            ...baseFilter,
+            seller: { $in: nearbySellerIds },
+          });
+        }
+        if (totalCount === 0) {
+          totalCount = await Product.countDocuments(baseFilter);
         }
 
         return {
@@ -321,7 +493,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
           categoryId: categoryId ? categoryId.toString() : "",
           name: card.name,
           productImages: productImages.slice(0, 4),
-          productCount: categoryProducts.length,
+          productCount: totalCount,
         };
       })
     );
@@ -601,7 +773,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
       })
     );
 
-    const shops = nearbySellersFormatted.length > 0 ? nearbySellersFormatted : curatedShops;
+    // shops defaults to curated specialty stores for "Shop by Store"
+    const shops = curatedShops.length > 0 ? curatedShops : (nearbySellersFormatted.length > 0 ? nearbySellersFormatted : []);
 
     // 5. Trending Items (Fetch some popular categories or products)
     const trendingCategories = await Category.find({
@@ -1030,6 +1203,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
         // Dynamic sections created by admin
         homeSections: dynamicSections,
         shops,
+        curatedShops,
+        nearbySellers: nearbySellersFormatted,
         promoBanners,
         trending,
         cookingIdeas,

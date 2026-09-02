@@ -13,11 +13,13 @@ import { useLocation } from "../../hooks/useLocation";
 import { useLoading } from "../../context/LoadingContext";
 import PageLoader from "../../components/PageLoader";
 import { CategoryNavIcon } from "./components/common/UserIcons";
+import { getIconByName } from "../../utils/iconLibrary";
 
 const ShopAdCarousel = React.lazy(() => import("./components/ShopAdCarousel"));
 const LowestPricesEver = React.lazy(() => import("./components/LowestPricesEver"));
 const CategoryTileSection = React.lazy(() => import("./components/CategoryTileSection"));
 const ProductCard = React.lazy(() => import("./components/ProductCard"));
+import LocationPermissionRequest from "../../components/LocationPermissionRequest";
 
 import { useThemeContext } from "../../context/ThemeContext";
 
@@ -35,6 +37,7 @@ export default function Home() {
   const SCROLL_POSITION_KEY = 'home-scroll-position';
 
   const [activeTabName, setActiveTabName] = useState('All');
+  const [showPlaceSearchModal, setShowPlaceSearchModal] = useState(false);
 
   const handleTabChange = (tabId: string, tabName?: string) => {
     setActiveTab(tabId);
@@ -356,7 +359,10 @@ export default function Home() {
     <div className="bg-[#F8FAFC] min-h-screen pb-24 md:pb-12" ref={contentRef}>
       <div className="w-full space-y-1 sm:space-y-2">
         {/* 1. Top Header: Location Pill | HelloLocal Logo | Bell + Search Bar + Twin Cards */}
-        <UserTopHeader />
+        <UserTopHeader
+          onLocationClick={() => setShowPlaceSearchModal(true)}
+          onPlaceClick={() => setShowPlaceSearchModal(true)}
+        />
 
         {/* 2. Category Quick-Strip: All + Circular categories */}
         <CategoryQuickStrip activeTab={activeTab} onTabChange={handleTabChange} />
@@ -368,7 +374,7 @@ export default function Home() {
         <FeatureHighlightStrip />
 
         {/* 5. Near You (Best Shops) Horizontal Section */}
-        <NearYouShopsSection shops={homeData.shops} />
+        <NearYouShopsSection shops={(homeData as any).nearbySellers && (homeData as any).nearbySellers.length > 0 ? (homeData as any).nearbySellers : homeData.shops} />
 
         {/* 6. Popular Categories Circular Grid */}
         <PopularCategoriesGrid categories={homeData.categories} />
@@ -539,54 +545,59 @@ export default function Home() {
 
             {/* Shop by Store Section */}
             <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-            <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
-              <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight relative">
-                Shop by Store
-                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] rounded-full"></span>
-              </h2>
-            </div>
+              <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
+                <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight relative">
+                  Shop by Store
+                  <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] rounded-full"></span>
+                </h2>
+              </div>
               <div className="px-4 md:px-6 lg:px-8">
                 <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
-                  {(homeData.shops || []).map((tile: any) => {
-                    const hasImages =
-                      tile.image ||
-                      (tile.productImages &&
-                        tile.productImages.filter(Boolean).length > 0);
+                  {((homeData as any).curatedShops && (homeData as any).curatedShops.length > 0
+                    ? (homeData as any).curatedShops
+                    : (homeData.shops || [])
+                  ).map((tile: any) => {
+                    const rawImg = tile.image || (tile.productImages ? tile.productImages[0] : "");
+                    const hasValidImg = Boolean(
+                      rawImg &&
+                        typeof rawImg === "string" &&
+                        !rawImg.includes("dv1l9sb4p") &&
+                        !rawImg.includes("undefined") &&
+                        rawImg.trim().length > 0
+                    );
 
                     return (
-                      <div key={tile.id} className="flex flex-col">
+                      <div key={tile.id || tile.storeId} className="flex flex-col group">
                         <div
                           onClick={() => {
-                            const storeSlug =
-                              tile.slug || tile.id.replace("-store", "");
+                            const storeSlug = tile.storeId || tile.slug || tile.id;
                             saveScrollPosition();
                             navigate(`/store/${storeSlug}`);
                           }}
-                          className="block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
-                          {hasImages ? (
+                          className="block bg-white rounded-xl shadow-2xs border border-neutral-200/80 hover:shadow-md hover:border-[#FF2E7A]/40 transition-all duration-200 cursor-pointer overflow-hidden">
+                          {hasValidImg ? (
                             <img
-                              src={
-                                tile.image ||
-                                (tile.productImages
-                                  ? tile.productImages[0]
-                                  : "")
-                              }
+                              src={rawImg}
                               alt={tile.name}
-                              className="w-full h-16 object-cover"
+                              className="w-full h-18 sm:h-20 object-cover group-hover:scale-105 transition-transform duration-300"
                               loading="lazy"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = "none";
+                              }}
                             />
                           ) : (
-                            <div
-                              className={`w-full h-16 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"
-                                }`}>
-                              {tile.name.charAt(0)}
+                            <div className="w-full h-18 sm:h-20 flex flex-col items-center justify-center p-2 bg-gradient-to-br from-rose-50/60 via-slate-50 to-indigo-50/40">
+                              <div className="w-8 h-8 rounded-lg bg-white shadow-2xs flex items-center justify-center text-[#FF2E7A] border border-slate-200/60">
+                                {getIconByName(tile.storeId || tile.slug || tile.name)}
+                              </div>
                             </div>
                           )}
                         </div>
 
                         {/* Tile name - outside card */}
                         <div className="mt-1.5 text-center">
-                          <span className="text-xs font-semibold text-neutral-900 line-clamp-2 leading-tight">
+                          <span className="text-xs font-semibold text-neutral-800 line-clamp-1 leading-tight group-hover:text-[#FF2E7A] transition-colors">
                             {tile.name}
                           </span>
                         </div>
@@ -599,6 +610,17 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Search by Place Modal */}
+      {showPlaceSearchModal && (
+        <LocationPermissionRequest
+          onLocationGranted={() => setShowPlaceSearchModal(false)}
+          skipable={true}
+          title="Search by Place"
+          description="Search your area, neighborhood, or city to find stores and products near you."
+          forceOpen={true}
+        />
+      )}
     </div>
   );
 }
