@@ -95,6 +95,7 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       iconName,
       theme,
       slug: sentSlug,
+      image,
       status,
       order,
     } = req.body;
@@ -128,14 +129,22 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       suffix++;
     }
 
+    // Auto-calculate next order if not explicitly specified
+    let finalOrder = order !== undefined && order !== null && !isNaN(Number(order)) ? Number(order) : undefined;
+    if (finalOrder === undefined) {
+      const highestCat = await HeaderCategory.findOne().sort({ order: -1 }).select("order").lean();
+      finalOrder = highestCat && highestCat.order !== undefined ? highestCat.order + 1 : 0;
+    }
+
     const category = await HeaderCategory.create({
       name: trimmedName,
       iconLibrary: iconLibrary || "Custom",
       iconName: iconName || "grid",
       slug,
       theme: theme || sentSlug || "all",
+      image: image || undefined,
       status: status || "Published",
-      order: order !== undefined && !isNaN(Number(order)) ? Number(order) : 0,
+      order: finalOrder,
     });
 
     return res.status(201).json(category);
@@ -156,6 +165,7 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
       iconName,
       theme,
       slug: sentSlug,
+      image,
       status,
       order,
     } = req.body;
@@ -205,6 +215,7 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
     } else if (sentSlug !== undefined) {
       (category as any).theme = sentSlug;
     }
+    if (image !== undefined) category.image = image || undefined;
     if (status !== undefined) category.status = status;
     if (order !== undefined && !isNaN(Number(order))) category.order = Number(order);
 

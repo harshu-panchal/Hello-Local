@@ -9,6 +9,7 @@ import {
 } from '../../../services/api/headerCategoryService';
 import { themes } from '../../../utils/themes';
 import { ICON_LIBRARY, getIconByName, IconDef } from '../../../utils/iconLibrary';
+import { uploadImage } from '../../../services/api/uploadService';
 import { useToast } from '../../../context/ToastContext';
 
 export default function AdminHeaderCategory() {
@@ -25,6 +26,9 @@ export default function AdminHeaderCategory() {
   const [selectedTheme, setSelectedTheme] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState<'Published' | 'Unpublished'>('Published');
   const [orderIndex, setOrderIndex] = useState<number>(0);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -150,6 +154,20 @@ export default function AdminHeaderCategory() {
     }
   };
 
+  // Next available order calculation
+  const nextAvailableOrder = useMemo(() => {
+    if (!headerCategories || headerCategories.length === 0) return 0;
+    const max = Math.max(...headerCategories.map((c) => c.order ?? 0));
+    return max + 1;
+  }, [headerCategories]);
+
+  // Set default orderIndex when categories first load if not editing
+  useEffect(() => {
+    if (!editingId && headerCategories.length > 0) {
+      setOrderIndex((prev) => (prev === 0 ? nextAvailableOrder : prev));
+    }
+  }, [headerCategories, nextAvailableOrder, editingId]);
+
   // 5. Form Actions
   const resetForm = () => {
     setHeaderCategoryName('');
@@ -157,7 +175,9 @@ export default function AdminHeaderCategory() {
     setHeaderCategoryIcon('grid');
     setSelectedTheme('all');
     setSelectedStatus('Published');
-    setOrderIndex(0);
+    setOrderIndex(nextAvailableOrder);
+    setImageFile(null);
+    setImagePreview('');
     setEditingId(null);
     setIconSearchTerm('');
     setFormError('');
@@ -191,13 +211,32 @@ export default function AdminHeaderCategory() {
 
     setIsSubmitting(true);
     try {
+      let finalImageUrl = imagePreview;
+
+      if (imageFile) {
+        setIsUploadingImage(true);
+        try {
+          const uploadRes = await uploadImage(imageFile, 'hellolocal/header-categories');
+          finalImageUrl = uploadRes.secureUrl;
+        } catch (err: any) {
+          console.error('Image upload failed', err);
+          showToast(err.message || 'Failed to upload custom image', 'error');
+          setIsSubmitting(false);
+          setIsUploadingImage(false);
+          return;
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
+
       const payload = {
         name: trimmedName,
         iconLibrary: selectedIconLibrary,
         iconName: headerCategoryIcon,
         theme: selectedTheme,
+        image: finalImageUrl || undefined,
         status: selectedStatus,
-        order: Number(orderIndex) || 0,
+        order: orderIndex !== undefined && !isNaN(Number(orderIndex)) ? Number(orderIndex) : nextAvailableOrder,
       };
 
       if (editingId) {
@@ -228,6 +267,8 @@ export default function AdminHeaderCategory() {
     setSelectedTheme(category.theme || category.slug || 'all');
     setSelectedStatus(category.status);
     setOrderIndex(category.order ?? 0);
+    setImagePreview(category.image || '');
+    setImageFile(null);
     setIconSearchTerm('');
     setFormError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -329,6 +370,81 @@ export default function AdminHeaderCategory() {
                 <span className="text-[11px] text-neutral-400">Unique display name on customer home rail</span>
                 <span className="text-[11px] text-neutral-400 font-mono">{headerCategoryName.length}/60</span>
               </div>
+            </div>
+
+            {/* Custom Category Image (Optional) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                  Custom Image <span className="text-neutral-400 font-normal">(Optional)</span>
+                </label>
+                {imagePreview && (
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Custom Photo Active
+                  </span>
+                )}
+              </div>
+
+              {imagePreview ? (
+                <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-200">
+                  <div className="w-13 h-13 rounded-full border-2 border-rose-500/30 overflow-hidden bg-white shrink-0 p-1 flex items-center justify-center">
+                    <img
+                      src={imagePreview}
+                      alt="Category preview"
+                      className="w-full h-full object-contain rounded-full"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-neutral-800 truncate">
+                      {imageFile ? imageFile.name : 'Uploaded Photo'}
+                    </p>
+                    <p className="text-[11px] text-neutral-500">
+                      Renders in top customer quick-strip. SVG icon acts as fallback.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreview('');
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 hover:border-rose-600/60 rounded-xl p-3 bg-neutral-50/50 hover:bg-rose-50/20 transition-all cursor-pointer group text-center">
+                  <div className="w-8 h-8 rounded-full bg-white shadow-xs border border-neutral-200 flex items-center justify-center text-neutral-500 group-hover:text-rose-600 mb-1 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-bold text-neutral-700 group-hover:text-rose-700 transition-colors">
+                    Click to upload custom photo
+                  </span>
+                  <span className="text-[10px] text-neutral-400 mt-0.5">PNG, JPG, or WebP (SVG icon will be backup)</span>
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          showToast('Image must be under 5MB', 'error');
+                          return;
+                        }
+                        setImageFile(file);
+                        setImagePreview(URL.createObjectURL(file));
+                      }
+                    }}
+                    className="hidden"
+                    disabled={isSubmitting}
+                  />
+                </label>
+              )}
             </div>
 
             {/* Select Icon Visual Grid */}
@@ -655,9 +771,22 @@ export default function AdminHeaderCategory() {
                         <div className="text-[10px] text-neutral-400 font-mono">slug: {category.slug}</div>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <div className="text-rose-700 w-6 h-6 flex items-center justify-center mx-auto bg-rose-50 rounded-lg p-1">
-                          {getIconByName(category.iconName)}
-                        </div>
+                        {category.image ? (
+                          <div className="relative w-7 h-7 mx-auto">
+                            <img
+                              src={category.image}
+                              alt={category.name}
+                              className="w-7 h-7 rounded-full object-contain border border-neutral-200 bg-white p-0.5"
+                            />
+                            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[7px]" title="Custom Image Active">
+                              ✓
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-rose-700 w-6 h-6 flex items-center justify-center mx-auto bg-rose-50 rounded-lg p-1">
+                            {getIconByName(category.iconName)}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-neutral-600">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-100 text-neutral-800 capitalize border border-neutral-200">
