@@ -3,19 +3,30 @@ import { getTheme, Theme } from '../utils/themes';
 
 interface ThemeContextType {
     activeCategory: string;
-    setActiveCategory: (category: string) => void;
+    activeTheme: string;
+    setActiveCategory: (category: string, themeKey?: string) => void;
     currentTheme: Theme;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [activeCategory, setActiveCategory] = useState('all');
+    const [activeCategory, setActiveCategoryState] = useState('all');
+    const [activeTheme, setActiveThemeState] = useState('all');
 
-    const currentTheme = getTheme(activeCategory);
+    const setActiveCategory = (category: string, themeKey?: string) => {
+        setActiveCategoryState(category);
+        if (themeKey) {
+            setActiveThemeState(themeKey);
+        } else {
+            setActiveThemeState(category);
+        }
+    };
+
+    const currentTheme = getTheme(activeTheme || activeCategory);
 
     return (
-        <ThemeContext.Provider value={{ activeCategory, setActiveCategory, currentTheme }}>
+        <ThemeContext.Provider value={{ activeCategory, activeTheme, setActiveCategory, currentTheme }}>
             {children}
         </ThemeContext.Provider>
     );

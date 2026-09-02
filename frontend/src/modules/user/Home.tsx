@@ -26,7 +26,7 @@ import { useThemeContext } from "../../context/ThemeContext";
 export default function Home() {
   const navigate = useNavigate();
   const { location } = useLocation();
-  const { activeCategory, setActiveCategory } = useThemeContext();
+  const { activeCategory, setActiveCategory, currentTheme } = useThemeContext();
   const { startRouteLoading, stopRouteLoading } = useLoading();
   const activeTab = activeCategory; // mapping for existing code compatibility
   const setActiveTab = setActiveCategory;
@@ -39,8 +39,8 @@ export default function Home() {
   const [activeTabName, setActiveTabName] = useState('All');
   const [showPlaceSearchModal, setShowPlaceSearchModal] = useState(false);
 
-  const handleTabChange = (tabId: string, tabName?: string) => {
-    setActiveTab(tabId);
+  const handleTabChange = (tabId: string, tabName?: string, themeKey?: string) => {
+    setActiveTab(tabId, themeKey);
     if (tabName) setActiveTabName(tabName);
     if (tabId !== 'all') {
       setTimeout(() => {
@@ -406,7 +406,7 @@ export default function Home() {
 
       {/* Veg / Non-veg Filter Toggle - Only for food section */}
       {isFoodCategory && (
-        <div className={`flex justify-center items-center px-4 pt-6 pb-2 relative z-10 transition-colors duration-500 ${!isFoodCategory ? 'bg-neutral-50' : ''}`} style={{ backgroundColor: isFoodCategory ? '#FFCCCC' : undefined }}>
+        <div className="flex justify-center items-center px-4 pt-6 pb-2 relative z-10 transition-colors duration-500" style={{ backgroundColor: currentTheme.softBg || '#FFCCCC' }}>
           <div className="bg-white rounded-full p-[6px] shadow-sm border border-neutral-200/80 flex items-center gap-1 w-[90%] md:w-auto overflow-hidden">
             <button
               onClick={() => setDietPreference('all')}
@@ -439,8 +439,8 @@ export default function Home() {
       {/* Main content */}
       <div
         ref={categoryContentRef}
-        className={`${!isFoodCategory ? 'bg-neutral-50' : ''} -mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 transition-colors duration-500`}
-        style={{ backgroundColor: isFoodCategory ? '#FFCCCC' : undefined }}>
+        className={`${activeTab === 'all' || !activeTab ? 'bg-neutral-50' : ''} -mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 transition-colors duration-500`}
+        style={{ backgroundColor: activeTab === 'all' || !activeTab ? undefined : currentTheme.softBg }}>
         {/* Dynamic Home Sections - Render sections created by admin */}
         {filteredHomeSections && filteredHomeSections.length > 0 && (
           <>

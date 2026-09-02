@@ -6,6 +6,10 @@ export interface Theme {
   bannerText: string;
   saleText: string;
   headerTextColor: string;
+  softBg: string;
+  pillBg: string;
+  pillBorder: string;
+  pillText: string;
 }
 
 export const themes: Record<string, Theme> = {
@@ -17,6 +21,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'HOUSEFULL',
     saleText: 'SALE',
     headerTextColor: '#ffffff',
+    softBg: '#F8FAFC',
+    pillBg: 'bg-emerald-50',
+    pillBorder: 'border-emerald-200',
+    pillText: 'text-emerald-700',
   },
   wedding: {
     primary: ['rgb(252, 165, 165)', 'rgb(253, 182, 182)', 'rgb(254, 202, 202)', 'rgb(255, 228, 228)'],
@@ -26,6 +34,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'WEDDING',
     saleText: 'SALE',
     headerTextColor: '#7f1d1d',
+    softBg: '#FFF1F2',
+    pillBg: 'bg-rose-50',
+    pillBorder: 'border-rose-200',
+    pillText: 'text-rose-700',
   },
   winter: {
     primary: ['rgb(186, 230, 253)', 'rgb(191, 234, 255)', 'rgb(207, 250, 254)', 'rgb(224, 242, 254)'],
@@ -35,6 +47,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'WINTER',
     saleText: 'SALE',
     headerTextColor: '#0c4a6e',
+    softBg: '#F0F9FF',
+    pillBg: 'bg-sky-50',
+    pillBorder: 'border-sky-200',
+    pillText: 'text-sky-700',
   },
   electronics: {
     primary: ['rgb(253, 224, 71)', 'rgb(253, 230, 138)', 'rgb(254, 240, 138)', 'rgb(254, 249, 195)'],
@@ -44,6 +60,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'ELECTRONICS',
     saleText: 'SALE',
     headerTextColor: '#713f12',
+    softBg: '#FEFCE8',
+    pillBg: 'bg-amber-50',
+    pillBorder: 'border-amber-200',
+    pillText: 'text-amber-700',
   },
   beauty: {
     primary: ['rgb(251, 207, 232)', 'rgb(252, 218, 238)', 'rgb(253, 224, 239)', 'rgb(254, 240, 246)'],
@@ -53,6 +73,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'BEAUTY',
     saleText: 'SALE',
     headerTextColor: '#831843',
+    softBg: '#FDF2F8',
+    pillBg: 'bg-pink-50',
+    pillBorder: 'border-pink-200',
+    pillText: 'text-pink-700',
   },
   dairy: {
     primary: ['rgb(224, 242, 254)', 'rgb(240, 249, 255)', 'rgb(254, 252, 232)', 'rgb(255, 255, 255)'],
@@ -62,6 +86,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'DAIRY',
     saleText: 'SALE',
     headerTextColor: '#0c4a6e',
+    softBg: '#F0F9FF',
+    pillBg: 'bg-blue-50',
+    pillBorder: 'border-blue-200',
+    pillText: 'text-blue-700',
   },
   grocery: {
     primary: ['#fefce8', '#fef9c3', '#fef3c7', '#fffbeb'],
@@ -71,6 +99,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'GROCERY',
     saleText: 'SALE',
     headerTextColor: '#854d0e',
+    softBg: '#F0FDF4',
+    pillBg: 'bg-emerald-50',
+    pillBorder: 'border-emerald-200',
+    pillText: 'text-emerald-700',
   },
   food: {
     primary: ['rgb(255, 153, 153)', 'rgb(255, 179, 179)', 'rgb(255, 204, 204)', 'rgb(255, 230, 230)'],
@@ -80,6 +112,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'FOOD',
     saleText: 'SALE',
     headerTextColor: '#450a0a',
+    softBg: '#FFCCCC',
+    pillBg: 'bg-rose-50',
+    pillBorder: 'border-rose-200',
+    pillText: 'text-rose-700',
   },
   fashion: {
     primary: ['rgb(196, 181, 253)', 'rgb(205, 192, 255)', 'rgb(221, 214, 254)', 'rgb(237, 233, 254)'],
@@ -89,6 +125,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'FASHION',
     saleText: 'SALE',
     headerTextColor: '#4c1d95',
+    softBg: '#FAF5FF',
+    pillBg: 'bg-purple-50',
+    pillBorder: 'border-purple-200',
+    pillText: 'text-purple-700',
   },
   sports: {
     primary: ['rgb(147, 197, 253)', 'rgb(165, 208, 255)', 'rgb(191, 219, 254)', 'rgb(219, 234, 254)'],
@@ -98,6 +138,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'SPORTS',
     saleText: 'SALE',
     headerTextColor: '#1e3a8a',
+    softBg: '#EFF6FF',
+    pillBg: 'bg-sky-50',
+    pillBorder: 'border-sky-200',
+    pillText: 'text-sky-700',
   },
   orange: {
     primary: ['rgb(251, 146, 60)', 'rgb(253, 186, 116)', 'rgb(254, 215, 170)', 'rgb(255, 237, 213)'],
@@ -107,6 +151,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'AUTUMN',
     saleText: 'SALE',
     headerTextColor: '#7c2d12',
+    softBg: '#FFF7ED',
+    pillBg: 'bg-orange-50',
+    pillBorder: 'border-orange-200',
+    pillText: 'text-orange-700',
   },
   violet: {
     primary: ['rgb(167, 139, 250)', 'rgb(196, 181, 253)', 'rgb(221, 214, 254)', 'rgb(237, 233, 254)'],
@@ -116,6 +164,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'VIOLET',
     saleText: 'SALE',
     headerTextColor: '#2e1065',
+    softBg: '#FAF5FF',
+    pillBg: 'bg-purple-50',
+    pillBorder: 'border-purple-200',
+    pillText: 'text-purple-700',
   },
   teal: {
     primary: ['rgb(45, 212, 191)', 'rgb(94, 234, 212)', 'rgb(153, 246, 228)', 'rgb(204, 251, 241)'],
@@ -125,6 +177,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'TEAL',
     saleText: 'SALE',
     headerTextColor: '#134e4a',
+    softBg: '#F0FDFA',
+    pillBg: 'bg-teal-50',
+    pillBorder: 'border-teal-200',
+    pillText: 'text-teal-700',
   },
   dark: {
     primary: ['rgb(75, 85, 99)', 'rgb(107, 114, 128)', 'rgb(156, 163, 175)', 'rgb(209, 213, 219)'],
@@ -134,6 +190,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'DARK',
     saleText: 'SALE',
     headerTextColor: '#000000',
+    softBg: '#F3F4F6',
+    pillBg: 'bg-slate-100',
+    pillBorder: 'border-slate-300',
+    pillText: 'text-slate-800',
   },
   hotpink: {
     primary: ['rgb(244, 114, 182)', 'rgb(249, 168, 212)', 'rgb(251, 207, 232)', 'rgb(253, 224, 239)'],
@@ -143,6 +203,10 @@ export const themes: Record<string, Theme> = {
     bannerText: 'PINK',
     saleText: 'SALE',
     headerTextColor: '#831843',
+    softBg: '#FDF2F8',
+    pillBg: 'bg-pink-50',
+    pillBorder: 'border-pink-200',
+    pillText: 'text-pink-700',
   },
   gold: {
     primary: ['rgb(250, 204, 21)', 'rgb(253, 224, 71)', 'rgb(254, 240, 138)', 'rgb(254, 249, 195)'],
@@ -152,20 +216,38 @@ export const themes: Record<string, Theme> = {
     bannerText: 'GOLD',
     saleText: 'SALE',
     headerTextColor: '#713f12',
+    softBg: '#FEFCE8',
+    pillBg: 'bg-amber-50',
+    pillBorder: 'border-amber-200',
+    pillText: 'text-amber-700',
   },
 };
 
-export const getTheme = (tabId: string): Theme => {
-  if (!tabId) return themes.all;
-  const lowerTabId = tabId.toLowerCase();
+export const getTheme = (themeKeyOrSlug?: string): Theme => {
+  if (!themeKeyOrSlug) return themes.all;
+  const key = themeKeyOrSlug.toLowerCase().trim();
 
-  if (themes[lowerTabId] && lowerTabId !== 'dark') {
-    return themes[lowerTabId];
+  // 1. Direct match in themes dictionary
+  if (themes[key]) {
+    return themes[key];
   }
 
-  if (lowerTabId.includes('food') || lowerTabId === 'dark') {
-    return themes.food;
-  }
+  // 2. Semantic fallback
+  if (key.includes('food') || key.includes('meal') || key.includes('fast')) return themes.food;
+  if (key.includes('dairy') || key.includes('milk')) return themes.dairy;
+  if (key.includes('grocer') || key.includes('fruit') || key.includes('veg')) return themes.grocery;
+  if (key.includes('fashion') || key.includes('wear') || key.includes('cloth')) return themes.fashion;
+  if (key.includes('beaut')) return themes.beauty;
+  if (key.includes('electr')) return themes.electronics;
+  if (key.includes('sport')) return themes.sports;
+  if (key.includes('book')) return themes.dairy;
+  if (key.includes('wed')) return themes.wedding;
+  if (key.includes('win')) return themes.winter;
+  if (key.includes('orange')) return themes.orange;
+  if (key.includes('violet') || key.includes('purp')) return themes.violet;
+  if (key.includes('teal')) return themes.teal;
+  if (key.includes('pink')) return themes.hotpink;
+  if (key.includes('gold') || key.includes('yell')) return themes.gold;
 
   return themes.all;
 };

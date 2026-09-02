@@ -95,7 +95,6 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       iconName,
       theme,
       slug: sentSlug,
-      relatedCategory,
       status,
       order,
     } = req.body;
@@ -135,7 +134,6 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       iconName: iconName || "grid",
       slug,
       theme: theme || sentSlug || "all",
-      relatedCategory: relatedCategory || undefined,
       status: status || "Published",
       order: order !== undefined && !isNaN(Number(order)) ? Number(order) : 0,
     });
@@ -158,7 +156,6 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
       iconName,
       theme,
       slug: sentSlug,
-      relatedCategory,
       status,
       order,
     } = req.body;
@@ -208,7 +205,6 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
     } else if (sentSlug !== undefined) {
       (category as any).theme = sentSlug;
     }
-    if (relatedCategory !== undefined) category.relatedCategory = relatedCategory || undefined;
     if (status !== undefined) category.status = status;
     if (order !== undefined && !isNaN(Number(order))) category.order = Number(order);
 

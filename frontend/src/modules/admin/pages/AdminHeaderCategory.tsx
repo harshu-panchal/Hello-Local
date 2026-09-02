@@ -9,7 +9,6 @@ import {
 } from '../../../services/api/headerCategoryService';
 import { themes } from '../../../utils/themes';
 import { ICON_LIBRARY, getIconByName, IconDef } from '../../../utils/iconLibrary';
-import { getCategories } from '../../../services/api/admin/adminProductService';
 import { useToast } from '../../../context/ToastContext';
 
 export default function AdminHeaderCategory() {
@@ -17,14 +16,12 @@ export default function AdminHeaderCategory() {
 
   // Data states
   const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>([]);
-  const [productCategories, setProductCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form states
   const [headerCategoryName, setHeaderCategoryName] = useState('');
   const [selectedIconLibrary, setSelectedIconLibrary] = useState('Custom');
   const [headerCategoryIcon, setHeaderCategoryIcon] = useState('grid');
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedTheme, setSelectedTheme] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState<'Published' | 'Unpublished'>('Published');
   const [orderIndex, setOrderIndex] = useState<number>(0);
@@ -59,18 +56,6 @@ export default function AdminHeaderCategory() {
   }, [searchTerm]);
 
   // 2. Fetch Data
-  const fetchProductCategories = useCallback(async () => {
-    try {
-      const response = await getCategories();
-      if (response && response.success && Array.isArray(response.data)) {
-        const rootCategories = response.data.filter((c: any) => !c.parentId);
-        setProductCategories(rootCategories);
-      }
-    } catch (error) {
-      console.error('Failed to fetch product categories', error);
-    }
-  }, []);
-
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
@@ -86,8 +71,7 @@ export default function AdminHeaderCategory() {
 
   useEffect(() => {
     fetchCategories();
-    fetchProductCategories();
-  }, [fetchCategories, fetchProductCategories]);
+  }, [fetchCategories]);
 
   // 3. Smart Icon Search & Filter
   const filteredIcons = useMemo(() => {
@@ -119,7 +103,6 @@ export default function AdminHeaderCategory() {
     return headerCategories.filter(
       (category) =>
         (category.name || '').toLowerCase().includes(lower) ||
-        (category.relatedCategory || '').toLowerCase().includes(lower) ||
         (category.slug || '').toLowerCase().includes(lower) ||
         (category.theme || '').toLowerCase().includes(lower)
     );
@@ -172,7 +155,6 @@ export default function AdminHeaderCategory() {
     setHeaderCategoryName('');
     setSelectedIconLibrary('Custom');
     setHeaderCategoryIcon('grid');
-    setSelectedCategory('');
     setSelectedTheme('all');
     setSelectedStatus('Published');
     setOrderIndex(0);
@@ -214,7 +196,6 @@ export default function AdminHeaderCategory() {
         iconLibrary: selectedIconLibrary,
         iconName: headerCategoryIcon,
         theme: selectedTheme,
-        relatedCategory: selectedCategory || undefined,
         status: selectedStatus,
         order: Number(orderIndex) || 0,
       };
@@ -244,7 +225,6 @@ export default function AdminHeaderCategory() {
     setHeaderCategoryName(category.name);
     setSelectedIconLibrary(category.iconLibrary || 'Custom');
     setHeaderCategoryIcon(category.iconName || 'grid');
-    setSelectedCategory(category.relatedCategory || '');
     setSelectedTheme(category.theme || category.slug || 'all');
     setSelectedStatus(category.status);
     setOrderIndex(category.order ?? 0);
@@ -490,26 +470,6 @@ export default function AdminHeaderCategory() {
                   <option value="Unpublished">Unpublished</option>
                 </select>
               </div>
-            </div>
-
-            {/* Related Product Category (Optional) */}
-            <div>
-              <label htmlFor="relatedCategorySelect" className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
-                Linked Root Category <span className="text-neutral-400 font-normal">(Optional)</span>
-              </label>
-              <select
-                id="relatedCategorySelect"
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none"
-              >
-                <option value="">None (Top Department Header)</option>
-                {productCategories.map((cat) => (
-                  <option key={cat._id} value={cat.slug || cat._id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Action Buttons */}

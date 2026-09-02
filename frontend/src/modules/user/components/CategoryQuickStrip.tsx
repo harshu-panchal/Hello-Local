@@ -4,10 +4,11 @@ import { getHeaderCategoriesPublic } from '../../../services/api/headerCategoryS
 import { UserImage } from './common/UserImage';
 import { CategoryNavIcon } from './common/UserIcons';
 import { getIconByName } from '../../../utils/iconLibrary';
+import { getTheme } from '../../../utils/themes';
 
 interface CategoryQuickStripProps {
   activeTab: string;
-  onTabChange: (tabId: string, tabName?: string) => void;
+  onTabChange: (tabId: string, tabName?: string, themeKey?: string) => void;
 }
 
 interface CategoryItem {
@@ -16,6 +17,7 @@ interface CategoryItem {
   slug: string;
   iconName?: string;
   image?: string;
+  theme?: string;
 }
 
 export default function CategoryQuickStrip({ activeTab, onTabChange }: CategoryQuickStripProps) {
@@ -34,6 +36,7 @@ export default function CategoryQuickStrip({ activeTab, onTabChange }: CategoryQ
               slug: c.slug,
               iconName: c.iconName,
               image: c.image,
+              theme: c.theme || c.slug || 'all',
             }))
           );
         }
@@ -43,15 +46,6 @@ export default function CategoryQuickStrip({ activeTab, onTabChange }: CategoryQ
     };
     fetchCats();
   }, []);
-
-  const pastelColors = [
-    { bg: 'bg-[#FFF5EB] border-[#FED7AA]', text: 'text-[#EA580C]' }, // soft orange/grocery
-    { bg: 'bg-[#F0FDF4] border-[#BBF7D0]', text: 'text-[#16A34A]' }, // soft green/fruits
-    { bg: 'bg-[#F0F9FF] border-[#BAE6FD]', text: 'text-[#0284C7]' }, // soft blue/dairy
-    { bg: 'bg-[#FAF5FF] border-[#E9D5FF]', text: 'text-[#9333EA]' }, // soft purple/bakery
-    { bg: 'bg-[#FFF1F2] border-[#FECDD3]', text: 'text-[#E11D48]' }, // soft rose/snacks
-    { bg: 'bg-[#FEFCE8] border-[#FEF08A]', text: 'text-[#CA8A04]' }, // soft yellow/books
-  ];
 
   return (
     <div className="w-full bg-white border-b border-slate-100">
@@ -92,24 +86,28 @@ export default function CategoryQuickStrip({ activeTab, onTabChange }: CategoryQ
           {categories.map((cat, idx) => {
             const isAllActive = activeTab === 'all' || !activeTab;
             const isActive = !isAllActive && (activeTab === cat.slug || activeTab === cat.id);
-            const themeStyle = pastelColors[idx % pastelColors.length];
+            const catTheme = getTheme(cat.theme || cat.slug);
             const hasImage = Boolean(cat.image && cat.image.trim());
 
             return (
               <button
                 type="button"
                 key={cat.id || cat.slug || idx}
-                onClick={() => onTabChange(cat.slug || cat.id, cat.name)}
+                onClick={() => onTabChange(cat.slug || cat.id, cat.name, cat.theme)}
                 className={`flex flex-col items-center gap-1.5 transition-all group min-h-[44px] ${
                   isActive ? 'scale-105' : 'opacity-85 hover:opacity-100'
                 }`}
               >
                 <div
-                  className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center overflow-hidden transition-all border p-1 ${themeStyle.bg} ${
+                  className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center overflow-hidden transition-all border p-1 ${catTheme.pillBg} ${catTheme.pillBorder} ${
                     isActive
-                      ? 'ring-2 ring-[#FF2E7A] shadow-2xs'
+                      ? 'ring-2 shadow-2xs'
                       : 'hover:scale-105'
                   }`}
+                  style={{
+                    borderColor: isActive ? catTheme.accentColor : undefined,
+                    boxShadow: isActive ? `0 0 0 2px ${catTheme.accentColor}40` : undefined,
+                  }}
                 >
                   {hasImage ? (
                     <UserImage
@@ -118,15 +116,18 @@ export default function CategoryQuickStrip({ activeTab, onTabChange }: CategoryQ
                       className="w-full h-full object-contain rounded-full"
                     />
                   ) : (
-                    <div className={`w-full h-full flex items-center justify-center ${themeStyle.text}`}>
+                    <div className={`w-full h-full flex items-center justify-center ${catTheme.pillText}`}>
                       {getIconByName(cat.iconName || cat.slug || cat.name)}
                     </div>
                   )}
                 </div>
                 <span
                   className={`text-[11px] font-medium max-w-[64px] truncate text-center ${
-                    isActive ? 'text-[#FF2E7A] font-bold' : 'text-slate-700'
+                    isActive ? 'font-bold' : 'text-slate-700'
                   }`}
+                  style={{
+                    color: isActive ? catTheme.accentColor : undefined,
+                  }}
                 >
                   {cat.name}
                 </span>

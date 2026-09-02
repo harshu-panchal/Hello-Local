@@ -8,7 +8,6 @@ export interface HeaderCategory {
     iconName: string;
     slug: string; // URL-safe unique identifier (generated from name)
     theme?: string; // Color theme key (e.g. 'grocery', 'beauty'). Falls back to slug for old records.
-    relatedCategory?: string;
     status: 'Published' | 'Unpublished';
     order?: number;
 }
