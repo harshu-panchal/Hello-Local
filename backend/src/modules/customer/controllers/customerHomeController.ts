@@ -444,7 +444,6 @@ export const getHomeContent = async (req: Request, res: Response) => {
         };
       })
     );
-
     // 4. Shop By Store & Nearby Sellers - Fetch real location-based sellers and curated shops
     let nearbySellersFormatted: any[] = [];
 
