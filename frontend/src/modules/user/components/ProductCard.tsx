@@ -201,6 +201,12 @@ export default function ProductCard({
   const imageUrl = product.imageUrl || product.mainImage;
   const productName = product.name || product.productName || 'Product';
   const packInfo = product.variations?.[0]?.value || product.pack || product.smallDescription || 'Standard';
+  const brandName =
+    product.brand && typeof product.brand === 'object' && product.brand.name
+      ? product.brand.name
+      : typeof product.brand === 'string' && product.brand.length < 50
+      ? product.brand
+      : null;
 
   return (
     <motion.div
@@ -259,9 +265,22 @@ export default function ProductCard({
         {/* Product Details */}
         <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
           <div>
-            <p className="text-[10px] text-slate-400 font-medium truncate mb-0.5">
-              {packInfo}
-            </p>
+            <div className="flex items-center justify-between gap-1 mb-0.5 min-w-0">
+              {brandName ? (
+                <span className="text-[10px] font-bold text-[#FF2E7A] uppercase tracking-wider truncate max-w-[60%]">
+                  {brandName}
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-medium truncate">
+                  {packInfo}
+                </span>
+              )}
+              {brandName && (
+                <span className="text-[10px] text-slate-400 font-medium truncate ml-auto">
+                  {packInfo}
+                </span>
+              )}
+            </div>
 
             <h4 className="text-xs sm:text-sm font-semibold text-slate-900 line-clamp-2 leading-snug min-h-[2rem]">
               {productName}

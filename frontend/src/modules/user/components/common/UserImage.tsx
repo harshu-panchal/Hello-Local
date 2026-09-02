@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StorefrontIcon, CategoryNavIcon } from './UserIcons';
+import React, { useState, useEffect, useRef } from 'react';
+import { StorefrontIcon } from './UserIcons';
+import { getIconByName } from '../../../../utils/iconLibrary';
 
 export type UserImageCategory = 'grocery' | 'food' | 'produce' | 'dairy' | 'bakery' | 'shop' | 'general';
 
@@ -19,14 +20,20 @@ export const UserImage: React.FC<UserImageProps> = ({
   aspectRatio = 'square',
   ...props
 }) => {
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(src ? 'loading' : 'error');
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(() => (src ? 'loading' : 'error'));
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     if (!src || !src.trim()) {
       setStatus('error');
       return;
     }
-    setStatus('loading');
+    // If the browser already has the image in memory cache
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setStatus('loaded');
+    } else {
+      setStatus('loading');
+    }
   }, [src]);
 
   const aspectClass = {
@@ -47,33 +54,32 @@ export const UserImage: React.FC<UserImageProps> = ({
         </div>
       );
     }
-    return <CategoryNavIcon size={24} className="text-slate-300" />;
+    const icon = getIconByName(cat || alt || 'grid');
+    return (
+      <div className="w-full h-full flex items-center justify-center text-[#FF2E7A]">
+        {icon}
+      </div>
+    );
   };
 
   return (
-    <div className={`relative overflow-hidden bg-slate-50 flex items-center justify-center ${aspectClass} ${className}`}>
-      {/* Loading Skeleton */}
-      {status === 'loading' && (
-        <div className="absolute inset-0 user-image-shimmer z-0" />
-      )}
-
+    <div className={`relative overflow-hidden flex items-center justify-center ${aspectClass} ${className}`}>
       {/* Actual Image */}
       {src && status !== 'error' && (
         <img
+          ref={imgRef}
           src={src}
           alt={alt}
           onLoad={() => setStatus('loaded')}
           onError={() => setStatus('error')}
-          className={`w-full h-full object-cover transition-opacity duration-200 ${
-            status === 'loaded' ? 'opacity-100' : 'opacity-0'
-          }`}
+          className="w-full h-full object-cover transition-opacity duration-200"
           {...props}
         />
       )}
 
-      {/* Subtle Fallback on Error / Missing Image */}
-      {status === 'error' && (
-        <div className="w-full h-full flex items-center justify-center p-2 text-center bg-gradient-to-br from-rose-50/60 via-slate-50 to-amber-50/40 rounded-[inherit]">
+      {/* Fallback on Error or Missing Image */}
+      {(!src || status === 'error') && (
+        <div className="w-full h-full flex items-center justify-center p-1.5 text-center bg-gradient-to-br from-rose-50/60 via-slate-50 to-amber-50/40 rounded-[inherit]">
           {getFallbackSvg(categoryFallback)}
         </div>
       )}

@@ -108,7 +108,7 @@ export default function PopularCategoriesGrid({ categories = [] }: PopularCatego
                   <UserImage
                     src={image}
                     alt={name}
-                    className="w-full h-full object-contain rounded-full"
+                    className="w-full h-full object-cover rounded-full"
                     categoryFallback={name}
                   />
                 ) : (

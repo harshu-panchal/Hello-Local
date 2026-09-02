@@ -204,6 +204,13 @@ export default function ProductDetail() {
       ? { name: product.category.name, id: product.category._id }
       : null;
 
+  const brandName =
+    product.brand && typeof product.brand === 'object' && (product.brand as any).name
+      ? (product.brand as any).name
+      : typeof product.brand === 'string' && product.brand.length < 50
+      ? product.brand
+      : null;
+
   const handleAddToCart = () => {
     if (!isAvailableAtLocation) {
       showToast("This product is not available for delivery at your location", "error");
@@ -392,6 +399,15 @@ export default function ProductDetail() {
                 />
               </div>
 
+              {/* Brand Tag (if present) */}
+              {brandName && (
+                <div className="mb-1.5">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FFF1F4] text-[#FF2E7A] border border-[#FFE4EA] uppercase tracking-wider">
+                    {brandName}
+                  </span>
+                </div>
+              )}
+
               {/* Title */}
               <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight leading-snug mb-1">
                 {product.name}
@@ -521,6 +537,12 @@ export default function ProductDetail() {
                       <span className="font-bold text-slate-800 w-24 flex-shrink-0">Origin:</span>
                       <span>{product.madeIn || "India"}</span>
                     </div>
+                    {brandName && (
+                      <div className="flex gap-2">
+                        <span className="font-bold text-slate-800 w-24 flex-shrink-0">Brand:</span>
+                        <span className="font-semibold text-[#FF2E7A]">{brandName}</span>
+                      </div>
+                    )}
                     {category && (
                       <div className="flex gap-2">
                         <span className="font-bold text-slate-800 w-24 flex-shrink-0">Category:</span>
