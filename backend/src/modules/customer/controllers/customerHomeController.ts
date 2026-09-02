@@ -370,12 +370,80 @@ export const getHomeContent = async (req: Request, res: Response) => {
         };
       });
 
-    // 3. Categories for Tiles (Grocery, Snacks, etc)
-    const categories = await Category.find({
+    // 3. Categories for Tiles (Popular Categories)
+    // Fetch root active categories first (parentId: null), ordered by order
+    let activeCategoryDocs = await Category.find({
       status: "Active",
+      parentId: null,
     })
       .select("name image icon color slug")
-      .sort({ order: 1 });
+      .sort({ order: 1 })
+      .limit(16)
+      .lean();
+
+    // If less than 6 root categories, include all active categories
+    if (activeCategoryDocs.length < 6) {
+      const allActiveCats = await Category.find({
+        status: "Active",
+      })
+        .select("name image icon color slug")
+        .sort({ order: 1 })
+        .limit(16)
+        .lean();
+      activeCategoryDocs = allActiveCats;
+    }
+
+    // For categories without an image, look up image from products or subcategories
+    const categories = await Promise.all(
+      activeCategoryDocs.map(async (cat: any) => {
+        let categoryImage = cat.image || "";
+
+        if (!categoryImage) {
+          // 1. Check child categories for an image
+          const childWithImage = await Category.findOne({
+            parentId: cat._id,
+            status: "Active",
+            image: { $exists: true, $ne: "" },
+          }).select("image").lean();
+
+          if (childWithImage?.image) {
+            categoryImage = childWithImage.image;
+          } else {
+            // 2. Check subcategory collection
+            const subWithImage = await SubCategory.findOne({
+              category: cat._id,
+              image: { $exists: true, $ne: "" },
+            }).select("image").lean();
+
+            if (subWithImage?.image) {
+              categoryImage = subWithImage.image;
+            } else {
+              // 3. Check product with mainImage
+              const prodWithImage = await Product.findOne({
+                category: cat._id,
+                status: "Active",
+                publish: true,
+                mainImage: { $exists: true, $ne: "" },
+              }).select("mainImage").lean();
+
+              if (prodWithImage?.mainImage) {
+                categoryImage = prodWithImage.mainImage;
+              }
+            }
+          }
+        }
+
+        return {
+          id: cat._id.toString(),
+          _id: cat._id.toString(),
+          name: cat.name,
+          image: categoryImage,
+          icon: cat.icon || "",
+          color: cat.color || "",
+          slug: cat.slug || cat._id.toString(),
+        };
+      })
+    );
 
     // 4. Shop By Store & Nearby Sellers - Fetch real location-based sellers and curated shops
     let nearbySellersFormatted: any[] = [];
