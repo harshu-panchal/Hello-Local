@@ -201,7 +201,7 @@ export const getProducts = async (req: Request, res: Response) => {
       products = await Product.find(query)
         .populate("category", "name icon image")
         .populate("subcategory", "name")
-        .populate("brand", "name")
+        .populate("brand", "name image")
         .populate("seller", "storeName")
         .sort(sortOptions)
         .skip(skip)
@@ -235,7 +235,7 @@ export const getProducts = async (req: Request, res: Response) => {
         products = await Product.find(query)
           .populate("category", "name icon image")
           .populate("subcategory", "name")
-          .populate("brand", "name")
+          .populate("brand", "name image")
           .populate("seller", "storeName")
           .sort(sortOptions)
           .skip(skip)
@@ -286,7 +286,7 @@ export const getProductById = async (req: Request, res: Response) => {
     })
       .populate("category", "name")
       .populate("subcategory", "name")
-      .populate("brand", "name")
+      .populate("brand", "name image")
       .populate(
         "seller",
         "storeName city fssaiLicNo address location serviceRadiusKm"

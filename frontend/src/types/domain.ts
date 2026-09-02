@@ -46,5 +46,6 @@ export interface Product {
   maxReturnDays?: number;
   sellerId?: string;
   isAvailable?: boolean;
+  brand?: { _id: string; name: string; image?: string } | string;
 }
 
