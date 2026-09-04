@@ -482,8 +482,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   style={{ background: getCategoryGradient(activeCategory) }}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center bg-white/60 border border-white/80 shadow-2xs">
-                      <span className="text-base">🤖</span>
+                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center bg-white/80 border border-white/90 shadow-2xs text-[#FF2E7A]">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
                     </div>
                     <div>
                       <h3 className="font-bold text-xs text-slate-900 tracking-tight">HelloLocal Helper</h3>

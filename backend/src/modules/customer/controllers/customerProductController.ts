@@ -182,7 +182,7 @@ export const getProducts = async (req: Request, res: Response) => {
     }
 
     // Filter by homemade flag / category
-    if (isHomemade === "true" || isHomemade === true) {
+    if (isHomemade === "true" || (isHomemade as unknown) === true) {
       query.isHomemade = true;
     }
     if (homemadeCategory) {
