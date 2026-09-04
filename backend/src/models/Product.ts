@@ -91,6 +91,11 @@ export interface IProduct extends Document {
   isShopByStoreOnly?: boolean;
   shopId?: mongoose.Types.ObjectId;
 
+  // Homemade
+  isHomemade?: boolean;
+  homemadeCategory?: string;
+  homemadeSubcategory?: string;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -230,6 +235,22 @@ const ProductSchema = new Schema<IProduct>(
       type: String,
       enum: ["Active", "Inactive", "Pending", "Rejected"],
       default: "Active",
+    },
+
+    // Homemade Flags
+    isHomemade: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    homemadeCategory: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    homemadeSubcategory: {
+      type: String,
+      trim: true,
     },
 
     // Product Details

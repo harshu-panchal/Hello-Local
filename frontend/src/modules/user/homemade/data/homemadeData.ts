@@ -1,0 +1,513 @@
+export interface HomemadeCategory {
+  id: string;
+  slug: string;
+  name: string;
+  shortName: string;
+  tagline: string;
+  icon: string;
+  accentBg: string;
+  accentBorder: string;
+  accentText: string;
+  heroImage: string;
+  subcategories: {
+    id: string;
+    slug: string;
+    name: string;
+    icon: string;
+  }[];
+}
+
+export interface HomemadeSeller {
+  id: string;
+  name: string;
+  specialty: string;
+  distance: string;
+  distanceKm: number;
+  rating: number;
+  reviewsCount: number;
+  deliveryTag: string;
+  avatarUrl: string;
+  isVerified: boolean;
+  productPreviews: string[];
+}
+
+export interface HomemadeProduct {
+  id: string;
+  name: string;
+  sellerId: string;
+  sellerName: string;
+  isSellerVerified: boolean;
+  rating: number;
+  reviewsCount: number;
+  distance: string;
+  distanceKm: number;
+  price: number;
+  originalPrice?: number;
+  unit: string;
+  badge?: 'Bestseller' | 'Popular' | 'New' | 'Chef Special';
+  categorySlug: string;
+  subcategorySlug: string;
+  imageUrl: string;
+  foodType?: 'Veg' | 'Non-Veg' | 'None';
+  description?: string;
+  isAvailable?: boolean;
+}
+
+export const HOMEMADE_CATEGORIES: HomemadeCategory[] = [
+  {
+    id: '1',
+    slug: 'food',
+    name: 'Homemade Food',
+    shortName: 'Food',
+    tagline: 'Pure ingredients. Made with love. Delivered to your door.',
+    icon: '🍲',
+    accentBg: 'bg-[#FFF6ED]',
+    accentBorder: 'border-[#FFEDD5]',
+    accentText: 'text-[#EA580C]',
+    heroImage: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+    subcategories: [
+      { id: '1-1', slug: 'all', name: 'All Food', icon: '🍽️' },
+      { id: '1-2', slug: 'tiffin-meals', name: 'Tiffin & Home Meals', icon: '🍱' },
+      { id: '1-3', slug: 'pickles-chutneys', name: 'Pickles & Chutneys', icon: '🫙' },
+      { id: '1-4', slug: 'papad-wafers', name: 'Papad & Wafers', icon: '🫓' },
+      { id: '1-5', slug: 'masalas', name: 'Masalas', icon: '🥣' },
+      { id: '1-6', slug: 'sweets-snacks', name: 'Sweets & Snacks', icon: '🥟' },
+    ],
+  },
+  {
+    id: '2',
+    slug: 'bakery',
+    name: 'Bakery From Home',
+    shortName: 'Bakery',
+    tagline: 'Freshly baked cakes, cookies & breads without preservatives.',
+    icon: '🧁',
+    accentBg: 'bg-[#FFF1F4]',
+    accentBorder: 'border-[#FFE4EA]',
+    accentText: 'text-[#FF2E7A]',
+    heroImage: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80',
+    subcategories: [
+      { id: '2-1', slug: 'all', name: 'All Bakery', icon: '🧁' },
+      { id: '2-2', slug: 'cakes-pastries', name: 'Cakes & Pastries', icon: '🎂' },
+      { id: '2-3', slug: 'cookies-biscuits', name: 'Cookies & Biscuits', icon: '🍪' },
+      { id: '2-4', slug: 'artisanal-breads', name: 'Artisanal Breads', icon: '🍞' },
+      { id: '2-5', slug: 'muffins', name: 'Muffins & Cupcakes', icon: '🧁' },
+    ],
+  },
+  {
+    id: '3',
+    slug: 'handmade',
+    name: 'Handmade Products',
+    shortName: 'Handmade',
+    tagline: 'Unique handcrafted treasures made by passionate neighborhood artisans.',
+    icon: '🧶',
+    accentBg: 'bg-[#FAF5FF]',
+    accentBorder: 'border-[#F3E8FF]',
+    accentText: 'text-[#9333EA]',
+    heroImage: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=600&q=80',
+    subcategories: [
+      { id: '3-1', slug: 'all', name: 'All Handmade', icon: '🧶' },
+      { id: '3-2', slug: 'crochet-knitting', name: 'Crochet & Knitting', icon: '🧣' },
+      { id: '3-3', slug: 'macrame-decor', name: 'Macrame Decor', icon: '🪴' },
+      { id: '3-4', slug: 'totes-bags', name: 'Bags & Totes', icon: '👜' },
+      { id: '3-5', slug: 'handmade-jewelry', name: 'Handmade Jewelry', icon: '💍' },
+    ],
+  },
+  {
+    id: '4',
+    slug: 'lifestyle',
+    name: 'Home & Lifestyle',
+    shortName: 'Home & Lifestyle',
+    tagline: 'Aromatherapy candles, natural soaps and cozy handmade home living.',
+    icon: '🕯️',
+    accentBg: 'bg-[#F0FDF4]',
+    accentBorder: 'border-[#DCFCE7]',
+    accentText: 'text-[#16A34A]',
+    heroImage: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=600&q=80',
+    subcategories: [
+      { id: '4-1', slug: 'all', name: 'All Home & Lifestyle', icon: '🕯️' },
+      { id: '4-2', slug: 'scented-candles', name: 'Scented Candles', icon: '🕯️' },
+      { id: '4-3', slug: 'natural-soaps', name: 'Natural Soaps', icon: '🧼' },
+      { id: '4-4', slug: 'pottery-clay', name: 'Pottery & Clay', icon: '🏺' },
+      { id: '4-5', slug: 'organic-planters', name: 'Planters & Decor', icon: '🌱' },
+    ],
+  },
+  {
+    id: '5',
+    slug: 'natural',
+    name: 'Natural & Local',
+    shortName: 'Natural & Local',
+    tagline: 'Direct from farms and traditional home churners. 100% pure.',
+    icon: '🌿',
+    accentBg: 'bg-[#FEFCE8]',
+    accentBorder: 'border-[#FEF08A]',
+    accentText: 'text-[#CA8A04]',
+    heroImage: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80',
+    subcategories: [
+      { id: '5-1', slug: 'all', name: 'All Natural', icon: '🌿' },
+      { id: '5-2', slug: 'cold-pressed-oils', name: 'Cold Pressed Oils', icon: '🫒' },
+      { id: '5-3', slug: 'raw-honey', name: 'Raw Forest Honey', icon: '🍯' },
+      { id: '5-4', slug: 'herbal-teas', name: 'Herbal Teas', icon: '🍵' },
+      { id: '5-5', slug: 'desi-ghee', name: 'Desi Bilona Ghee', icon: '🧈' },
+    ],
+  },
+  {
+    id: '6',
+    slug: 'custom',
+    name: 'Custom & Made-to-Order',
+    shortName: 'Custom & Gifts',
+    tagline: 'Bespoke gifts, customized celebration hampers and personal keepsakes.',
+    icon: '🎁',
+    accentBg: 'bg-[#FDF2F8]',
+    accentBorder: 'border-[#FCE7F3]',
+    accentText: 'text-[#DB2777]',
+    heroImage: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=600&q=80',
+    subcategories: [
+      { id: '6-1', slug: 'all', name: 'All Custom Gifts', icon: '🎁' },
+      { id: '6-2', slug: 'gift-hampers', name: 'Festive Hampers', icon: '🧺' },
+      { id: '6-3', slug: 'personalized-art', name: 'Personalized Art', icon: '🎨' },
+      { id: '6-4', slug: 'celebration-boxes', name: 'Party Favors', icon: '🎀' },
+    ],
+  },
+];
+
+export const HOMEMADE_SELLERS: HomemadeSeller[] = [
+  {
+    id: 's-1',
+    name: "Sneha's Kitchen",
+    specialty: 'Homemade Food',
+    distance: '1.2 km',
+    distanceKm: 1.2,
+    rating: 4.8,
+    reviewsCount: 156,
+    deliveryTag: 'On Time Delivery',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+    isVerified: true,
+    productPreviews: [
+      'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=200&q=80',
+    ],
+  },
+  {
+    id: 's-2',
+    name: 'Handmade by Priya',
+    specialty: 'Handmade Products',
+    distance: '1.8 km',
+    distanceKm: 1.8,
+    rating: 4.9,
+    reviewsCount: 98,
+    deliveryTag: 'On Time Delivery',
+    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+    isVerified: true,
+    productPreviews: [
+      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=200&q=80',
+    ],
+  },
+  {
+    id: 's-3',
+    name: "Aai's Kitchen",
+    specialty: 'Pickles, Thecha & Chutneys',
+    distance: '1.1 km',
+    distanceKm: 1.1,
+    rating: 4.8,
+    reviewsCount: 132,
+    deliveryTag: 'On Time Delivery',
+    avatarUrl: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=150&q=80',
+    isVerified: true,
+    productPreviews: [
+      'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=200&q=80',
+    ],
+  },
+  {
+    id: 's-4',
+    name: 'Home Food Corner',
+    specialty: 'Homely Daily Tiffins',
+    distance: '1.3 km',
+    distanceKm: 1.3,
+    rating: 4.7,
+    reviewsCount: 98,
+    deliveryTag: 'On Time Delivery',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+    isVerified: true,
+    productPreviews: [
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=200&q=80',
+    ],
+  },
+  {
+    id: 's-5',
+    name: "Sunita's Kitchen",
+    specialty: 'Handmade Papad & Snacks',
+    distance: '1.6 km',
+    distanceKm: 1.6,
+    rating: 4.6,
+    reviewsCount: 76,
+    deliveryTag: 'On Time Delivery',
+    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80',
+    isVerified: true,
+    productPreviews: [
+      'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=200&q=80',
+    ],
+  },
+  {
+    id: 's-6',
+    name: 'Sweet Home',
+    specialty: 'Pure Ghee Sweets & Ladoos',
+    distance: '1.9 km',
+    distanceKm: 1.9,
+    rating: 4.9,
+    reviewsCount: 145,
+    deliveryTag: 'On Time Delivery',
+    avatarUrl: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&w=150&q=80',
+    isVerified: true,
+    productPreviews: [
+      'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=200&q=80',
+      'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=200&q=80',
+    ],
+  },
+];
+
+export const HOMEMADE_TRENDING_PRODUCTS: HomemadeProduct[] = [
+  {
+    id: 'tp-1',
+    name: 'Khandeshi Thecha Pickle',
+    sellerId: 's-3',
+    sellerName: "Aai's Kitchen",
+    isSellerVerified: true,
+    rating: 4.7,
+    reviewsCount: 128,
+    distance: '1.1 km',
+    distanceKm: 1.1,
+    price: 220,
+    originalPrice: 260,
+    unit: '250g',
+    badge: 'Bestseller',
+    categorySlug: 'food',
+    subcategorySlug: 'pickles-chutneys',
+    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Authentic Maharashtrian garlic & green chilli crushed pickle made in wooden mortar.',
+    isAvailable: true,
+  },
+  {
+    id: 'tp-2',
+    name: 'Chocolate Fudge Cake',
+    sellerId: 's-1',
+    sellerName: "Sneha's Kitchen",
+    isSellerVerified: true,
+    rating: 4.8,
+    reviewsCount: 92,
+    distance: '1.2 km',
+    distanceKm: 1.2,
+    price: 499,
+    originalPrice: 599,
+    unit: '500g',
+    badge: 'Popular',
+    categorySlug: 'bakery',
+    subcategorySlug: 'cakes-pastries',
+    imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Decadent moist dark chocolate fudge cake baked fresh upon order with cocoa.',
+    isAvailable: true,
+  },
+  {
+    id: 'tp-3',
+    name: 'Besan Ladoo (Ghar Ka)',
+    sellerId: 's-6',
+    sellerName: 'Sweet Home',
+    isSellerVerified: true,
+    rating: 4.6,
+    reviewsCount: 74,
+    distance: '1.9 km',
+    distanceKm: 1.9,
+    price: 250,
+    originalPrice: 290,
+    unit: '250g',
+    badge: 'Popular',
+    categorySlug: 'food',
+    subcategorySlug: 'sweets-snacks',
+    imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Pure desi ghee roasted besan ladoos studded with crunchy cashews and green cardamom.',
+    isAvailable: true,
+  },
+  {
+    id: 'tp-4',
+    name: 'Moong Papad (Handmade)',
+    sellerId: 's-5',
+    sellerName: "Sunita's Kitchen",
+    isSellerVerified: true,
+    rating: 4.6,
+    reviewsCount: 76,
+    distance: '1.6 km',
+    distanceKm: 1.6,
+    price: 200,
+    originalPrice: 240,
+    unit: '250g',
+    badge: 'Bestseller',
+    categorySlug: 'food',
+    subcategorySlug: 'papad-wafers',
+    imageUrl: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Sun-dried crisp papad seasoned with crushed black pepper and hing.',
+    isAvailable: true,
+  },
+  {
+    id: 'tp-5',
+    name: 'Handmade Macrame Wall Hanging',
+    sellerId: 's-2',
+    sellerName: 'Handmade by Priya',
+    isSellerVerified: true,
+    rating: 4.9,
+    reviewsCount: 42,
+    distance: '1.8 km',
+    distanceKm: 1.8,
+    price: 650,
+    originalPrice: 850,
+    unit: '1 piece',
+    badge: 'New',
+    categorySlug: 'handmade',
+    subcategorySlug: 'macrame-decor',
+    imageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=400&q=80',
+    foodType: 'None',
+    description: 'Boho style hand-knotted natural cotton thread wall decor for living room.',
+    isAvailable: true,
+  },
+];
+
+export const HOMEMADE_FOOD_PRODUCTS: HomemadeProduct[] = [
+  {
+    id: 'hfp-1',
+    name: 'Mango Pickle (Ghar Ka)',
+    sellerId: 's-3',
+    sellerName: "Aai's Kitchen",
+    isSellerVerified: true,
+    rating: 4.8,
+    reviewsCount: 132,
+    distance: '1.1 km',
+    distanceKm: 1.1,
+    price: 250,
+    originalPrice: 290,
+    unit: '250g',
+    badge: 'Bestseller',
+    categorySlug: 'food',
+    subcategorySlug: 'pickles-chutneys',
+    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Traditional raw mango pickle cured in mustard oil and aromatic spices.',
+    isAvailable: true,
+  },
+  {
+    id: 'hfp-2',
+    name: 'Daily Tiffin (Veg)',
+    sellerId: 's-4',
+    sellerName: 'Home Food Corner',
+    isSellerVerified: true,
+    rating: 4.7,
+    reviewsCount: 98,
+    distance: '1.3 km',
+    distanceKm: 1.3,
+    price: 120,
+    originalPrice: 150,
+    unit: 'meal',
+    badge: 'Bestseller',
+    categorySlug: 'food',
+    subcategorySlug: 'tiffin-meals',
+    imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Homely cooked healthy meal: 4 soft rotis, dal tadka, fresh sabzi, steamed rice, and salad.',
+    isAvailable: true,
+  },
+  {
+    id: 'hfp-3',
+    name: 'Moong Papad (Handmade)',
+    sellerId: 's-5',
+    sellerName: "Sunita's Kitchen",
+    isSellerVerified: true,
+    rating: 4.6,
+    reviewsCount: 76,
+    distance: '1.6 km',
+    distanceKm: 1.6,
+    price: 200,
+    originalPrice: 240,
+    unit: '250g',
+    badge: 'Bestseller',
+    categorySlug: 'food',
+    subcategorySlug: 'papad-wafers',
+    imageUrl: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Hand-rolled thin crispy moong dal papad, sun dried without any chemical preservatives.',
+    isAvailable: true,
+  },
+  {
+    id: 'hfp-4',
+    name: 'Kaju Katli (Homemade)',
+    sellerId: 's-6',
+    sellerName: 'Sweet Home',
+    isSellerVerified: true,
+    rating: 4.9,
+    reviewsCount: 145,
+    distance: '1.9 km',
+    distanceKm: 1.9,
+    price: 350,
+    originalPrice: 420,
+    unit: '250g',
+    badge: 'Popular',
+    categorySlug: 'food',
+    subcategorySlug: 'sweets-snacks',
+    imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Melt-in-mouth diamond fudge prepared from pure premium cashews and minimum sugar.',
+    isAvailable: true,
+  },
+  {
+    id: 'hfp-5',
+    name: 'Special Garam Masala (Khandeshi)',
+    sellerId: 's-3',
+    sellerName: "Aai's Kitchen",
+    isSellerVerified: true,
+    rating: 4.9,
+    reviewsCount: 88,
+    distance: '1.1 km',
+    distanceKm: 1.1,
+    price: 180,
+    originalPrice: 210,
+    unit: '150g',
+    badge: 'Popular',
+    categorySlug: 'food',
+    subcategorySlug: 'masalas',
+    imageUrl: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Hand-roasted whole spices ground freshly for rich curries and gravies.',
+    isAvailable: true,
+  },
+  {
+    id: 'hfp-6',
+    name: 'Homemade Gajar Halwa (Desi Ghee)',
+    sellerId: 's-1',
+    sellerName: "Sneha's Kitchen",
+    isSellerVerified: true,
+    rating: 4.8,
+    reviewsCount: 110,
+    distance: '1.2 km',
+    distanceKm: 1.2,
+    price: 240,
+    originalPrice: 280,
+    unit: '300g',
+    badge: 'Chef Special',
+    categorySlug: 'food',
+    subcategorySlug: 'sweets-snacks',
+    imageUrl: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=400&q=80',
+    foodType: 'Veg',
+    description: 'Slow-simmered winter carrots cooked in full cream milk, pure mawa, and dry fruits.',
+    isAvailable: true,
+  },
+];

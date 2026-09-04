@@ -47,6 +47,8 @@ const Wishlist = lazy(() => import("./modules/user/Wishlist"));
 const Addresses = lazy(() => import("./modules/user/Addresses"));
 const AddressBook = lazy(() => import("./modules/user/AddressBook"));
 const LocalSetu = lazy(() => import("./modules/user/LocalSetu"));
+const HomemadeHub = lazy(() => import("./modules/user/homemade/HomemadeHub"));
+const HomemadeCategoryListing = lazy(() => import("./modules/user/homemade/HomemadeCategoryListing"));
 const SpiritualStore = lazy(() => import("./modules/user/SpiritualStore"));
 const PharmaStore = lazy(() => import("./modules/user/PharmaStore"));
 const EGiftStore = lazy(() => import("./modules/user/EGiftStore"));
@@ -419,7 +421,9 @@ function App() {
                                 <Route path="categories" element={<Categories />} />
                                 <Route path="category/:id" element={<Category />} />
                                 <Route path="address-book" element={<RequireCustomer><AddressBook /></RequireCustomer>} />
-                                <Route path="local-setu" element={<LocalSetu />} />
+                                <Route path="local-setu" element={<Navigate to="/homemade" replace />} />
+                                <Route path="homemade" element={<HomemadeHub />} />
+                                <Route path="homemade/category/:categorySlug" element={<HomemadeCategoryListing />} />
                                 <Route path="checkout" element={<RequireCustomer><Checkout /></RequireCustomer>} />
                                 <Route path="checkout/address" element={<RequireCustomer><CheckoutAddress /></RequireCustomer>} />
                                 <Route path="product/:id" element={<ProductDetail />} />

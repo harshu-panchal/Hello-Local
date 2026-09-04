@@ -196,6 +196,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
     location.pathname.startsWith('/category/') ||
     location.pathname.startsWith('/categories/');
 
+  const isHomemadeActive =
+    location.pathname === '/homemade' ||
+    location.pathname.startsWith('/homemade/');
+
   return (
     <div className="flex flex-col min-h-screen w-full bg-[#F8FAFC] overflow-x-hidden">
       <div className="w-full bg-[#F8FAFC] min-h-screen flex flex-col overflow-x-hidden">
@@ -413,17 +417,25 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </span>
               </Link>
 
-              {/* 3. Central Signature "Local SETU" Raised Button */}
+              {/* 3. Central Signature "Homemade" Raised Button */}
               <div className="relative flex-1 flex flex-col items-center justify-center">
                 <button
                   type="button"
-                  onClick={() => navigate('/local-setu')}
-                  className="absolute -top-5 w-13 h-13 rounded-full bg-[#FF2E7A] text-white flex flex-col items-center justify-center hl-setu-glow border-2 border-white active:scale-95 transition-transform touch-target-min"
-                  aria-label="Local SETU Services"
+                  onClick={() => navigate('/homemade')}
+                  className={`absolute -top-5 w-13 h-13 rounded-full ${
+                    isHomemadeActive ? 'bg-[#FF2E7A] scale-105 ring-2 ring-[#FF8A00] ring-offset-2' : 'bg-[#FF2E7A]'
+                  } text-white flex flex-col items-center justify-center hl-setu-glow border-2 border-white active:scale-95 transition-all touch-target-min shadow-md`}
+                  aria-label="Homemade Hub"
                 >
-                  <span className="text-[9px] font-bold leading-none tracking-tight">Local</span>
-                  <span className="text-[11px] font-extrabold leading-none uppercase mt-0.5 tracking-wider">SETU</span>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <path d="M9 22V12h6v10" />
+                  </svg>
+                  <span className="text-[8px] font-black leading-none uppercase mt-0.5 tracking-tight">Home</span>
                 </button>
+                <span className={`text-[10px] mt-7 font-medium ${isHomemadeActive ? 'text-[#FF2E7A] font-bold' : 'text-slate-500'}`}>
+                  Homemade
+                </span>
               </div>
 
               {/* 4. Orders */}

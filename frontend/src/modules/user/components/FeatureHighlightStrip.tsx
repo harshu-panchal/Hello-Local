@@ -17,7 +17,7 @@ export default function FeatureHighlightStrip() {
       subtitle: 'Win Coins',
       icon: <SparklesIcon size={16} className="text-[#E11D48]" />,
       iconBg: 'bg-[#FFE4E6] border-[#FECDD3]',
-      route: '/local-setu',
+      route: '/homemade',
     },
     {
       title: 'Loyalty',

@@ -103,7 +103,7 @@ export default function UserTopHeader({ onLocationClick, onPlaceClick }: UserTop
           {/* Location Pill */}
           <button
             type="button"
-            onClick={onLocationClick || onPlaceClick || (() => navigate('/local-setu'))}
+            onClick={onLocationClick || onPlaceClick || (() => navigate('/addresses'))}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl text-left transition-all active:scale-98 shadow-2xs max-w-[42%] min-h-[44px]"
             aria-label="Change Location"
           >

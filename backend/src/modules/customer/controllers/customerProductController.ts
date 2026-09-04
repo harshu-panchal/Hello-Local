@@ -22,6 +22,8 @@ export const getProducts = async (req: Request, res: Response) => {
       latitude, // User location latitude
       longitude, // User location longitude
       foodType,  // "Veg" | "Non-Veg" — filter by food type
+      isHomemade,
+      homemadeCategory,
     } = req.query;
 
     const query: any = {
@@ -177,6 +179,14 @@ export const getProducts = async (req: Request, res: Response) => {
     // Filter by food type — only apply when explicitly set to Veg or Non-Veg
     if (foodType === "Veg" || foodType === "Non-Veg") {
       query.foodType = foodType;
+    }
+
+    // Filter by homemade flag / category
+    if (isHomemade === "true" || isHomemade === true) {
+      query.isHomemade = true;
+    }
+    if (homemadeCategory) {
+      query.homemadeCategory = { $regex: new RegExp(`^${homemadeCategory}$`, "i") };
     }
 
     if (search) {
