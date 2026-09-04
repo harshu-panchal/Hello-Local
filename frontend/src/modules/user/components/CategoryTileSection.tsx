@@ -66,26 +66,26 @@ export default function CategoryTileSection({
     console.log("Clicked tile", tile.id);
   };
 
-  // Dynamic grid classes based on column count
+  // Dynamic responsive grid classes based on column count
   const getGridCols = () => {
     switch (columns) {
       case 2:
-        return "grid-cols-2";
+        return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
       case 3:
-        return "grid-cols-3";
+        return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
       case 4:
-        return "grid-cols-4";
+        return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8";
       case 6:
-        return "grid-cols-6";
+        return "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8";
       case 8:
-        return "grid-cols-8";
+        return "grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8";
       default:
-        return "grid-cols-4";
+        return "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8";
     }
   };
 
   const gridCols = getGridCols();
-  const gapClass = columns >= 6 ? "gap-1.5 md:gap-2.5" : "gap-2.5 md:gap-4";
+  const gapClass = "gap-2.5 sm:gap-3 md:gap-4";
 
   return (
     <div className="mt-2 md:mt-3 mb-6 md:mb-8 overflow-visible max-w-[1440px] mx-auto">
@@ -121,7 +121,7 @@ export default function CategoryTileSection({
                 transition={{ duration: 0.2 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex flex-col">
+                className="flex flex-col items-center w-full">
                 <Link
                   to={
                     tile.subcategoryId || tile.type === "subcategory"
@@ -157,12 +157,14 @@ export default function CategoryTileSection({
                       handleTileClick(tile);
                     }
                   }}
-                  className={`block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow h-full ${showProductCount ? "px-2.5" : "px-1.5"
-                    }`}>
+                  className={`block bg-white rounded-xl shadow-2xs border border-neutral-200/80 hover:shadow-md hover:border-neutral-300 transition-all h-full w-full ${
+                    showProductCount ? "max-w-[200px] px-2.5 py-2" : "max-w-[150px] p-1.5"
+                  }`}>
                   {/* Image - Multi-image collage or single image with semantic vector icon fallback */}
                   <div
-                    className={`w-full rounded-lg overflow-hidden ${showProductCount ? "h-32 md:h-36 mb-2" : "aspect-square"
-                      } ${tile.bgColor || "bg-slate-50"}`}>
+                    className={`w-full rounded-lg overflow-hidden aspect-square ${
+                      showProductCount ? "h-28 sm:h-32 mb-2" : ""
+                    } ${tile.bgColor || "bg-slate-50"}`}>
                     {hasValidImages ? (
                       (showProductCount || validImages.length >= 2) ? (
                         // Multi-image collage (2x2 grid)
@@ -191,15 +193,10 @@ export default function CategoryTileSection({
                         />
                       )
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-rose-50/60 via-slate-50 to-indigo-50/50">
-                        <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-white shadow-2xs flex items-center justify-center text-[#FF2E7A] border border-slate-200/60 mb-1.5">
+                      <div className="w-full h-full flex items-center justify-center p-2 text-center bg-gradient-to-br from-rose-50/60 via-slate-50 to-indigo-50/50">
+                        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-white shadow-2xs flex items-center justify-center text-[#FF2E7A] border border-slate-200/60">
                           {getIconByName(tile.slug || tile.name)}
                         </div>
-                        {!showProductCount && (
-                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider line-clamp-1">
-                            {tile.name}
-                          </span>
-                        )}
                       </div>
                     )}
                   </div>
@@ -223,8 +220,8 @@ export default function CategoryTileSection({
 
                 {/* Category name - outside card for non-bestsellers */}
                 {!showProductCount && (
-                  <div className="mt-1.5 text-center">
-                    <span className="text-[13px] md:text-sm font-medium text-neutral-800 line-clamp-2 leading-snug tracking-tight">
+                  <div className="mt-1.5 text-center px-1 max-w-[150px]">
+                    <span className="text-[12px] sm:text-[13px] font-medium text-neutral-800 line-clamp-2 leading-tight tracking-tight">
                       {tile.name}
                     </span>
                   </div>

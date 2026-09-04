@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { uploadImage, uploadImages } from "../../../services/api/uploadService";
 import {
   validateImageFile,
@@ -33,6 +33,9 @@ export default function AdminAddProduct() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { showToast } = useToast();
+  const mainFileInputRef = useRef<HTMLInputElement>(null);
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     productName: "",
     headerCategory: "",
@@ -75,9 +78,7 @@ export default function AdminAddProduct() {
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
   const [mainImagePreview, setMainImagePreview] = useState<string>("");
   const [galleryImageFiles, setGalleryImageFiles] = useState<File[]>([]);
-  const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>(
-    []
-  );
+  const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
@@ -87,15 +88,12 @@ export default function AdminAddProduct() {
   const [subSubCategories, setSubSubCategories] = useState<SubSubCategory[]>([]);
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>(
-    []
-  );
+  const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>([]);
   const [shops, setShops] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Use Promise.allSettled to ensure one failing API doesn't break all others
         const results = await Promise.allSettled([
           getCategories(),
           getActiveTaxes(),
@@ -104,26 +102,21 @@ export default function AdminAddProduct() {
           getShops(),
         ]);
 
-        // Handle categories
         if (results[0].status === "fulfilled" && results[0].value.success) {
           setCategories(results[0].value.data);
         }
 
-        // Handle taxes
         if (results[1].status === "fulfilled" && results[1].value.success) {
           setTaxes(results[1].value.data);
         }
 
-        // Handle brands
         if (results[2].status === "fulfilled" && results[2].value.success) {
           setBrands(results[2].value.data);
         }
 
-        // Handle header categories
         if (results[3].status === "fulfilled") {
           const headerCatRes = results[3].value;
           if (headerCatRes && Array.isArray(headerCatRes)) {
-            // Filter only Published header categories
             const published = headerCatRes.filter(
               (hc: HeaderCategory) => hc.status === "Published"
             );
@@ -131,12 +124,13 @@ export default function AdminAddProduct() {
           }
         }
 
-        // Handle shops (optional - for Shop By Store feature)
         if (results[4].status === "fulfilled" && results[4].value.success) {
           setShops(results[4].value.data);
         } else if (results[4].status === "rejected") {
-          // Shops API failed - this is non-critical, log and continue
-          console.warn("Failed to fetch shops (Shop By Store feature may be unavailable):", results[4].reason?.message || "Unknown error");
+          console.warn(
+            "Failed to fetch shops:",
+            results[4].reason?.message || "Unknown error"
+          );
         }
       } catch (err) {
         console.error("Error fetching form data:", err);
@@ -172,7 +166,7 @@ export default function AdminAddProduct() {
               popular: product.popular ? "Yes" : "No",
               dealOfDay: product.dealOfDay ? "Yes" : "No",
               brand: (product.brand as any)?._id || product.brandId || "",
-              tags: product.tags.join(", "),
+              tags: Array.isArray(product.tags) ? product.tags.join(", ") : "",
               smallDescription: product.smallDescription || "",
               seoTitle: product.seoTitle || "",
               seoKeywords: product.seoKeywords || "",
@@ -188,9 +182,15 @@ export default function AdminAddProduct() {
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
-              galleryImageUrls: product.galleryImageUrls || product.galleryImages || [],
-              isShopByStoreOnly: (product as any).isShopByStoreOnly ? "Yes" : "No",
-              shopId: (product as any).shopId?._id || (product as any).shopId || "",
+              galleryImageUrls:
+                product.galleryImageUrls || product.galleryImages || [],
+              isShopByStoreOnly: (product as any).isShopByStoreOnly
+                ? "Yes"
+                : "No",
+              shopId:
+                (product as any).shopId?._id ||
+                (product as any).shopId ||
+                "",
             });
             setVariations(product.variations || []);
             if (product.mainImageUrl || product.mainImage) {
@@ -199,7 +199,9 @@ export default function AdminAddProduct() {
               );
             }
             if (product.galleryImageUrls || product.galleryImages) {
-              setGalleryImagePreviews(product.galleryImageUrls || product.galleryImages || []);
+              setGalleryImagePreviews(
+                product.galleryImageUrls || product.galleryImages || []
+              );
             }
           }
         } catch (err) {
@@ -222,12 +224,9 @@ export default function AdminAddProduct() {
         }
       } else {
         setSubcategories([]);
-        // Clear subcategory selection when category is cleared
         setFormData((prev) => ({ ...prev, subcategory: "" }));
       }
     };
-    // Only fetch if category changed and user is interacting (or initial load)
-    // For edit mode, we want to load subcategories for the selected category
     if (formData.category) {
       fetchSubs();
     }
@@ -252,10 +251,8 @@ export default function AdminAddProduct() {
     }
   }, [formData.subcategory]);
 
-  // Clear category and subcategory when header category changes
   useEffect(() => {
     if (formData.headerCategory) {
-      // Header category selected - check if current category belongs to it
       const currentCategory = categories.find(
         (cat: any) => (cat._id || cat.id) === formData.category
       );
@@ -264,7 +261,6 @@ export default function AdminAddProduct() {
           typeof currentCategory.headerCategoryId === "string"
             ? currentCategory.headerCategoryId
             : currentCategory.headerCategoryId?._id;
-        // If current category doesn't belong to selected header category, clear it
         if (catHeaderId !== formData.headerCategory) {
           setFormData((prev) => ({
             ...prev,
@@ -277,7 +273,6 @@ export default function AdminAddProduct() {
         }
       }
     } else {
-      // Header category cleared - clear category and subcategory
       setFormData((prev) => ({
         ...prev,
         category: "",
@@ -325,16 +320,12 @@ export default function AdminAddProduct() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Validate all files
     const invalidFiles = files.filter((file) => !validateImageFile(file).valid);
     if (invalidFiles.length > 0) {
-      setUploadError(
-        "Some files are invalid. Please check file types and sizes."
-      );
+      setUploadError("Some files are invalid. Please check file types and sizes.");
       return;
     }
 
-    // Append new files to existing state
     setGalleryImageFiles((prev) => [...prev, ...files]);
     setUploadError("");
 
@@ -347,7 +338,6 @@ export default function AdminAddProduct() {
       setUploadError("Failed to create image previews");
     }
 
-    // Reset file input value to allow selecting the same file again if needed
     e.target.value = "";
   };
 
@@ -398,20 +388,21 @@ export default function AdminAddProduct() {
     e.preventDefault();
     setUploadError("");
 
-    // Basic validation
     if (!formData.productName.trim()) {
       setUploadError("Please enter a product name.");
+      showToast("Please enter a product name.", "error");
       return;
     }
 
-    // Only validate categories if NOT shop by store only
     if (formData.isShopByStoreOnly !== "Yes") {
       if (!formData.headerCategory) {
         setUploadError("Please select a header category.");
+        showToast("Please select a header category.", "error");
         return;
       }
       if (!formData.category) {
         setUploadError("Please select a category.");
+        showToast("Please select a category.", "error");
         return;
       }
     }
@@ -419,11 +410,9 @@ export default function AdminAddProduct() {
     setUploading(true);
 
     try {
-      // Keep local copies so we don't rely on async state updates before submit
       let mainImageUrl = formData.mainImageUrl;
       let galleryImageUrls = [...formData.galleryImageUrls];
 
-      // Upload main image if provided
       if (mainImageFile) {
         const compressedMain = await compressImage(mainImageFile);
         const mainImageResult = await uploadImage(
@@ -437,7 +426,6 @@ export default function AdminAddProduct() {
         }));
       }
 
-      // Upload gallery images if provided
       if (galleryImageFiles.length > 0) {
         const compressedGallery = await Promise.all(
           galleryImageFiles.map((file) => compressImage(file))
@@ -450,14 +438,13 @@ export default function AdminAddProduct() {
         setFormData((prev) => ({ ...prev, galleryImageUrls }));
       }
 
-      // Validate variations
       if (variations.length === 0) {
         setUploadError("Please add at least one product variation");
+        showToast("Please add at least one product variation", "error");
         setUploading(false);
         return;
       }
 
-      // Prepare product data for API
       const tagsArray = formData.tags
         ? formData.tags
             .split(",")
@@ -499,10 +486,12 @@ export default function AdminAddProduct() {
         })),
         variationType: formData.variationType || undefined,
         isShopByStoreOnly: formData.isShopByStoreOnly === "Yes",
-        shopId: formData.isShopByStoreOnly === "Yes" && formData.shopId ? formData.shopId : undefined,
+        shopId:
+          formData.isShopByStoreOnly === "Yes" && formData.shopId
+            ? formData.shopId
+            : undefined,
       };
 
-      // Create or Update product via API
       let response;
       if (id) {
         response = await updateProduct(id as string, productData);
@@ -511,385 +500,562 @@ export default function AdminAddProduct() {
       }
 
       if (response.success) {
-        const msg = id ? "Product updated successfully!" : "Product added successfully!";
+        const msg = id
+          ? "Product updated successfully!"
+          : "Product added successfully!";
         setSuccessMessage(msg);
         showToast(msg, "success");
         setTimeout(() => {
           navigate("/admin/product/list");
         }, 1000);
       } else {
-        setUploadError(response.message || "Failed to create product");
+        setUploadError(response.message || "Failed to save product");
+        showToast(response.message || "Failed to save product", "error");
       }
     } catch (error: any) {
-      setUploadError(
+      const msg =
         error.response?.data?.message ||
         error.message ||
-        "Failed to upload images. Please try again."
-      );
+        "Failed to save product. Please try again.";
+      setUploadError(msg);
+      showToast(msg, "error");
     } finally {
       setUploading(false);
     }
   };
 
+  const filteredCategories = categories.filter((cat: any) => {
+    if (!formData.headerCategory) return false;
+    const catHeaderId =
+      typeof cat.headerCategoryId === "string"
+        ? cat.headerCategoryId
+        : cat.headerCategoryId?._id;
+    return catHeaderId === formData.headerCategory;
+  });
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Main Content */}
-      <div className="flex-1">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Product Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">Product</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Product Name
-                  </label>
-                  <input
-                    type="text"
-                    name="productName"
-                    value={formData.productName}
-                    onChange={handleChange}
-                    placeholder="Enter Product Name"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select Header Category{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="headerCategory"
-                    value={formData.headerCategory}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="">Select Header Category</option>
-                    {headerCategories.map((headerCat) => (
-                      <option key={headerCat._id} value={headerCat._id}>
-                        {headerCat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select Category
-                    {!formData.headerCategory && (
-                      <span className="text-xs text-neutral-500 ml-1">
-                        (Select header category first)
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    disabled={!formData.headerCategory}
-                    className={`w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 ${!formData.headerCategory
-                      ? "bg-neutral-100 cursor-not-allowed text-neutral-500"
-                      : "bg-white"
-                      }`}>
-                    <option value="">
-                      {formData.headerCategory
-                        ? "Select Category"
-                        : "Select Header Category First"}
-                    </option>
-                    {categories
-                      .filter((cat: any) => {
-                        // Filter categories by selected header category if header category is selected
-                        if (formData.headerCategory) {
-                          const catHeaderId =
-                            typeof cat.headerCategoryId === "string"
-                              ? cat.headerCategoryId
-                              : cat.headerCategoryId?._id;
-                          return catHeaderId === formData.headerCategory;
-                        }
-                        return true;
-                      })
-                      .map((cat: any) => (
-                        <option
-                          key={cat._id || cat.id}
-                          value={cat._id || cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select SubCategory
-                    {!formData.category && (
-                      <span className="text-xs text-neutral-500 ml-1">
-                        (Select category first)
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    name="subcategory"
-                    value={formData.subcategory}
-                    onChange={handleChange}
-                    disabled={!formData.category}
-                    className={`w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 ${!formData.category
-                      ? "bg-neutral-100 cursor-not-allowed text-neutral-500"
-                      : "bg-white"
-                      }`}>
-                    <option value="">
-                      {formData.category
-                        ? "Select Subcategory"
-                        : "Select Category First"}
-                    </option>
-                    {subcategories.map((sub) => (
-                      <option key={sub._id} value={sub._id}>
-                        {sub.subcategoryName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select Sub-SubCategory
-                    {!formData.subcategory && (
-                      <span className="text-xs text-neutral-500 ml-1">
-                        (Select subcategory first)
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    name="subSubCategory"
-                    value={formData.subSubCategory}
-                    onChange={handleChange}
-                    disabled={!formData.subcategory}
-                    className={`w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 ${!formData.subcategory
-                      ? "bg-neutral-100 cursor-not-allowed text-neutral-500"
-                      : "bg-white"
-                      }`}>
-                    <option value="">Select Sub-SubCategory</option>
-                    {subSubCategories.map((subSub) => (
-                      <option key={subSub._id} value={subSub._id}>
-                        {subSub.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Product Status
-                  </label>
-                  <select
-                    name="publish"
-                    value={formData.publish}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">Unpublished</option>
-                    <option value="Yes">Published</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Make Product Popular?
-                  </label>
-                  <select
-                    name="popular"
-                    value={formData.popular}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Insert to Deal of the day?
-                  </label>
-                  <select
-                    name="dealOfDay"
-                    value={formData.dealOfDay}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select Brand
-                  </label>
-                  <select
-                    name="brand"
-                    value={formData.brand}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="">Select Brand</option>
-                    {brands.map((brand) => (
-                      <option key={brand._id} value={brand._id}>
-                        {brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select Tags
-                  </label>
-                  <input
-                    type="text"
-                    name="tags"
-                    value={formData.tags}
-                    onChange={handleChange}
-                    placeholder="Select or create tags"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  />
-                  <p className="text-xs text-red-500 mt-1">
-                    This will help for search
-                  </p>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Product Small Description
-                </label>
-                <textarea
-                  name="smallDescription"
-                  value={formData.smallDescription}
-                  onChange={handleChange}
-                  placeholder="Enter Product Small Description"
-                  rows={4}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 resize-none"
+    <div className="space-y-6 pb-12">
+      {/* Header & Breadcrumb */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">
+            {id ? "Edit Product" : "Add New Product"}
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            {id
+              ? "Update product catalogue attributes, inventory variants, and tax details"
+              : "Create a verified catalogue item with categories, variations, and images"}
+          </p>
+        </div>
+
+        <nav aria-label="Breadcrumb" className="text-xs sm:text-sm text-neutral-500">
+          <Link
+            to="/admin/dashboard"
+            className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+          >
+            Dashboard
+          </Link>
+          <span className="mx-2 text-neutral-300">/</span>
+          <Link
+            to="/admin/product/list"
+            className="text-rose-700 hover:text-rose-800 font-semibold transition-colors"
+          >
+            Products
+          </Link>
+          <span className="mx-2 text-neutral-300">/</span>
+          <span className="text-neutral-700 font-medium">
+            {id ? "Edit Product" : "Add Product"}
+          </span>
+        </nav>
+      </div>
+
+      {/* Global Alerts */}
+      {uploadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <svg
+              className="w-4 h-4 shrink-0 text-red-600"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span>{uploadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUploadError("")}
+            className="text-red-500 hover:text-red-700 font-bold ml-2 text-base leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-xs">
+          <svg
+            className="w-4 h-4 shrink-0 text-emerald-600"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Section 1: Product General Details */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                 />
-              </div>
+              </svg>
+              <h2 className="text-sm sm:text-base font-bold tracking-tight">
+                General Product Information
+              </h2>
             </div>
           </div>
 
-          {/* SEO Content Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">SEO Content</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-4">
+          <div className="p-5 sm:p-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              {/* Product Name */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Title
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Product Name <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="productName"
+                  value={formData.productName}
+                  onChange={handleChange}
+                  placeholder="e.g. Fortune Sunlite Refined Sunflower Oil 1L"
+                  required
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+              </div>
+
+              {/* Header Category */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Select Header Category{" "}
+                  {formData.isShopByStoreOnly !== "Yes" && (
+                    <span className="text-rose-600">*</span>
+                  )}
+                </label>
+                <select
+                  name="headerCategory"
+                  value={formData.headerCategory}
+                  onChange={handleChange}
+                  required={formData.isShopByStoreOnly !== "Yes"}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="">Select Header Category</option>
+                  {headerCategories.map((hc) => (
+                    <option key={hc._id || hc.id} value={hc._id || hc.id}>
+                      {hc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Category{" "}
+                  {formData.isShopByStoreOnly !== "Yes" && (
+                    <span className="text-rose-600">*</span>
+                  )}
+                  <span className="text-[11px] font-normal text-neutral-400 normal-case ml-1">
+                    (Select Header Category first)
+                  </span>
+                </label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  disabled={!formData.headerCategory}
+                  required={formData.isShopByStoreOnly !== "Yes"}
+                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
+                    !formData.headerCategory ? "opacity-60 bg-neutral-100 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <option value="">
+                    {formData.headerCategory
+                      ? "Select Category"
+                      : "Select Header Category First"}
+                  </option>
+                  {filteredCategories.map((cat) => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* SubCategory */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  SubCategory
+                  <span className="text-[11px] font-normal text-neutral-400 normal-case ml-1">
+                    (Select Category first)
+                  </span>
+                </label>
+                <select
+                  name="subcategory"
+                  value={formData.subcategory}
+                  onChange={handleChange}
+                  disabled={!formData.category}
+                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
+                    !formData.category ? "opacity-60 bg-neutral-100 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <option value="">
+                    {formData.category
+                      ? "Select SubCategory"
+                      : "Select Category First"}
+                  </option>
+                  {subcategories.map((sub) => (
+                    <option key={sub._id || sub.id} value={sub._id || sub.id}>
+                      {sub.subcategoryName || (sub as any).name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sub-SubCategory */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Sub-SubCategory
+                  <span className="text-[11px] font-normal text-neutral-400 normal-case ml-1">
+                    (Optional)
+                  </span>
+                </label>
+                <select
+                  name="subSubCategory"
+                  value={formData.subSubCategory}
+                  onChange={handleChange}
+                  disabled={!formData.subcategory}
+                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
+                    !formData.subcategory ? "opacity-60 bg-neutral-100 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <option value="">
+                    {formData.subcategory
+                      ? "Select Sub-SubCategory"
+                      : "Select SubCategory First"}
+                  </option>
+                  {subSubCategories.map((ss) => (
+                    <option key={ss._id} value={ss._id}>
+                      {ss.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Product Status */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Product Status <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  name="publish"
+                  value={formData.publish}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="Yes">Published (Visible in Customer Store)</option>
+                  <option value="No">Unpublished (Hidden draft)</option>
+                </select>
+              </div>
+
+              {/* Popular Product */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Make Product Popular?
+                </label>
+                <select
+                  name="popular"
+                  value={formData.popular}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes (Highlighted in Popular Section)</option>
+                </select>
+              </div>
+
+              {/* Deal of the day */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Insert to Deal of the day?
+                </label>
+                <select
+                  name="dealOfDay"
+                  value={formData.dealOfDay}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes (Featured in Daily Deals)</option>
+                </select>
+              </div>
+
+              {/* Brand */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Select Brand
+                </label>
+                <select
+                  name="brand"
+                  value={formData.brand}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="">Select Brand (Optional)</option>
+                  {brands.map((b) => (
+                    <option key={b._id} value={b._id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Search Tags
+                </label>
+                <input
+                  type="text"
+                  name="tags"
+                  value={formData.tags}
+                  onChange={handleChange}
+                  placeholder="e.g. oil, cooking, grocery, healthy (comma separated)"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+                <span className="text-[11px] text-neutral-400 mt-1 block">
+                  Keywords separated by commas to improve in-app search relevance
+                </span>
+              </div>
+            </div>
+
+            {/* Small Description */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                Product Small Description
+              </label>
+              <textarea
+                name="smallDescription"
+                value={formData.smallDescription}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Brief summary of product features, key ingredients, or benefits..."
+                className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white resize-y"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: SEO Content */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <h2 className="text-sm sm:text-base font-bold tracking-tight">
+                SEO & Meta Content (Optional)
+              </h2>
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Meta Title
                 </label>
                 <input
                   type="text"
                   name="seoTitle"
                   value={formData.seoTitle}
                   onChange={handleChange}
-                  placeholder="Enter SEO Title"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
+                  placeholder="e.g. Buy Fortune Sunflower Oil 1L Online | HelloLocal"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Keywords
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Meta Keywords
                 </label>
                 <input
                   type="text"
                   name="seoKeywords"
                   value={formData.seoKeywords}
                   onChange={handleChange}
-                  placeholder="Enter SEO Keywords"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
+                  placeholder="e.g. refined oil, sunflower oil, fortune oil"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Image Alt Text
-                </label>
-                <input
-                  type="text"
-                  name="seoImageAlt"
-                  value={formData.seoImageAlt}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Image Alt Text"
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  SEO Description
-                </label>
-                <textarea
-                  name="seoDescription"
-                  value={formData.seoDescription}
-                  onChange={handleChange}
-                  placeholder="Enter SEO Description"
-                  rows={4}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 resize-none"
-                />
-              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                SEO Image Alt Text
+              </label>
+              <input
+                type="text"
+                name="seoImageAlt"
+                value={formData.seoImageAlt}
+                onChange={handleChange}
+                placeholder="e.g. Fortune Sunflower Oil 1 Liter Pouch"
+                className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                Meta Description
+              </label>
+              <textarea
+                name="seoDescription"
+                value={formData.seoDescription}
+                onChange={handleChange}
+                rows={2}
+                placeholder="Search engine meta snippet for this product listing..."
+                className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white resize-y"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Add Variation Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">Add Variation</h2>
+        {/* Section 3: Product Variations */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                />
+              </svg>
+              <h2 className="text-sm sm:text-base font-bold tracking-tight">
+                Product Variations & Pricing
+              </h2>
             </div>
-            <div className="p-4 sm:p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Select Product Variation Type
-                </label>
-                <select
-                  name="variationType"
-                  value={formData.variationType}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                  <option value="">Select Product Type</option>
-                  <option value="Size">Size</option>
-                  <option value="Weight">Weight</option>
-                  <option value="Color">Color</option>
-                  <option value="Pack">Pack</option>
-                </select>
-              </div>
+            <span className="text-xs bg-rose-800/80 px-2.5 py-0.5 rounded-full font-semibold">
+              {variations.length} {variations.length === 1 ? "Variant" : "Variants"} Added
+            </span>
+          </div>
 
-              {/* Variation Form */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-neutral-50 rounded-lg">
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Variation Type */}
+            <div className="max-w-md">
+              <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                Select Variation Dimension
+              </label>
+              <select
+                name="variationType"
+                value={formData.variationType}
+                onChange={handleChange}
+                className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+              >
+                <option value="">Standard (Default / Single Unit)</option>
+                <option value="Weight">Weight (e.g. 500g, 1kg, 5kg)</option>
+                <option value="Volume">Volume (e.g. 250ml, 500ml, 1L)</option>
+                <option value="Size">Size (e.g. Small, Medium, Large, XL)</option>
+                <option value="Pack">Pack (e.g. Pack of 2, Pack of 6)</option>
+                <option value="Color">Color (e.g. Red, Blue, Black)</option>
+                <option value="Flavor">Flavor (e.g. Vanilla, Chocolate)</option>
+              </select>
+            </div>
+
+            {/* Add Variation Input Box */}
+            <div className="bg-neutral-50/80 rounded-2xl border border-neutral-200 p-4 sm:p-5">
+              <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider mb-3">
+                Add New Variant
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Title (e.g., 100g)
+                  <label className="block text-[11px] font-bold text-neutral-600 mb-1 uppercase">
+                    Variant Title / Value <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="text"
+                    placeholder="e.g. 1kg or Red"
                     value={variationForm.title}
                     onChange={(e) =>
-                      setVariationForm({
-                        ...variationForm,
-                        title: e.target.value,
-                      })
+                      setVariationForm({ ...variationForm, title: e.target.value })
                     }
-                    placeholder="100g"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 bg-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Price *
+                  <label className="block text-[11px] font-bold text-neutral-600 mb-1 uppercase">
+                    MRP / Price (₹) <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 150"
                     value={variationForm.price}
                     onChange={(e) =>
-                      setVariationForm({
-                        ...variationForm,
-                        price: e.target.value,
-                      })
+                      setVariationForm({ ...variationForm, price: e.target.value })
                     }
-                    placeholder="100"
-                    min="0"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 bg-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Discounted Price
+                  <label className="block text-[11px] font-bold text-neutral-600 mb-1 uppercase">
+                    Discount Price (₹)
                   </label>
                   <input
                     type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 135"
                     value={variationForm.discPrice}
                     onChange={(e) =>
                       setVariationForm({
@@ -897,441 +1063,567 @@ export default function AdminAddProduct() {
                         discPrice: e.target.value,
                       })
                     }
-                    placeholder="80"
-                    min="0"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 bg-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Stock (0 = Unlimited)
+                  <label className="block text-[11px] font-bold text-neutral-600 mb-1 uppercase">
+                    Stock Available
                   </label>
                   <input
                     type="number"
+                    min="0"
+                    placeholder="e.g. 50"
                     value={variationForm.stock}
+                    onChange={(e) =>
+                      setVariationForm({ ...variationForm, stock: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-600 mb-1 uppercase">
+                    Status
+                  </label>
+                  <select
+                    value={variationForm.status}
                     onChange={(e) =>
                       setVariationForm({
                         ...variationForm,
-                        stock: e.target.value,
+                        status: e.target.value as "Available" | "Sold out",
                       })
                     }
-                    placeholder="0"
-                    min="0"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={addVariation}
-                    className="w-full px-4 py-2 bg-pink-700 hover:bg-pink-800 text-white rounded-lg font-medium">
-                    Add Variation
-                  </button>
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 bg-white"
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Sold out">Sold out</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Variations List */}
-              {variations.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium text-neutral-700 mb-2">
-                    Added Variations:
-                  </h3>
-                  <div className="space-y-2">
-                    {variations.map((variation, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-white border border-neutral-200 rounded-lg">
-                        <div className="flex-1">
-                          <span className="font-medium">{variation.title}</span>{" "}
-                          - ₹{variation.price}
-                          {(variation.discPrice || 0) > 0 && (
-                            <span className="text-pink-700 ml-2">
-                              (₹{variation.discPrice})
-                            </span>
-                          )}
-                          <span className="ml-4 text-sm text-neutral-600">
-                            Stock:{" "}
-                            {variation.stock === 0
-                              ? "Unlimited"
-                              : variation.stock}{" "}
-                            | Status: {variation.status}
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={addVariation}
+                  className="px-5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-all active:scale-[0.98] flex items-center gap-1.5"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Variation
+                </button>
+              </div>
+            </div>
+
+            {/* Variations Table */}
+            {variations.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-neutral-200">
+                <table className="min-w-full divide-y divide-neutral-200 text-xs sm:text-sm">
+                  <thead className="bg-neutral-50 text-neutral-700 font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Variant Title</th>
+                      <th className="px-4 py-3 text-right">Price (₹)</th>
+                      <th className="px-4 py-3 text-right">Discount (₹)</th>
+                      <th className="px-4 py-3 text-right">Stock</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 bg-white">
+                    {variations.map((v, idx) => (
+                      <tr key={idx} className="hover:bg-neutral-50/60 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-neutral-900">
+                          {v.title || (v as any).value}
+                        </td>
+                        <td className="px-4 py-3 text-right text-neutral-800 font-mono">
+                          ₹{Number(v.price || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-medium text-emerald-700">
+                          {v.discPrice && Number(v.discPrice) > 0
+                            ? `₹${Number(v.discPrice).toFixed(2)}`
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-neutral-700">
+                          {v.stock}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              v.status === "Available"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}
+                          >
+                            {v.status}
                           </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeVariation(index)}
-                          className="text-red-600 hover:text-red-700 ml-4">
-                          Remove
-                        </button>
-                      </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeVariation(idx)}
+                            className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-6 border-2 border-dashed border-neutral-200 rounded-xl text-neutral-400 text-xs">
+                No variations added yet. Use the form above to add at least one product variant.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Section 4: Other Details & Compliance */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              <h2 className="text-sm sm:text-base font-bold tracking-tight">
+                Taxation, Manufacturer & Return Policy
+              </h2>
             </div>
           </div>
 
-          {/* Add Other Details Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">Add Other Details</h2>
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
+              {/* Manufacturer */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Manufacturer
+                </label>
+                <input
+                  type="text"
+                  name="manufacturer"
+                  value={formData.manufacturer}
+                  onChange={handleChange}
+                  placeholder="e.g. Adani Wilmar Ltd."
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+              </div>
+
+              {/* Made In */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Country of Origin / Made In
+                </label>
+                <input
+                  type="text"
+                  name="madeIn"
+                  value={formData.madeIn}
+                  onChange={handleChange}
+                  placeholder="e.g. India"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+              </div>
+
+              {/* Tax */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  GST / Tax Slab
+                </label>
+                <select
+                  name="tax"
+                  value={formData.tax}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="">Select Tax Slab (Optional)</option>
+                  {taxes.map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name} ({(t as any).percentage ?? (t as any).rate}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Is Returnable */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Is Returnable?
+                </label>
+                <select
+                  name="isReturnable"
+                  value={formData.isReturnable}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="No">No (Non-returnable item)</option>
+                  <option value="Yes">Yes (Returnable)</option>
+                </select>
+              </div>
+
+              {/* Max Return Days */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Max Return Window (Days)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  name="maxReturnDays"
+                  value={formData.maxReturnDays}
+                  onChange={handleChange}
+                  disabled={formData.isReturnable !== "Yes"}
+                  placeholder={formData.isReturnable === "Yes" ? "e.g. 7" : "N/A"}
+                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
+                    formData.isReturnable !== "Yes"
+                      ? "opacity-60 bg-neutral-100 cursor-not-allowed"
+                      : ""
+                  }`}
+                />
+              </div>
+
+              {/* FSSAI Lic No */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  FSSAI License No.
+                </label>
+                <input
+                  type="text"
+                  name="fssaiLicNo"
+                  value={formData.fssaiLicNo}
+                  onChange={handleChange}
+                  placeholder="e.g. 10012021000123"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+              </div>
+
+              {/* Total Allowed Quantity */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Max Order Qty Per User
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  name="totalAllowedQuantity"
+                  value={formData.totalAllowedQuantity}
+                  onChange={handleChange}
+                  placeholder="e.g. 10"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+                <span className="text-[11px] text-neutral-400 mt-1 block">
+                  Capped limit on single cart checkout
+                </span>
+              </div>
             </div>
-            <div className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Manufacturer
-                  </label>
-                  <input
-                    type="text"
-                    name="manufacturer"
-                    value={formData.manufacturer}
-                    onChange={handleChange}
-                    placeholder="Enter Manufacturer"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
+          </div>
+        </div>
+
+        {/* Section 5: Product Images */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              <h2 className="text-sm sm:text-base font-bold tracking-tight">
+                Product Photography & Gallery
+              </h2>
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-6 space-y-6">
+            {/* Main Feature Image */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                Main Cover Photo {!id && <span className="text-rose-600">*</span>}
+              </label>
+
+              <input
+                ref={mainFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleMainImageChange}
+                className="hidden"
+              />
+
+              {mainImagePreview ? (
+                <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border border-neutral-200 rounded-2xl bg-neutral-50/50">
+                  <img
+                    src={mainImagePreview}
+                    alt="Main product"
+                    className="h-32 w-32 rounded-xl object-contain bg-white border border-neutral-200 shadow-2xs p-1"
                   />
+                  <div className="space-y-2 text-center sm:text-left">
+                    <p className="text-xs font-bold text-neutral-800 truncate max-w-sm">
+                      {mainImageFile ? mainImageFile.name : "Current cover photo"}
+                    </p>
+                    <p className="text-[11px] text-neutral-400">
+                      Primary high-resolution image used in catalog cards & checkout
+                    </p>
+                    <div className="flex items-center gap-3 pt-1 justify-center sm:justify-start">
+                      <button
+                        type="button"
+                        onClick={() => mainFileInputRef.current?.click()}
+                        className="text-xs font-bold text-rose-700 hover:text-rose-800"
+                      >
+                        Change Photo
+                      </button>
+                      <span className="text-neutral-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMainImageFile(null);
+                          setMainImagePreview("");
+                          setFormData((prev) => ({ ...prev, mainImageUrl: "" }));
+                        }}
+                        className="text-xs font-bold text-red-600 hover:text-red-800"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Made In
-                  </label>
-                  <input
-                    type="text"
-                    name="madeIn"
-                    value={formData.madeIn}
-                    onChange={handleChange}
-                    placeholder="Enter Made In"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  />
+              ) : (
+                <div
+                  onClick={() => mainFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-neutral-300 hover:border-rose-500 rounded-2xl p-6 sm:p-8 text-center cursor-pointer bg-neutral-50/40 hover:bg-rose-50/30 transition-all"
+                >
+                  <svg
+                    className="w-8 h-8 mx-auto text-neutral-400 mb-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  <p className="text-xs sm:text-sm font-bold text-neutral-700">
+                    Click to upload main product photo
+                  </p>
+                  <p className="text-[11px] text-neutral-400 mt-1">
+                    JPG, PNG or WEBP (Max 5MB)
+                  </p>
                 </div>
+              )}
+            </div>
+
+            {/* Gallery Images */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                Additional Gallery Photos (Optional)
+              </label>
+
+              <input
+                ref={galleryFileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleGalleryImagesChange}
+                className="hidden"
+              />
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                {galleryImagePreviews.map((preview, idx) => (
+                  <div
+                    key={idx}
+                    className="relative group rounded-xl overflow-hidden border border-neutral-200 bg-white aspect-square shadow-2xs"
+                  >
+                    <img
+                      src={preview}
+                      alt={`Gallery ${idx + 1}`}
+                      className="w-full h-full object-contain p-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeGalleryImage(idx)}
+                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-sm transition-transform active:scale-95"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => galleryFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-neutral-300 hover:border-rose-500 rounded-xl aspect-square flex flex-col items-center justify-center text-neutral-400 hover:text-rose-700 bg-neutral-50/50 hover:bg-rose-50/30 transition-all cursor-pointer p-2"
+                >
+                  <svg
+                    className="w-5 h-5 mb-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  <span className="text-[11px] font-bold">Add Photo</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 6: Shop by Store Configuration */}
+        <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
+          <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
+              </svg>
+              <h2 className="text-sm sm:text-base font-bold tracking-tight">
+                Storefront & Hyperlocal Channel Visibility
+              </h2>
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5">
+              <svg
+                className="w-4 h-4 shrink-0 text-blue-600 mt-0.5"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span>
+                If <strong>Show in Shop by Store only</strong> is active, this product will appear exclusively within the designated retailer shopfront and will not be displayed on general category pages.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Show in Shop by Store Only?
+                </label>
+                <select
+                  name="isShopByStoreOnly"
+                  value={formData.isShopByStoreOnly}
+                  onChange={handleChange}
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                >
+                  <option value="No">No (Standard Catalog item)</option>
+                  <option value="Yes">Yes (Exclusive to specific store)</option>
+                </select>
+              </div>
+
+              {formData.isShopByStoreOnly === "Yes" && (
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Select Tax
+                  <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                    Designated Retail Shop <span className="text-rose-600">*</span>
                   </label>
                   <select
-                    name="tax"
-                    value={formData.tax}
+                    name="shopId"
+                    value={formData.shopId}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="">Select Tax</option>
-                    {taxes.map((tax) => (
-                      <option key={tax._id} value={tax._id}>
-                        {tax.name} ({tax.percentage}%)
+                    required={formData.isShopByStoreOnly === "Yes"}
+                    className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                  >
+                    <option value="">Select Shop</option>
+                    {shops.map((s: any) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name} ({s.city || "Local"})
                       </option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    is Returnable?
-                  </label>
-                  <select
-                    name="isReturnable"
-                    value={formData.isReturnable}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Max Return Days
-                  </label>
-                  <input
-                    type="number"
-                    name="maxReturnDays"
-                    value={formData.maxReturnDays}
-                    onChange={handleChange}
-                    placeholder="Enter Max Return Days"
-                    min="0"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    FSSAI Lic. No.
-                  </label>
-                  <input
-                    type="text"
-                    name="fssaiLicNo"
-                    value={formData.fssaiLicNo}
-                    onChange={handleChange}
-                    placeholder="Enter FSSAI Lic. No."
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Total allowed quantity
-                  </label>
-                  <input
-                    type="number"
-                    name="totalAllowedQuantity"
-                    value={formData.totalAllowedQuantity}
-                    onChange={handleChange}
-                    placeholder="Enter Total allowed quantit"
-                    min="0"
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600"
-                  />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Keep blank if no such limit
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Add Images Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">Add Images</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-6">
-              {uploadError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                  {uploadError}
-                </div>
               )}
-              {successMessage && (
-                <div className="bg-pink-50 border border-pink-200 text-pink-800 px-4 py-3 rounded-lg">
-                  {successMessage}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Product Main Image <span className="text-red-500">*</span>
-                </label>
-                <label className="block border-2 border-dashed border-neutral-300 rounded-lg p-8 text-center hover:border-pink-600 transition-colors cursor-pointer">
-                  {mainImagePreview ? (
-                    <div className="space-y-2">
-                      <img
-                        src={mainImagePreview}
-                        alt="Main product preview"
-                        className="max-h-48 mx-auto rounded-lg object-cover"
-                      />
-                      <p className="text-sm text-neutral-600">
-                        {mainImageFile?.name}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setMainImageFile(null);
-                          setMainImagePreview("");
-                        }}
-                        className="text-sm text-red-600 hover:text-red-700">
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <svg
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="mx-auto mb-2 text-neutral-400">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                      </svg>
-                      <p className="text-sm text-neutral-600 font-medium">
-                        Upload Main Image
-                      </p>
-                      <p className="text-xs text-neutral-500 mt-1">
-                        Max 5MB, JPG/PNG/WEBP
-                      </p>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleMainImageChange}
-                    className="hidden"
-                    disabled={uploading}
-                  />
-                </label>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Product Gallery Images (Optional)
-                </label>
-                <div className="block border-2 border-dashed border-neutral-300 rounded-lg p-8 text-center bg-white">
-                  {galleryImagePreviews.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {galleryImagePreviews.map((preview, index) => (
-                          <div key={index} className="relative group">
-                            <img
-                              src={preview}
-                              alt={`Gallery ${index + 1}`}
-                              className="w-full h-32 object-cover rounded-lg shadow-sm"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeGalleryImage(index)}
-                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-700 shadow-md transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                              title="Remove image">
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                        {/* Visual "Add More" Placeholder - Acts as Label for Input */}
-                        <label
-                          htmlFor="gallery-image-upload"
-                          className="w-full h-32 border-2 border-dashed border-neutral-300 rounded-lg flex flex-col items-center justify-center text-neutral-400 hover:text-pink-700 hover:border-pink-600 hover:bg-pink-50 transition-all bg-neutral-50 cursor-pointer">
-                          <svg
-                            width="32"
-                            height="32"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="mb-1">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span className="text-xs font-semibold">Add Image</span>
-                        </label>
-                      </div>
-                      <p className="text-sm text-neutral-600">
-                        {galleryImageFiles.length} image(s) selected
-                      </p>
-                    </div>
-                  ) : (
-                    <label
-                      htmlFor="gallery-image-upload"
-                      className="cursor-pointer block w-full h-full">
-                      <div className="flex flex-col items-center justify-center">
-                        <svg
-                          width="48"
-                          height="48"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="mx-auto mb-2 text-neutral-400">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                          <polyline points="17 8 12 3 7 8"></polyline>
-                          <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                        <p className="text-sm text-neutral-600 font-medium">
-                          Upload Other Product Images Here
-                        </p>
-                        <p className="text-xs text-neutral-500 mt-1">
-                          Max 5MB per image, up to 10 images
-                        </p>
-                      </div>
-                    </label>
-                  )}
-                  <input
-                    id="gallery-image-upload"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleGalleryImagesChange}
-                    className="hidden"
-                    disabled={uploading}
-                  />
-                </div>
-              </div>
             </div>
           </div>
+        </div>
 
-          {/* Shop by Store Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-            <div className="bg-pink-700 text-white px-4 sm:px-6 py-3">
-              <h2 className="text-lg font-semibold">Shop by Store</h2>
-            </div>
-            <div className="p-4 sm:p-6 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> If you select "Show in Shop by Store only", this product will only be visible in the Shop by Store section and will not appear on category pages, home page, or any other pages.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Show in Shop by Store only?
-                  </label>
-                  <select
-                    name="isShopByStoreOnly"
-                    value={formData.isShopByStoreOnly}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </div>
-                {formData.isShopByStoreOnly === "Yes" && (
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">
-                      Select Store <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="shopId"
-                      value={formData.shopId}
-                      onChange={handleChange}
-                      required={formData.isShopByStoreOnly === "Yes"}
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-pink-600 bg-white">
-                      <option value="">Select Store</option>
-                      {shops.map((shop) => (
-                        <option key={shop._id} value={shop._id}>
-                          {shop.name}
-                        </option>
-                      ))}
-                    </select>
-                    {shops.length === 0 && (
-                      <p className="text-xs text-neutral-500 mt-1">
-                        No active stores available. Please contact admin to create stores.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+        {/* Bottom Submission Action Bar */}
+        <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
+          <button
+            type="button"
+            onClick={() => navigate("/admin/product/list")}
+            className="px-5 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 font-bold text-sm hover:bg-neutral-100 transition-colors"
+          >
+            Cancel
+          </button>
 
-          {/* Submit Button */}
-          <div className="flex justify-end pb-6">
-            <button
-              type="submit"
-              disabled={uploading}
-              className={`px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm ${uploading
-                ? "bg-neutral-400 cursor-not-allowed text-white"
-                : "bg-pink-700 hover:bg-pink-800 text-white"
-                }`}>
-              {uploading
-                ? "Processing..."
-                : id
-                  ? "Update Product"
-                  : "Add Product"}
-            </button>
-          </div>
-        </form>
-      </div>
+          <button
+            type="submit"
+            disabled={uploading}
+            className={`px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-[0.98] flex items-center gap-2 ${
+              uploading
+                ? "bg-neutral-400 text-white cursor-not-allowed"
+                : "bg-rose-700 hover:bg-rose-800 text-white"
+            }`}
+          >
+            {uploading ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                Saving Product...
+              </>
+            ) : (
+              <>{id ? "Update Product" : "Add Product"}</>
+            )}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
-
-

@@ -463,7 +463,7 @@ export default function Home() {
                   productImages: card.subcategoryImages || [],
                   bgColor: card.bgColor || "bg-yellow-50",
                 }))}
-                columns={2}
+                columns={6}
                 showProductCount={false}
               />
             </Suspense>

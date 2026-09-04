@@ -424,14 +424,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   onClick={() => navigate('/homemade')}
                   className={`absolute -top-5 w-13 h-13 rounded-full ${
                     isHomemadeActive ? 'bg-[#FF2E7A] scale-105 ring-2 ring-[#FF8A00] ring-offset-2' : 'bg-[#FF2E7A]'
-                  } text-white flex flex-col items-center justify-center hl-setu-glow border-2 border-white active:scale-95 transition-all touch-target-min shadow-md`}
+                  } text-white flex items-center justify-center hl-setu-glow border-2 border-white active:scale-95 transition-all touch-target-min shadow-md`}
                   aria-label="Homemade Hub"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                     <path d="M9 22V12h6v10" />
                   </svg>
-                  <span className="text-[8px] font-black leading-none uppercase mt-0.5 tracking-tight">Home</span>
                 </button>
                 <span className={`text-[10px] mt-7 font-medium ${isHomemadeActive ? 'text-[#FF2E7A] font-bold' : 'text-slate-500'}`}>
                   Homemade
