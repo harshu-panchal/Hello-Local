@@ -19,6 +19,7 @@ import {
   getHeaderCategoriesAdmin,
   HeaderCategory,
 } from "../../../services/api/headerCategoryService";
+import SearchableSelect from "../../../components/ui/SearchableSelect";
 
 interface CategoryFormModalProps {
   isOpen: boolean;
@@ -550,31 +551,32 @@ export default function CategoryFormModal({
                           assigned. Please select one.
                         </div>
                       )}
-                    <select
+                    <SearchableSelect
+                      id="headerCategorySelect"
                       name="headerCategoryId"
-                      value={formData.headerCategoryId || ""}
-                      onChange={(e) =>
+                      options={headerCategories.map((headerCat) => ({
+                        value: headerCat._id,
+                        label: headerCat.name,
+                      }))}
+                      value={formData.headerCategoryId}
+                      onChange={(val) =>
                         setFormData((prev) => ({
                           ...prev,
-                          headerCategoryId: e.target.value || null,
+                          headerCategoryId: val,
                         }))
                       }
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.headerCategoryId
-                        ? "border-red-300"
-                        : "border-neutral-300"
-                        }`}
-                      disabled={submitting}>
-                      <option value="">
-                        {mode === "edit" && !category?.headerCategoryId
+                      placeholder={
+                        mode === "edit" && !category?.headerCategoryId
                           ? "-- Select Header Category (Required) --"
-                          : "-- Select Header Category --"}
-                      </option>
-                      {headerCategories.map((headerCat) => (
-                        <option key={headerCat._id} value={headerCat._id}>
-                          {headerCat.name}
-                        </option>
-                      ))}
-                    </select>
+                          : "-- Select Header Category --"
+                      }
+                      searchPlaceholder="Search header category..."
+                      emptyMessage="No header categories found"
+                      clearLabel="-- Select Header Category --"
+                      clearValue={null}
+                      hasError={!!errors.headerCategoryId}
+                      disabled={submitting}
+                    />
                     {errors.headerCategoryId && (
                       <p className="mt-1 text-sm text-red-600">
                         {errors.headerCategoryId}
@@ -661,25 +663,28 @@ export default function CategoryFormModal({
               <label className="block text-sm font-medium text-neutral-700 mb-2">
                 Parent Category
               </label>
-              <select
+              <SearchableSelect
+                id="parentCategorySelect"
                 name="parentId"
-                value={formData.parentId || ""}
-                onChange={(e) =>
+                options={availableParents.map((parent) => ({
+                  value: parent._id,
+                  label: parent.name,
+                }))}
+                value={formData.parentId}
+                onChange={(val) =>
                   setFormData((prev) => ({
                     ...prev,
-                    parentId: e.target.value || null,
+                    parentId: val,
                   }))
                 }
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.parentId ? "border-red-300" : "border-neutral-300"
-                  }`}
-                disabled={submitting}>
-                <option value="">None (Root Category)</option>
-                {availableParents.map((parent) => (
-                  <option key={parent._id} value={parent._id}>
-                    {parent.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="None (Root Category)"
+                searchPlaceholder="Search parent category..."
+                emptyMessage="No parent categories found"
+                clearLabel="None (Root Category)"
+                clearValue={null}
+                hasError={!!errors.parentId}
+                disabled={submitting}
+              />
               {errors.parentId && (
                 <p className="mt-1 text-sm text-red-600">{errors.parentId}</p>
               )}
