@@ -341,6 +341,7 @@ function App() {
                             <AdminLayout>
                               <Routes>
                                 <Route path="/" element={<AdminDashboard />} />
+                                <Route path="dashboard" element={<AdminDashboard />} />
                                 <Route path="profile" element={<AdminProfile />} />
                                 <Route path="category" element={<AdminCategory />} />
                                 <Route path="category/header" element={<AdminHeaderCategory />} />
@@ -390,6 +391,7 @@ function App() {
                                 <Route path="payments" element={<AdminPayments />} />
                                 <Route path="wallet" element={<AdminWallet />} />
                                 <Route path="billing-settings" element={<AdminBillingSettings />} />
+                                <Route path="*" element={<Navigate to="/admin" replace />} />
                               </Routes>
                             </AdminLayout>
                           </Suspense>
