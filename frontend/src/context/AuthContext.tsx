@@ -73,11 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //
     // A debug call to /fcm-tokens/test used to fire here, so every user of every
     // portal received a "test push notification" on each sign-in. (#H-26)
-    import("../services/pushNotificationService").then(({ registerFCMToken }) => {
-      registerFCMToken(true).catch((error) => {
-        console.error("Failed to register FCM token:", error);
-      });
-    });
+    import("../services/pushNotificationService").then(
+      ({ registerFCMToken }) => {
+        registerFCMToken(true).catch((error) => {
+          console.error("Failed to register FCM token:", error);
+        });
+      },
+    );
   };
 
   const logout = () => {
@@ -108,7 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         updateUser,
-      }}>
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -121,3 +124,5 @@ export function useAuth() {
   }
   return context;
 }
+
+//frk
