@@ -145,6 +145,8 @@ export const calculateOrderCommissions = async (orderId: string) => {
         amount: number;
         rate: number;
         orderAmount: number;
+        baseDeliveryEarning?: number;
+        tipAmount?: number;
       };
     } = {};
 
@@ -159,21 +161,23 @@ export const calculateOrderCommissions = async (orderId: string) => {
       if (!orderItem) continue;
 
       const sellerId = orderItem.seller.toString();
-      const itemTotal = orderItem.total;
+      const isSellerFunded = (order as any).couponFunding === "SELLER";
+      const itemDiscount = (isSellerFunded && (orderItem as any).discountAmount) ? Number((orderItem as any).discountAmount) : 0;
+      const effectiveItemTotal = Math.max(0, Math.round((orderItem.total - itemDiscount) * 100) / 100);
 
       // Get commission rate for this seller
       const commissionRate = await getSellerCommissionRate(sellerId);
-      const commissionAmount = (itemTotal * commissionRate) / 100;
+      const commissionAmount = Math.round(((effectiveItemTotal * commissionRate) / 100) * 100) / 100;
 
       if (sellerCommissions.has(sellerId)) {
         const existing = sellerCommissions.get(sellerId)!;
         existing.amount += commissionAmount;
-        existing.orderAmount += itemTotal;
+        existing.orderAmount += effectiveItemTotal;
       } else {
         sellerCommissions.set(sellerId, {
           amount: commissionAmount,
           rate: commissionRate,
-          orderAmount: itemTotal,
+          orderAmount: effectiveItemTotal,
         });
       }
     }
@@ -222,13 +226,19 @@ export const calculateOrderCommissions = async (orderId: string) => {
         commissionAmount = (order.subtotal * commissionRate) / 100;
       }
 
+      const baseDeliveryEarning = Math.round(commissionAmount * 100) / 100;
+      const tipAmount = Math.round((Number(order.tipAmount) || 0) * 100) / 100;
+      const totalRiderEarning = Math.round((baseDeliveryEarning + tipAmount) * 100) / 100;
+
       commissions.deliveryBoy = {
         deliveryBoyId,
-        amount: Math.round(commissionAmount * 100) / 100, // Round to 2 decimals
+        amount: totalRiderEarning, // Total earning: base delivery fee + customer tip
         rate: commissionRate,
         orderAmount: usedDistanceBased
           ? order.deliveryDistanceKm || 0
           : order.subtotal,
+        baseDeliveryEarning,
+        tipAmount,
       };
     }
 
@@ -274,12 +284,16 @@ export const createPendingCommissions = async (orderId: string) => {
       const seller = await Seller.findById(item.seller);
       if (!seller) continue;
 
+      const isSellerFunded = (order as any).couponFunding === "SELLER";
+      const itemDiscount = (isSellerFunded && (item as any).discountAmount) ? Number((item as any).discountAmount) : 0;
+      const effectiveItemAmount = Math.max(0, Math.round((item.total - itemDiscount) * 100) / 100);
+
       const commissionRate = await getOrderItemCommissionRate(
         item.product.toString(),
         item.seller.toString()
       );
-      const commissionAmount = (item.total * commissionRate) / 100;
-      const netEarning = item.total - commissionAmount;
+      const commissionAmount = Math.round(((effectiveItemAmount * commissionRate) / 100) * 100) / 100;
+      const netEarning = Math.round((effectiveItemAmount - commissionAmount) * 100) / 100;
 
       console.log(
         `[Commission] Item: ${item.product}, Rate: ${commissionRate}%, Amount: ${commissionAmount}, Net: ${netEarning}`,
@@ -297,7 +311,7 @@ export const createPendingCommissions = async (orderId: string) => {
         orderItem: item._id,
         seller: item.seller,
         type: "SELLER",
-        orderAmount: item.total,
+        orderAmount: effectiveItemAmount,
         commissionRate,
         commissionAmount,
         status: "Pending",
@@ -486,6 +500,10 @@ export const distributeCommissions = async (orderId: string) => {
           commissionAmount = (order.subtotal * commissionRate) / 100;
         }
 
+        const baseDeliveryEarning = Math.round(commissionAmount * 100) / 100;
+        const tipAmount = Math.round((Number(order.tipAmount) || 0) * 100) / 100;
+        const totalRiderEarning = Math.round((baseDeliveryEarning + tipAmount) * 100) / 100;
+
         // Create Commission Record
         const newComm = await Commission.create(
           [
@@ -497,7 +515,8 @@ export const distributeCommissions = async (orderId: string) => {
                 ? order.deliveryDistanceKm || 0
                 : order.subtotal,
               commissionRate,
-              commissionAmount: Math.round(commissionAmount * 100) / 100,
+              commissionAmount: totalRiderEarning,
+              tipAmount,
               status: "Paid",
               paidAt: new Date(),
             },
@@ -508,34 +527,51 @@ export const distributeCommissions = async (orderId: string) => {
         const comm = newComm[0];
         processedCommissions.push(comm);
 
-        // Credit Wallet Immediately
+        const description = tipAmount > 0
+          ? `Delivery earning for order ${order.orderNumber} (Base: ₹${baseDeliveryEarning}, Tip: ₹${tipAmount})`
+          : `Delivery earning for order ${order.orderNumber}`;
+
+        // Credit Wallet Immediately with deterministic reference for idempotency
         await creditWallet(
           deliveryBoyId,
           "DELIVERY_BOY",
           comm.commissionAmount,
-          `Delivery earning for order ${order.orderNumber}`,
+          description,
           orderId,
           comm._id.toString(),
           session,
+          `DEL-EARN-${order._id}`,
         );
       } else if (
         existingDeliveryComm &&
         existingDeliveryComm.status === "Pending"
       ) {
+        const tipAmount = Math.round((Number(order.tipAmount) || 0) * 100) / 100;
+        if (tipAmount > 0 && !(existingDeliveryComm.tipAmount && existingDeliveryComm.tipAmount > 0)) {
+          existingDeliveryComm.tipAmount = tipAmount;
+          existingDeliveryComm.commissionAmount = Math.round((existingDeliveryComm.commissionAmount + tipAmount) * 100) / 100;
+        }
+
         // If it existed as pending, mark as paid and credit
         existingDeliveryComm.status = "Paid";
         existingDeliveryComm.paidAt = new Date();
         await existingDeliveryComm.save({ session });
         processedCommissions.push(existingDeliveryComm);
 
+        const baseAmt = Math.round((existingDeliveryComm.commissionAmount - (existingDeliveryComm.tipAmount || 0)) * 100) / 100;
+        const description = (existingDeliveryComm.tipAmount || 0) > 0
+          ? `Delivery earning for order ${order.orderNumber} (Base: ₹${baseAmt}, Tip: ₹${existingDeliveryComm.tipAmount})`
+          : `Delivery earning for order ${order.orderNumber}`;
+
         await creditWallet(
           deliveryBoyId,
           "DELIVERY_BOY",
           existingDeliveryComm.commissionAmount,
-          `Delivery earning for order ${order.orderNumber}`,
+          description,
           orderId,
           existingDeliveryComm._id.toString(),
           session,
+          `DEL-EARN-${order._id}`,
         );
       }
     }
@@ -591,14 +627,43 @@ export const processPendingCODPayouts = async (
       (comm) => comm.order !== null,
     );
 
+    // Group pending seller commissions by order
+    const orderCommissionsMap = new Map<string, typeof validCommissions>();
+    for (const comm of validCommissions) {
+      const oId = (comm.order as any)._id.toString();
+      if (!orderCommissionsMap.has(oId)) {
+        orderCommissionsMap.set(oId, []);
+      }
+      orderCommissionsMap.get(oId)!.push(comm);
+    }
+
     const processedOrders = new Set<string>();
     const PlatformWallet = (await import("../models/PlatformWallet")).default;
     let platformWallet = await PlatformWallet.findOne().session(session || null);
 
-    for (const comm of validCommissions) {
+    // If deliveryBoy exists, check cumulative settled amount across pending orders
+    const deliveryBoy = await Delivery.findById(deliveryBoyId).session(session || null);
+    if (deliveryBoy) {
+      let totalPendingDebt = 0;
+      for (const oComms of orderCommissionsMap.values()) {
+        const o = oComms[0].order as any;
+        const dComm = await Commission.findOne({
+          order: o._id,
+          type: "DELIVERY_BOY",
+        }).session(session || null);
+        if (dComm) {
+          totalPendingDebt += Math.round((o.total - dComm.commissionAmount) * 100) / 100;
+        }
+      }
+      const currentDebt = Math.round((deliveryBoy.pendingAdminPayout || 0) * 100) / 100;
+      const settledAvailable = Math.max(0, Math.round((totalPendingDebt - currentDebt) * 100) / 100);
+      remainingAmount = Math.max(remainingAmount, settledAvailable);
+    }
+
+    for (const oComms of orderCommissionsMap.values()) {
       if (remainingAmount <= 0.01) break; // Use small epsilon
 
-      const order = comm.order as any;
+      const order = oComms[0].order as any;
 
       // Calculate how much this order contributes to the admin payout
       const deliveryComm = await Commission.findOne({
@@ -613,41 +678,54 @@ export const processPendingCODPayouts = async (
 
       // We process the commission if the amount paid covers this order's part (with small epsilon)
       if (remainingAmount >= orderAdminPayoutPart - 0.01) {
-        comm.status = "Paid";
-        comm.paidAt = new Date();
-        await comm.save({ session });
+        remainingAmount = Math.max(0, Math.round((remainingAmount - orderAdminPayoutPart) * 100) / 100);
+        processedOrders.add(order.orderNumber);
 
-        // Credit Seller Wallet
-        const netEarning = Math.round((comm.orderAmount - comm.commissionAmount) * 100) / 100;
-        if (comm.seller) {
-          await creditWallet(
-            comm.seller.toString(),
-            "SELLER",
-            netEarning,
-            `Sale proceeds for COD order ${order.orderNumber} (Delivery boy payout confirmed)`,
-            order._id.toString(),
-            comm._id.toString(),
-            session,
-          );
-
-          // Update platform wallet counters for this specifically processed order
-          if (platformWallet) {
-            // How much admin actually earned from this order (Commission + platform fee + admin shipping)
-            const { calculateCODOrderBreakdown } = await import("./commissionService");
-            const breakdown = await calculateCODOrderBreakdown(order._id.toString());
-
-            platformWallet.totalAdminEarning += breakdown.totalAdminEarning;
-            // Paying the seller REDUCES what the platform still owes them.
-            // This used to add, so the liability grew every time it was settled. (#H-43)
-            platformWallet.sellerPendingPayouts = Math.max(
-              0,
-              (platformWallet.sellerPendingPayouts || 0) - netEarning,
-            );
-          }
+        // Update platform admin earnings once for this order
+        if (platformWallet) {
+          const { calculateCODOrderBreakdown } = await import("./commissionService");
+          const breakdown = await calculateCODOrderBreakdown(order._id.toString());
+          platformWallet.totalAdminEarning = Math.round(
+            ((platformWallet.totalAdminEarning || 0) + breakdown.totalAdminEarning) * 100
+          ) / 100;
         }
 
-        remainingAmount -= orderAdminPayoutPart;
-        processedOrders.add(order.orderNumber);
+        // Process all seller commissions belonging to this order
+        for (const comm of oComms) {
+          comm.status = "Paid";
+          comm.paidAt = new Date();
+          await comm.save({ session });
+
+          // Credit Seller Wallet
+          const netEarning = Math.round((comm.orderAmount - comm.commissionAmount) * 100) / 100;
+          if (comm.seller) {
+            await creditWallet(
+              comm.seller.toString(),
+              "SELLER",
+              netEarning,
+              `Sale proceeds for COD order ${order.orderNumber} (Delivery boy payout confirmed)`,
+              order._id.toString(),
+              comm._id.toString(),
+              session,
+            );
+
+            // Update platform wallet counters for this specifically processed order
+            if (platformWallet) {
+              // Paying the seller REDUCES what the platform still owes them.
+              // This used to add, so the liability grew every time it was settled. (#H-43)
+              platformWallet.sellerPendingPayouts = Math.max(
+                0,
+                (platformWallet.sellerPendingPayouts || 0) - netEarning,
+              );
+              // Releasing seller payout transfers the seller's money out of the platform's
+              // available balance into the seller's wallet, preventing double-counted balance inflation.
+              platformWallet.currentPlatformBalance = Math.max(
+                0,
+                (platformWallet.currentPlatformBalance || 0) - netEarning,
+              );
+            }
+          }
+        }
       }
     }
 
@@ -731,9 +809,216 @@ export const getCommissionSummary = async (
 };
 
 /**
+ * Reverse commission for a single returned order item / partial quantity
+ */
+export interface ReverseOrderItemCommissionParams {
+  orderId: string;
+  orderItemId: string;
+  returnId?: string;
+  returnedQuantity: number;
+  session?: mongoose.ClientSession;
+}
+
+export const reverseOrderItemCommission = async (
+  params: ReverseOrderItemCommissionParams,
+) => {
+  const { orderId, orderItemId, returnId, returnedQuantity } = params;
+  const useExternalSession = !!params.session;
+  const session = params.session || (await mongoose.startSession());
+  if (!useExternalSession) {
+    session.startTransaction();
+  }
+
+  try {
+    const qty = Number(returnedQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new Error(`Invalid returned quantity: ${returnedQuantity}`);
+    }
+
+    const orderItem = await OrderItem.findById(orderItemId).session(session);
+    if (!orderItem) {
+      throw new Error(`Order item ${orderItemId} not found`);
+    }
+
+    // Idempotency guard: if a wallet reversal already exists for this return, do not re-debit
+    const reference = returnId
+      ? `REV-RET-${returnId}`
+      : `REV-ITEM-${orderItemId}-${Date.now()}`;
+    const WalletTransaction = (await import("../models/WalletTransaction")).default;
+    const existingTx = await WalletTransaction.findOne({ reference }).session(session);
+    if (existingTx) {
+      console.log(`Return ${returnId} already reversed with reference ${reference}`);
+      if (!useExternalSession) await session.commitTransaction();
+      return {
+        success: true,
+        message: "Commission already reversed for this return",
+        data: { amountReversed: existingTx.amount },
+      };
+    }
+
+    // Find the seller commission for this item
+    let commission = await Commission.findOne({
+      order: orderId,
+      orderItem: orderItemId,
+      type: "SELLER",
+    }).session(session);
+
+    if (!commission) {
+      // Fallback: search by order and seller if orderItem was unlinked
+      commission = await Commission.findOne({
+        order: orderId,
+        seller: orderItem.seller,
+        type: "SELLER",
+      }).session(session);
+    }
+
+    if (!commission) {
+      console.warn(
+        `No commission record found for order item ${orderItemId} in order ${orderId}`,
+      );
+      if (!useExternalSession) await session.commitTransaction();
+      return {
+        success: true,
+        message: "No commission record found to reverse",
+      };
+    }
+
+    // Authoritative calculation based on the stored Commission record
+    const originalQuantity = Math.max(1, orderItem.quantity || 1);
+    const commissionRate =
+      commission.commissionRate ?? (orderItem.commissionRate || 0);
+
+    // Calculate total returned quantity across all completed returns for this item
+    const Return = (await import("../models/Return")).default;
+    const otherReturns = await Return.find({
+      orderItem: orderItemId,
+      status: "Completed",
+      ...(returnId ? { _id: { $ne: returnId } } : {}),
+    }).session(session);
+    const priorReturned =
+      otherReturns.reduce((sum, r) => sum + (r.quantity || 0), 0);
+    const totalReturned = priorReturned + qty;
+    const isFullyReturned = totalReturned >= originalQuantity;
+
+    let returnedGross: number;
+    let returnedCommission: number;
+    let amountToReverse: number;
+
+    if (isFullyReturned) {
+      // Final return: sweep 100% of the remaining stored commission allocation.
+      // This guarantees zero rounding discrepancy and prevents cumulative paise drift.
+      returnedGross = commission.orderAmount;
+      returnedCommission = commission.commissionAmount;
+      amountToReverse = Math.max(
+        0,
+        Math.round((commission.orderAmount - commission.commissionAmount) * 100) / 100,
+      );
+
+      commission.orderAmount = 0;
+      commission.commissionAmount = 0;
+      commission.status = "Cancelled";
+    } else {
+      // Partial return: derive proportionally based on returned quantity fraction
+      const remainingQty = Math.max(1, originalQuantity - priorReturned);
+      const unitGross = commission.orderAmount > 0
+        ? Math.round((commission.orderAmount / remainingQty) * 100) / 100
+        : (orderItem.unitPrice || 0);
+      const calculatedGross = Math.round(unitGross * qty * 100) / 100;
+      returnedGross = Math.min(commission.orderAmount, calculatedGross);
+      returnedCommission = Math.min(
+        commission.commissionAmount,
+        Math.round(((returnedGross * commissionRate) / 100) * 100) / 100,
+      );
+      const netToReverse =
+        Math.round((returnedGross - returnedCommission) * 100) / 100;
+      const remainingNet =
+        Math.round((commission.orderAmount - commission.commissionAmount) * 100) / 100;
+      amountToReverse = Math.max(0, Math.min(netToReverse, remainingNet));
+
+      commission.orderAmount = Math.max(
+        0,
+        Math.round((commission.orderAmount - returnedGross) * 100) / 100,
+      );
+      commission.commissionAmount = Math.max(
+        0,
+        Math.round((commission.commissionAmount - returnedCommission) * 100) / 100,
+      );
+    }
+
+    // If commission was already Paid, debit the seller wallet
+    if (
+      commission.status === "Paid" &&
+      amountToReverse > 0 &&
+      commission.seller
+    ) {
+      const { debitWallet } = await import("./walletManagementService");
+      await debitWallet(
+        commission.seller.toString(),
+        "SELLER",
+        amountToReverse,
+        `Reversal for return ${returnId || ""} (${orderItem.productName || "Item"}, Qty: ${qty}) in order ${orderId}`,
+        orderId,
+        session,
+        {
+          allowNegative: true,
+          reference,
+        },
+      );
+    }
+
+    await commission.save({ session });
+
+    if (!useExternalSession) {
+      await session.commitTransaction();
+    }
+
+    return {
+      success: true,
+      message: "Item commission reversed successfully",
+      data: {
+        orderItemId,
+        returnedQuantity: qty,
+        returnedGross,
+        returnedCommission,
+        amountToReverse,
+        isFullyReturned,
+      },
+    };
+  } catch (error: any) {
+    if (!useExternalSession) {
+      await session.abortTransaction();
+    }
+    console.error("Error reversing order item commission:", error);
+    return {
+      success: false,
+      message: error.message || "Failed to reverse order item commission",
+    };
+  } finally {
+    if (!useExternalSession) {
+      session.endSession();
+    }
+  }
+};
+
+/**
  * Reverse commissions for a cancelled/returned order
  */
-export const reverseCommissions = async (orderId: string) => {
+export const reverseCommissions = async (
+  orderId: string,
+  options?: {
+    orderItemId?: string;
+    returnId?: string;
+    returnedQuantity?: number;
+  },
+) => {
+  if (options?.orderItemId && options?.returnedQuantity) {
+    return reverseOrderItemCommission({
+      orderId,
+      orderItemId: options.orderItemId,
+      returnId: options.returnId,
+      returnedQuantity: options.returnedQuantity,
+    });
+  }
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -855,13 +1140,18 @@ export interface ICODOrderBreakdown {
 
   // Delivery breakdown
   totalDeliveryCharge: number;
-  deliveryBoyCommission: number; // Delivery boy's earning from delivery
+  deliveryBoyCommission: number; // Delivery boy's earning from delivery (base fee + tip)
+  baseDeliveryCommission?: number; // Base delivery fee excluding tip
+  tipAmount?: number; // Customer tip passed through to rider
   adminDeliveryCommission: number; // Admin's portion of delivery charge
 
   // Totals
   totalAdminEarning: number; // adminProductCommission + platformFee + adminDeliveryCommission
   totalOrderAmount: number; // Grand total customer pays
   amountDeliveryBoyOwesAdmin: number; // Total - deliveryBoyCommission
+  couponDiscount?: number;
+  couponFunding?: "PLATFORM" | "SELLER";
+  platformDiscountSubsidy?: number;
 
   // Metadata
   deliveryBoyId?: string;
@@ -888,6 +1178,11 @@ export const calculateCODOrderBreakdown = async (
       throw new Error("This function is only for COD orders");
     }
 
+    const tipAmount = Math.round((Number(order.tipAmount) || 0) * 100) / 100;
+    const isSellerFunded = (order as any).couponFunding === "SELLER";
+    const isPlatformFunded = !(order as any).couponFunding || (order as any).couponFunding === "PLATFORM";
+    const platformDiscountSubsidy = (isPlatformFunded && order.discount) ? Math.round(Number(order.discount) * 100) / 100 : 0;
+
     const breakdown: ICODOrderBreakdown = {
       orderId: order._id.toString(),
       orderNumber: order.orderNumber,
@@ -897,12 +1192,17 @@ export const calculateCODOrderBreakdown = async (
       platformFee: order.platformFee || 0,
       totalDeliveryCharge: order.shipping || 0,
       deliveryBoyCommission: 0,
+      baseDeliveryCommission: 0,
+      tipAmount,
       adminDeliveryCommission: 0,
       totalAdminEarning: 0,
       totalOrderAmount: order.total,
       amountDeliveryBoyOwesAdmin: 0,
       deliveryBoyId: order.deliveryBoy?.toString(),
       deliveryDistanceKm: order.deliveryDistanceKm,
+      couponDiscount: order.discount || 0,
+      couponFunding: (order as any).couponFunding || "PLATFORM",
+      platformDiscountSubsidy,
     };
 
     // 1. Calculate Product Commissions (Admin vs Seller)
@@ -918,16 +1218,19 @@ export const calculateCODOrderBreakdown = async (
         item.seller.toString()
       );
 
-      // Calculate commission and seller earning for this item
-      const itemCommission = (item.total * commissionRate) / 100;
-      const itemSellerEarning = item.total - itemCommission;
+      const itemDiscount = (isSellerFunded && (item as any).discountAmount) ? Number((item as any).discountAmount) : 0;
+      const effectiveItemAmount = Math.max(0, Math.round((item.total - itemDiscount) * 100) / 100);
 
-      breakdown.adminProductCommission += itemCommission;
+      // Calculate commission and seller earning for this item
+      const itemCommission = Math.round(((effectiveItemAmount * commissionRate) / 100) * 100) / 100;
+      const itemSellerEarning = Math.round((effectiveItemAmount - itemCommission) * 100) / 100;
+
+      breakdown.adminProductCommission = Math.round((breakdown.adminProductCommission + itemCommission) * 100) / 100;
 
       // Aggregate seller earnings
       const sellerId = item.seller.toString();
       const currentEarning = breakdown.sellerEarnings.get(sellerId) || 0;
-      breakdown.sellerEarnings.set(sellerId, currentEarning + itemSellerEarning);
+      breakdown.sellerEarnings.set(sellerId, Math.round((currentEarning + itemSellerEarning) * 100) / 100);
     }
 
     // 2. Calculate Delivery Commission Split
@@ -943,10 +1246,12 @@ export const calculateCODOrderBreakdown = async (
       ) {
         // Distance-based calculation
         const deliveryBoyKmRate = settings.deliveryConfig.deliveryBoyKmRate;
-        breakdown.deliveryBoyCommission = order.deliveryDistanceKm * deliveryBoyKmRate;
+        const baseComm = order.deliveryDistanceKm * deliveryBoyKmRate;
+        breakdown.baseDeliveryCommission = Math.round(baseComm * 100) / 100;
+        breakdown.deliveryBoyCommission = Math.round((baseComm + tipAmount) * 100) / 100;
 
-        // Admin gets the rest of the delivery charge
-        breakdown.adminDeliveryCommission = breakdown.totalDeliveryCharge - breakdown.deliveryBoyCommission;
+        // Admin gets the rest of the delivery charge (or absorbs delivery subsidy if negative)
+        breakdown.adminDeliveryCommission = Math.round((breakdown.totalDeliveryCharge - baseComm) * 100) / 100;
       } else {
         // Fallback: If no distance-based config, use percentage of order subtotal (matches prepaid logic)
         // Get delivery boy commission rate (default 5%)
@@ -955,7 +1260,9 @@ export const calculateCODOrderBreakdown = async (
 
         // Use subtotal instead of shipping charge to avoid zero commission on free delivery.
         // This ensures the delivery boy always gets paid even if shipping is free.
-        breakdown.deliveryBoyCommission = (order.subtotal * deliveryBoyRate) / 100;
+        const baseComm = (order.subtotal * deliveryBoyRate) / 100;
+        breakdown.baseDeliveryCommission = Math.round(baseComm * 100) / 100;
+        breakdown.deliveryBoyCommission = Math.round((baseComm + tipAmount) * 100) / 100;
 
         // Admin's portion of the shipping charge
         breakdown.adminDeliveryCommission = Math.max(0, breakdown.totalDeliveryCharge);
@@ -963,21 +1270,28 @@ export const calculateCODOrderBreakdown = async (
 
     } else {
       // No delivery boy assigned, all delivery charge goes to admin
+      breakdown.baseDeliveryCommission = 0;
       breakdown.adminDeliveryCommission = breakdown.totalDeliveryCharge;
     }
 
     // 3. Calculate Total Admin Earning
     // Admin Earning = Product Commission + Platform Fee + Admin's portion of Delivery Charge
-    breakdown.totalAdminEarning =
-      breakdown.adminProductCommission +
-      breakdown.platformFee +
-      breakdown.adminDeliveryCommission;
+    // Minus Platform Discount Subsidy if platform-funded
+    const grossAdminEarning = Math.round(
+      (breakdown.adminProductCommission +
+        breakdown.platformFee +
+        breakdown.adminDeliveryCommission) * 100
+    ) / 100;
+
+    breakdown.totalAdminEarning = Math.round(
+      (grossAdminEarning - platformDiscountSubsidy) * 100
+    ) / 100;
 
     // 4. Calculate Amount Delivery Boy Owes Admin
-    // Delivery boy collects full order amount but keeps only their commission
+    // Delivery boy collects full order amount but keeps only their commission (including tip)
     // They owe: Total Order Amount - Their Commission
     breakdown.amountDeliveryBoyOwesAdmin =
-      breakdown.totalOrderAmount - breakdown.deliveryBoyCommission;
+      Math.round((breakdown.totalOrderAmount - breakdown.deliveryBoyCommission) * 100) / 100;
 
     console.log(`[COD Breakdown] Order ${order.orderNumber}:`, {
       productCost: breakdown.productCost,
@@ -1034,9 +1348,14 @@ export const processCODOrderDelivery = async (
 
     // Check if already processed to avoid double-counting
     const existingTx = await WalletTransaction.findOne({
-      userId: order.deliveryBoy.toString(),
-      relatedOrder: orderId,
-      description: { $regex: /Delivery earning for COD order/i }
+      $or: [
+        { reference: `DEL-COD-EARN-${orderId}` },
+        {
+          userId: order.deliveryBoy.toString(),
+          relatedOrder: orderId,
+          description: { $regex: /Delivery earning for COD order/i },
+        },
+      ],
     }).session(session);
 
     if (existingTx) {
@@ -1056,19 +1375,30 @@ export const processCODOrderDelivery = async (
       const currentCash = deliveryBoy.cashCollected || 0;
       deliveryBoy.cashCollected = currentCash + breakdown.totalOrderAmount;
 
-
       await deliveryBoy.save({ session });
 
-      // Create wallet transaction for delivery boy commission
+      const tipText = (breakdown.tipAmount || 0) > 0
+        ? ` (Base: ₹${breakdown.baseDeliveryCommission || Math.round((breakdown.deliveryBoyCommission - (breakdown.tipAmount || 0)) * 100) / 100}, Tip: ₹${breakdown.tipAmount})`
+        : "";
+
+      // Create wallet transaction for delivery boy commission with idempotent reference
       await creditWallet(
         order.deliveryBoy.toString(),
         "DELIVERY_BOY",
         breakdown.deliveryBoyCommission,
-        `Delivery earning for COD order ${order.orderNumber}`,
+        `Delivery earning for COD order ${order.orderNumber}${tipText}`,
         orderId,
         undefined,
-        session
+        session,
+        `DEL-COD-EARN-${order._id}`,
       );
+
+      // Calculate total pending seller payout for this order
+      let totalOrderSellerEarnings = 0;
+      for (const earning of breakdown.sellerEarnings.values()) {
+        totalOrderSellerEarnings += earning;
+      }
+      totalOrderSellerEarnings = Math.round(totalOrderSellerEarnings * 100) / 100;
 
       // 2. Update Platform Wallet
       const platformWallet = await PlatformWallet.findOne().session(session);
@@ -1080,12 +1410,13 @@ export const processCODOrderDelivery = async (
           currentPlatformBalance: 0,
           totalAdminEarning: 0,
           pendingFromDeliveryBoy: breakdown.amountDeliveryBoyOwesAdmin,
-          sellerPendingPayouts: 0,
+          sellerPendingPayouts: totalOrderSellerEarnings,
           deliveryBoyPendingPayouts: breakdown.deliveryBoyCommission,
         }], { session });
       } else {
         // Update existing platform wallet
         platformWallet.pendingFromDeliveryBoy += breakdown.amountDeliveryBoyOwesAdmin;
+        platformWallet.sellerPendingPayouts = (platformWallet.sellerPendingPayouts || 0) + totalOrderSellerEarnings;
         platformWallet.deliveryBoyPendingPayouts += breakdown.deliveryBoyCommission;
         await platformWallet.save({ session });
       }
@@ -1107,6 +1438,7 @@ export const processCODOrderDelivery = async (
           breakdown.totalDeliveryCharge,
         ),
         commissionAmount: breakdown.deliveryBoyCommission,
+        tipAmount: breakdown.tipAmount || 0,
         status: "Paid", // Delivery boy gets paid immediately
         paidAt: new Date(),
       });

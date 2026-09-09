@@ -108,8 +108,8 @@ export default function ShopAdCarousel() {
     const currentAd = ads[currentIndex];
 
     return (
-        <div className="relative group w-full max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2 select-none">
-            <div className="relative h-[130px] sm:h-[160px] md:h-[180px] w-full overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-2xs border border-slate-100">
+        <div className="relative group w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2 select-none">
+            <div className="relative h-[125px] sm:h-[150px] md:h-[170px] w-full overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl shadow-xs border border-slate-200/40">
                 <AnimatePresence initial={false} custom={direction}>
                     <motion.div
                         key={currentIndex}
@@ -152,13 +152,13 @@ export default function ShopAdCarousel() {
                         <div className="relative z-10 max-w-[70%] sm:max-w-[60%]">
                             {currentAd.badge && (
                                 <span
-                                    className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full text-white uppercase tracking-wider mb-1 shadow-2xs"
+                                    className="inline-block text-[9px] sm:text-[10px] font-black px-2.5 py-0.5 rounded-full text-white uppercase tracking-wider mb-1 shadow-2xs"
                                     style={{ backgroundColor: currentAd.badgeColor || '#FF2E7A' }}
                                 >
                                     {currentAd.badge}
                                 </span>
                             )}
-                            <h3 className="text-sm sm:text-lg md:text-xl font-bold text-white leading-tight">
+                            <h3 className="text-sm sm:text-lg md:text-xl font-black text-white leading-tight">
                                 {currentAd.shopName}
                             </h3>
                             <p className="text-xs sm:text-sm text-slate-300 font-medium line-clamp-1 mt-0.5">
@@ -168,7 +168,7 @@ export default function ShopAdCarousel() {
 
                         {/* CTA */}
                         <div className="relative z-10">
-                            <span className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#FF2E7A] hover:bg-[#E02269] text-white shadow-xs">
+                            <span className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-black bg-[#FF2E7A] hover:bg-[#E02269] text-white shadow-xs group-hover:scale-105 transition-all">
                                 <span>{currentAd.ctaText || "Explore"}</span>
                             </span>
                         </div>

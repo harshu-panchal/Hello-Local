@@ -25,6 +25,7 @@ export interface PricedLine {
   lineTotal: number;
   taxRate: number;
   taxAmount: number;
+  discountAmount?: number;
 }
 
 export interface OrderPricing {
@@ -34,11 +35,14 @@ export interface OrderPricing {
   platformFee: number;
   discount: number;
   couponCode?: string;
+  couponFunding?: "PLATFORM" | "SELLER";
   tip: number;
   total: number;
   deliveryDistanceKm: number;
   /** Human-readable note when a requested coupon was not applied. */
   couponRejectionReason?: string;
+  isFreeDelivery?: boolean;
+  freeDeliverySubsidy?: number;
 }
 
 export class PricingError extends Error {
@@ -72,6 +76,8 @@ export async function resolveTaxRate(
 
 /**
  * Compute the delivery fee from platform settings + real seller distances.
+ * Preserves the actual physical delivery route distance for fair courier payout,
+ * even when customer shipping fee is ₹0 (free delivery).
  * The client's suggestion is never used.
  */
 export async function computeDeliveryFee(params: {
@@ -79,61 +85,79 @@ export async function computeDeliveryFee(params: {
   sellerIds: string[];
   deliveryLat: number;
   deliveryLng: number;
-}): Promise<{ fee: number; distanceKm: number }> {
+}): Promise<{
+  fee: number;
+  distanceKm: number;
+  isFreeDelivery: boolean;
+  originalFee: number;
+}> {
   const { subtotal, sellerIds, deliveryLat, deliveryLng } = params;
 
   const settings = await AppSettings.getSettings();
   const freeThreshold = Number(settings?.freeDeliveryThreshold) || 0;
-
-  if (freeThreshold > 0 && subtotal >= freeThreshold) {
-    return { fee: 0, distanceKm: 0 };
-  }
-
   const config = settings?.deliveryConfig;
+
+  let standardFee = 0;
+  let computedDistanceKm = 0;
 
   if (!config?.isDistanceBased) {
     // Flat charge from settings — not from the request body.
-    return { fee: round2(Number(settings?.deliveryCharges) || 0), distanceKm: 0 };
+    standardFee = round2(Number(settings?.deliveryCharges) || 0);
+    computedDistanceKm = 0;
+  } else {
+    const ids = sellerIds.map((id) => new mongoose.Types.ObjectId(id));
+    const sellers = await Seller.find({ _id: { $in: ids } }).select(
+      "location latitude longitude",
+    );
+
+    const origins: { lat: number; lng: number }[] = [];
+    for (const s of sellers) {
+      let lat: number | undefined;
+      let lng: number | undefined;
+      if (s.location?.coordinates?.length === 2) {
+        lng = s.location.coordinates[0];
+        lat = s.location.coordinates[1];
+      } else if (s.latitude && s.longitude) {
+        lat = parseFloat(s.latitude);
+        lng = parseFloat(s.longitude);
+      }
+      // Note: `0` is a valid coordinate, so check for finiteness, not truthiness.
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        origins.push({ lat: lat as number, lng: lng as number });
+      }
+    }
+
+    const base = round2(Number(config.baseCharge) || 0);
+    if (origins.length === 0) {
+      standardFee = base;
+      computedDistanceKm = 0;
+    } else {
+      const distances = await getRoadDistances(
+        origins,
+        { lat: deliveryLat, lng: deliveryLng },
+      );
+
+      const usable = (distances || []).filter((d) => Number.isFinite(d) && d >= 0);
+      if (usable.length === 0) {
+        standardFee = base;
+        computedDistanceKm = 0;
+      } else {
+        computedDistanceKm = Math.max(...usable);
+        const extraKm = Math.max(0, computedDistanceKm - (Number(config.baseDistance) || 0));
+        standardFee = Math.ceil(base + extraKm * (Number(config.kmRate) || 0));
+      }
+    }
   }
 
-  const ids = sellerIds.map((id) => new mongoose.Types.ObjectId(id));
-  const sellers = await Seller.find({ _id: { $in: ids } }).select(
-    "location latitude longitude",
-  );
+  const isFreeDelivery = freeThreshold > 0 && subtotal >= freeThreshold;
+  const finalFee = isFreeDelivery ? 0 : round2(standardFee);
 
-  const origins: { lat: number; lng: number }[] = [];
-  for (const s of sellers) {
-    let lat: number | undefined;
-    let lng: number | undefined;
-    if (s.location?.coordinates?.length === 2) {
-      lng = s.location.coordinates[0];
-      lat = s.location.coordinates[1];
-    } else if (s.latitude && s.longitude) {
-      lat = parseFloat(s.latitude);
-      lng = parseFloat(s.longitude);
-    }
-    // Note: `0` is a valid coordinate, so check for finiteness, not truthiness.
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      origins.push({ lat: lat as number, lng: lng as number });
-    }
-  }
-
-  const base = round2(Number(config.baseCharge) || 0);
-  if (origins.length === 0) return { fee: base, distanceKm: 0 };
-
-  const distances = await getRoadDistances(
-    origins,
-    { lat: deliveryLat, lng: deliveryLng },
-  );
-
-  const usable = (distances || []).filter((d) => Number.isFinite(d) && d >= 0);
-  if (usable.length === 0) return { fee: base, distanceKm: 0 };
-
-  const distanceKm = Math.max(...usable);
-  const extraKm = Math.max(0, distanceKm - (Number(config.baseDistance) || 0));
-  const fee = Math.ceil(base + extraKm * (Number(config.kmRate) || 0));
-
-  return { fee: round2(fee), distanceKm: round2(distanceKm) };
+  return {
+    fee: finalFee,
+    distanceKm: round2(computedDistanceKm),
+    isFreeDelivery,
+    originalFee: round2(standardFee),
+  };
 }
 
 /**
@@ -145,7 +169,14 @@ export async function computeCouponDiscount(params: {
   code?: string | null;
   customerId: string;
   eligibleAmount: number;
-}): Promise<{ discount: number; code?: string; reason?: string }> {
+}): Promise<{
+  discount: number;
+  code?: string;
+  reason?: string;
+  funding?: "PLATFORM" | "SELLER";
+  applicableTo?: string;
+  applicableIds?: string[];
+}> {
   const { code, eligibleAmount } = params;
   if (!code) return { discount: 0 };
 
@@ -179,7 +210,13 @@ export async function computeCouponDiscount(params: {
   // Never discount below zero, and never more than the eligible amount.
   discount = round2(Math.min(Math.max(discount, 0), eligibleAmount));
 
-  return { discount, code: coupon.code };
+  return {
+    discount,
+    code: coupon.code,
+    funding: coupon.funding as ("PLATFORM" | "SELLER" | undefined),
+    applicableTo: coupon.applicableTo || "All",
+    applicableIds: (coupon.applicableIds || []).map((id) => id.toString()),
+  };
 }
 
 /**
@@ -223,11 +260,12 @@ export async function priceOrder(params: {
       lineTotal,
       taxRate,
       taxAmount,
+      discountAmount: 0,
     });
   }
 
   const sellerIds = [...new Set(params.lines.map((l) => l.sellerId))];
-  const { fee: shipping, distanceKm } = await computeDeliveryFee({
+  const { fee: shipping, distanceKm, isFreeDelivery, originalFee } = await computeDeliveryFee({
     subtotal,
     sellerIds,
     deliveryLat: params.deliveryLat,
@@ -236,16 +274,70 @@ export async function priceOrder(params: {
 
   // The coupon applies to goods + tax + fees, matching what the customer sees.
   const eligibleAmount = round2(subtotal + tax + shipping + platformFee);
-  const { discount, code, reason } = await computeCouponDiscount({
+  const { discount, code, reason, funding, applicableTo, applicableIds } = await computeCouponDiscount({
     code: params.couponCode,
     customerId: params.customerId,
     eligibleAmount,
   });
 
-  // A tip is customer-chosen and additive. It is passed through to the courier
-  // rather than silently dropped, which is what used to happen. (#C-11)
+  const couponFunding: "PLATFORM" | "SELLER" =
+    funding || (settings as any)?.couponSettings?.defaultFunding || "PLATFORM";
+
+  // Proportional item discount allocation
+  if (discount > 0 && priced.length > 0) {
+    let eligibleLines = priced;
+    if (applicableTo === "Seller" && applicableIds && applicableIds.length > 0) {
+      const sellerSet = new Set(applicableIds);
+      const matched = priced.filter((l) => sellerSet.has(l.sellerId));
+      if (matched.length > 0) eligibleLines = matched;
+    } else if (applicableTo === "Product" && applicableIds && applicableIds.length > 0) {
+      const prodSet = new Set(applicableIds);
+      const matched = priced.filter((l) => prodSet.has(l.productId));
+      if (matched.length > 0) eligibleLines = matched;
+    }
+
+    const eligibleSubtotal = round2(eligibleLines.reduce((sum, l) => sum + l.lineTotal, 0));
+    const merchandiseDiscount = Math.min(discount, eligibleSubtotal);
+    let allocatedSum = 0;
+    let maxLine: PricedLine | null = null;
+    let maxLineTotal = -1;
+
+    for (const line of priced) {
+      if (eligibleLines.includes(line) && eligibleSubtotal > 0) {
+        const rawLineDiscount = Math.floor(((line.lineTotal / eligibleSubtotal) * merchandiseDiscount) * 100) / 100;
+        const lineDiscount = Math.min(line.lineTotal, rawLineDiscount);
+        line.discountAmount = lineDiscount;
+        allocatedSum = round2(allocatedSum + lineDiscount);
+        if (line.lineTotal > maxLineTotal) {
+          maxLineTotal = line.lineTotal;
+          maxLine = line;
+        }
+      } else {
+        line.discountAmount = 0;
+      }
+    }
+
+    // Remainder paise goes to line with largest total, clamped to line.lineTotal
+    const remainder = round2(merchandiseDiscount - allocatedSum);
+    if (remainder > 0 && maxLine) {
+      const newDiscount = round2((maxLine.discountAmount || 0) + remainder);
+      maxLine.discountAmount = Math.min(maxLine.lineTotal, newDiscount);
+    }
+  }
+
+  // A tip is customer-chosen and additive, governed by admin AppSettings policy.
+  // It is passed through to the courier rather than silently dropped. (#C-11)
+  const tipConfig = (settings as any)?.tipSettings ?? { enabled: true, minTip: 0, maxTip: 1000 };
   const rawTip = Number(params.tipAmount) || 0;
-  const tip = rawTip > 0 && Number.isFinite(rawTip) ? round2(Math.min(rawTip, 10000)) : 0;
+  let tip = 0;
+
+  if (tipConfig.enabled !== false && Number.isFinite(rawTip) && rawTip > 0) {
+    const minTip = typeof tipConfig.minTip === "number" && tipConfig.minTip >= 0 ? tipConfig.minTip : 0;
+    const maxTip = typeof tipConfig.maxTip === "number" && tipConfig.maxTip > 0 ? tipConfig.maxTip : 10000;
+    if (rawTip >= minTip) {
+      tip = round2(Math.min(rawTip, maxTip));
+    }
+  }
 
   const total = round2(Math.max(0, eligibleAmount - discount + tip));
 
@@ -257,10 +349,13 @@ export async function priceOrder(params: {
       platformFee,
       discount,
       couponCode: code,
+      couponFunding: code ? couponFunding : "PLATFORM",
       tip,
       total,
       deliveryDistanceKm: distanceKm,
       couponRejectionReason: reason,
+      isFreeDelivery: Boolean(isFreeDelivery),
+      freeDeliverySubsidy: isFreeDelivery ? round2(Math.max(0, (originalFee || 0) - shipping)) : 0,
     },
     lines: priced,
   };

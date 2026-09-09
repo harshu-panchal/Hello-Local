@@ -26,6 +26,9 @@ export interface ICoupon extends Document {
   applicableTo: "All" | "Category" | "Product" | "Seller";
   applicableIds?: mongoose.Types.ObjectId[]; // Category/Product/Seller IDs
 
+  // Funding Policy
+  funding?: "PLATFORM" | "SELLER";
+
   // Created By
   createdBy: mongoose.Types.ObjectId;
 
@@ -109,6 +112,12 @@ const CouponSchema = new Schema<ICoupon>(
         type: Schema.Types.ObjectId,
       },
     ],
+
+    // Funding Policy (optional override; if not set, falls back to AppSettings.couponSettings.defaultFunding)
+    funding: {
+      type: String,
+      enum: ["PLATFORM", "SELLER"],
+    },
 
     // Created By
     createdBy: {

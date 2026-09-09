@@ -13,6 +13,7 @@ export interface ICommission extends Document {
   orderAmount: number;
   commissionRate: number; // Percentage
   commissionAmount: number;
+  tipAmount?: number;
 
   // Status
   status: "Pending" | "Paid" | "Cancelled";
@@ -68,6 +69,11 @@ const CommissionSchema = new Schema<ICommission>(
       type: Number,
       required: [true, "Commission amount is required"],
       min: [0, "Commission amount cannot be negative"],
+    },
+    tipAmount: {
+      type: Number,
+      default: 0,
+      min: [0, "Tip amount cannot be negative"],
     },
 
     // Status

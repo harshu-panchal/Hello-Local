@@ -52,6 +52,7 @@ export interface IOrder extends Document {
   platformFee: number;
   discount: number;
   couponCode?: string;
+  couponFunding?: "PLATFORM" | "SELLER";
   /** Customer-chosen delivery tip, passed through to the courier. (#C-11) */
   tipAmount: number;
   total: number;
@@ -59,7 +60,7 @@ export interface IOrder extends Document {
 
   // Payment
   paymentMethod: string;
-  paymentStatus: "Pending" | "Paid" | "Failed" | "Refunded";
+  paymentStatus: "Pending" | "Paid" | "PartiallyRefunded" | "Failed" | "Refunded";
   paymentId?: string;
   // Razorpay order id issued for THIS order. A checkout signature is only
   // accepted if it matches this value, which prevents replaying a signature
@@ -109,6 +110,8 @@ export interface IOrder extends Document {
   deliveryOtpAttempts?: number;
   invoiceEnabled?: boolean;
   deliveryDistanceKm?: number;
+  isFreeDelivery?: boolean;
+  freeDeliverySubsidy?: number;
 
   // Seller Pickups (for multi-seller orders)
   sellerPickups?: Array<{
@@ -332,6 +335,11 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       trim: true,
     },
+    couponFunding: {
+      type: String,
+      enum: ["PLATFORM", "SELLER"],
+      default: "PLATFORM",
+    },
     tipAmount: {
       type: Number,
       default: 0,
@@ -354,7 +362,7 @@ const OrderSchema = new Schema<IOrder>(
     },
     paymentStatus: {
       type: String,
-      enum: ["Pending", "Paid", "Failed", "Refunded"],
+      enum: ["Pending", "Paid", "PartiallyRefunded", "Failed", "Refunded"],
       default: "Pending",
     },
     paymentId: {
@@ -439,6 +447,15 @@ const OrderSchema = new Schema<IOrder>(
     },
     deliveryDistanceKm: {
       type: Number,
+    },
+    isFreeDelivery: {
+      type: Boolean,
+      default: false,
+    },
+    freeDeliverySubsidy: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
 
     // Seller Pickups (for multi-seller orders)

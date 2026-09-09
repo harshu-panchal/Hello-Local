@@ -20,6 +20,7 @@ export const createCoupon = asyncHandler(
       usageLimitPerUser,
       applicableTo,
       applicableIds,
+      funding,
     } = req.body;
 
     if (!code || !discountType || !discountValue || !startDate || !endDate) {
@@ -41,6 +42,13 @@ export const createCoupon = asyncHandler(
       return res.status(400).json({
         success: false,
         message: "Percentage discount cannot exceed 100%",
+      });
+    }
+
+    if (funding && !["PLATFORM", "SELLER"].includes(funding)) {
+      return res.status(400).json({
+        success: false,
+        message: "Funding must be PLATFORM or SELLER",
       });
     }
 
@@ -71,6 +79,7 @@ export const createCoupon = asyncHandler(
       usageLimitPerUser,
       applicableTo: applicableTo || "All",
       applicableIds,
+      funding: funding || undefined,
       createdBy: req.user?.userId,
       isActive: true,
     });
@@ -191,6 +200,13 @@ export const updateCoupon = asyncHandler(
     }
     if (updateData.endDate) {
       updateData.endDate = new Date(updateData.endDate);
+    }
+
+    if (updateData.funding && !["PLATFORM", "SELLER"].includes(updateData.funding)) {
+      return res.status(400).json({
+        success: false,
+        message: "Funding must be PLATFORM or SELLER",
+      });
     }
 
     const coupon = await Coupon.findByIdAndUpdate(id, updateData, {

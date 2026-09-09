@@ -80,6 +80,29 @@ export async function requestReturn(params: {
   if (!Number.isInteger(quantity) || quantity <= 0 || quantity > orderItem.quantity) {
     throw new ReturnError(
       `Quantity must be between 1 and ${orderItem.quantity}`,
+      400,
+    );
+  }
+
+  // Check already returned quantity
+  const completedReturns = await Return.find({
+    orderItem: orderItemId,
+    status: "Completed",
+  });
+  const alreadyReturnedQuantity = completedReturns.reduce(
+    (sum, r) => sum + (r.quantity || 0),
+    0,
+  );
+  const remainingQuantity = orderItem.quantity - alreadyReturnedQuantity;
+
+  if (remainingQuantity <= 0) {
+    throw new ReturnError("All units of this item have already been returned", 400);
+  }
+
+  if (quantity > remainingQuantity) {
+    throw new ReturnError(
+      `Quantity must be between 1 and ${remainingQuantity}`,
+      400,
     );
   }
 
@@ -108,8 +131,14 @@ export async function requestReturn(params: {
     throw new ReturnError("A return is already in progress for this item", 409);
   }
 
-  const refundAmount =
-    Math.round(((orderItem.unitPrice || 0) * quantity + Number.EPSILON) * 100) / 100;
+  const itemTotal = orderItem.total || ((orderItem.unitPrice || 0) * (orderItem.quantity || 1));
+  const itemDiscount = (orderItem as any).discountAmount || 0;
+  const effectiveLinePaid = Math.max(0, itemTotal - itemDiscount);
+  const effectiveUnitRefund = Math.round((effectiveLinePaid / Math.max(1, orderItem.quantity || 1)) * 100) / 100;
+  const refundAmount = Math.min(
+    effectiveLinePaid,
+    Math.round((effectiveUnitRefund * quantity + Number.EPSILON) * 100) / 100,
+  );
 
   const created = await Return.create({
     order: orderId,
@@ -171,14 +200,15 @@ export async function processReturn(params: {
     ret.refundAmount = requested;
   }
 
-  ret.status = status;
-  ret.processedBy = new mongoose.Types.ObjectId(processedBy);
-  ret.processedAt = new Date();
-  if (status === "Rejected" && params.rejectionReason) {
-    ret.rejectionReason = params.rejectionReason;
+  if (status !== "Completed") {
+    ret.status = status;
+    ret.processedBy = new mongoose.Types.ObjectId(processedBy);
+    ret.processedAt = new Date();
+    if (status === "Rejected" && params.rejectionReason) {
+      ret.rejectionReason = params.rejectionReason;
+    }
+    await ret.save();
   }
-  await ret.save();
-
   if (status !== "Completed") return ret;
 
   // ── Completion: restock, refund, reverse commission, close the order ──────
@@ -191,7 +221,18 @@ export async function processReturn(params: {
     console.error(`Return ${returnId}: failed to restock`, err);
   }
 
-  await OrderItem.updateOne({ _id: ret.orderItem }, { $set: { status: "Returned" } });
+  // Check if all units of this order item have now been returned
+  const completedReturns = await Return.find({
+    orderItem: ret.orderItem,
+    status: "Completed",
+    _id: { $ne: ret._id },
+  });
+  const priorReturned = completedReturns.reduce((sum, r) => sum + (r.quantity || 0), 0);
+  const totalReturned = priorReturned + ret.quantity;
+
+  if (totalReturned >= orderItem.quantity) {
+    await OrderItem.updateOne({ _id: ret.orderItem }, { $set: { status: "Returned" } });
+  }
 
   const order = await Order.findById(ret.order);
   if (order) {
@@ -202,28 +243,42 @@ export async function processReturn(params: {
       await Order.updateOne({ _id: order._id }, { $set: { status: "Returned" } });
     }
 
-    if (order.paymentStatus === "Paid" && order.paymentMethod !== "COD") {
-      try {
-        const outcome = await refundOrder(
-          String(order._id),
-          `Return completed: ${ret.reason}`,
-          ret.refundAmount,
+    if (["Paid", "PartiallyRefunded"].includes(order.paymentStatus) && order.paymentMethod !== "COD") {
+      const outcome = await refundOrder(
+        String(order._id),
+        `Return completed: ${ret.reason}`,
+        ret.refundAmount,
+        { returnId: String(ret._id) }
+      );
+      if (!outcome.refunded) {
+        throw new ReturnError(
+          `Refund failed: ${outcome.reason || "Gateway refund could not be processed"}`,
+          502,
         );
-        if (!outcome.refunded) {
-          console.error(`Return ${returnId}: refund not issued — ${outcome.reason}`);
-        }
-      } catch (err) {
-        console.error(`Return ${returnId}: refund failed`, err);
+      }
+      if (outcome.refundId) {
+        ret.refundId = new mongoose.Types.ObjectId(outcome.refundId);
       }
     }
 
-    try {
-      const { reverseCommissions } = await import("./commissionService");
-      await reverseCommissions(String(order._id));
-    } catch (err) {
-      console.error(`Return ${returnId}: commission reversal failed`, err);
+    const { reverseCommissions } = await import("./commissionService");
+    const rev = await reverseCommissions(String(order._id), {
+      orderItemId: String(ret.orderItem),
+      returnId: String(ret._id),
+      returnedQuantity: ret.quantity,
+    });
+    if (!rev.success) {
+      throw new ReturnError(
+        `Commission reversal failed: ${rev.message || "Failed to reverse seller commission"}`,
+        500,
+      );
     }
   }
+
+  ret.status = "Completed";
+  ret.processedBy = new mongoose.Types.ObjectId(processedBy);
+  ret.processedAt = new Date();
+  await ret.save();
 
   return ret;
 }

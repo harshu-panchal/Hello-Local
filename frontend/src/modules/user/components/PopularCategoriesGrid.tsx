@@ -76,17 +76,17 @@ export default function PopularCategoriesGrid({ categories = [] }: PopularCatego
     categories && categories.length > 0 ? categories.slice(0, 8) : defaultCategories;
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5">
+    <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-2">
       {/* Header */}
       <UserSectionHeader
         title="Popular Categories"
-        subtitle="Explore by category"
+        subtitle="Explore everyday staples by category"
         actionText="View All"
         onViewAllClick={() => navigate('/categories')}
       />
 
       {/* 4-to-8 Items Circular Grid */}
-      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
+      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-4 pt-1">
         {displayCategories.map((cat: any, idx: number) => {
           const name = cat.name || 'Category';
           const slug = cat.slug || cat.id || cat._id || 'all';
@@ -99,16 +99,16 @@ export default function PopularCategoriesGrid({ categories = [] }: PopularCatego
               type="button"
               key={cat.id || cat._id || slug || idx}
               onClick={() => navigate(`/category/${slug}`)}
-              className="flex flex-col items-center text-center group active:scale-95 transition-all min-h-[44px]"
+              className="flex flex-col items-center text-center group active:scale-95 transition-all duration-200 min-h-[44px]"
             >
               <div
-                className={`w-14 h-14 sm:w-16 sm:h-16 lg:w-18 lg:h-18 rounded-full border p-1.5 shadow-2xs flex items-center justify-center overflow-hidden mb-1.5 ${theme.bgClass} group-hover:scale-105 transition-transform`}
+                className={`w-14 h-14 sm:w-16 sm:h-16 lg:w-18 lg:h-18 rounded-2xl border p-1.5 shadow-2xs group-hover:shadow-xs flex items-center justify-center overflow-hidden mb-1.5 ${theme.bgClass} group-hover:scale-105 transition-all duration-200`}
               >
                 {hasImage ? (
                   <UserImage
                     src={image}
                     alt={name}
-                    className="w-full h-full object-cover rounded-full"
+                    className="w-full h-full object-cover rounded-xl"
                     categoryFallback={name}
                   />
                 ) : (
@@ -117,7 +117,7 @@ export default function PopularCategoriesGrid({ categories = [] }: PopularCatego
                   </div>
                 )}
               </div>
-              <span className="text-[11px] font-medium text-slate-800 leading-tight line-clamp-2 max-w-[88px]">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight line-clamp-2 max-w-[88px] group-hover:text-[#FF2E7A] transition-colors">
                 {name}
               </span>
             </button>

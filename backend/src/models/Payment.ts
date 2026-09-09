@@ -1,8 +1,10 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export interface IPayment extends Document {
-  order: mongoose.Types.ObjectId;
-  customer: mongoose.Types.ObjectId;
+  order?: mongoose.Types.ObjectId;
+  customer?: mongoose.Types.ObjectId;
+  adRequest?: mongoose.Types.ObjectId;
+  seller?: mongoose.Types.ObjectId;
 
   // Payment Info
   paymentMethod: string;
@@ -18,12 +20,16 @@ export interface IPayment extends Document {
   // Amount
   amount: number;
   currency: string;
+  gatewayFee?: number;
+  gatewayTax?: number;
+  netAmount?: number;
 
   // Status
   status:
   | "Pending"
   | "Processing"
   | "Completed"
+  | "PartiallyRefunded"
   | "Failed"
   | "Refunded"
   | "Cancelled";
@@ -37,15 +43,25 @@ export interface IPayment extends Document {
     success: boolean;
     message?: string;
     rawResponse?: any;
+    isDuplicate?: boolean;
+    refundId?: string;
+    refundStatus?: string;
+    autoRefundFailed?: boolean;
+    refundError?: string;
+    [key: string]: any;
   };
 
   // Refund Info
   refundAmount?: number;
+  totalRefunded?: number;
   refundedAt?: Date;
   refundReason?: string;
 
   // Notes
   notes?: string;
+
+  // Duplicate Payment Tracking (P1 #6)
+  isDuplicate?: boolean;
 
   createdAt: Date;
   updatedAt: Date;
@@ -56,12 +72,42 @@ const PaymentSchema = new Schema<IPayment>(
     order: {
       type: Schema.Types.ObjectId,
       ref: "Order",
-      required: [true, "Order is required"],
+      required: [
+        function (this: any) {
+          return !this.adRequest && !this.seller;
+        },
+        "Order is required for order payments",
+      ],
     },
     customer: {
       type: Schema.Types.ObjectId,
       ref: "Customer",
-      required: [true, "Customer is required"],
+      required: [
+        function (this: any) {
+          return !this.adRequest && !this.seller;
+        },
+        "Customer is required for order payments",
+      ],
+    },
+    adRequest: {
+      type: Schema.Types.ObjectId,
+      ref: "SellerAdRequest",
+      required: [
+        function (this: any) {
+          return !this.order && !this.customer;
+        },
+        "AdRequest is required for ad payments",
+      ],
+    },
+    seller: {
+      type: Schema.Types.ObjectId,
+      ref: "Seller",
+      required: [
+        function (this: any) {
+          return !this.order && !this.customer;
+        },
+        "Seller is required for ad payments",
+      ],
     },
 
     // Payment Info
@@ -114,6 +160,18 @@ const PaymentSchema = new Schema<IPayment>(
       default: "INR",
       trim: true,
     },
+    gatewayFee: {
+      type: Number,
+      min: [0, "Gateway fee cannot be negative"],
+    },
+    gatewayTax: {
+      type: Number,
+      min: [0, "Gateway tax cannot be negative"],
+    },
+    netAmount: {
+      type: Number,
+      min: [0, "Net amount cannot be negative"],
+    },
 
     // Status
     status: {
@@ -122,6 +180,7 @@ const PaymentSchema = new Schema<IPayment>(
         "Pending",
         "Processing",
         "Completed",
+        "PartiallyRefunded",
         "Failed",
         "Refunded",
         "Cancelled",
@@ -149,6 +208,12 @@ const PaymentSchema = new Schema<IPayment>(
     refundAmount: {
       type: Number,
       min: [0, "Refund amount cannot be negative"],
+      default: 0,
+    },
+    totalRefunded: {
+      type: Number,
+      min: [0, "Total refunded cannot be negative"],
+      default: 0,
     },
     refundedAt: {
       type: Date,
@@ -163,15 +228,58 @@ const PaymentSchema = new Schema<IPayment>(
       type: String,
       trim: true,
     },
+
+    // Duplicate Payment Tracking (P1 #6)
+    isDuplicate: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,
   }
 );
 
+PaymentSchema.pre("validate", function (next) {
+  const hasOrder = Boolean(this.order);
+  const hasCustomer = Boolean(this.customer);
+  const hasAdRequest = Boolean(this.adRequest);
+  const hasSeller = Boolean(this.seller);
+
+  const hasOrderContext = hasOrder || hasCustomer;
+  const hasAdContext = hasAdRequest || hasSeller;
+
+  if (hasOrderContext && hasAdContext) {
+    this.invalidate("order", "Payment cannot have both Order and AdRequest context");
+    this.invalidate("adRequest", "Payment cannot have both Order and AdRequest context");
+  } else if (!hasOrderContext && !hasAdContext) {
+    this.invalidate("order", "Payment must specify either an order or an ad request");
+    this.invalidate("adRequest", "Payment must specify either an order or an ad request");
+  } else if (hasOrderContext) {
+    if (!hasOrder) {
+      this.invalidate("order", "Order is required for order payments");
+    }
+    if (!hasCustomer) {
+      this.invalidate("customer", "Customer is required for order payments");
+    }
+  } else if (hasAdContext) {
+    if (!hasAdRequest) {
+      this.invalidate("adRequest", "AdRequest is required for ad payments");
+    }
+    if (!hasSeller) {
+      this.invalidate("seller", "Seller is required for ad payments");
+    }
+  }
+
+  next();
+});
+
 // Indexes for faster queries
 PaymentSchema.index({ order: 1 });
 PaymentSchema.index({ customer: 1 });
+PaymentSchema.index({ adRequest: 1 });
+PaymentSchema.index({ seller: 1 });
 PaymentSchema.index({ status: 1 });
 PaymentSchema.index({ paymentDate: -1 });
 

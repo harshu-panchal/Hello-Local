@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import express from 'express';
 import mongoose from 'mongoose';
 import { authenticate } from '../middleware/auth';
-import { createRazorpayOrder, capturePayment, handleWebhook } from '../services/paymentService';
+import { getOrReuseRazorpayOrder, capturePayment, handleWebhook } from '../services/paymentService';
 import Order from '../models/Order';
 import SellerAdRequest from '../models/SellerAdRequest';
 
@@ -81,14 +81,10 @@ router.post('/create-order', authenticate, async (req: Request, res: Response) =
             return res.status(400).json({ success: false, message: 'Nothing to pay for this record' });
         }
 
-        const result = await createRazorpayOrder(orderId, loaded.amountDue);
+        const result = await getOrReuseRazorpayOrder(loaded.doc, loaded.amountDue);
         if (!result.success || !result.data) {
             return res.status(400).json(result);
         }
-
-        // Bind the intent to the record. (#C-01)
-        loaded.doc.razorpayOrderId = result.data.razorpayOrderId;
-        await loaded.doc.save();
 
         return res.status(200).json(result);
     } catch (error: any) {

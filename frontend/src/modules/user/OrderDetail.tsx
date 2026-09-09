@@ -546,7 +546,7 @@ export default function OrderDetail() {
                             onClick={() => openReturnModal(item)}
                             className="text-[10px] font-bold text-[#FF2E7A] hover:underline mt-0.5"
                           >
-                            Return Item
+                            Request return
                           </button>
                         )}
                       </div>

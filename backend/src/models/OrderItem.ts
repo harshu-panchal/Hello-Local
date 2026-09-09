@@ -22,6 +22,7 @@ export interface IOrderItem extends Document {
   // Status
   status: "Pending" | "Shipped" | "Delivered" | "Cancelled" | "Returned";
   subtotal: number;
+  discountAmount?: number;
   orderId?: string;
   commissionRate: number;
   commissionAmount: number;
@@ -120,6 +121,11 @@ const OrderItemSchema = new Schema<IOrderItem>(
     subtotal: {
       type: Number,
       default: 0,
+    },
+    discountAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     orderId: {
       type: String,

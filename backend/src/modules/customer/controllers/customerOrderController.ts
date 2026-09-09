@@ -247,9 +247,12 @@ export const createOrder = async (req: Request, res: Response) => {
             platformFee: pricing.platformFee,
             discount: pricing.discount,
             couponCode: pricing.couponCode,
+            couponFunding: pricing.couponFunding || "PLATFORM",
             tipAmount: pricing.tip,
             total: pricing.total,
             deliveryDistanceKm: pricing.deliveryDistanceKm,
+            isFreeDelivery: pricing.isFreeDelivery || false,
+            freeDeliverySubsidy: pricing.freeDeliverySubsidy || 0,
             items: [],
         });
 
@@ -262,6 +265,11 @@ export const createOrder = async (req: Request, res: Response) => {
                 String(r.product.seller),
             );
 
+            const isSellerFunded = pricing.couponFunding === "SELLER";
+            const commBase = isSellerFunded
+                ? Math.max(0, Math.round((line.lineTotal - (line.discountAmount || 0)) * 100) / 100)
+                : line.lineTotal;
+
             const orderItem = await OrderItem.create({
                 order: newOrder._id,
                 product: r.product._id,
@@ -273,10 +281,11 @@ export const createOrder = async (req: Request, res: Response) => {
                 quantity: line.quantity,
                 total: line.lineTotal,
                 subtotal: line.lineTotal,
+                discountAmount: line.discountAmount || 0,
                 taxRate: line.taxRate,
                 taxAmount: line.taxAmount,
                 commissionRate: commRate,
-                commissionAmount: Math.round(((line.lineTotal * commRate) / 100) * 100) / 100,
+                commissionAmount: Math.round(((commBase * commRate) / 100) * 100) / 100,
                 variation: r.selector || undefined,
                 variantTitle: variationLabel(r.variation),
                 status: "Pending",
@@ -627,7 +636,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
 
         // A prepaid order that is cancelled must be refunded, not just closed.
         // (#H-06)
-        if (claimed.paymentStatus === "Paid" && claimed.paymentMethod !== "COD") {
+        if (["Paid", "PartiallyRefunded"].includes(claimed.paymentStatus) && claimed.paymentMethod !== "COD") {
             try {
                 const { refundOrder } = await import("../../../services/refundService");
                 await refundOrder(id, `Order cancelled by customer: ${String(reason).trim()}`);

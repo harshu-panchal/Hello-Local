@@ -201,7 +201,7 @@ export const updateOrderStatus = asyncHandler(
       }
 
       // Prepaid orders must be refunded, not merely closed. (#H-06)
-      if (current.paymentStatus === "Paid" && current.paymentMethod !== "COD") {
+      if (["Paid", "PartiallyRefunded"].includes(current.paymentStatus) && current.paymentMethod !== "COD") {
         try {
           const { refundOrder } = await import("../../../services/refundService");
           await refundOrder(id, `Order ${nextStatus.toLowerCase()} by admin`);

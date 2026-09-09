@@ -20,13 +20,16 @@ export const UserSectionHeader: React.FC<UserSectionHeaderProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`flex items-center justify-between mb-2.5 ${className}`}>
-      <div>
-        <h3 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
-          {title}
-        </h3>
+    <div className={`flex items-center justify-between mb-3 ${className}`}>
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[#FF8A00] to-[#FF2E7A]" />
+          <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+            {title}
+          </h3>
+        </div>
         {subtitle && (
-          <p className="text-[11px] text-slate-400 font-medium">{subtitle}</p>
+          <p className="text-[11px] sm:text-xs text-slate-500 font-medium ml-3.5 mt-0.5">{subtitle}</p>
         )}
       </div>
 
@@ -34,19 +37,19 @@ export const UserSectionHeader: React.FC<UserSectionHeaderProps> = ({
         viewAllLink ? (
           <Link
             to={viewAllLink}
-            className="inline-flex items-center gap-0.5 text-xs font-bold text-[#FF2E7A] hover:text-[#E02269] transition-colors"
+            className="group inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF1F4] hover:bg-[#FFE4EA] text-xs font-black text-[#FF2E7A] transition-all duration-200 border border-[#FFE4EA]"
           >
             <span>{actionText}</span>
-            <ChevronRightIcon size={14} className="text-[#FF2E7A]" />
+            <ChevronRightIcon size={13} className="text-[#FF2E7A] group-hover:translate-x-0.5 transition-transform" />
           </Link>
         ) : (
           <button
             type="button"
             onClick={onViewAllClick}
-            className="inline-flex items-center gap-0.5 text-xs font-bold text-[#FF2E7A] hover:text-[#E02269] transition-colors"
+            className="group inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF1F4] hover:bg-[#FFE4EA] text-xs font-black text-[#FF2E7A] transition-all duration-200 border border-[#FFE4EA]"
           >
             <span>{actionText}</span>
-            <ChevronRightIcon size={14} className="text-[#FF2E7A]" />
+            <ChevronRightIcon size={13} className="text-[#FF2E7A] group-hover:translate-x-0.5 transition-transform" />
           </button>
         )
       )}

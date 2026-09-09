@@ -318,14 +318,16 @@ export default function Home() {
       return (
         <div key={section.id || section._id || section.title} className="mt-6 mb-6 md:mt-8 md:mb-8">
           {section.title && (
-            <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
-              <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight capitalize relative">
-                {section.title}
-                <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] rounded-full"></span>
-              </h2>
+            <div className="flex items-center justify-between px-3 sm:px-6 lg:px-8 mb-3 md:mb-5">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-5 rounded-full bg-gradient-to-b from-[#FF8A00] to-[#FF2E7A]" />
+                <h2 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight capitalize">
+                  {section.title}
+                </h2>
+              </div>
             </div>
           )}
-          <div className="px-4 md:px-6 lg:px-8">
+          <div className="px-3 sm:px-6 lg:px-8">
             <div className={`grid ${gridClass} ${gapClass}`}>
               {section.data.map((product: any) => (
                 <ProductCard
@@ -544,14 +546,16 @@ export default function Home() {
             </div>
 
             {/* Shop by Store Section */}
-            <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-              <div className="flex items-center justify-between px-4 md:px-6 lg:px-8 mb-4 md:mb-7">
-                <h2 className="text-xl md:text-2xl font-extrabold text-neutral-900 tracking-tight relative">
-                  Shop by Store
-                  <span className="absolute -bottom-1.5 left-0 w-8 h-1 bg-gradient-to-r from-[#FF8A3D] via-[#FF2E7A] to-[#FFC233] rounded-full"></span>
-                </h2>
+            <div className="mb-6 mt-4 md:mb-8 md:mt-6">
+              <div className="flex items-center justify-between px-3 sm:px-6 lg:px-8 mb-3 md:mb-5">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-5 rounded-full bg-gradient-to-b from-[#FF8A00] to-[#FF2E7A]" />
+                  <h2 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight">
+                    Shop by Store
+                  </h2>
+                </div>
               </div>
-              <div className="px-4 md:px-6 lg:px-8">
+              <div className="px-3 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
                   {((homeData as any).curatedShops && (homeData as any).curatedShops.length > 0
                     ? (homeData as any).curatedShops

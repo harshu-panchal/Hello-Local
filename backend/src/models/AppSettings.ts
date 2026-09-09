@@ -64,6 +64,18 @@ export interface IAppSettings extends Document {
     deliveryBoyKmRate?: number;
   };
 
+  // Tip Settings
+  tipSettings?: {
+    enabled: boolean;
+    minTip?: number;
+    maxTip?: number;
+  };
+
+  // Coupon Settings
+  couponSettings?: {
+    defaultFunding?: "PLATFORM" | "SELLER";
+  };
+
   // Tax Settings
   gstEnabled: boolean;
   gstRate?: number;
@@ -272,6 +284,31 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       baseDistance: { type: Number, default: 0 },
       kmRate: { type: Number, default: 0 },
       deliveryBoyKmRate: { type: Number, default: 0 },
+    },
+    // Tip Settings
+    tipSettings: {
+      enabled: {
+        type: Boolean,
+        default: true,
+      },
+      minTip: {
+        type: Number,
+        default: 0,
+        min: [0, "Minimum tip cannot be negative"],
+      },
+      maxTip: {
+        type: Number,
+        default: 1000,
+        min: [0, "Maximum tip cannot be negative"],
+      },
+    },
+    // Coupon Settings
+    couponSettings: {
+      defaultFunding: {
+        type: String,
+        enum: ["PLATFORM", "SELLER"],
+        default: "PLATFORM",
+      },
     },
     // Tax Settings
     gstEnabled: {

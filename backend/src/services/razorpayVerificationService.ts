@@ -29,6 +29,10 @@ export interface GatewayPaymentAssertion {
   razorpayPaymentId: string;
   razorpayOrderId: string;
   method?: string;
+  /** Total fee charged by Razorpay in rupees (inclusive of tax), if reported. */
+  fee?: number;
+  /** GST component included in fee in rupees, if reported. */
+  tax?: number;
 }
 
 export class PaymentVerificationError extends Error {
@@ -173,6 +177,81 @@ export async function assertGatewayPayment(params: {
   }
 
   // 3. The gateway is the only source of truth for status and amount.
+  return verifyGatewayPaymentEntity({
+    razorpayOrderId,
+    razorpayPaymentId,
+    expectedAmount,
+    expectedCurrency,
+    paymentFetcher,
+  });
+}
+
+/**
+ * Server-authoritative gateway verification for webhook events.
+ *
+ * Webhooks are authenticated via HMAC on the raw HTTP body (verifyWebhookSignature),
+ * so they do not carry a checkout signature. This function asserts that the
+ * gateway captured payment genuinely exists, belongs to the issued order intent,
+ * is in the expected currency, and satisfies expectedAmount with 1 paise tolerance.
+ */
+export async function assertGatewayWebhookPayment(params: {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  expectedAmount: number;
+  expectedRazorpayOrderId?: string | null;
+  expectedCurrency?: string;
+  paymentFetcher?: PaymentFetcher;
+}): Promise<GatewayPaymentAssertion> {
+  const {
+    razorpayOrderId,
+    razorpayPaymentId,
+    expectedAmount,
+    expectedRazorpayOrderId,
+    expectedCurrency = "INR",
+    paymentFetcher,
+  } = params;
+
+  if (!razorpayOrderId || !razorpayPaymentId) {
+    throw new PaymentVerificationError(
+      "Missing required payment verification parameters.",
+    );
+  }
+
+  if (!expectedRazorpayOrderId) {
+    throw new PaymentVerificationError(
+      "No payment intent was issued for this record.",
+    );
+  }
+  if (expectedRazorpayOrderId !== razorpayOrderId) {
+    throw new PaymentVerificationError(
+      "This payment does not belong to this order.",
+    );
+  }
+
+  return verifyGatewayPaymentEntity({
+    razorpayOrderId,
+    razorpayPaymentId,
+    expectedAmount,
+    expectedCurrency,
+    paymentFetcher,
+  });
+}
+
+async function verifyGatewayPaymentEntity(params: {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  expectedAmount: number;
+  expectedCurrency?: string;
+  paymentFetcher?: PaymentFetcher;
+}): Promise<GatewayPaymentAssertion> {
+  const {
+    razorpayOrderId,
+    razorpayPaymentId,
+    expectedAmount,
+    expectedCurrency = "INR",
+    paymentFetcher,
+  } = params;
+
   const fetchPayment: PaymentFetcher =
     paymentFetcher ??
     ((pid: string) => getRazorpayInstance().payments.fetch(pid) as Promise<any>);
@@ -228,11 +307,30 @@ export async function assertGatewayPayment(params: {
     );
   }
 
+  let fee: number | undefined = undefined;
+  if (payment.fee !== null && payment.fee !== undefined) {
+    const rawFee = Number(payment.fee);
+    if (Number.isFinite(rawFee) && rawFee >= 0) {
+      fee = Math.round(rawFee) / 100;
+    }
+  }
+
+  let tax: number | undefined = undefined;
+  if (payment.tax !== null && payment.tax !== undefined) {
+    const rawTax = Number(payment.tax);
+    if (Number.isFinite(rawTax) && rawTax >= 0) {
+      tax = Math.round(rawTax) / 100;
+    }
+  }
+
   return {
     amount: paidMinor / 100,
     currency,
     razorpayPaymentId: String(payment.id),
     razorpayOrderId: String(payment.order_id),
     method: payment.method ? String(payment.method) : undefined,
+    fee,
+    tax,
   };
 }
+

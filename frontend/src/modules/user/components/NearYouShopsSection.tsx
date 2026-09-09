@@ -12,7 +12,7 @@ export default function NearYouShopsSection({ shops = [] }: NearYouShopsSectionP
   const hasShops = shops && shops.length > 0;
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5">
+    <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-2">
       {/* Section Header */}
       <UserSectionHeader
         title="Near You (Best Shops)"
@@ -21,9 +21,9 @@ export default function NearYouShopsSection({ shops = [] }: NearYouShopsSectionP
         onViewAllClick={() => navigate('/shop-by-stores')}
       />
 
-      {/* Responsive Shop List: Horizontal Carousel on Mobile, 4-to-5 Col Grid on Desktop */}
+      {/* Responsive Shop List: Horizontal Carousel on Mobile, 3-to-5 Col Grid on Desktop */}
       {hasShops ? (
-        <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 overflow-x-auto md:overflow-visible scrollbar-hide pb-2 md:pb-0">
+        <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 overflow-x-auto md:overflow-visible scrollbar-hide pb-2 md:pb-0 pt-1">
           {shops.map((shop: any, idx: number) => {
             const shopId = shop.storeId || shop._id || shop.id;
             const shopName = shop.storeName || shop.name || 'Local Store';
@@ -37,7 +37,7 @@ export default function NearYouShopsSection({ shops = [] }: NearYouShopsSectionP
             const imageUrl = shop.bannerImage || shop.image || shop.logo || (shop.productImages && shop.productImages[0]) || null;
 
             return (
-              <div key={shopId || idx} className="w-[200px] sm:w-[220px] md:w-auto flex-shrink-0">
+              <div key={shopId || idx} className="w-[190px] sm:w-[210px] md:w-auto flex-shrink-0">
                 <StoreCard
                   id={shopId}
                   name={shopName}
@@ -55,15 +55,18 @@ export default function NearYouShopsSection({ shops = [] }: NearYouShopsSectionP
           })}
         </div>
       ) : (
-        <div className="p-6 bg-white rounded-2xl border border-slate-100 text-center space-y-2">
-          <StorefrontIcon size={28} className="text-slate-400 mx-auto" />
-          <p className="text-xs font-bold text-slate-700">Connecting with local shops in your area</p>
+        <div className="p-6 sm:p-8 bg-white rounded-2xl border border-slate-200/80 shadow-2xs text-center space-y-2.5">
+          <div className="w-12 h-12 rounded-2xl bg-[#FFF1F4] flex items-center justify-center text-[#FF2E7A] mx-auto border border-[#FFE4EA]">
+            <StorefrontIcon size={24} className="text-[#FF2E7A]" />
+          </div>
+          <h4 className="text-sm font-bold text-slate-900">Connecting with local shops in your area</h4>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">Discover trusted neighborhood grocery, bakery, and retail stores deliverable right to your door.</p>
           <button
             type="button"
             onClick={() => navigate('/shop-by-stores')}
-            className="text-xs font-bold text-[#FF2E7A] hover:underline min-h-[44px]"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF2E7A] hover:bg-[#E02269] text-white text-xs font-black rounded-full shadow-2xs transition-all active:scale-95 min-h-[38px]"
           >
-            Explore all partner stores
+            <span>Explore all partner stores</span>
           </button>
         </div>
       )}

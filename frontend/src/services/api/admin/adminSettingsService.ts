@@ -82,6 +82,11 @@ export interface AppSettings {
     kmRate: number;
     deliveryBoyKmRate?: number;
   };
+  tipSettings?: {
+    enabled: boolean;
+    minTip?: number;
+    maxTip?: number;
+  };
   gstEnabled: boolean;
   gstRate?: number;
   privacyPolicy?: string;

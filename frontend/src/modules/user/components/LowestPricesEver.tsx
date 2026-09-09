@@ -170,65 +170,64 @@ const ProductCard = memo(({
         </div>
 
         {/* Product Details */}
-        <div className="p-1.5 flex-1 flex flex-col min-h-0" style={{ background: '#fef9e7' }}>
+        {/* Product Details */}
+        <div className="p-2 flex-1 flex flex-col min-h-0 bg-white border-t border-slate-100">
           {/* Light Grey Tags */}
-          <div className="flex gap-0.5 mb-0.5">
-            <div className="bg-neutral-200 text-neutral-700 text-[8px] font-medium px-1 py-0.5 rounded">
+          <div className="flex gap-1 mb-1">
+            <div className="bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
               {product.pack || '1 unit'}
             </div>
             {product.pack && (product.pack.includes('g') || product.pack.includes('kg')) && (
-              <div className="bg-neutral-200 text-neutral-700 text-[8px] font-medium px-1 py-0.5 rounded">
+              <div className="bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
                 {product.pack.replace(/[gk]/gi, '').trim()} GSM
               </div>
             )}
           </div>
 
           {/* Product Name */}
-          <div className="mb-0.5">
-            <h3 className="text-[10px] font-bold text-neutral-900 line-clamp-2 leading-tight min-h-[2rem] max-h-[2rem] overflow-hidden" title={productName}>
+          <div className="mb-1">
+            <h3 className="text-xs font-black text-slate-900 line-clamp-2 leading-tight min-h-[2rem] max-h-[2rem] overflow-hidden group-hover:text-[#FF2E7A] transition-colors" title={productName}>
               {displayName}
             </h3>
           </div>
 
           {/* Rating and Reviews */}
-          <div className="flex items-center gap-0.5 mb-0.5">
+          <div className="flex items-center gap-1 mb-1">
             <div className="flex items-center">
               {[...Array(5)].map((_, i) => (
                 <svg
                   key={i}
-                  width="8"
-                  height="8"
+                  width="9"
+                  height="9"
                   viewBox="0 0 24 24"
-                  fill={i < 4 ? '#fbbf24' : '#e5e7eb'}
+                  fill={i < 4 ? '#fbbf24' : '#e2e8f0'}
                   xmlns="http://www.w3.org/2000/svg"
                 >
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
               ))}
             </div>
-            <span className="text-[8px] text-neutral-500">(85)</span>
+            <span className="text-[9px] text-slate-400 font-bold">(85)</span>
           </div>
 
-          {/* Delivery Time */}
-          <div className="text-[9px] text-neutral-600 mb-0.5">
-            20 MINS
+          {/* Delivery Time & Discount */}
+          <div className="flex items-center justify-between text-[9px] mb-1">
+            <span className="text-slate-500 font-bold">15 MINS</span>
+            {discount > 0 && (
+              <span className="text-[#FF2E7A] font-black">
+                {discount}% OFF
+              </span>
+            )}
           </div>
-
-          {/* Discount - Blue Text */}
-          {discount > 0 && (
-            <div className="text-[9px] text-blue-600 font-semibold mb-0.5">
-              {discount}% OFF
-            </div>
-          )}
 
           {/* Price */}
-          <div className="mb-1">
-            <div className="flex items-baseline gap-1">
-              <span className="text-[13px] font-bold text-neutral-900">
+          <div className="mb-1.5">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-black text-slate-900">
                 ₹{displayPrice.toLocaleString('en-IN')}
               </span>
               {hasDiscount && (
-                <span className="text-[10px] text-neutral-400 line-through">
+                <span className="text-[10px] text-slate-400 line-through">
                   ₹{mrp.toLocaleString('en-IN')}
                 </span>
               )}
@@ -238,11 +237,10 @@ const ProductCard = memo(({
           {/* Bottom Link */}
           <Link
             to={`/category/${product.categoryId || 'all'}`}
-            className="w-full bg-green-100 text-green-700 text-[8px] font-medium py-0.5 rounded-lg flex items-center justify-between px-1 hover:bg-green-200 transition-colors mt-auto"
+            className="w-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 text-[9px] font-bold py-1 rounded-lg flex items-center justify-between px-1.5 transition-colors mt-auto"
           >
-            <span>See more like this</span>
+            <span>See more</span>
             <div className="flex items-center gap-0.5">
-              <div className="w-px h-2 bg-green-300"></div>
               <svg width="6" height="6" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M0 0L8 4L0 8Z" fill="#16a34a" />
               </svg>
