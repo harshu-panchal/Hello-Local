@@ -10,6 +10,8 @@ import {
   createProduct,
   updateProduct,
   getProductById,
+  getBrands,
+  Brand,
   ProductVariation,
 } from "../../../services/api/admin/adminProductService";
 import { getShops } from "../../../services/api/productService";
@@ -22,7 +24,6 @@ import {
   SubSubCategory,
 } from "../../../services/api/categoryService";
 import { getActiveTaxes, Tax } from "../../../services/api/taxService";
-import { getBrands, Brand } from "../../../services/api/brandService";
 import {
   getHeaderCategoriesPublic,
   HeaderCategory,
@@ -97,7 +98,7 @@ export default function AdminAddProduct() {
         const results = await Promise.allSettled([
           getCategories(),
           getActiveTaxes(),
-          getBrands(),
+          getBrands({ pagination: false }),
           getHeaderCategoriesPublic(),
           getShops(),
         ]);
@@ -111,7 +112,10 @@ export default function AdminAddProduct() {
         }
 
         if (results[2].status === "fulfilled" && results[2].value.success) {
-          setBrands(results[2].value.data);
+          const fetchedBrands = Array.isArray(results[2].value.data)
+            ? results[2].value.data
+            : (results[2].value.data as any)?.brands || [];
+          setBrands(fetchedBrands);
         }
 
         if (results[3].status === "fulfilled") {

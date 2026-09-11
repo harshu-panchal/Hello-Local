@@ -15,15 +15,17 @@ import { authenticate, requireUserType } from "../middleware/auth";
 
 const router = Router();
 
-// All routes require authentication and seller user type
+// All routes require authentication
 router.use(authenticate);
+
+// Get all brands - sellers and admins need this for product creation
+router.get("/brands", requireUserType("Seller", "Admin"), getBrands);
+
+// Get all active shops - sellers and admins need this for shop-by-store-only products
+router.get("/shops", requireUserType("Seller", "Admin"), getShops);
+
+// Remaining routes require seller user type
 router.use(requireUserType("Seller"));
-
-// Get all brands - sellers need this for product creation
-router.get("/brands", getBrands);
-
-// Get all active shops - sellers need this for shop-by-store-only products
-router.get("/shops", getShops);
 
 // Create product
 router.post("/", createProduct);
