@@ -20,6 +20,7 @@ export interface SearchableSelectProps {
   clearLabel?: string; // e.g. "None (Root Category)" or "-- Select Header Category --"
   clearValue?: string | null; // Value to set when clearLabel option is clicked (default: null)
   className?: string;
+  buttonClassName?: string;
   dropdownPlacement?: "bottom" | "auto";
 }
 
@@ -37,6 +38,7 @@ export default function SearchableSelect({
   clearLabel,
   clearValue = null,
   className = "",
+  buttonClassName = "",
   dropdownPlacement = "bottom",
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -134,13 +136,13 @@ export default function SearchableSelect({
         }}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`w-full px-3 py-2 text-sm bg-white border rounded-lg flex items-center justify-between transition-all outline-none text-left min-h-[40px] ${
+        className={`w-full px-3.5 py-2.5 text-sm bg-white border rounded-xl flex items-center justify-between transition-all outline-none text-left min-h-[44px] ${
           hasError
             ? "border-red-400 focus:ring-2 focus:ring-red-500/20"
             : isOpen
             ? "border-rose-600 ring-2 ring-rose-600/20"
             : "border-neutral-300 hover:border-neutral-400 focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600"
-        } ${disabled ? "bg-neutral-100 text-neutral-400 cursor-not-allowed" : "cursor-pointer"}`}
+        } ${disabled ? "bg-neutral-100/70 text-neutral-400 cursor-not-allowed opacity-60" : "cursor-pointer"} ${buttonClassName}`}
       >
         <span
           className={`truncate pr-2 ${

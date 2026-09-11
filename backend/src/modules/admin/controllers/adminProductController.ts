@@ -1141,27 +1141,70 @@ export const createProduct = asyncHandler(
               email: "admin-store@hellolocal.com",
               mobile: "9999999999",
               password: "AdminStore@123", // Should be hashed by pre-save hook
-              address: "",
-              city: "",
+              address: "Admin Store Headquarters",
+              city: "Navi Mumbai",
               category: "Admin",
               commission: 0,
               status: "Approved",
               requireProductApproval: false,
+              location: {
+                type: "Point",
+                coordinates: [72.8777, 19.076],
+              },
             });
           }
           productData.seller = adminSeller._id;
         } catch (sellerError: any) {
           console.error("Error handling default admin seller:", sellerError);
           throw new Error(
-            "Failed to assign default seller: " + sellerError.message
+            "Failed to assign default store: " + (sellerError.message || "Store initialization error")
           );
         }
       }
 
+      // Map variations: Ensure 'title' from frontend is mapped to 'value' expected by Schema
+      if (productData.variations && Array.isArray(productData.variations)) {
+        productData.variations = productData.variations.map((v: any) => ({
+          ...v,
+          value: v.value || v.title,
+          name: v.name || "Variation",
+          discPrice: v.discPrice || 0,
+          status: v.status || "Available",
+        }));
+      }
+
+      // If price/discPrice/stock not provided directly, derive from variations
+      if (
+        (productData.price === undefined || productData.price === null || productData.price === "") &&
+        productData.variations &&
+        productData.variations.length > 0
+      ) {
+        productData.price = Number(productData.variations[0].price) || 0;
+        productData.discPrice =
+          productData.variations[0].discPrice !== undefined
+            ? Number(productData.variations[0].discPrice)
+            : productData.price;
+        if (productData.stock === undefined || productData.stock === null || productData.stock === "") {
+          productData.stock = productData.variations.reduce(
+            (acc: number, curr: any) => acc + (parseInt(curr.stock) || 0),
+            0
+          );
+        }
+      }
+
+      // Clean up empty optional strings so Mongoose doesn't fail with CastError
+      if (!productData.headerCategoryId) delete productData.headerCategoryId;
+      if (!productData.subcategory) delete productData.subcategory;
+      if (!productData.subSubCategory) delete productData.subSubCategory;
+      if (!productData.brand) delete productData.brand;
+      if (!productData.tax) delete productData.tax;
+      if (!productData.shopId) delete productData.shopId;
+
       if (
         !productData.productName ||
         !productData.category ||
-        !productData.price
+        productData.price === undefined ||
+        productData.price === null
       ) {
         return res.status(400).json({
           success: false,
@@ -1225,11 +1268,16 @@ export const createProduct = asyncHandler(
         });
       }
 
-      // Re-throw other errors to be handled by global error handler (will result in 500)
-      // But we can return 400 if we suspect bad data
+      // Log internal server error
+      console.error("Error creating product:", error);
+      let userMessage = error.message || "Failed to create product. Please try again.";
+      if (userMessage.includes("Can't extract geo keys") || userMessage.includes("Point must be an array")) {
+        userMessage = "Invalid store location configuration. Default coordinates applied, please try again.";
+      }
+
       return res.status(500).json({
         success: false,
-        message: "Error creating product: " + error.message,
+        message: userMessage,
       });
     }
   }
@@ -1337,6 +1385,42 @@ export const updateProduct = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
     const updateData = req.body;
+
+    // Clean up empty optional ID strings so Mongoose doesn't try to cast "" to ObjectId
+    if (updateData.headerCategoryId === "") updateData.headerCategoryId = null;
+    if (updateData.subcategory === "") updateData.subcategory = null;
+    if (updateData.subSubCategory === "") updateData.subSubCategory = null;
+    if (updateData.brand === "") updateData.brand = null;
+    if (updateData.tax === "") updateData.tax = null;
+    if (updateData.shopId === "") updateData.shopId = null;
+
+    // Handle variations & pricing if provided
+    if (updateData.variations && Array.isArray(updateData.variations)) {
+      updateData.variations = updateData.variations.map((v: any) => ({
+        ...v,
+        value: v.value || v.title,
+        name: v.name || "Variation",
+        discPrice: v.discPrice || 0,
+        status: v.status || "Available",
+      }));
+
+      if (
+        (updateData.price === undefined || updateData.price === null || updateData.price === "") &&
+        updateData.variations.length > 0
+      ) {
+        updateData.price = Number(updateData.variations[0].price) || 0;
+        updateData.discPrice =
+          updateData.variations[0].discPrice !== undefined
+            ? Number(updateData.variations[0].discPrice)
+            : updateData.price;
+        if (updateData.stock === undefined || updateData.stock === null || updateData.stock === "") {
+          updateData.stock = updateData.variations.reduce(
+            (acc: number, curr: any) => acc + (parseInt(curr.stock) || 0),
+            0
+          );
+        }
+      }
+    }
 
     const product = await Product.findByIdAndUpdate(id, updateData, {
       new: true,

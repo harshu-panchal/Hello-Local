@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import SearchableSelect from "../../../components/ui/SearchableSelect";
 import { uploadImage, uploadImages } from "../../../services/api/uploadService";
 import {
   validateImageFile,
@@ -488,6 +489,15 @@ export default function AdminAddProduct() {
           value: (v as any).value || v.title,
           name: (v as any).name || "Variation",
         })),
+        price: variations.length > 0 ? Number(variations[0].price) || 0 : 0,
+        discPrice:
+          variations.length > 0
+            ? Number(variations[0].discPrice) || Number(variations[0].price) || 0
+            : 0,
+        stock: variations.reduce(
+          (sum, v) => sum + (parseInt(v.stock?.toString() || "0") || 0),
+          0
+        ),
         variationType: formData.variationType || undefined,
         isShopByStoreOnly: formData.isShopByStoreOnly === "Yes",
         shopId:
@@ -517,10 +527,22 @@ export default function AdminAddProduct() {
         showToast(response.message || "Failed to save product", "error");
       }
     } catch (error: any) {
-      const msg =
+      let msg =
         error.response?.data?.message ||
         error.message ||
         "Failed to save product. Please try again.";
+
+      // Sanitize raw database or internal technical errors into user-friendly text
+      if (typeof msg === "string") {
+        if (msg.includes("Can't extract geo keys") || msg.includes("Point must be an array")) {
+          msg = "Invalid store location configuration. Default coordinates applied, please try submitting again.";
+        } else if (msg.includes("Failed to assign default")) {
+          msg = "Failed to initialize default store seller. Please try again.";
+        } else if (msg.includes("{") && msg.includes("}")) {
+          msg = msg.split(":")[0]?.trim() || "An unexpected error occurred while creating the product.";
+        }
+      }
+
       setUploadError(msg);
       showToast(msg, "error");
     } finally {
@@ -528,14 +550,72 @@ export default function AdminAddProduct() {
     }
   };
 
-  const filteredCategories = categories.filter((cat: any) => {
-    if (!formData.headerCategory) return false;
-    const catHeaderId =
-      typeof cat.headerCategoryId === "string"
-        ? cat.headerCategoryId
-        : cat.headerCategoryId?._id;
-    return catHeaderId === formData.headerCategory;
-  });
+  const filteredCategories = useMemo(() => {
+    return categories.filter((cat: any) => {
+      if (!formData.headerCategory) return false;
+      const catHeaderId =
+        typeof cat.headerCategoryId === "string"
+          ? cat.headerCategoryId
+          : cat.headerCategoryId?._id;
+      return catHeaderId?.toString() === formData.headerCategory?.toString();
+    });
+  }, [categories, formData.headerCategory]);
+
+  const headerCategoryOptions = useMemo(
+    () =>
+      headerCategories.map((hc) => ({
+        value: (hc._id || hc.id || "").toString(),
+        label: hc.name,
+        sublabel: hc.slug ? `slug: ${hc.slug}` : undefined,
+      })),
+    [headerCategories]
+  );
+
+  const categoryOptions = useMemo(
+    () =>
+      filteredCategories.map((cat: any) => ({
+        value: (cat._id || cat.id || "").toString(),
+        label: cat.name,
+        sublabel: cat.slug ? `slug: ${cat.slug}` : undefined,
+      })),
+    [filteredCategories]
+  );
+
+  const subcategoryOptions = useMemo(
+    () =>
+      subcategories.map((sub: any) => ({
+        value: (sub._id || sub.id || "").toString(),
+        label: sub.subcategoryName || sub.name || "",
+      })),
+    [subcategories]
+  );
+
+  const subSubCategoryOptions = useMemo(
+    () =>
+      subSubCategories.map((ss: any) => ({
+        value: (ss._id || ss.id || "").toString(),
+        label: ss.name,
+      })),
+    [subSubCategories]
+  );
+
+  const brandOptions = useMemo(
+    () =>
+      brands.map((b: any) => ({
+        value: (b._id || b.id || "").toString(),
+        label: b.name,
+      })),
+    [brands]
+  );
+
+  const taxOptions = useMemo(
+    () =>
+      taxes.map((t: any) => ({
+        value: (t._id || t.id || "").toString(),
+        label: `${t.name} (${t.taxPercentage ?? t.percentage ?? t.rate ?? 0}%)`,
+      })),
+    [taxes]
+  );
 
   return (
     <div className="space-y-6 pb-12">
@@ -667,20 +747,25 @@ export default function AdminAddProduct() {
                     <span className="text-rose-600">*</span>
                   )}
                 </label>
-                <select
+                <SearchableSelect
                   name="headerCategory"
+                  options={headerCategoryOptions}
                   value={formData.headerCategory}
-                  onChange={handleChange}
-                  required={formData.isShopByStoreOnly !== "Yes"}
-                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
-                >
-                  <option value="">Select Header Category</option>
-                  {headerCategories.map((hc) => (
-                    <option key={hc._id || hc.id} value={hc._id || hc.id}>
-                      {hc.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      headerCategory: val || "",
+                      category: "",
+                      subcategory: "",
+                      subSubCategory: "",
+                    }));
+                  }}
+                  placeholder="-- Search & Select Header Category --"
+                  searchPlaceholder="Type to search header categories..."
+                  emptyMessage="No header categories found"
+                  clearLabel="-- Clear Header Category --"
+                  clearValue=""
+                />
               </div>
 
               {/* Category */}
@@ -694,27 +779,33 @@ export default function AdminAddProduct() {
                     (Select Header Category first)
                   </span>
                 </label>
-                <select
+                <SearchableSelect
                   name="category"
-                  value={formData.category}
-                  onChange={handleChange}
                   disabled={!formData.headerCategory}
-                  required={formData.isShopByStoreOnly !== "Yes"}
-                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
-                    !formData.headerCategory ? "opacity-60 bg-neutral-100 cursor-not-allowed" : ""
-                  }`}
-                >
-                  <option value="">
-                    {formData.headerCategory
-                      ? "Select Category"
-                      : "Select Header Category First"}
-                  </option>
-                  {filteredCategories.map((cat) => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  options={categoryOptions}
+                  value={formData.category}
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      category: val || "",
+                      subcategory: "",
+                      subSubCategory: "",
+                    }));
+                  }}
+                  placeholder={
+                    formData.headerCategory
+                      ? "-- Search & Select Category --"
+                      : "Select Header Category First"
+                  }
+                  searchPlaceholder="Type to search categories..."
+                  emptyMessage={
+                    formData.headerCategory
+                      ? "No categories assigned to this Header Category yet. (Create one under this Header Category in Category Management or select another Header Category)."
+                      : "Select Header Category First"
+                  }
+                  clearLabel="-- Clear Category --"
+                  clearValue=""
+                />
               </div>
 
               {/* SubCategory */}
@@ -725,26 +816,32 @@ export default function AdminAddProduct() {
                     (Select Category first)
                   </span>
                 </label>
-                <select
+                <SearchableSelect
                   name="subcategory"
-                  value={formData.subcategory}
-                  onChange={handleChange}
                   disabled={!formData.category}
-                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
-                    !formData.category ? "opacity-60 bg-neutral-100 cursor-not-allowed" : ""
-                  }`}
-                >
-                  <option value="">
-                    {formData.category
-                      ? "Select SubCategory"
-                      : "Select Category First"}
-                  </option>
-                  {subcategories.map((sub) => (
-                    <option key={sub._id || sub.id} value={sub._id || sub.id}>
-                      {sub.subcategoryName || (sub as any).name}
-                    </option>
-                  ))}
-                </select>
+                  options={subcategoryOptions}
+                  value={formData.subcategory}
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      subcategory: val || "",
+                      subSubCategory: "",
+                    }));
+                  }}
+                  placeholder={
+                    formData.category
+                      ? "-- Search & Select SubCategory --"
+                      : "Select Category First"
+                  }
+                  searchPlaceholder="Type to search subcategories..."
+                  emptyMessage={
+                    formData.category
+                      ? "No subcategories found for this category"
+                      : "Select Category First"
+                  }
+                  clearLabel="-- Clear SubCategory --"
+                  clearValue=""
+                />
               </div>
 
               {/* Sub-SubCategory */}
@@ -755,26 +852,31 @@ export default function AdminAddProduct() {
                     (Optional)
                   </span>
                 </label>
-                <select
+                <SearchableSelect
                   name="subSubCategory"
-                  value={formData.subSubCategory}
-                  onChange={handleChange}
                   disabled={!formData.subcategory}
-                  className={`w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px] ${
-                    !formData.subcategory ? "opacity-60 bg-neutral-100 cursor-not-allowed" : ""
-                  }`}
-                >
-                  <option value="">
-                    {formData.subcategory
-                      ? "Select Sub-SubCategory"
-                      : "Select SubCategory First"}
-                  </option>
-                  {subSubCategories.map((ss) => (
-                    <option key={ss._id} value={ss._id}>
-                      {ss.name}
-                    </option>
-                  ))}
-                </select>
+                  options={subSubCategoryOptions}
+                  value={formData.subSubCategory}
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      subSubCategory: val || "",
+                    }));
+                  }}
+                  placeholder={
+                    formData.subcategory
+                      ? "-- Search & Select Sub-SubCategory --"
+                      : "Select SubCategory First"
+                  }
+                  searchPlaceholder="Type to search sub-subcategories..."
+                  emptyMessage={
+                    formData.subcategory
+                      ? "No sub-subcategories found"
+                      : "Select SubCategory First"
+                  }
+                  clearLabel="-- None (Optional) --"
+                  clearValue=""
+                />
               </div>
 
               {/* Product Status */}
@@ -830,19 +932,22 @@ export default function AdminAddProduct() {
                 <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
                   Select Brand
                 </label>
-                <select
+                <SearchableSelect
                   name="brand"
+                  options={brandOptions}
                   value={formData.brand}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
-                >
-                  <option value="">Select Brand (Optional)</option>
-                  {brands.map((b) => (
-                    <option key={b._id} value={b._id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      brand: val || "",
+                    }));
+                  }}
+                  placeholder="-- Search & Select Brand (Optional) --"
+                  searchPlaceholder="Type to search brands..."
+                  emptyMessage="No brands found"
+                  clearLabel="-- None (No Brand) --"
+                  clearValue=""
+                />
               </div>
 
               {/* Tags */}
@@ -1245,19 +1350,22 @@ export default function AdminAddProduct() {
                 <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
                   GST / Tax Slab
                 </label>
-                <select
+                <SearchableSelect
                   name="tax"
+                  options={taxOptions}
                   value={formData.tax}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
-                >
-                  <option value="">Select Tax Slab (Optional)</option>
-                  {taxes.map((t) => (
-                    <option key={t._id} value={t._id}>
-                      {t.name} ({(t as any).percentage ?? (t as any).rate}%)
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      tax: val || "",
+                    }));
+                  }}
+                  placeholder="-- Select Tax Slab (Optional) --"
+                  searchPlaceholder="Type to search taxes..."
+                  emptyMessage="No tax slabs found"
+                  clearLabel="-- None / No Tax --"
+                  clearValue=""
+                />
               </div>
 
               {/* Is Returnable */}

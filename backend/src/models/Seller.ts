@@ -194,7 +194,6 @@ const SellerSchema = new Schema<ISeller>(
       type: {
         type: String,
         enum: ['Point'],
-        default: 'Point',
       },
       coordinates: {
         type: [Number], // [longitude, latitude]
@@ -329,8 +328,23 @@ SellerSchema.methods.comparePassword = async function (
   return bcrypt.compare(candidatePassword, this.password);
 };
 
+// Ensure location has valid 2D coordinates or unset it to prevent 2dsphere index failure
+SellerSchema.pre('save', function (next) {
+  if (
+    this.location &&
+    (!Array.isArray(this.location.coordinates) ||
+      this.location.coordinates.length < 2 ||
+      this.location.coordinates.some(
+        (coord: any) => coord === undefined || coord === null || isNaN(Number(coord))
+      ))
+  ) {
+    this.location = undefined;
+  }
+  next();
+});
+
 // Create geospatial index on location field for efficient queries
-SellerSchema.index({ location: '2dsphere' });
+SellerSchema.index({ location: '2dsphere' }, { sparse: true });
 SellerSchema.index({ status: 1 }); // Compound index for status + location queries
 
 const Seller = (mongoose.models.Seller as mongoose.Model<ISeller>) || mongoose.model<ISeller>('Seller', SellerSchema);

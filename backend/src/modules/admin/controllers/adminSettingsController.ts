@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import AppSettings from "../../../models/AppSettings";
 import PaymentMethod from "../../../models/PaymentMethod";
+import Seller from "../../../models/Seller";
 
 /**
  * Get app settings
@@ -149,6 +150,183 @@ export const updateSMSGatewaySettings = asyncHandler(
       success: true,
       message: "SMS gateway settings updated successfully",
       data: settings.smsGateway,
+    });
+  }
+);
+
+/**
+ * Get default Admin Store settings
+ */
+export const getAdminStoreSettings = asyncHandler(
+  async (_req: Request, res: Response) => {
+    let adminSeller = await Seller.findOne({
+      $or: [
+        { email: "admin-store@hellolocal.com" },
+        { mobile: "9999999999" },
+        { category: "Admin" },
+      ],
+    });
+
+    if (!adminSeller) {
+      adminSeller = await Seller.create({
+        sellerName: "Hello Local Admin",
+        storeName: "Hello Local Admin Store",
+        email: "admin-store@hellolocal.com",
+        mobile: "9999999999",
+        password: "AdminStore@123",
+        address: "Admin Store Headquarters",
+        city: "Navi Mumbai",
+        serviceableArea: "Navi Mumbai, Mumbai",
+        searchLocation: "Navi Mumbai",
+        category: "Admin",
+        commission: 0,
+        status: "Approved",
+        requireProductApproval: false,
+        location: {
+          type: "Point",
+          coordinates: [72.8777, 19.076],
+        },
+        serviceRadiusKm: 10,
+      });
+    }
+
+    const lat =
+      adminSeller.location?.coordinates?.[1] ??
+      (adminSeller.latitude ? parseFloat(adminSeller.latitude) : 19.076);
+    const lng =
+      adminSeller.location?.coordinates?.[0] ??
+      (adminSeller.longitude ? parseFloat(adminSeller.longitude) : 72.8777);
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin store settings fetched successfully",
+      data: {
+        _id: adminSeller._id,
+        sellerName: adminSeller.sellerName || "Hello Local Admin",
+        storeName: adminSeller.storeName || "Hello Local Admin Store",
+        email: adminSeller.email || "admin-store@hellolocal.com",
+        mobile: adminSeller.mobile || "9999999999",
+        address: adminSeller.address || "",
+        city: adminSeller.city || "",
+        serviceableArea: adminSeller.serviceableArea || "",
+        searchLocation: adminSeller.searchLocation || "",
+        latitude: lat,
+        longitude: lng,
+        serviceRadiusKm: adminSeller.serviceRadiusKm ?? 10,
+        status: adminSeller.status,
+      },
+    });
+  }
+);
+
+/**
+ * Update default Admin Store settings
+ */
+export const updateAdminStoreSettings = asyncHandler(
+  async (req: Request, res: Response) => {
+    const {
+      sellerName,
+      storeName,
+      email,
+      mobile,
+      address,
+      city,
+      serviceableArea,
+      searchLocation,
+      latitude,
+      longitude,
+      serviceRadiusKm,
+    } = req.body;
+
+    let adminSeller = await Seller.findOne({
+      $or: [
+        { email: "admin-store@hellolocal.com" },
+        { mobile: "9999999999" },
+        { category: "Admin" },
+      ],
+    });
+
+    const updateData: any = {};
+    if (sellerName !== undefined) updateData.sellerName = String(sellerName).trim();
+    if (storeName !== undefined) updateData.storeName = String(storeName).trim();
+    if (email !== undefined) updateData.email = String(email).trim().toLowerCase();
+    if (mobile !== undefined) updateData.mobile = String(mobile).trim();
+    if (address !== undefined) updateData.address = String(address).trim();
+    if (city !== undefined) updateData.city = String(city).trim();
+    if (serviceableArea !== undefined) updateData.serviceableArea = String(serviceableArea).trim();
+    if (searchLocation !== undefined) updateData.searchLocation = String(searchLocation).trim();
+    if (serviceRadiusKm !== undefined) updateData.serviceRadiusKm = Math.max(0.1, Number(serviceRadiusKm) || 10);
+
+    // Update coordinates if provided
+    if (
+      latitude !== undefined &&
+      longitude !== undefined &&
+      !isNaN(Number(latitude)) &&
+      !isNaN(Number(longitude))
+    ) {
+      const latNum = Number(latitude);
+      const lngNum = Number(longitude);
+      updateData.latitude = String(latNum);
+      updateData.longitude = String(lngNum);
+      updateData.location = {
+        type: "Point",
+        coordinates: [lngNum, latNum], // GeoJSON order: [longitude, latitude]
+      };
+    }
+
+    if (!adminSeller) {
+      adminSeller = await Seller.create({
+        sellerName: updateData.sellerName || "Hello Local Admin",
+        storeName: updateData.storeName || "Hello Local Admin Store",
+        email: updateData.email || "admin-store@hellolocal.com",
+        mobile: updateData.mobile || "9999999999",
+        password: "AdminStore@123",
+        address: updateData.address || "Admin Store Headquarters",
+        city: updateData.city || "Navi Mumbai",
+        serviceableArea: updateData.serviceableArea || "Navi Mumbai, Mumbai",
+        searchLocation: updateData.searchLocation || "Navi Mumbai",
+        category: "Admin",
+        commission: 0,
+        status: "Approved",
+        requireProductApproval: false,
+        location: updateData.location || {
+          type: "Point",
+          coordinates: [72.8777, 19.076],
+        },
+        serviceRadiusKm: updateData.serviceRadiusKm ?? 10,
+      });
+    } else {
+      adminSeller = await Seller.findByIdAndUpdate(adminSeller._id, updateData, {
+        new: true,
+        runValidators: true,
+      });
+    }
+
+    const lat =
+      adminSeller?.location?.coordinates?.[1] ??
+      (adminSeller?.latitude ? parseFloat(adminSeller.latitude) : 19.076);
+    const lng =
+      adminSeller?.location?.coordinates?.[0] ??
+      (adminSeller?.longitude ? parseFloat(adminSeller.longitude) : 72.8777);
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin store settings updated successfully",
+      data: {
+        _id: adminSeller?._id,
+        sellerName: adminSeller?.sellerName,
+        storeName: adminSeller?.storeName,
+        email: adminSeller?.email,
+        mobile: adminSeller?.mobile,
+        address: adminSeller?.address,
+        city: adminSeller?.city,
+        serviceableArea: adminSeller?.serviceableArea,
+        searchLocation: adminSeller?.searchLocation,
+        latitude: lat,
+        longitude: lng,
+        serviceRadiusKm: adminSeller?.serviceRadiusKm,
+        status: adminSeller?.status,
+      },
     });
   }
 );

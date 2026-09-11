@@ -165,3 +165,56 @@ export const updatePaymentMethods = async (
   );
   return response.data;
 };
+
+export interface AdminStoreSettings {
+  _id: string;
+  sellerName: string;
+  storeName: string;
+  email: string;
+  mobile: string;
+  address: string;
+  city: string;
+  serviceableArea?: string;
+  searchLocation?: string;
+  latitude: number;
+  longitude: number;
+  serviceRadiusKm: number;
+  status?: string;
+}
+
+export interface UpdateAdminStoreSettingsData {
+  sellerName?: string;
+  storeName?: string;
+  email?: string;
+  mobile?: string;
+  address?: string;
+  city?: string;
+  serviceableArea?: string;
+  searchLocation?: string;
+  latitude?: number;
+  longitude?: number;
+  serviceRadiusKm?: number;
+}
+
+/**
+ * Get Admin Store settings
+ */
+export const getAdminStoreSettings = async (): Promise<ApiResponse<AdminStoreSettings>> => {
+  const response = await api.get<ApiResponse<AdminStoreSettings>>(
+    "/admin/store-settings"
+  );
+  return response.data;
+};
+
+/**
+ * Update Admin Store settings
+ */
+export const updateAdminStoreSettings = async (
+  data: UpdateAdminStoreSettingsData
+): Promise<ApiResponse<AdminStoreSettings>> => {
+  const response = await api.put<ApiResponse<AdminStoreSettings>>(
+    "/admin/store-settings",
+    data
+  );
+  return response.data;
+};

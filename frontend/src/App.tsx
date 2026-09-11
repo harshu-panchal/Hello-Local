@@ -153,6 +153,7 @@ const AdminWithdrawals = lazy(() => import("./modules/admin/pages/AdminWithdrawa
 const AdminPayments = lazy(() => import("./modules/admin/pages/AdminPayments"));
 const AdminWallet = lazy(() => import("./modules/admin/pages/AdminWallet"));
 const AdminBillingSettings = lazy(() => import("./modules/admin/pages/AdminBillingSettings"));
+const AdminStoreSettings = lazy(() => import("./modules/admin/pages/AdminStoreSettings"));
 const SellerAdRequests = lazy(() => import("./modules/seller/pages/SellerAdRequests"));
 const WebsiteHome = lazy(() => import("./modules/website/pages/WebsiteHome"));
 
@@ -391,6 +392,7 @@ function App() {
                                 <Route path="payments" element={<AdminPayments />} />
                                 <Route path="wallet" element={<AdminWallet />} />
                                 <Route path="billing-settings" element={<AdminBillingSettings />} />
+                                <Route path="store-settings" element={<AdminStoreSettings />} />
                                 <Route path="*" element={<Navigate to="/admin" replace />} />
                               </Routes>
                             </AdminLayout>
