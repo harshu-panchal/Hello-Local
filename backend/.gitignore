@@ -22,6 +22,8 @@ seed_error.txt
 verification_results.txt
 test-report.json
 product_mappings.json
+backups/
+scratch/
 
 # Test coverage
 coverage/

@@ -112,7 +112,16 @@ function buildOtpMessage(otp: string): string {
 /**
  * Parse and handle SMS India HUB API response
  */
-function handleSmsResponse(responseData: SmsIndiaHubResponse): void {
+function handleSmsResponse(responseData: SmsIndiaHubResponse | string): void {
+  if (typeof responseData === 'string') {
+    const trimmed = responseData.trim();
+    if (trimmed.startsWith('Failed#') || trimmed.toLowerCase().includes('failed') || trimmed.toLowerCase().includes('error')) {
+      throw new Error(`SMS India HUB: ${trimmed}`);
+    }
+    // String formats like "JobId#123..." or numbers indicate success
+    return;
+  }
+
   const errorCode = responseData.ErrorCode || '';
   const errorMsg = responseData.ErrorMessage || '';
 
@@ -289,6 +298,7 @@ export async function sendSmsOtp(
     // Mock mode
     if (await isMockMode() || normalized === TEST_PHONE) {
       await saveOtpToDb(mobile, otp, userType);
+      console.log(`[MOCK OTP] Generated OTP for mobile ${normalized} (${userType}): ${otp}`);
       return {
         success: true,
         sessionId: 'MOCK_SESSION_' + mobile,
