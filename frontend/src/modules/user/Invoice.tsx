@@ -283,10 +283,10 @@ export default function Invoice() {
                   <span className="font-bold text-slate-900">{formatCurrency(order.tipAmount)}</span>
                 </div>
               )}
-              {order.giftPackaging && (
-                <div className="flex justify-between text-slate-600 font-medium">
-                  <span>Gift Packaging</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(30)}</span>
+              {((order as any).tax || 0) > 0 && (
+                <div className="flex justify-between text-slate-500 font-medium text-[11px]">
+                  <span>Includes Taxes (GST)</span>
+                  <span className="font-semibold text-slate-700">{formatCurrency((order as any).tax)}</span>
                 </div>
               )}
               <div className="border-t border-slate-200 pt-2 flex justify-between items-baseline font-bold text-xs text-slate-900">

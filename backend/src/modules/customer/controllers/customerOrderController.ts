@@ -38,7 +38,7 @@ export const createOrder = async (req: Request, res: Response) => {
     let orderCreated = false;
 
     try {
-        const { items, address, paymentMethod, couponCode, tipAmount } = req.body;
+        const { items, address, paymentMethod, couponCode, tipAmount, gstin } = req.body;
         const userId = req.user?.userId;
 
         if (!userId) {
@@ -77,6 +77,19 @@ export const createOrder = async (req: Request, res: Response) => {
         }
         if (deliveryLat < -90 || deliveryLat > 90 || deliveryLng < -180 || deliveryLng > 180) {
             return res.status(400).json({ success: false, message: "Invalid delivery address coordinates" });
+        }
+
+        // ── Business GSTIN validation (optional) ───────────────────────────
+        let validatedGstin: string | undefined = undefined;
+        if (gstin && typeof gstin === "string") {
+            const cleanGstin = gstin.trim().toUpperCase();
+            if (cleanGstin.length > 0) {
+                const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+                if (!gstRegex.test(cleanGstin)) {
+                    return res.status(400).json({ success: false, message: "Invalid GSTIN format. Expected 15-character GST number." });
+                }
+                validatedGstin = cleanGstin;
+            }
         }
 
         // ── Resolve products and validate every line BEFORE touching stock ──
@@ -229,6 +242,7 @@ export const createOrder = async (req: Request, res: Response) => {
             customerName: customer.name,
             customerEmail: customer.email,
             customerPhone: customer.phone,
+            gstin: validatedGstin,
             deliveryAddress: {
                 address: address.address || address.street || "N/A",
                 city: address.city || "N/A",

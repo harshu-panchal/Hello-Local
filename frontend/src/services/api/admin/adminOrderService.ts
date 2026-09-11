@@ -36,6 +36,7 @@ export interface Order {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  gstin?: string;
   deliveryAddress: DeliveryAddress;
   items: string[] | OrderItem[];
   subtotal: number;

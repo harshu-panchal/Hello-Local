@@ -575,6 +575,12 @@ export default function OrderDetail() {
                   {order.address?.city && `, ${order.address.city}`}
                   {order.address?.pincode && ` - ${order.address.pincode}`}
                 </p>
+                {order.gstin && (
+                  <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 font-medium">Customer GSTIN</span>
+                    <span className="font-mono font-bold text-slate-800">{order.gstin}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -613,10 +619,10 @@ export default function OrderDetail() {
                 </div>
               )}
 
-              {order.giftPackaging && (
-                <div className="flex justify-between text-slate-600 font-medium">
-                  <span>Gift Packaging</span>
-                  <span className="font-bold text-slate-900">₹30</span>
+              {((order as any).tax || 0) > 0 && (
+                <div className="flex justify-between text-slate-500 font-medium text-[11px]">
+                  <span>Includes Taxes (GST)</span>
+                  <span className="font-semibold text-slate-700">₹{Number((order as any).tax).toFixed(2)}</span>
                 </div>
               )}
 

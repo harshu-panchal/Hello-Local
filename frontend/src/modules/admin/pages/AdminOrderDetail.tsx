@@ -295,6 +295,12 @@ export default function AdminOrderDetail() {
               {order.deliveryAddress?.landmark && (
                 <p className="text-neutral-500 pt-1">Landmark: {order.deliveryAddress.landmark}</p>
               )}
+              {order.gstin && (
+                <div className="pt-1.5 mt-1 border-t border-neutral-200/60 flex items-center justify-between">
+                  <span className="text-neutral-500 font-medium">Customer GSTIN:</span>
+                  <span className="font-mono font-bold text-neutral-900 bg-neutral-200/60 px-1.5 py-0.5 rounded">{order.gstin}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -122,6 +122,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         // server recomputes every figure; these are inputs, not amounts. (#C-11)
         couponCode: order.couponCode || undefined,
         tipAmount: order.tipAmount || 0,
+        gstin: order.gstin || undefined,
       };
 
       const response = await createOrder(payload);

@@ -234,8 +234,9 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
     const taxRate = await resolveProductTaxRate(product.tax);
 
     const lineSubtotal = Math.round(unitPrice * quantity * 100) / 100;
-    const taxAmount = Math.round(((lineSubtotal * taxRate) / 100) * 100) / 100;
-    const lineTotal = Math.round((lineSubtotal + taxAmount) * 100) / 100;
+    // Prices are tax-inclusive: tax is embedded inside lineSubtotal
+    const taxAmount = taxRate > 0 ? Math.round(((lineSubtotal * taxRate) / (100 + taxRate)) * 100) / 100 : 0;
+    const lineTotal = lineSubtotal;
 
     subtotal = Math.round((subtotal + lineSubtotal) * 100) / 100;
     totalTax = Math.round((totalTax + taxAmount) * 100) / 100;
@@ -262,7 +263,7 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
     });
   }
 
-  const grandTotal = Math.max(0, Math.round((subtotal + totalTax - discountAmount) * 100) / 100);
+  const grandTotal = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
 
   // 3. Validate Cash payment received amount
   let receivedAmount = Number(

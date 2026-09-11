@@ -247,7 +247,8 @@ export async function priceOrder(params: {
   for (const l of params.lines) {
     const lineTotal = round2(l.unitPrice * l.quantity);
     const taxRate = await resolveTaxRate(l.taxRefId, defaultTaxRate);
-    const taxAmount = round2((lineTotal * taxRate) / 100);
+    // Prices are tax-inclusive: tax is embedded within the selling price (MRP)
+    const taxAmount = taxRate > 0 ? round2((lineTotal * taxRate) / (100 + taxRate)) : 0;
 
     subtotal = round2(subtotal + lineTotal);
     tax = round2(tax + taxAmount);
@@ -272,8 +273,8 @@ export async function priceOrder(params: {
     deliveryLng: params.deliveryLng,
   });
 
-  // The coupon applies to goods + tax + fees, matching what the customer sees.
-  const eligibleAmount = round2(subtotal + tax + shipping + platformFee);
+  // All product prices are tax-inclusive; subtotal already accounts for merchandise value.
+  const eligibleAmount = round2(subtotal + shipping + platformFee);
   const { discount, code, reason, funding, applicableTo, applicableIds } = await computeCouponDiscount({
     code: params.couponCode,
     customerId: params.customerId,

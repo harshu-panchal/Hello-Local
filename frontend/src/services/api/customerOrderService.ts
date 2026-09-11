@@ -34,6 +34,8 @@ export interface CreateOrderData {
     couponCode?: string;
     /** Delivery tip, in rupees. (#C-11) */
     tipAmount?: number;
+    /** Customer GSTIN for business tax invoices */
+    gstin?: string;
 }
 
 export interface OrderResponse {

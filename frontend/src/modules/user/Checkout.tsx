@@ -77,7 +77,6 @@ export default function Checkout() {
   const [showGstinSheet, setShowGstinSheet] = useState(false);
   const [gstin, setGstin] = useState<string>("");
   const [showCancellationPolicy, setShowCancellationPolicy] = useState(false);
-  const [giftPackaging, setGiftPackaging] = useState<boolean>(false);
 
   // Profile completion modal state
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -323,14 +322,12 @@ export default function Checkout() {
   }
 
   const finalTipAmount = showCustomTipInput ? customTipAmount : tipAmount || 0;
-  const giftPackagingFee = giftPackaging ? 30 : 0;
   const grandTotal = Math.max(
     0,
     discountedTotal +
       handlingCharge +
       deliveryCharge +
-      finalTipAmount +
-      giftPackagingFee -
+      finalTipAmount -
       currentCouponDiscount
   );
 
@@ -451,7 +448,6 @@ export default function Checkout() {
       tipAmount: finalTipAmount,
       gstin: gstin || undefined,
       couponCode: selectedCoupon?.code || undefined,
-      giftPackaging: giftPackaging,
     };
 
     try {
@@ -879,52 +875,23 @@ export default function Checkout() {
               )}
             </div>
 
-            {/* 4. GSTIN & Gift Packaging */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* 4. GSTIN for Business Purchase */}
+            <div className="w-full">
               {/* GSTIN */}
               <button
                 type="button"
                 onClick={() => setShowGstinSheet(true)}
-                className="bg-white rounded-2xl border border-slate-100 p-3 shadow-2xs flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+                className="w-full bg-white rounded-2xl border border-slate-100 p-3 shadow-2xs flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
               >
                 <div>
                   <p className="text-xs font-bold text-slate-900">
                     {gstin ? `GSTIN: ${gstin}` : "Add GSTIN"}
                   </p>
                   <p className="text-[10px] text-slate-400 font-medium">
-                    {gstin ? "Saved for input credit" : "Claim tax credit for business"}
+                    {gstin ? "Saved for business tax invoice / input credit" : "Claim tax credit for business purchase"}
                   </p>
                 </div>
                 <span className="text-xs text-[#FF2E7A] font-bold">Edit ▸</span>
-              </button>
-
-              {/* Gift Packaging Toggle */}
-              <button
-                type="button"
-                onClick={() => setGiftPackaging(!giftPackaging)}
-                className={`rounded-2xl border p-3 shadow-2xs flex items-center justify-between text-left transition-all ${
-                  giftPackaging
-                    ? "bg-[#FFF1F4] border-[#FF2E7A] text-[#FF2E7A]"
-                    : "bg-white border-slate-100 text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                <div>
-                  <p className="text-xs font-bold text-slate-900">
-                    Gift Packaging
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    {giftPackaging ? "+₹30 added" : "Add packaging (+₹30)"}
-                  </p>
-                </div>
-                <div
-                  className={`w-4 h-4 rounded border flex items-center justify-center ${
-                    giftPackaging
-                      ? "bg-[#FF2E7A] border-[#FF2E7A] text-white"
-                      : "border-slate-300 bg-white"
-                  }`}
-                >
-                  {giftPackaging && <span className="text-[10px]">✓</span>}
-                </div>
               </button>
             </div>
 
@@ -1059,13 +1026,6 @@ export default function Checkout() {
                   <div className="flex justify-between text-slate-600 font-medium">
                     <span>Partner Tip</span>
                     <span className="font-bold text-slate-900">₹{finalTipAmount}</span>
-                  </div>
-                )}
-
-                {giftPackaging && (
-                  <div className="flex justify-between text-slate-600 font-medium">
-                    <span>Gift Packaging</span>
-                    <span className="font-bold text-slate-900">₹{giftPackagingFee}</span>
                   </div>
                 )}
               </div>

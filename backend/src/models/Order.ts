@@ -18,6 +18,7 @@ export interface IOrder extends Document {
   customerName: string;
   customerEmail?: string;
   customerPhone?: string;
+  gstin?: string;
 
   // Delivery Info
   deliveryAddress: {
@@ -226,6 +227,11 @@ const OrderSchema = new Schema<IOrder>(
         "Customer phone is required for online orders",
       ],
       trim: true,
+    },
+    gstin: {
+      type: String,
+      trim: true,
+      uppercase: true,
     },
 
     // Delivery Info (Optional for offline sales)

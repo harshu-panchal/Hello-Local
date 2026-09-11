@@ -327,6 +327,12 @@ export default function SellerOrderDetail() {
                 <span className="text-slate-600">{orderDetail.customerEmail}</span>
               </div>
             )}
+            {(orderDetail as any).gstin && (
+              <div>
+                <span className="text-slate-400 block">Customer GSTIN</span>
+                <span className="font-mono font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded inline-block">{(orderDetail as any).gstin}</span>
+              </div>
+            )}
           </div>
         </SellerCard>
 
