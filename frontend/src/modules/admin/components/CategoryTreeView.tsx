@@ -150,7 +150,7 @@ export default function CategoryTreeView({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3
                           className={`${
                             isSubcategory
@@ -162,6 +162,16 @@ export default function CategoryTreeView({
                         {isSubcategory && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-200 text-blue-800">
                             Subcategory
+                          </span>
+                        )}
+                        {category.isBestseller && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                            ⭐ Bestseller
+                          </span>
+                        )}
+                        {category.hasWarning && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+                            ⚠️ Warning
                           </span>
                         )}
                       </div>

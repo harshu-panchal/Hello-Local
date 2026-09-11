@@ -124,8 +124,20 @@ export default function CategoryListView({
                   )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm font-medium text-neutral-900">
-                    {category.name}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-neutral-900">
+                      {category.name}
+                    </span>
+                    {category.isBestseller && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                        ⭐ Bestseller
+                      </span>
+                    )}
+                    {category.hasWarning && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+                        ⚠️ Warning
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">

@@ -15,7 +15,6 @@ export interface Category {
   headerCategoryId?: string | any; // Can be string ID or populated object
   isBestseller: boolean;
   hasWarning: boolean;
-  groupCategory?: string;
   totalSubcategory?: number;
   totalProduct?: number;
   createdAt?: string;

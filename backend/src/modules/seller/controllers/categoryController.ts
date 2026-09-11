@@ -195,6 +195,8 @@ export const getSubcategories = asyncHandler(
         image: cat.image,
         subcategoryImage: cat.image,
         order: cat.order || 0,
+        isBestseller: cat.isBestseller || false,
+        hasWarning: cat.hasWarning || false,
         totalProduct: 0, // Will be calculated below
         isNewModel: true, // Flag to identify new model
       })),
@@ -206,6 +208,8 @@ export const getSubcategories = asyncHandler(
         image: sub.image,
         subcategoryImage: sub.image,
         order: sub.order || 0,
+        isBestseller: false,
+        hasWarning: false,
         totalProduct: 0, // Will be calculated below
         isNewModel: false, // Flag to identify old model
       })),

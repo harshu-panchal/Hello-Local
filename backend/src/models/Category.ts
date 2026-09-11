@@ -7,7 +7,6 @@ export interface ICategory extends Document {
   order: number;
   isBestseller: boolean;
   hasWarning: boolean;
-  groupCategory?: string;
   totalSubcategories?: number;
   commissionRate?: number;
   status: "Active" | "Inactive";
@@ -55,10 +54,6 @@ const CategorySchema = new Schema<ICategory>(
     hasWarning: {
       type: Boolean,
       default: false,
-    },
-    groupCategory: {
-      type: String,
-      trim: true,
     },
     totalSubcategories: {
       type: Number,

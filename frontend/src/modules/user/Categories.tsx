@@ -176,10 +176,22 @@ export default function Categories() {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h2 className="text-sm font-bold text-slate-800 line-clamp-1 group-hover:text-[#FF2E7A] transition-colors">
-                            {cat.name}
-                          </h2>
-                          <p className="text-[11px] text-slate-400">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h2 className="text-sm font-bold text-slate-800 line-clamp-1 group-hover:text-[#FF2E7A] transition-colors">
+                              {cat.name}
+                            </h2>
+                            {cat.isBestseller && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px] font-semibold">
+                                ⭐ Bestseller
+                              </span>
+                            )}
+                            {cat.hasWarning && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-[10px] font-semibold">
+                                ⚠️ Advisory
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
                             {subcategories.length > 0
                               ? `${subcategories.length} subcategories`
                               : "Explore products"}
@@ -195,9 +207,17 @@ export default function Categories() {
                             <Link
                               key={sub._id || sub.id}
                               to={`/category/${catSlug}?subcategory=${sub._id || sub.id}`}
-                              className="px-2.5 py-1 bg-slate-50 hover:bg-[#FFF1F4] hover:text-[#FF2E7A] border border-slate-100 hover:border-[#FFD0DE] rounded-lg text-[11px] font-medium text-slate-600 transition-colors"
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors inline-flex items-center gap-1 ${
+                                sub.isBestseller
+                                  ? "bg-amber-50/70 border border-amber-200/80 text-amber-800 hover:bg-amber-100"
+                                  : sub.hasWarning
+                                  ? "bg-rose-50/70 border border-rose-200/80 text-rose-800 hover:bg-rose-100"
+                                  : "bg-slate-50 hover:bg-[#FFF1F4] hover:text-[#FF2E7A] border border-slate-100 hover:border-[#FFD0DE] text-slate-600"
+                              }`}
                             >
-                              {sub.name}
+                              {sub.isBestseller && <span>⭐</span>}
+                              {sub.hasWarning && <span>⚠️</span>}
+                              <span>{sub.name}</span>
                             </Link>
                           ))}
                           {subcategories.length > 6 && (

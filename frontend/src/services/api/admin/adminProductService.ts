@@ -10,7 +10,6 @@ export interface Category {
   order: number;
   isBestseller: boolean;
   hasWarning: boolean;
-  groupCategory?: string;
   totalSubcategories?: number;
   status: "Active" | "Inactive";
   parentId?: string | null;
@@ -34,7 +33,6 @@ export interface CreateCategoryData {
   order?: number;
   isBestseller?: boolean;
   hasWarning?: boolean;
-  groupCategory?: string;
   parentId?: string | null;
   headerCategoryId?: string | null;
   status?: "Active" | "Inactive";

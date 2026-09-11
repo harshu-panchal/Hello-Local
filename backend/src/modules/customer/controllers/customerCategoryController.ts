@@ -19,7 +19,7 @@ export const getCategories = async (_req: Request, res: Response) => {
         parentId: null,   // Only root-level categories (not subcategories stored in Category model)
       })
         .sort({ order: 1 })
-        .select("name image icon description color slug _id")
+        .select("name image icon description color slug _id isBestseller hasWarning")
         .lean(); // Use lean() for better performance
 
       // Cache for 10 minutes
@@ -252,7 +252,7 @@ export const getCategoryById = async (req: Request, res: Response) => {
             parentId: category._id,
             status: "Active",
           })
-            .select("name image order slug")
+            .select("name image order slug isBestseller hasWarning")
             .sort({ order: 1 });
 
           return res.status(200).json({
@@ -297,7 +297,7 @@ export const getCategoryById = async (req: Request, res: Response) => {
       parentId: { $in: [catId, catId.toString()] },
       status: "Active",
     })
-      .select("name image order slug icon")
+      .select("name image order slug icon isBestseller hasWarning")
       .sort({ order: 1 })
       .lean();
 

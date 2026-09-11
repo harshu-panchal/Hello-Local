@@ -49,7 +49,6 @@ export default function CategoryFormModal({
     status: "Active" as "Active" | "Inactive",
     isBestseller: false,
     hasWarning: false,
-    groupCategory: "",
     commissionRate: 0,
   });
 
@@ -114,7 +113,6 @@ export default function CategoryFormModal({
           status: category.status || "Active",
           isBestseller: category.isBestseller || false,
           hasWarning: category.hasWarning || false,
-          groupCategory: category.groupCategory || "",
           commissionRate: category.commissionRate || 0,
         });
         if (category.image) {
@@ -156,7 +154,6 @@ export default function CategoryFormModal({
           status: "Active",
           isBestseller: false,
           hasWarning: false,
-          groupCategory: "",
           commissionRate: 0,
         });
       } else {
@@ -170,7 +167,6 @@ export default function CategoryFormModal({
           status: "Active",
           isBestseller: false,
           hasWarning: false,
-          groupCategory: "",
           commissionRate: 0,
         });
       }
@@ -361,7 +357,6 @@ export default function CategoryFormModal({
         status: formData.status,
         isBestseller: formData.isBestseller,
         hasWarning: formData.hasWarning,
-        groupCategory: formData.groupCategory || undefined,
         commissionRate: formData.commissionRate,
       };
 
@@ -859,22 +854,6 @@ export default function CategoryFormModal({
                       Has Warning
                     </span>
                   </label>
-                </div>
-
-                {/* Group Category */}
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Group Category
-                  </label>
-                  <input
-                    type="text"
-                    name="groupCategory"
-                    value={formData.groupCategory}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600"
-                    placeholder="Enter group category"
-                    disabled={submitting}
-                  />
                 </div>
               </div>
             )}

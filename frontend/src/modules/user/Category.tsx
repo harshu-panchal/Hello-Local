@@ -204,6 +204,12 @@ export default function CategoryPage() {
     setIsFiltersOpen(false);
   };
 
+  const activeSubcat = subcategories.find(
+    (s) => (s.id || s._id) === selectedSubcategory
+  );
+  const hasActiveWarning =
+    Boolean(category?.hasWarning) || Boolean(activeSubcat?.hasWarning);
+
   return (
     <div className="flex bg-[#F8FAFC] h-screen overflow-hidden">
       {/* 1. Left Sidebar - Subcategories Strip */}
@@ -227,23 +233,41 @@ export default function CategoryPage() {
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 bg-[#FF2E7A] rounded-r-full" />
                 )}
 
-                {/* Subcategory Image */}
+                {/* Subcategory Image with Badges */}
                 <div
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-base mb-1 flex-shrink-0 overflow-hidden transition-all ${
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-base mb-1 flex-shrink-0 relative transition-all ${
                     isSelected
                       ? "ring-2 ring-[#FF2E7A] bg-white shadow-2xs"
                       : "bg-slate-50 border border-slate-100 group-hover:bg-white"
                   }`}
                 >
-                  {subcat.image ? (
-                    <UserImage
-                      src={subcat.image}
-                      alt={subcat.name}
-                      categoryFallback={subcat.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-lg select-none">{subcat.name === 'All' ? '📦' : '🛍️'}</span>
+                  <div className="w-full h-full rounded-xl overflow-hidden flex items-center justify-center">
+                    {subcat.image ? (
+                      <UserImage
+                        src={subcat.image}
+                        alt={subcat.name}
+                        categoryFallback={subcat.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-lg select-none">{subcat.name === 'All' ? '📦' : '🛍️'}</span>
+                    )}
+                  </div>
+                  {subcat.isBestseller && (
+                    <span
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 text-slate-900 rounded-full text-[9px] flex items-center justify-center shadow-xs font-bold"
+                      title="Bestseller"
+                    >
+                      ⭐
+                    </span>
+                  )}
+                  {subcat.hasWarning && (
+                    <span
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] flex items-center justify-center shadow-xs"
+                      title="Advisory Warning"
+                    >
+                      ⚠️
+                    </span>
                   )}
                 </div>
 
@@ -275,10 +299,22 @@ export default function CategoryPage() {
               >
                 <ArrowLeftIcon size={18} />
               </button>
-              <div>
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight tracking-tight">
-                  {category?.name}
-                </h1>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight tracking-tight">
+                    {category?.name}
+                  </h1>
+                  {category?.isBestseller && (
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-semibold">
+                      ⭐ Bestseller
+                    </span>
+                  )}
+                  {category?.hasWarning && (
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-[10px] font-semibold">
+                      ⚠️ Advisory
+                    </span>
+                  )}
+                </div>
                 <p className="text-[10px] text-slate-400 font-medium">
                   {categoryProducts.length} items available
                 </p>
@@ -333,6 +369,16 @@ export default function CategoryPage() {
             </button>
           </div>
         </div>
+
+        {/* Warning / Advisory Notice Banner */}
+        {hasActiveWarning && (
+          <div className="px-4 py-2.5 bg-amber-50/90 border-b border-amber-200/80 flex items-start gap-2 text-xs text-amber-900 flex-shrink-0">
+            <span className="text-sm leading-none mt-0.5">⚠️</span>
+            <div className="flex-1 leading-snug">
+              <span className="font-bold">Advisory Notice:</span> Products in this category may require age verification (18+) or special handling upon delivery.
+            </div>
+          </div>
+        )}
 
         {/* Products Grid */}
         <div className="flex-1 overflow-y-auto scrollbar-hide pb-24 md:pb-12 px-3 sm:px-4 md:px-6 py-3.5">
