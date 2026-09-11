@@ -386,12 +386,12 @@ export default function AdminHeaderCategory() {
               </div>
 
               {imagePreview ? (
-                <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-200">
-                  <div className="w-13 h-13 rounded-full border-2 border-rose-500/30 overflow-hidden bg-white shrink-0 p-1 flex items-center justify-center">
+                <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
+                  <div className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-full border-2 border-rose-500/30 overflow-hidden bg-white shrink-0 p-1 flex items-center justify-center">
                     <img
                       src={imagePreview}
                       alt="Category preview"
-                      className="w-full h-full object-contain rounded-full"
+                      className="w-full h-full max-w-full max-h-full object-contain rounded-full"
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -439,6 +439,7 @@ export default function AdminHeaderCategory() {
                         setImageFile(file);
                         setImagePreview(URL.createObjectURL(file));
                       }
+                      e.target.value = '';
                     }}
                     className="hidden"
                     disabled={isSubmitting}

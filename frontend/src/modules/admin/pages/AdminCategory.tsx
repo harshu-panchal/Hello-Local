@@ -23,12 +23,14 @@ import {
 } from "../../../utils/categoryUtils";
 
 // Flatten tree structure for filtering (works for both tree and list view)
-const flattenTree = (cats: Category[]): Category[] => {
+const flattenTree = (cats: Category[], parentCat?: Category): Category[] => {
   const result: Category[] = [];
   cats.forEach((cat) => {
     const { children, ...catWithoutChildren } = cat;
 
     let normalizedParentId: string | null = null;
+    let parentObj: any = (cat as any).parent || null;
+
     if (catWithoutChildren.parentId) {
       if (typeof catWithoutChildren.parentId === "string") {
         normalizedParentId = catWithoutChildren.parentId;
@@ -38,18 +40,28 @@ const flattenTree = (cats: Category[]): Category[] => {
       ) {
         normalizedParentId =
           (catWithoutChildren.parentId as { _id?: string })._id || null;
+        if (!parentObj) {
+          parentObj = catWithoutChildren.parentId;
+        }
       }
     }
 
-    result.push({
+    if (!parentObj && parentCat) {
+      parentObj = { _id: parentCat._id, name: parentCat.name };
+    }
+
+    const currentItem = {
       ...catWithoutChildren,
       parentId: normalizedParentId,
+      parent: parentObj,
       childrenCount:
         cat.childrenCount ||
         (children && children.length > 0 ? children.length : 0),
-    } as Category);
+    } as Category;
+
+    result.push(currentItem);
     if (children && children.length > 0) {
-      result.push(...flattenTree(children));
+      result.push(...flattenTree(children, currentItem));
     }
   });
   return result;

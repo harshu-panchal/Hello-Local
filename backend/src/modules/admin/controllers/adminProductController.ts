@@ -82,6 +82,18 @@ export const createCategory = asyncHandler(
         });
       }
 
+      // Enforce maximum 3-level category hierarchy: Root (L1) -> Subcategory (L2) -> Sub-subcategory (L3)
+      if (parent.parentId) {
+        const grandparent = await Category.findById(parent.parentId);
+        if (grandparent && grandparent.parentId) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Maximum category depth is 3 levels (Root → Subcategory → Sub-subcategory). Cannot create a subcategory under a Level 3 category.",
+          });
+        }
+      }
+
       // Inherit headerCategoryId from parent if not explicitly provided
       if (!finalHeaderCategoryId && parent.headerCategoryId) {
         finalHeaderCategoryId = parent.headerCategoryId.toString();

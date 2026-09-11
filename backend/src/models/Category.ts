@@ -194,6 +194,31 @@ const Category = (mongoose.models.Category as ICategoryModel) || mongoose.model<
           "Cannot create circular reference: parent cannot be a descendant",
       };
     }
+
+    // If category has child categories and newParent is Level 2 (has parentId),
+    // moving category here would push its children to Level 4!
+    if (newParent.parentId) {
+      const hasChildren = await Category.exists({ parentId: categoryId });
+      if (hasChildren) {
+        return {
+          valid: false,
+          error:
+            "Cannot move this category under a subcategory because its existing child categories would exceed the 3-level limit.",
+        };
+      }
+    }
+  }
+
+  // Check that newParent is not already a Level 3 category
+  if (newParent.parentId) {
+    const grandparent = await Category.findById(newParent.parentId);
+    if (grandparent && grandparent.parentId) {
+      return {
+        valid: false,
+        error:
+          "Maximum category depth is 3 levels. Cannot select a Level 3 category as parent.",
+      };
+    }
   }
 
   return { valid: true };

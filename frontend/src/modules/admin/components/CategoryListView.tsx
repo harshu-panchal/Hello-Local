@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Category } from "../../../services/api/admin/adminProductService";
 
 interface CategoryListViewProps {
@@ -23,6 +24,35 @@ export default function CategoryListView({
   itemsPerPage,
   onPageChange,
 }: CategoryListViewProps) {
+  // Map of category ID to category name for instant parent lookup
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach((c) => {
+      map.set(c._id, c.name);
+    });
+    return map;
+  }, [categories]);
+
+  const getParentName = (cat: Category) => {
+    if (cat.parent) {
+      if (typeof cat.parent === "string") return cat.parent;
+      if (cat.parent.name) return cat.parent.name;
+    }
+    if (typeof cat.parentId === "object" && cat.parentId !== null) {
+      const p = cat.parentId as { _id?: string; name?: string };
+      if (p.name) return p.name;
+      if (p._id && categoryMap.has(p._id)) return categoryMap.get(p._id)!;
+    }
+    if (cat.parentId) {
+      const pIdStr = String(cat.parentId);
+      if (categoryMap.has(pIdStr)) {
+        return categoryMap.get(pIdStr)!;
+      }
+      return "Unknown";
+    }
+    return "Root";
+  };
+
   const totalPages = Math.ceil(categories.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -141,14 +171,29 @@ export default function CategoryListView({
                   </div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm text-neutral-600">
-                    {category.parent
-                      ? typeof category.parent === "string"
-                        ? category.parent
-                        : category.parent.name
-                      : category.parentId
-                      ? "Unknown"
-                      : "Root"}
+                  <div className="text-sm">
+                    {(() => {
+                      const parentName = getParentName(category);
+                      if (parentName === "Root") {
+                        return (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-neutral-100 text-neutral-600">
+                            Root
+                          </span>
+                        );
+                      }
+                      if (parentName === "Unknown") {
+                        return (
+                          <span className="text-xs text-neutral-400">
+                            Unknown
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="font-medium text-neutral-800">
+                          {parentName}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
@@ -162,11 +207,15 @@ export default function CategoryListView({
                         </span>
                       )
                     ) : category.headerCategoryId ? (
-                      <span className="text-xs text-neutral-400">
-                        {typeof category.headerCategoryId === "string"
-                          ? category.headerCategoryId.slice(-6)
-                          : String(category.headerCategoryId).slice(-6)}
-                      </span>
+                      typeof category.headerCategoryId === "object" && category.headerCategoryId !== null ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                          {(category.headerCategoryId as any).name || "Assigned"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-neutral-400">
+                          {String(category.headerCategoryId).slice(-6)}
+                        </span>
+                      )
                     ) : (
                       <span className="text-xs text-yellow-600">
                         Not Assigned

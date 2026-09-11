@@ -119,6 +119,25 @@ export function validateParentChange(
     };
   }
 
+  // Enforce maximum 3-level depth limit
+  const parentDepth = getCategoryPath(newParentId, categories).length;
+  if (parentDepth >= 3) {
+    return {
+      valid: false,
+      error:
+        "Maximum category depth is 3 levels. Cannot select a Level 3 category as parent.",
+    };
+  }
+
+  const hasChildren = categories.some((c) => c.parentId === categoryId);
+  if (hasChildren && parentDepth >= 2) {
+    return {
+      valid: false,
+      error:
+        "Cannot move this category under a subcategory because its existing child categories would exceed the 3-level limit.",
+    };
+  }
+
   return { valid: true };
 }
 
@@ -170,24 +189,34 @@ export function getActiveCategories(categories: Category[]): Category[] {
 }
 
 /**
- * Get categories available as parents (excludes self and descendants)
+ * Get categories available as parents (excludes self and descendants, and caps depth to max 3 levels)
  */
 export function getAvailableParents(
   categoryId: string | null,
   categories: Category[]
 ): Category[] {
+  // Helper to get depth of a candidate parent (Level 1: depth 1, Level 2: depth 2)
+  const getDepth = (id: string) => getCategoryPath(id, categories).length;
+
   if (!categoryId) {
-    // For new categories, return all active root categories
-    return getActiveCategories(getRootCategories(categories));
+    // For new categories, return active categories with depth < 3 (Level 1 and Level 2)
+    return getActiveCategories(categories).filter((cat) => getDepth(cat._id) < 3);
   }
 
   // For existing categories, exclude self and all descendants
   const descendants = getAllDescendants(categoryId, categories);
   const excludeIds = new Set([categoryId, ...descendants.map((d) => d._id)]);
 
-  return getActiveCategories(categories).filter(
-    (cat) => !excludeIds.has(cat._id)
-  );
+  // If this category already has child subcategories, it cannot be placed under a Level 2 parent
+  const hasDirectChildren = categories.some((c) => c.parentId === categoryId);
+
+  return getActiveCategories(categories).filter((cat) => {
+    if (excludeIds.has(cat._id)) return false;
+    const parentDepth = getDepth(cat._id);
+    if (parentDepth >= 3) return false;
+    if (hasDirectChildren && parentDepth >= 2) return false;
+    return true;
+  });
 }
 
 /**

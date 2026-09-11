@@ -241,41 +241,49 @@ export default function CategoryTreeView({
 
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {/* Add Subcategory Button - Available for all categories (supports nested subcategories) */}
-                      <button
-                        onClick={() => onAddSubcategory(category)}
-                        className={`${
-                          isSubcategory ? "px-2 py-1" : "px-3 py-1.5"
-                        } text-xs font-medium text-white bg-rose-700 hover:bg-rose-800 rounded transition-colors`}
-                        title="Add Subcategory">
-                        {isSubcategory ? (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                        ) : (
-                          <>
+                      {/* Add Subcategory Button - Only available for Level 0 (Root) and Level 1 (Subcategory) */}
+                      {level < 2 ? (
+                        <button
+                          onClick={() => onAddSubcategory(category)}
+                          className={`${
+                            isSubcategory ? "px-2 py-1" : "px-3 py-1.5"
+                          } text-xs font-medium text-white bg-rose-700 hover:bg-rose-800 rounded transition-colors`}
+                          title="Add Subcategory">
+                          {isSubcategory ? (
                             <svg
-                              width="16"
-                              height="16"
+                              width="14"
+                              height="14"
                               viewBox="0 0 24 24"
                               fill="none"
                               stroke="currentColor"
-                              strokeWidth="2"
-                              className="inline-block mr-1">
+                              strokeWidth="2">
                               <line x1="12" y1="5" x2="12" y2="19"></line>
                               <line x1="5" y1="12" x2="19" y2="12"></line>
                             </svg>
-                            Add Subcategory
-                          </>
-                        )}
-                      </button>
+                          ) : (
+                            <>
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                className="inline-block mr-1">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                              </svg>
+                              Add Subcategory
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span
+                          className="px-2 py-1 text-[10px] font-semibold text-neutral-400 bg-neutral-100 border border-neutral-200 rounded select-none"
+                          title="Maximum category hierarchy reached (Level 3)">
+                          Max Level
+                        </span>
+                      )}
 
                       {/* Toggle Status Button */}
                       <button
