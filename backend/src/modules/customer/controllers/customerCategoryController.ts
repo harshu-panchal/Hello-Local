@@ -54,20 +54,37 @@ export const getCategoriesWithSubs = async (_req: Request, res: Response) => {
       });
     }
 
-    const categories = await Category.find({ status: "Active" })
-      .sort({ order: 1 })
+    // 1. Fetch all Root (parent-less) active categories
+    const categories = await Category.find({
+      status: "Active",
+      parentId: null,
+    })
+      .sort({ order: 1, name: 1 })
       .lean();
 
-    // Build product count maps to filter categories/subcategories that actually have products
-    const activeProductMatch = { status: "Active", publish: true };
+    const rootIds = categories.map((c) => c._id);
 
-    const [categoryCounts, subcategoryCounts] = await Promise.all([
+    // 2. Fetch child categories and product counts in parallel
+    const [childCategories, legacySubcategories, categoryCounts, subcategoryCounts] = await Promise.all([
+      Category.find({
+        parentId: { $in: rootIds },
+        status: "Active",
+      })
+        .sort({ order: 1, name: 1 })
+        .select("name image order slug icon isBestseller hasWarning parentId")
+        .lean(),
+      SubCategory.find({
+        category: { $in: rootIds },
+      })
+        .sort({ order: 1, name: 1 })
+        .select("name image order category")
+        .lean(),
       Product.aggregate([
-        { $match: activeProductMatch },
+        { $match: { status: "Active", publish: true } },
         { $group: { _id: "$category", count: { $sum: 1 } } },
       ]),
       Product.aggregate([
-        { $match: activeProductMatch },
+        { $match: { status: "Active", publish: true } },
         { $group: { _id: "$subcategory", count: { $sum: 1 } } },
       ]),
     ]);
@@ -86,40 +103,48 @@ export const getCategoriesWithSubs = async (_req: Request, res: Response) => {
       }
     });
 
-    categoriesWithSubs = await Promise.all(
-      categories.map(async (category) => {
-        const subcategories = await SubCategory.find({
-          category: category._id,
-        })
-          .sort({ order: 1 })
-          .select("name image order");
+    // Group child categories by parentId
+    const subsByParent = new Map<string, any[]>();
+    for (const sub of childCategories) {
+      const pId = sub.parentId?.toString();
+      if (!pId) continue;
+      if (!subsByParent.has(pId)) subsByParent.set(pId, []);
+      subsByParent.get(pId)!.push({
+        ...sub,
+        totalProducts: subcategoryCountMap.get(sub._id.toString()) || 0,
+      });
+    }
 
-        // Keep only subcategories that have at least one product
-        const filteredSubs = subcategories.filter((sub) =>
-          subcategoryCountMap.has(sub._id.toString())
-        );
+    // Merge legacy subcategories if any exist and aren't duplicated by name
+    for (const legSub of legacySubcategories) {
+      const pId = (legSub as any).category?.toString();
+      if (!pId) continue;
+      if (!subsByParent.has(pId)) subsByParent.set(pId, []);
+      const existing = subsByParent.get(pId)!;
+      if (!existing.some((s) => s.name.toLowerCase() === legSub.name.toLowerCase())) {
+        existing.push({
+          ...legSub,
+          totalProducts: subcategoryCountMap.get(legSub._id.toString()) || 0,
+        });
+      }
+    }
 
-        const directCategoryCount =
-          categoryCountMap.get(category._id.toString()) || 0;
-        const subsProductCount = filteredSubs.reduce(
-          (total, sub) =>
-            total + (subcategoryCountMap.get(sub._id.toString()) || 0),
-          0
-        );
-        const totalProducts = directCategoryCount + subsProductCount;
+    categoriesWithSubs = categories.map((category) => {
+      const catIdStr = category._id.toString();
+      const subcategories = subsByParent.get(catIdStr) || [];
+      const directCategoryCount = categoryCountMap.get(catIdStr) || 0;
+      const subsProductCount = subcategories.reduce(
+        (total: number, sub: any) => total + (sub.totalProducts || 0),
+        0
+      );
+      const totalProducts = directCategoryCount + subsProductCount;
 
-        // Exclude category if no products in category or its subcategories
-        if (totalProducts === 0) {
-          return null;
-        }
-
-        return {
-          ...category,
-          subcategories: filteredSubs,
-          totalProducts,
-        };
-      })
-    ).then((list) => list.filter(Boolean));
+      return {
+        ...category,
+        subcategories,
+        totalProducts,
+      };
+    });
 
     // Cache for 10 minutes
     cache.set(cacheKey, categoriesWithSubs, 10 * 60 * 1000);

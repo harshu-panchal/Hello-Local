@@ -34,7 +34,7 @@ export default function Categories() {
         setError(null);
 
         const [treeRes, homeRes] = await Promise.allSettled([
-          getCategories(true),
+          getCategories(true, true),
           getHomeContent(undefined, location?.latitude, location?.longitude),
         ]);
 
@@ -251,8 +251,12 @@ export default function Categories() {
           <div className="py-10">
             <UserEmptyState
               icon={<CategoryNavIcon size={28} className="text-[#FF2E7A]" />}
-              title="No categories match your search"
-              description="Try adjusting your filter keywords to find what you are looking for."
+              title={searchQuery ? "No categories match your search" : "No categories found"}
+              description={
+                searchQuery
+                  ? "Try adjusting your filter keywords to find what you are looking for."
+                  : "No categories are currently available. Please check back soon."
+              }
             />
           </div>
         )}
