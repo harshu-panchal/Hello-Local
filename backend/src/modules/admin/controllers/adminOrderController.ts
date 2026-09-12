@@ -178,10 +178,19 @@ export const updateOrderStatus = asyncHandler(
     }
 
 
-    // Trigger notification if status is "Processed" (Confirmed) or if paymentStatus changed to "Paid"
-    if (nextStatus === "Processed" || order.paymentStatus === "Paid") {
-      const io: SocketIOServer = req.app.get("io");
-      if (io) {
+    // Real-time socket notification to customer and sellers
+    const io: SocketIOServer = req.app.get("io");
+    if (io) {
+      // Real-time socket (for customer open tracking screen)
+      io.to(`order-${id}`).emit("order-status-update", {
+        orderId: id,
+        orderNumber: order.orderNumber,
+        status: nextStatus,
+        updatedAt: new Date(),
+      });
+
+      // Trigger notification for sellers if status is "Processed" (Confirmed) or if paymentStatus changed to "Paid"
+      if (nextStatus === "Processed" || order.paymentStatus === "Paid") {
         notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
       }
     }
@@ -329,11 +338,11 @@ export const assignDeliveryBoy = asyncHandler(
       .populate("deliveryBoy", "name mobile email")
       .populate("items");
 
-    // Tell the courier. Assignment used to be silent — no socket event and no
-    // push — so a partner only discovered the job by refreshing. (#H-30)
+    // Tell the courier and customer.
     try {
       const io = req.app.get("io");
       if (io) {
+        // Notify courier
         io.to(`delivery-${deliveryBoyId}`).emit("order-assigned", {
           orderId: order._id,
           orderNumber: order.orderNumber,
@@ -341,6 +350,21 @@ export const assignDeliveryBoy = asyncHandler(
           total: order.total,
           deliveryAddress: order.deliveryAddress,
           message: "A new order has been assigned to you",
+        });
+
+        // Notify customer in real-time
+        io.to(`order-${order._id}`).emit("order-courier-assigned", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          deliveryBoy: {
+            _id: deliveryBoy._id,
+            name: deliveryBoy.name,
+            phone: deliveryBoy.mobile,
+            vehicleNumber: (deliveryBoy as any).vehicleNumber || (deliveryBoy as any).vehicleDetails?.number,
+            profileImage: (deliveryBoy as any).profileImage,
+          },
+          deliveryBoyStatus: "Assigned",
+          message: `Courier ${deliveryBoy.name} has been assigned to your order.`,
         });
       }
     } catch (socketErr) {

@@ -107,6 +107,9 @@ export default function CategoryListView({
                 Status
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                Commission
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                 Order
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
@@ -232,6 +235,15 @@ export default function CategoryListView({
                     }`}>
                     {category.status}
                   </span>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-xs">
+                  {category.commissionRate && category.commissionRate > 0 ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      {category.commissionRate}%
+                    </span>
+                  ) : (
+                    <span className="text-neutral-400 font-medium">Default</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-neutral-600">
                   {category.order || 0}

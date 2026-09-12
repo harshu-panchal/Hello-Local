@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
 import Delivery from "../../../models/Delivery";
+import Notification from "../../../models/Notification";
+import Admin from "../../../models/Admin";
 import {
   sendSmsOtp as sendSmsOtpService,
   verifySmsOtp as verifySmsOtpService,
 } from "../../../services/otpService";
 import { generateToken } from "../../../services/jwtService";
 import { asyncHandler } from "../../../utils/asyncHandler";
-// import { uploadDocument } from "../../../services/uploadService"; // File does not exist
+import { sendNotificationToUser } from "../../../services/firebaseAdmin";
 
 /**
  * Send SMS OTP to delivery mobile number
@@ -188,7 +190,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Create new delivery partner
-  await Delivery.create({
+  const newDelivery = await Delivery.create({
     name,
     mobile,
     email,
@@ -209,13 +211,71 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     cashCollected: 0,
   } as any);
 
-  // Generate token (Optional: usually registration doesn't login immediately if approval needed, but for seamless UX we can)
-  // However, FE Flow: Register -> OTP -> Login. So we return success, then FE calls sendSmsOtp.
+  // Notify Admin of new driver registration
+  try {
+    const notification = await Notification.create({
+      recipientType: "Admin",
+      title: "🛵 New Driver Registered",
+      message: `${name} (${mobile}) has registered as a delivery partner in ${city || "your area"}. Awaiting verification and activation.`,
+      type: "Info",
+      link: `/admin/delivery-boy/manage?search=${encodeURIComponent(mobile)}`,
+      actionLabel: "Review Courier",
+      priority: "High",
+      isRead: false,
+    });
+
+    // Real-time Socket Notification to Admin room
+    const io = req.app.get("io");
+    if (io) {
+      io.to("admin-notifications").emit("admin-notification", {
+        type: "NEW_DELIVERY_PARTNER",
+        notificationId: notification._id.toString(),
+        title: "🛵 New Driver Registered",
+        message: `${name} (${mobile}) has registered as a delivery partner in ${city || "your area"}.`,
+        courierId: newDelivery._id.toString(),
+        name,
+        mobile,
+        city: city || "",
+        timestamp: new Date(),
+        link: `/admin/delivery-boy/manage?search=${encodeURIComponent(mobile)}`,
+        actionLabel: "Review Courier",
+      });
+      console.log(`📤 Emitted admin-notification for new delivery partner: ${name} (${mobile})`);
+    }
+
+    // Push notification to admins (if FCM tokens registered)
+    try {
+      const admins = await Admin.find().select("_id");
+      for (const admin of admins) {
+        sendNotificationToUser(
+          admin._id.toString(),
+          "Admin",
+          {
+            title: "🛵 New Driver Registered",
+            body: `${name} (${mobile}) has registered as a delivery partner in ${city || "your area"}.`,
+            data: {
+              url: `/admin/delivery-boy/manage?search=${encodeURIComponent(mobile)}`,
+            },
+          },
+          true
+        ).catch(() => {});
+      }
+    } catch (pushErr) {
+      // Non-blocking for push
+    }
+  } catch (notifErr) {
+    console.error("Failed to notify admin of delivery partner registration:", notifErr);
+  }
 
   return res.status(201).json({
     success: true,
     message: "Delivery partner registered successfully.",
-    // No token returned here, flow continues to OTP
+    data: {
+      id: newDelivery._id,
+      name: newDelivery.name,
+      mobile: newDelivery.mobile,
+      email: newDelivery.email,
+    },
   });
 });
 

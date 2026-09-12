@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { uploadImage, uploadImages } from "../../../services/api/uploadService";
 import {
@@ -34,6 +34,7 @@ import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerCard } from "../components/common/SellerCard";
 import { SellerButton } from "../components/common/SellerButton";
 import { SellerFormField } from "../components/common/SellerFormField";
+import SearchableSelect from "../../../components/ui/SearchableSelect";
 
 export default function SellerAddProduct() {
   const navigate = useNavigate();
@@ -101,6 +102,60 @@ export default function SellerAddProduct() {
     []
   );
   const [shops, setShops] = useState<Shop[]>([]);
+
+  // Memoized options for SearchableSelect
+  const headerCategoryOptions = useMemo(
+    () =>
+      headerCategories.map((hc) => ({
+        value: hc._id,
+        label: hc.name,
+      })),
+    [headerCategories]
+  );
+
+  const categoryOptions = useMemo(() => {
+    let list = categories;
+    if (formData.headerCategory) {
+      list = list.filter((cat: any) => {
+        const hId =
+          typeof cat.headerCategoryId === "object"
+            ? cat.headerCategoryId?._id
+            : cat.headerCategoryId;
+        return hId === formData.headerCategory;
+      });
+    }
+    return list.map((c) => ({
+      value: c._id,
+      label: c.name,
+    }));
+  }, [categories, formData.headerCategory]);
+
+  const subcategoryOptions = useMemo(
+    () =>
+      subcategories.map((s) => ({
+        value: s._id,
+        label: s.subcategoryName,
+      })),
+    [subcategories]
+  );
+
+  const brandOptions = useMemo(
+    () =>
+      brands.map((b) => ({
+        value: b._id,
+        label: b.name,
+      })),
+    [brands]
+  );
+
+  const taxOptions = useMemo(
+    () =>
+      taxes.map((t) => ({
+        value: t._id,
+        label: `${t.name} (${t.percentage}%)`,
+      })),
+    [taxes]
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -667,74 +722,108 @@ export default function SellerAddProduct() {
 
             <div>
               <SellerFormField label="Header Category">
-                <select
+                <SearchableSelect
                   name="headerCategory"
+                  options={headerCategoryOptions}
                   value={formData.headerCategory}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 min-h-[42px]"
-                >
-                  <option value="">Select Header Category</option>
-                  {headerCategories.map((hc) => (
-                    <option key={hc._id} value={hc._id}>
-                      {hc.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      headerCategory: val || "",
+                      category: "",
+                      subcategory: "",
+                      subSubCategory: "",
+                    }));
+                  }}
+                  placeholder="Select Header Category"
+                  searchPlaceholder="Type to search header categories..."
+                  emptyMessage="No header categories found"
+                  clearLabel="-- Clear Header Category --"
+                  clearValue=""
+                  accentColor="purple"
+                />
               </SellerFormField>
             </div>
 
             <div>
               <SellerFormField label="Main Category" required={formData.isShopByStoreOnly !== "Yes"}>
-                <select
+                <SearchableSelect
                   name="category"
+                  options={categoryOptions}
                   value={formData.category}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 min-h-[42px]"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      category: val || "",
+                      subcategory: "",
+                      subSubCategory: "",
+                    }));
+                  }}
+                  placeholder={
+                    formData.headerCategory
+                      ? "Select Category"
+                      : "Select Category (or choose Header Category)"
+                  }
+                  searchPlaceholder="Type to search categories..."
+                  emptyMessage="No categories found"
+                  clearLabel="-- Clear Category --"
+                  clearValue=""
+                  accentColor="purple"
+                />
               </SellerFormField>
             </div>
 
             <div>
               <SellerFormField label="Subcategory">
-                <select
+                <SearchableSelect
                   name="subcategory"
-                  value={formData.subcategory}
-                  onChange={handleChange}
                   disabled={!formData.category}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 disabled:opacity-50 min-h-[42px]"
-                >
-                  <option value="">Select Subcategory</option>
-                  {subcategories.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.subcategoryName}
-                    </option>
-                  ))}
-                </select>
+                  options={subcategoryOptions}
+                  value={formData.subcategory}
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      subcategory: val || "",
+                      subSubCategory: "",
+                    }));
+                  }}
+                  placeholder={
+                    formData.category
+                      ? "Select Subcategory"
+                      : "Select Category First"
+                  }
+                  searchPlaceholder="Type to search subcategories..."
+                  emptyMessage={
+                    formData.category
+                      ? "No subcategories found for this category"
+                      : "Select Category First"
+                  }
+                  clearLabel="-- Clear Subcategory --"
+                  clearValue=""
+                  accentColor="purple"
+                />
               </SellerFormField>
             </div>
 
             <div>
               <SellerFormField label="Brand">
-                <select
+                <SearchableSelect
                   name="brand"
+                  options={brandOptions}
                   value={formData.brand}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 min-h-[42px]"
-                >
-                  <option value="">Select Brand</option>
-                  {brands.map((b) => (
-                    <option key={b._id} value={b._id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      brand: val || "",
+                    }));
+                  }}
+                  placeholder="Select Brand (Optional)"
+                  searchPlaceholder="Type to search brands..."
+                  emptyMessage="No brands found"
+                  clearLabel="-- None (No Brand) --"
+                  clearValue=""
+                  accentColor="purple"
+                />
               </SellerFormField>
             </div>
 
@@ -933,19 +1022,23 @@ export default function SellerAddProduct() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <SellerFormField label="GST Tax Slab">
-                <select
+                <SearchableSelect
                   name="tax"
+                  options={taxOptions}
                   value={formData.tax}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-purple-600 min-h-[42px]"
-                >
-                  <option value="">Select Applicable Tax</option>
-                  {taxes.map((t) => (
-                    <option key={t._id} value={t._id}>
-                      {t.name} ({t.percentage}%)
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      tax: val || "",
+                    }));
+                  }}
+                  placeholder="Select Applicable Tax"
+                  searchPlaceholder="Type to search tax slabs..."
+                  emptyMessage="No tax slabs found"
+                  clearLabel="-- None (0% Tax) --"
+                  clearValue=""
+                  accentColor="purple"
+                />
               </SellerFormField>
             </div>
 

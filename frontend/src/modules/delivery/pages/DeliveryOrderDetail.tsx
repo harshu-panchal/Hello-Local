@@ -500,26 +500,35 @@ export default function DeliveryOrderDetail() {
         );
     }
 
-    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked up', 'Out for Delivery', 'Delivered'];
+    const statusFlow = ['Assigned', 'Picked up', 'Out for Delivery', 'Delivered'];
 
-    let currentStatusIndex = statusFlow.indexOf(order.status as DeliveryOrderStatus);
-    // Handle cases where status might not be in the flow (e.g. Cancelled)
-    if (currentStatusIndex === -1 && (order.status === 'Cancelled' || order.status === 'Returned')) {
-        // Maybe show a different UI for cancelled/returned orders
-        currentStatusIndex = -1;
-    }
+    const getDeliveryStatusIndex = (status: string) => {
+        if (['Pending', 'Received', 'Accepted', 'Processed', 'Shipped', 'Ready for pickup'].includes(status)) {
+            return 0;
+        }
+        if (status === 'Picked up') {
+            return 1;
+        }
+        if (status === 'Out for Delivery' || status === 'On the way') {
+            return 2;
+        }
+        if (status === 'Delivered' || status === 'Completed') {
+            return 3;
+        }
+        return -1;
+    };
+
+    const currentStatusIndex = getDeliveryStatusIndex(order.status);
 
     const handleStatusChange = async (newStatus: DeliveryOrderStatus) => {
         if (!id) return;
         try {
-            setLoading(true); // Or use a separate loading state for the action
+            setLoading(true);
             const updatedOrder = await updateOrderStatus(id, newStatus);
-            // Verify the update was successful and update local state
             if (updatedOrder && updatedOrder.data) {
                 setOrder(updatedOrder.data);
                 showToast(`Order status updated to ${newStatus}`, 'success');
             } else {
-                // Fallback - re-fetch everything
                 await fetchOrder();
                 showToast(`Order status updated to ${newStatus}`, 'success');
             }
@@ -529,9 +538,12 @@ export default function DeliveryOrderDetail() {
         }
     };
 
-    const getNextStatus = () => {
-        if (currentStatusIndex !== -1 && currentStatusIndex < statusFlow.length - 1) {
-            return statusFlow[currentStatusIndex + 1];
+    const getNextStatus = (): DeliveryOrderStatus | null => {
+        if (['Pending', 'Received', 'Accepted', 'Processed', 'Shipped'].includes(order.status)) {
+            return 'Picked up';
+        }
+        if (order.status === 'Picked up') {
+            return 'Out for Delivery';
         }
         return null;
     };
@@ -860,70 +872,56 @@ export default function DeliveryOrderDetail() {
                             </p>
                         )}
 
-                        {/* 4-digit OTP Input - Always visible but disabled until OTP is sent */}
+                        {/* 4-digit OTP Input */}
                         <input
                             type="text"
                             value={otpValue}
                             onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                            placeholder="Enter 4-digit OTP"
-                            disabled={!showOtpInput}
-                            className={`w-full px-4 py-3 border rounded-xl text-lg font-semibold text-center mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 ${showOtpInput ? 'border-neutral-300 bg-white' : 'border-neutral-200 bg-neutral-100 text-neutral-400'
-                                }`}
+                            placeholder="Enter customer 4-digit OTP"
+                            className="w-full px-4 py-3 border border-neutral-300 bg-white rounded-xl text-lg font-semibold text-center mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
                             maxLength={4}
                         />
 
-                        <div className="flex gap-3">
-                            {!showOtpInput ? (
-                                <button
-                                    onClick={handleSendOtp}
-                                    disabled={!getOtpEnabled || otpSending}
-                                    className={`flex-1 py-3 rounded-xl font-semibold transition-all ${getOtpEnabled && !otpSending
-                                            ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
-                                            : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                                        }`}
-                                >
-                                    {otpSending ? 'Sending...' : getOtpEnabled ? 'Get OTP' : 'Move within 500m to get OTP'}
-                                </button>
-                            ) : (
-                                <>
-                                    <button
-                                        onClick={() => {
-                                            setShowOtpInput(false);
-                                            setOtpValue('');
-                                        }}
-                                        className="flex-1 py-3 rounded-xl bg-neutral-200 text-neutral-700 font-semibold hover:bg-neutral-300 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleVerifyOtp}
-                                        className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors"
-                                        disabled={otpVerifying || otpValue.length !== 4}
-                                    >
-                                        {otpVerifying ? 'Verifying...' : 'Verify OTP'}
-                                    </button>
-                                </>
-                            )}
+                        <div className="flex gap-2.5">
+                            <button
+                                onClick={handleSendOtp}
+                                disabled={otpSending}
+                                className="px-3.5 py-3 rounded-xl font-semibold text-xs border border-neutral-300 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors"
+                            >
+                                {otpSending ? 'Resending...' : 'Resend SMS OTP'}
+                            </button>
+                            <button
+                                onClick={handleVerifyOtp}
+                                className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm text-sm"
+                                disabled={otpVerifying || otpValue.length !== 4}
+                            >
+                                {otpVerifying ? 'Verifying...' : 'Verify OTP & Complete Delivery'}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
-            {/* Hide this button when order is "Out for Delivery" because OTP section is shown instead */}
-            {nextStatus && order.status !== 'Picked up' && order.status !== 'Out for Delivery' && !showOtpInput && (
+            {/* Floating Glassmorphic Action Button Dock - Order Picked Up or Start Delivery */}
+            {nextStatus && order.status !== 'Out for Delivery' && (
                 <div className="fixed bottom-24 left-6 right-6 z-30">
                     <button
                         onClick={() => handleStatusChange(nextStatus)}
-                        className="w-full py-4 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
+                        className="w-full py-4 rounded-2xl bg-black/85 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-base sm:text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
                         disabled={loading}
                     >
                         <span className="relative z-10">
-                            {loading ? 'Updating...' : nextStatus === 'Picked up' ? 'Order Taken' : `Mark as ${nextStatus}`}
+                            {loading
+                                ? 'Updating...'
+                                : nextStatus === 'Picked up'
+                                ? 'Order Picked Up / Taken'
+                                : 'Start Delivery (Out for Delivery)'}
                         </span>
-                        {!loading && <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
-                            <Icons.ChevronLeft className="rotate-180" size={18} />
-                        </div>}
+                        {!loading && (
+                            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
+                                <Icons.ChevronLeft className="rotate-180" size={18} />
+                            </div>
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
                     </button>
                 </div>

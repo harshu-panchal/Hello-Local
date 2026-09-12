@@ -226,6 +226,20 @@ export const updateSeller = asyncHandler(
       delete updateData.serviceRadiusKm;
     }
 
+    // Handle commission and commissionRate synchronization & validation
+    if (updateData.commission !== undefined || updateData.commissionRate !== undefined) {
+      const commVal = updateData.commission !== undefined ? Number(updateData.commission) : Number(updateData.commissionRate);
+      if (!isNaN(commVal) && commVal >= 0 && commVal <= 100) {
+        updateData.commission = commVal;
+        updateData.commissionRate = commVal;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Commission rate must be a valid number between 0 and 100%",
+        });
+      }
+    }
+
     const seller = await Seller.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,

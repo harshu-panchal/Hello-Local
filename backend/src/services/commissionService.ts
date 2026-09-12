@@ -13,7 +13,10 @@ import WalletTransaction from "../models/WalletTransaction";
 
 /**
  * Get the effective commission rate for a product/item
- * Priority: 1. SubSubCategory -> 2. SubCategory -> 3. Category -> 4. Seller -> 5. Global
+ * 3-Tier Priority:
+ * 1. Category Rate (Highest: applies to any product belonging to this category or its parent)
+ * 2. Seller Rate (Secondary: individual rate agreed with this vendor)
+ * 3. Global Default Rate (Fallback: configured platform-wide in Billing & Charges)
  */
 export const getOrderItemCommissionRate = async (
   productId: string,
@@ -23,7 +26,28 @@ export const getOrderItemCommissionRate = async (
     const product = await Product.findById(productId);
     if (!product) return 10; // Default fallback
 
-    // 1. Check SubSubCategory
+    // 1. Check Category rate (Level 3)
+    if (product.category) {
+      const cat = await Category.findById(product.category);
+      if (cat?.commissionRate && cat.commissionRate > 0) {
+        return cat.commissionRate;
+      }
+      // If child category doesn't have rate, check its parent category
+      if (cat?.parentId) {
+        const parentCat = await Category.findById(cat.parentId);
+        if (parentCat?.commissionRate && parentCat.commissionRate > 0) {
+          return parentCat.commissionRate;
+        }
+      }
+    }
+
+    // Also check subcategory / subSubCategory if present for backward compatibility
+    if (product.subcategory) {
+      const subCat = await SubCategory.findById(product.subcategory);
+      if (subCat?.commissionRate && subCat.commissionRate > 0) {
+        return subCat.commissionRate;
+      }
+    }
     if (product.subSubCategory) {
       const subSubCat = await Category.findById(product.subSubCategory);
       if (subSubCat?.commissionRate && subSubCat.commissionRate > 0) {
@@ -31,43 +55,29 @@ export const getOrderItemCommissionRate = async (
       }
     }
 
-    // 2. Check SubCategory
-    if (product.subcategory) {
-      const subCat = await SubCategory.findById(product.subcategory);
-      if (subCat?.commissionRate && subCat.commissionRate > 0) {
-        return subCat.commissionRate;
-      }
-    }
-
-    // 3. Check Category
-    if (product.category) {
-      const cat = await Category.findById(product.category);
-      if (cat?.commissionRate && cat.commissionRate > 0) {
-        return cat.commissionRate;
-      }
-    }
-
-    // 4. Check Seller specific rate
+    // 2. Check Seller specific rate (Level 4)
     const finalSellerId = sellerId || product.seller.toString();
     const seller = await Seller.findById(finalSellerId);
-    if (seller?.commission && seller.commission > 0) {
-      return seller.commission;
+    if (seller) {
+      if (seller.commissionRate !== undefined && seller.commissionRate !== null && seller.commissionRate > 0) {
+        return seller.commissionRate;
+      }
+      if (seller.commission !== undefined && seller.commission !== null && seller.commission > 0) {
+        return seller.commission;
+      }
     }
 
-    // 5. Global Default
+    // 3. Global Default (Level 5) from Billing & Charges
     const settings = await AppSettings.findOne();
-    return settings?.globalCommissionRate !== undefined
-      ? settings.globalCommissionRate
-      : 10;
+    // @ts-ignore
+    const globalRate = settings?.globalCommissionRate ?? settings?.defaultCommission;
+    return globalRate !== undefined && globalRate !== null ? globalRate : 10;
   } catch (error) {
     console.error("Error calculating commission rate:", error);
     return 10;
   }
 };
 
-/**
- * Get commission rate for a seller
- */
 /**
  * Get commission rate for a seller
  */
@@ -80,16 +90,18 @@ export const getSellerCommissionRate = async (
       throw new Error("Seller not found");
     }
 
-    // Use individual rate if set, otherwise use global default
-    if (seller.commissionRate !== undefined && seller.commissionRate !== null) {
+    // Check individual rate (checking both commissionRate and commission)
+    if (seller.commissionRate !== undefined && seller.commissionRate !== null && seller.commissionRate > 0) {
       return seller.commissionRate;
+    }
+    if (seller.commission !== undefined && seller.commission !== null && seller.commission > 0) {
+      return seller.commission;
     }
 
     const settings = await AppSettings.findOne();
     // @ts-ignore
-    return settings && settings.globalCommissionRate !== undefined
-      ? settings.globalCommissionRate
-      : 10;
+    const globalRate = settings?.globalCommissionRate ?? settings?.defaultCommission;
+    return globalRate !== undefined && globalRate !== null ? globalRate : 10;
   } catch (error) {
     console.error("Error getting seller commission rate:", error);
     return 10; // Default fallback

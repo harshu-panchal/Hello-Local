@@ -12,10 +12,11 @@ export interface DeliveryBoy {
   address: string;
   city: string;
   pincode?: string;
-  bankAccountNumber: string;
-  bankName: string;
-  accountName: string;
-  ifscCode: string;
+  bankAccountNumber?: string;
+  accountNumber?: string;
+  bankName?: string;
+  accountName?: string;
+  ifscCode?: string;
   otherPaymentInformation?: string;
   bonusType?: string;
   commissionType: "Percentage" | "Fixed";
@@ -26,6 +27,10 @@ export interface DeliveryBoy {
   cashCollected: number;
   status: "Active" | "Inactive";
   available: "Available" | "Not Available";
+  drivingLicense?: string;
+  nationalIdentityCard?: string;
+  vehicleNumber?: string;
+  vehicleType?: string;
   currentLocation?: {
     latitude: number;
     longitude: number;

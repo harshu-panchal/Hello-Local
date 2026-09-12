@@ -4,15 +4,24 @@ import { useAuth } from '../../../context/AuthContext';
 import { getSocketBaseURL } from '../../../services/api/config';
 
 export interface AdminSocketNotification {
-    type: 'NEW_ORDER' | 'STATUS_UPDATE' | 'ORDER_CANCELLED';
-    orderId: string;
-    orderNumber: string;
-    status: string;
+    type: 'NEW_ORDER' | 'STATUS_UPDATE' | 'ORDER_CANCELLED' | 'NEW_DELIVERY_PARTNER' | string;
+    orderId?: string;
+    orderNumber?: string;
+    status?: string;
     paymentMethod?: string;
     paymentStatus?: string;
-    totalAmount: number;
+    totalAmount?: number;
     customerName?: string;
-    timestamp: Date;
+    timestamp?: Date;
+    title?: string;
+    message?: string;
+    notificationId?: string;
+    name?: string;
+    mobile?: string;
+    city?: string;
+    courierId?: string;
+    link?: string;
+    actionLabel?: string;
 }
 
 /**

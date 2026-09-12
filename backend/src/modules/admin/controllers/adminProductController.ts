@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Category from "../../../models/Category";
 import SubCategory from "../../../models/SubCategory";
@@ -754,17 +755,103 @@ export const getSubCategories = asyncHandler(
       pagination,
     } = req.query;
 
-    const query: any = {};
+    const querySub: any = {};
+    const queryCat: any = {};
+
+    // Get root categories to resolve category names
+    const rootCats = await Category.find({ parentId: null })
+      .select("_id name slug image")
+      .lean();
+    const rootCatMap = new Map(rootCats.map((c: any) => [c._id.toString(), c]));
+    const rootCatIds = rootCats.map((c: any) => c._id);
+
     if (category) {
-      query.category = category;
-    }
-    if (search && typeof search === "string" && search.trim()) {
-      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      query.name = { $regex: escapedSearch, $options: "i" };
+      querySub.category = category;
+      queryCat.parentId = category;
+    } else {
+      queryCat.parentId = { $in: rootCatIds };
     }
 
-    const sort: any = {};
-    sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
+    if (search && typeof search === "string" && search.trim()) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      querySub.name = { $regex: escapedSearch, $options: "i" };
+      queryCat.name = { $regex: escapedSearch, $options: "i" };
+    }
+
+    const [subcategoriesFromSub, subcategoriesFromCat] = await Promise.all([
+      SubCategory.find(querySub).populate("category", "name image").lean(),
+      Category.find(queryCat).populate("parentId", "name slug image").lean(),
+    ]);
+
+    const mappedSub = subcategoriesFromSub.map((sub: any) => ({
+      ...sub,
+      _id: sub._id.toString(),
+      id: sub._id.toString(),
+      isNewModel: false,
+    }));
+
+    const mappedCat = subcategoriesFromCat.map((cat: any) => {
+      const parent = cat.parentId || rootCatMap.get(cat.parentId?.toString());
+      return {
+        ...cat,
+        _id: cat._id.toString(),
+        id: cat._id.toString(),
+        category: parent ? { _id: parent._id.toString(), name: parent.name, image: parent.image } : null,
+        isNewModel: true,
+      };
+    });
+
+    const combinedMap = new Map<string, any>();
+    for (const item of mappedSub) combinedMap.set(item._id, item);
+    for (const item of mappedCat) combinedMap.set(item._id, item);
+    const combined = Array.from(combinedMap.values());
+
+    // Product counts
+    const allIds = combined.map((s) => s._id);
+    const objectIds = allIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    const productCountAgg = await Product.aggregate([
+      {
+        $match: {
+          $or: [
+            { subcategory: { $in: objectIds } },
+            { category: { $in: objectIds } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: { $ifNull: ["$subcategory", "$category"] },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const productCountMap = new Map<string, number>(
+      productCountAgg.map((r: any) => [r._id?.toString(), r.count])
+    );
+
+    combined.forEach((sub) => {
+      sub.totalProduct = productCountMap.get(sub._id) ?? 0;
+    });
+
+    // Sorting
+    const sortField = sortBy as string;
+    const sortDir = sortOrder === "desc" ? -1 : 1;
+    combined.sort((a, b) => {
+      let valA: any = a[sortField];
+      let valB: any = b[sortField];
+      if (sortField === "category") {
+        valA = a.category?.name || "";
+        valB = b.category?.name || "";
+      }
+      if (typeof valA === "string" && typeof valB === "string") {
+        return valA.localeCompare(valB) * sortDir;
+      }
+      return (valA > valB ? 1 : valA < valB ? -1 : 0) * sortDir;
+    });
 
     const isPaginated = pagination !== "false" && (page !== undefined || limit !== undefined);
 
@@ -772,31 +859,13 @@ export const getSubCategories = asyncHandler(
       const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
       const limitNum = Math.max(1, parseInt(limit as string, 10) || 10);
       const skip = (pageNum - 1) * limitNum;
-
-      const total = await SubCategory.countDocuments(query);
-      const subcategories = await SubCategory.find(query)
-        .populate("category", "name")
-        .sort(sort)
-        .skip(skip)
-        .limit(limitNum);
-
-      const subcategoriesWithCounts = await Promise.all(
-        subcategories.map(async (subcategory) => {
-          const productCount = await Product.countDocuments({
-            subcategory: subcategory._id,
-          });
-
-          return {
-            ...subcategory.toObject(),
-            totalProduct: productCount,
-          };
-        })
-      );
+      const total = combined.length;
+      const data = combined.slice(skip, skip + limitNum);
 
       return res.status(200).json({
         success: true,
         message: "Subcategories fetched successfully",
-        data: subcategoriesWithCounts,
+        data,
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -806,28 +875,10 @@ export const getSubCategories = asyncHandler(
       });
     }
 
-    const subcategories = await SubCategory.find(query)
-      .populate("category", "name")
-      .sort(sort);
-
-    // Get product counts for each subcategory
-    const subcategoriesWithCounts = await Promise.all(
-      subcategories.map(async (subcategory) => {
-        const productCount = await Product.countDocuments({
-          subcategory: subcategory._id,
-        });
-
-        return {
-          ...subcategory.toObject(),
-          totalProduct: productCount,
-        };
-      })
-    );
-
     return res.status(200).json({
       success: true,
       message: "Subcategories fetched successfully",
-      data: subcategoriesWithCounts,
+      data: combined,
     });
   }
 );
@@ -840,7 +891,13 @@ export const updateSubCategory = asyncHandler(
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    const currentSub = await SubCategory.findById(id);
+    let currentSub: any = await SubCategory.findById(id);
+    let isCategoryModel = false;
+    if (!currentSub) {
+      currentSub = await Category.findOne({ _id: id, parentId: { $ne: null } });
+      if (currentSub) isCategoryModel = true;
+    }
+
     if (!currentSub) {
       return res.status(404).json({
         success: false,
@@ -856,14 +913,20 @@ export const updateSubCategory = asyncHandler(
           message: "Subcategory name must be at least 2 characters",
         });
       }
-      const targetCategory = updateData.category || currentSub.category;
+      const targetCategory = updateData.category || (isCategoryModel ? currentSub.parentId : currentSub.category);
       if (targetCategory) {
         const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const duplicate = await SubCategory.findOne({
-          _id: { $ne: id },
-          category: targetCategory,
-          name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-        });
+        const duplicate = isCategoryModel
+          ? await Category.findOne({
+              _id: { $ne: id },
+              parentId: targetCategory,
+              name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+            })
+          : await SubCategory.findOne({
+              _id: { $ne: id },
+              category: targetCategory,
+              name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+            });
         if (duplicate) {
           return res.status(400).json({
             success: false,
@@ -874,10 +937,22 @@ export const updateSubCategory = asyncHandler(
       updateData.name = trimmedName;
     }
 
-    const subcategory = await SubCategory.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    }).populate("category", "name");
+    let subcategory: any;
+    if (isCategoryModel) {
+      if (updateData.category) {
+        updateData.parentId = updateData.category;
+        delete updateData.category;
+      }
+      subcategory = await Category.findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true,
+      }).populate("parentId", "name");
+    } else {
+      subcategory = await SubCategory.findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true,
+      }).populate("category", "name");
+    }
 
     // Invalidate customer category caches so updated subcategory appears immediately
     cache.delete("customer-categories-tree");
@@ -899,7 +974,9 @@ export const deleteSubCategory = asyncHandler(
     const { id } = req.params;
 
     // Check if subcategory has products
-    const productCount = await Product.countDocuments({ subcategory: id });
+    const productCount = await Product.countDocuments({
+      $or: [{ subcategory: id }, { category: id }],
+    });
     if (productCount > 0) {
       return res.status(400).json({
         success: false,
@@ -907,7 +984,12 @@ export const deleteSubCategory = asyncHandler(
       });
     }
 
-    const subcategory = await SubCategory.findByIdAndDelete(id);
+    let subcategory: any = await SubCategory.findByIdAndDelete(id);
+    let isCategoryModel = false;
+    if (!subcategory) {
+      subcategory = await Category.findOneAndDelete({ _id: id, parentId: { $ne: null } });
+      if (subcategory) isCategoryModel = true;
+    }
 
     if (!subcategory) {
       return res.status(404).json({
@@ -917,9 +999,12 @@ export const deleteSubCategory = asyncHandler(
     }
 
     // Update category subcategory count
-    await Category.findByIdAndUpdate(subcategory.category, {
-      $inc: { totalSubcategories: -1 },
-    });
+    const parentId = isCategoryModel ? subcategory.parentId : subcategory.category;
+    if (parentId) {
+      await Category.findByIdAndUpdate(parentId, {
+        $inc: { totalSubcategories: -1 },
+      });
+    }
 
     // Invalidate customer category caches
     cache.delete("customer-categories-tree");

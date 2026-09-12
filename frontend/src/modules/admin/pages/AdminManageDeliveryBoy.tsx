@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   getDeliveryBoys,
   updateDeliveryBoyStatus,
@@ -12,6 +12,7 @@ import { useToast } from "../../../context/ToastContext";
 
 export default function AdminManageDeliveryBoy() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, token } = useAuth();
   const { showToast } = useToast();
 
@@ -35,6 +36,20 @@ export default function AdminManageDeliveryBoy() {
   // Deletion Modal State
   const [deleteTarget, setDeleteTarget] = useState<DeliveryBoy | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Courier Details & KYC Modal State
+  const [viewingCourier, setViewingCourier] = useState<DeliveryBoy | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Read initial search from URL params if present (e.g. from notification link)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setSearchTerm(q);
+      setDebouncedSearch(q);
+    }
+  }, [location.search]);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -573,7 +588,15 @@ export default function AdminManageDeliveryBoy() {
                       #{deliveryBoy._id.slice(-6).toUpperCase()}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-bold text-neutral-900">{deliveryBoy.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => setViewingCourier(deliveryBoy)}
+                        className="font-bold text-neutral-900 hover:text-rose-700 transition-colors text-left flex items-center gap-1 group"
+                        title="Click to view full driver details & KYC documents"
+                      >
+                        <span>{deliveryBoy.name}</span>
+                        <span className="text-neutral-400 group-hover:text-rose-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+                      </button>
                       {deliveryBoy.email && (
                         <div className="text-[11px] text-neutral-500 font-medium truncate max-w-[160px]">
                           {deliveryBoy.email}
@@ -653,6 +676,17 @@ export default function AdminManageDeliveryBoy() {
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setViewingCourier(deliveryBoy)}
+                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors inline-flex items-center justify-center min-w-[36px] min-h-[36px]"
+                          title="View courier details & KYC documents"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setDeleteTarget(deliveryBoy)}
@@ -809,6 +843,434 @@ export default function AdminManageDeliveryBoy() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Courier Full Details & KYC Dossier Modal */}
+      {viewingCourier && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-neutral-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-scale-up">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-neutral-900 to-neutral-800 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-rose-600/30 border border-rose-500/40 text-rose-300 flex items-center justify-center text-xl shrink-0">
+                  🛵
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-base sm:text-lg text-white truncate">
+                      {viewingCourier.name}
+                    </h3>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white/10 text-neutral-300">
+                      #{viewingCourier._id.slice(-6).toUpperCase()}
+                    </span>
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                        viewingCourier.status === "Active"
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                          : "bg-red-500/20 text-red-300 border border-red-500/30"
+                      }`}
+                    >
+                      {viewingCourier.status}
+                    </span>
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                        viewingCourier.available === "Available"
+                          ? "bg-teal-500/20 text-teal-300 border border-teal-500/30"
+                          : "bg-neutral-500/20 text-neutral-300 border border-neutral-500/30"
+                      }`}
+                    >
+                      {viewingCourier.available || "Not Available"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-400 truncate mt-0.5">
+                    Registered on {viewingCourier.createdAt ? new Date(viewingCourier.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingCourier(null)}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0 ml-2"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Quick Actions Bar */}
+            <div className="p-3 bg-neutral-100 border-b border-neutral-200/80 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const nextStatus = viewingCourier.status === "Active" ? "Inactive" : "Active";
+                    await handleStatusChange(viewingCourier._id, viewingCourier.status, viewingCourier.name);
+                    setViewingCourier((prev) => prev ? { ...prev, status: nextStatus } : null);
+                  }}
+                  disabled={processingId === viewingCourier._id}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
+                    viewingCourier.status === "Active"
+                      ? "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                      : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  }`}
+                >
+                  {viewingCourier.status === "Active" ? "Deactivate Driver" : "✓ Approve & Activate Driver"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const nextAvail = viewingCourier.available === "Available" ? "Not Available" : "Available";
+                    await handleAvailabilityChange(viewingCourier._id, viewingCourier.available, viewingCourier.name);
+                    setViewingCourier((prev) => prev ? { ...prev, available: nextAvail } : null);
+                  }}
+                  disabled={processingId === viewingCourier._id}
+                  className="px-3 py-1.5 bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-300 rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                >
+                  {viewingCourier.available === "Available" ? "Mark as Offline" : "Mark as Available (On Duty)"}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={`tel:${viewingCourier.mobile}`}
+                  className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 text-xs font-bold flex items-center gap-1 transition-colors"
+                >
+                  📞 Call
+                </a>
+              </div>
+            </div>
+
+            {/* Modal Body (Scrollable Dossier) */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 text-xs text-neutral-700">
+              {/* Top Grid: Personal & Bank Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Personal & Contact Details */}
+                <div className="bg-neutral-50/70 p-4 rounded-xl border border-neutral-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-neutral-200/60 font-bold text-neutral-900 text-sm">
+                    <span>👤</span>
+                    <span>Personal & Contact</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Full Name:</span>
+                    <span className="col-span-2 font-bold text-neutral-900">{viewingCourier.name}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Mobile:</span>
+                    <span className="col-span-2 font-mono font-bold text-neutral-900">
+                      {viewingCourier.mobile}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Email:</span>
+                    <span className="col-span-2 text-neutral-800 break-all">{viewingCourier.email || "—"}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Date of Birth:</span>
+                    <span className="col-span-2 text-neutral-800">
+                      {viewingCourier.dateOfBirth
+                        ? new Date(viewingCourier.dateOfBirth).toLocaleDateString("en-IN", { dateStyle: "medium" })
+                        : "—"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">City:</span>
+                    <span className="col-span-2 font-semibold text-neutral-900">{viewingCourier.city || "—"}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Address:</span>
+                    <span className="col-span-2 text-neutral-800">{viewingCourier.address || "—"}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Pincode:</span>
+                    <span className="col-span-2 font-mono text-neutral-800">{viewingCourier.pincode || "—"}</span>
+                  </div>
+                </div>
+
+                {/* Bank Account & Payouts */}
+                <div className="bg-neutral-50/70 p-4 rounded-xl border border-neutral-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-neutral-200/60 font-bold text-neutral-900 text-sm">
+                    <span>🏦</span>
+                    <span>Bank & Settlement Info</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Account Name:</span>
+                    <span className="col-span-2 font-bold text-neutral-900">{viewingCourier.accountName || "—"}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Bank Name:</span>
+                    <span className="col-span-2 font-semibold text-neutral-900">{viewingCourier.bankName || "—"}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Account No:</span>
+                    <span className="col-span-2 font-mono font-bold text-neutral-900">
+                      {viewingCourier.accountNumber || viewingCourier.bankAccountNumber || "—"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">IFSC Code:</span>
+                    <span className="col-span-2 font-mono font-bold text-rose-700">
+                      {viewingCourier.ifscCode || "—"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Bonus Type:</span>
+                    <span className="col-span-2 inline-flex">
+                      <span className="px-2 py-0.5 rounded bg-neutral-200 text-neutral-800 font-semibold text-[11px]">
+                        {viewingCourier.bonusType || "Fixed / Salaried"}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">Commission:</span>
+                    <span className="col-span-2 font-medium text-neutral-800">
+                      {viewingCourier.commissionType === "Percentage"
+                        ? `${viewingCourier.commission || 0}% per delivery`
+                        : "Fixed Rate"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1 pt-1 border-t border-neutral-200/40">
+                    <span className="text-neutral-500 font-medium">Wallet Balance:</span>
+                    <span className="col-span-2 font-mono font-bold text-emerald-700 text-sm">
+                      ₹{viewingCourier.balance.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-neutral-500 font-medium">COD Cash Debt:</span>
+                    <span className="col-span-2 font-mono font-bold text-rose-700 text-sm">
+                      ₹{viewingCourier.cashCollected.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* KYC & Identity Verification Documents */}
+              <div className="bg-neutral-50/70 p-4 rounded-xl border border-neutral-200/80 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-neutral-200/60">
+                  <div className="flex items-center gap-2 font-bold text-neutral-900 text-sm">
+                    <span>📑</span>
+                    <span>KYC & Verification Documents</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-500 font-medium">
+                    Click any document to inspect full size
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Driving License */}
+                  <div className="bg-white p-3 rounded-xl border border-neutral-200 shadow-2xs flex flex-col justify-between gap-2">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-neutral-900 text-xs">Driving License</span>
+                        {viewingCourier.drivingLicense ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            Uploaded
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500">
+                            Not Uploaded
+                          </span>
+                        )}
+                      </div>
+
+                      {viewingCourier.drivingLicense ? (
+                        <div
+                          onClick={() =>
+                            setPreviewImage({
+                              url: viewingCourier.drivingLicense!,
+                              title: `${viewingCourier.name} — Driving License`,
+                            })
+                          }
+                          className="relative group cursor-pointer overflow-hidden rounded-lg bg-neutral-100 border border-neutral-200 h-44 flex items-center justify-center"
+                        >
+                          <img
+                            src={viewingCourier.drivingLicense}
+                            alt="Driving License"
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1">
+                            <span>🔍 Click to Zoom</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-44 rounded-lg bg-neutral-100/70 border border-dashed border-neutral-300 flex flex-col items-center justify-center text-neutral-400 gap-1 text-center p-4">
+                          <span className="text-2xl">🪪</span>
+                          <span className="text-xs font-medium">No Driving License provided</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {viewingCourier.drivingLicense && (
+                      <div className="flex items-center justify-between pt-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: viewingCourier.drivingLicense!,
+                              title: `${viewingCourier.name} — Driving License`,
+                            })
+                          }
+                          className="text-rose-700 hover:text-rose-800 font-bold"
+                        >
+                          Inspect Document →
+                        </button>
+                        <a
+                          href={viewingCourier.drivingLicense}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-neutral-500 hover:text-neutral-700 font-medium"
+                        >
+                          Open in Tab ↗
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* National Identity Card */}
+                  <div className="bg-white p-3 rounded-xl border border-neutral-200 shadow-2xs flex flex-col justify-between gap-2">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-neutral-900 text-xs">National Identity Card (Aadhaar / ID)</span>
+                        {viewingCourier.nationalIdentityCard ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            Uploaded
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500">
+                            Not Uploaded
+                          </span>
+                        )}
+                      </div>
+
+                      {viewingCourier.nationalIdentityCard ? (
+                        <div
+                          onClick={() =>
+                            setPreviewImage({
+                              url: viewingCourier.nationalIdentityCard!,
+                              title: `${viewingCourier.name} — National Identity Card`,
+                            })
+                          }
+                          className="relative group cursor-pointer overflow-hidden rounded-lg bg-neutral-100 border border-neutral-200 h-44 flex items-center justify-center"
+                        >
+                          <img
+                            src={viewingCourier.nationalIdentityCard}
+                            alt="National Identity Card"
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1">
+                            <span>🔍 Click to Zoom</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-44 rounded-lg bg-neutral-100/70 border border-dashed border-neutral-300 flex flex-col items-center justify-center text-neutral-400 gap-1 text-center p-4">
+                          <span className="text-2xl">🆔</span>
+                          <span className="text-xs font-medium">No National Identity Card provided</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {viewingCourier.nationalIdentityCard && (
+                      <div className="flex items-center justify-between pt-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: viewingCourier.nationalIdentityCard!,
+                              title: `${viewingCourier.name} — National Identity Card`,
+                            })
+                          }
+                          className="text-rose-700 hover:text-rose-800 font-bold"
+                        >
+                          Inspect Document →
+                        </button>
+                        <a
+                          href={viewingCourier.nationalIdentityCard}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-neutral-500 hover:text-neutral-700 font-medium"
+                        >
+                          Open in Tab ↗
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 bg-neutral-50 border-t border-neutral-200/80 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteTarget(viewingCourier);
+                  setViewingCourier(null);
+                }}
+                className="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl transition-colors"
+              >
+                Delete Courier...
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewingCourier(null)}
+                className="px-5 py-2 text-xs font-bold text-neutral-700 bg-white hover:bg-neutral-100 border border-neutral-300 rounded-xl transition-colors shadow-2xs"
+              >
+                Close Dossier
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/90 z-60 flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-4xl flex items-center justify-between text-white pb-3 shrink-0">
+            <h4 className="text-sm font-bold truncate">{previewImage.title}</h4>
+            <div className="flex items-center gap-3">
+              <a
+                href={previewImage.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors font-semibold"
+              >
+                Open Original ↗
+              </a>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="text-white hover:text-neutral-300 text-xl font-bold px-2 py-1"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          <div className="max-w-4xl max-h-[80vh] w-full flex items-center justify-center overflow-hidden rounded-xl bg-neutral-950 p-2 border border-white/10">
+            <img
+              src={previewImage.url}
+              alt={previewImage.title}
+              className="max-w-full max-h-[78vh] object-contain rounded"
+            />
           </div>
         </div>
       )}

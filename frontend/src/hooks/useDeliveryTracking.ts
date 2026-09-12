@@ -18,11 +18,13 @@ interface LocationUpdate {
 
 interface TrackingData {
     deliveryLocation: { lat: number; lng: number } | null
-    eta: number
+    eta: number | null
     distance: number
     status: string
     orderStatus: string | null // The actual order status (Placed, Out for Delivery, Delivered, etc.)
+    assignedDeliveryBoy: any | null
     isConnected: boolean
+    isLiveTrackingActive: boolean
     lastUpdate: Date | null
     error: string | null
     reconnectAttempts: number
@@ -34,11 +36,13 @@ const INITIAL_RECONNECT_DELAY = 2000 // 2 seconds
 export const useDeliveryTracking = (orderId: string | undefined) => {
     const [trackingData, setTrackingData] = useState<TrackingData>({
         deliveryLocation: null,
-        eta: 30,
+        eta: null,
         distance: 0,
         status: 'idle',
         orderStatus: null,
+        assignedDeliveryBoy: null,
         isConnected: false,
+        isLiveTrackingActive: false,
         lastUpdate: null,
         error: null,
         reconnectAttempts: 0,
@@ -99,11 +103,30 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
 
         socket.on('delivery-boy-accepted', (data: any) => {
             console.log('✅ Delivery boy accepted order:', data)
-            // Start tracking when delivery boy accepts
             setTrackingData(prev => ({
                 ...prev,
-                isConnected: true,
+                orderStatus: prev.orderStatus === 'Received' || prev.orderStatus === 'Processed' ? 'Accepted' : prev.orderStatus,
+                assignedDeliveryBoy: data.deliveryBoy || prev.assignedDeliveryBoy,
             }))
+        })
+
+        socket.on('order-courier-assigned', (data: any) => {
+            console.log('🛵 Courier assigned to order:', data)
+            setTrackingData(prev => ({
+                ...prev,
+                assignedDeliveryBoy: data.deliveryBoy || prev.assignedDeliveryBoy,
+            }))
+        })
+
+        socket.on('order-status-update', (data: any) => {
+            console.log('📊 Order status update received:', data)
+            if (data?.status) {
+                setTrackingData(prev => ({
+                    ...prev,
+                    orderStatus: data.status,
+                    lastUpdate: new Date(),
+                }))
+            }
         })
 
         socket.on('location-update', (update: LocationUpdate) => {
@@ -131,9 +154,10 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
                     lat: update.location.latitude,
                     lng: update.location.longitude,
                 },
-                eta: update.eta,
-                distance: update.distance,
-                status: update.status,
+                eta: typeof update.eta === 'number' ? update.eta : null,
+                distance: update.distance || 0,
+                status: update.status || 'in_transit',
+                isLiveTrackingActive: true,
                 lastUpdate: timestamp,
                 error: null,
             }))
@@ -165,13 +189,24 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
             setTrackingData(prev => ({
                 ...prev,
                 orderStatus: 'Delivered',
+                isLiveTrackingActive: false,
+                lastUpdate: new Date(),
+            }))
+        })
+
+        socket.on('order-cancelled', (data: any) => {
+            console.log('❌ Order cancelled:', data)
+            setTrackingData(prev => ({
+                ...prev,
+                orderStatus: 'Cancelled',
+                isLiveTrackingActive: false,
                 lastUpdate: new Date(),
             }))
         })
 
         socket.on('disconnect', (reason: any) => {
             console.log('❌ Socket disconnected:', reason)
-            setTrackingData(prev => ({ ...prev, isConnected: false }))
+            setTrackingData(prev => ({ ...prev, isConnected: false, isLiveTrackingActive: false }))
 
             // Attempt reconnection with exponential backoff
             if (reason === 'io server disconnect' || reason === 'io client disconnect') {

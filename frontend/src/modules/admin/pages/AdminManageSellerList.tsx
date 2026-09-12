@@ -22,6 +22,7 @@ interface Seller {
   logo?: string;
   balance: number;
   commission: number;
+  commissionRate?: number;
   categories: string[];
   status: "Approved" | "Pending" | "Rejected";
   needApproval: boolean;
@@ -118,6 +119,8 @@ export default function AdminManageSellerList() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isUpdatingRadius, setIsUpdatingRadius] = useState(false);
   const [newRadius, setNewRadius] = useState<number>(10);
+  const [isUpdatingCommission, setIsUpdatingCommission] = useState(false);
+  const [newCommission, setNewCommission] = useState<number>(0);
 
   // Deletion Modal
   const [deleteTarget, setDeleteTarget] = useState<Seller | null>(null);
@@ -278,7 +281,35 @@ export default function AdminManageSellerList() {
     if (seller) {
       setEditingSeller(seller);
       setNewRadius(seller.serviceRadiusKm || 10);
+      setNewCommission(seller.commission || 0);
       setIsEditModalOpen(true);
+    }
+  };
+
+  const handleUpdateCommission = async () => {
+    if (!editingSeller) return;
+
+    try {
+      setIsUpdatingCommission(true);
+      const commVal = Math.max(0, Math.min(100, Number(newCommission) || 0));
+      const response = await updateSeller(editingSeller._id, {
+        commission: commVal,
+        commissionRate: commVal,
+      });
+      if (response.success) {
+        setEditingSeller({ ...editingSeller, commission: commVal });
+        setSellers((prev) =>
+          prev.map((s) => (s._id === editingSeller._id ? { ...s, commission: commVal } : s))
+        );
+        showToast(`Platform commission updated to ${commVal}%`, "success");
+      } else {
+        showToast(response.message || "Failed to update commission", "error");
+      }
+    } catch (error: any) {
+      console.error("Error updating commission:", error);
+      showToast(error.response?.data?.message || "Failed to update commission", "error");
+    } finally {
+      setIsUpdatingCommission(false);
     }
   };
 
@@ -940,8 +971,36 @@ export default function AdminManageSellerList() {
                     <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.category || "General"}</p>
                   </div>
                   <div>
-                    <label className="text-[11px] text-neutral-500 font-semibold">Platform Commission</label>
-                    <p className="font-bold text-neutral-900 mt-0.5">{editingSeller.commission.toFixed(2)}%</p>
+                    <label className="text-[11px] text-neutral-500 font-semibold block mb-1">
+                      Platform Commission (%)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={newCommission}
+                          onChange={(e) => setNewCommission(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                          className="w-full pl-2.5 pr-6 py-1 border border-neutral-300 rounded-lg text-xs font-bold bg-white text-neutral-900 focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none"
+                          placeholder="e.g. 10"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 font-bold text-xs">%</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleUpdateCommission}
+                        disabled={isUpdatingCommission || newCommission === editingSeller.commission}
+                        className="px-2.5 py-1 bg-rose-700 hover:bg-rose-800 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition-colors min-h-[28px] whitespace-nowrap"
+                        title="Save Commission"
+                      >
+                        {isUpdatingCommission ? "..." : "Save"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">
+                      Overrides global rate (0 = use global)
+                    </p>
                   </div>
                 </div>
               </div>

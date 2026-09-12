@@ -42,6 +42,8 @@ export interface Order {
   subtotal: number;
   tax: number;
   shipping: number;
+  platformFee?: number;
+  tipAmount?: number;
   discount: number;
   couponCode?: string;
   total: number;

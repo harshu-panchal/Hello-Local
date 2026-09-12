@@ -22,6 +22,7 @@ export interface SearchableSelectProps {
   className?: string;
   buttonClassName?: string;
   dropdownPlacement?: "bottom" | "auto";
+  accentColor?: "rose" | "purple";
 }
 
 export default function SearchableSelect({
@@ -40,7 +41,9 @@ export default function SearchableSelect({
   className = "",
   buttonClassName = "",
   dropdownPlacement = "bottom",
+  accentColor = "rose",
 }: SearchableSelectProps) {
+  const isPurple = accentColor === "purple";
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -140,7 +143,11 @@ export default function SearchableSelect({
           hasError
             ? "border-red-400 focus:ring-2 focus:ring-red-500/20"
             : isOpen
-            ? "border-rose-600 ring-2 ring-rose-600/20"
+            ? isPurple
+              ? "border-purple-600 ring-2 ring-purple-600/20"
+              : "border-rose-600 ring-2 ring-rose-600/20"
+            : isPurple
+            ? "border-neutral-300 hover:border-neutral-400 focus:ring-2 focus:ring-purple-600/20 focus:border-purple-600"
             : "border-neutral-300 hover:border-neutral-400 focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600"
         } ${disabled ? "bg-neutral-100/70 text-neutral-400 cursor-not-allowed opacity-60" : "cursor-pointer"} ${buttonClassName}`}
       >
@@ -164,7 +171,7 @@ export default function SearchableSelect({
             strokeLinecap="round"
             strokeLinejoin="round"
             className={`transition-transform duration-200 ${
-              isOpen ? "rotate-180 text-rose-600" : ""
+              isOpen ? (isPurple ? "rotate-180 text-purple-600" : "rotate-180 text-rose-600") : ""
             }`}
           >
             <polyline points="6 9 12 15 18 9" />
@@ -203,7 +210,11 @@ export default function SearchableSelect({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-neutral-800 placeholder:text-neutral-400"
+                className={`w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-neutral-200 rounded-lg outline-none text-neutral-800 placeholder:text-neutral-400 ${
+                  isPurple
+                    ? "focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                    : "focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                }`}
               />
               {searchQuery && (
                 <button
@@ -237,7 +248,9 @@ export default function SearchableSelect({
                 onClick={() => handleSelect(clearValue)}
                 className={`w-full px-3.5 py-2 text-xs text-left flex items-center justify-between transition-colors ${
                   !value || value === clearValue
-                    ? "bg-rose-50/80 font-semibold text-rose-700"
+                    ? isPurple
+                      ? "bg-purple-50/80 font-semibold text-purple-700"
+                      : "bg-rose-50/80 font-semibold text-rose-700"
                     : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
                 }`}
               >
@@ -252,7 +265,7 @@ export default function SearchableSelect({
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-rose-600 shrink-0"
+                    className={`${isPurple ? "text-purple-600" : "text-rose-600"} shrink-0`}
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
@@ -271,7 +284,11 @@ export default function SearchableSelect({
                     onClick={() => handleSelect(opt.value)}
                     className={`w-full px-3.5 py-2 text-xs text-left flex items-center justify-between transition-colors ${
                       isSelected
-                        ? "bg-rose-50 font-semibold text-rose-700"
+                        ? isPurple
+                          ? "bg-purple-50 font-semibold text-purple-700"
+                          : "bg-rose-50 font-semibold text-rose-700"
+                        : isPurple
+                        ? "text-neutral-700 hover:bg-purple-50/60 hover:text-purple-700"
                         : "text-neutral-700 hover:bg-rose-50/50 hover:text-rose-700"
                     }`}
                   >
@@ -293,7 +310,7 @@ export default function SearchableSelect({
                         strokeWidth="2.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="text-rose-600 shrink-0"
+                        className={`${isPurple ? "text-purple-600" : "text-rose-600"} shrink-0`}
                       >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>

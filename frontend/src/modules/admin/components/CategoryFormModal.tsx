@@ -706,73 +706,35 @@ export default function CategoryFormModal({
             )}
           </div>
 
-          {/* Commission Rate - Only for SubSubCategories (Level 3) */}
-          {(() => {
-            // Logic to determine if we should show commission rate (Level 3+ only)
-
-            // 1. If in subcategory creation mode
-            if (isSubcategoryMode && parentCategory) {
-              // Check if the parent ITSELF has a parent (meaning parent is L2, so new one is L3)
-              // We need to check parentCategory.parentId or similar
-              // parentCategory is type Category, so it has parentId
-              // If parentCategory.parentId is truthy, then parent is NOT root.
-              return parentCategory.parentId ? true : false;
-            }
-
-            // 2. If editing existing category
-            if (mode === 'edit' && category) {
-              // We need to know if category is L3.
-              // We can check if parent exists, and if that parent has a parent.
-              // However, we only have parentId string readily available in formData.
-              // We can try to find the parent in flatCategories (which contains all levels).
-              if (formData.parentId) {
-                const parent = flatCategories.find(c => c._id === formData.parentId);
-                // If parent exists and parent also has a parentId, then current is L3+
-                if (parent && parent.parentId) {
-                  return true;
-                }
-              }
-              return false;
-            }
-
-            // 3. creating new category (not sub mode) but with parent selected
-            if (mode === 'create' && formData.parentId) {
-              const parent = flatCategories.find(c => c._id === formData.parentId);
-              if (parent && parent.parentId) {
-                return true;
-              }
-            }
-
-            return false;
-          })() && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Commission Rate (%)
-                </label>
-                <input
-                  type="number"
-                  name="commissionRate"
-                  value={formData.commissionRate}
-                  onChange={handleInputChange}
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.commissionRate
-                    ? "border-red-300"
-                    : "border-neutral-300"
-                    }`}
-                  disabled={submitting}
-                />
-                <p className="mt-1 text-xs text-neutral-500">
-                  Override default commission rate for this category (0 = use default)
-                </p>
-                {errors.commissionRate && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.commissionRate}
-                  </p>
-                )}
-              </div>
+          {/* Commission Rate (Level 3 Category Commission) */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Commission Rate (%)
+            </label>
+            <input
+              type="number"
+              name="commissionRate"
+              value={formData.commissionRate}
+              onChange={handleInputChange}
+              min="0"
+              max="100"
+              step="0.01"
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 ${errors.commissionRate
+                ? "border-red-300"
+                : "border-neutral-300"
+                }`}
+              disabled={submitting}
+              placeholder="e.g. 8"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Set custom commission rate for this category (0 = inherit seller or global default)
+            </p>
+            {errors.commissionRate && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.commissionRate}
+              </p>
             )}
+          </div>
 
           {/* Active Status */}
           <div className="mb-4">

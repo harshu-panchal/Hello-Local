@@ -57,7 +57,9 @@ export default function OrderDetail() {
     distance,
     status: trackingStatus,
     orderStatus: socketOrderStatus,
+    assignedDeliveryBoy,
     isConnected,
+    isLiveTrackingActive,
     lastUpdate,
     error: trackingError,
     reconnectAttempts,
@@ -144,10 +146,29 @@ export default function OrderDetail() {
   }, [socketOrderStatus, orderStatus, id, fetchOrderById]);
 
   useEffect(() => {
+    if (assignedDeliveryBoy) {
+      setOrder((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          deliveryBoy: assignedDeliveryBoy,
+          deliveryBoyStatus: "Assigned",
+        };
+      });
+      if (id) {
+        fetchOrderById(id).then((fetchedOrder) => {
+          if (fetchedOrder) {
+            setOrder(fetchedOrder);
+          }
+        });
+      }
+    }
+  }, [assignedDeliveryBoy, id, fetchOrderById]);
+
+  useEffect(() => {
     if (confirmed && order) {
       const timer1 = setTimeout(() => {
         setShowConfirmation(false);
-        setOrderStatus("Accepted");
       }, 3000);
       return () => clearTimeout(timer1);
     }
@@ -337,6 +358,39 @@ export default function OrderDetail() {
   const isTerminalOrder = ["Delivered", "Cancelled", "Rejected", "Returned"].includes(orderStatus);
   const isCancellable = ["Received", "Pending", "Accepted"].includes(orderStatus);
 
+  const assignedPartner = order?.deliveryBoy || assignedDeliveryBoy;
+  const hasCourier = Boolean(assignedPartner);
+  const isDriverOnTheWay =
+    hasCourier &&
+    (orderStatus === "Out for Delivery" ||
+      orderStatus === "On the way" ||
+      orderStatus === "Picked up" ||
+      isLiveTrackingActive);
+
+  const getStepIndex = (status: string) => {
+    switch (status) {
+      case "Pending":
+        return 0;
+      case "Received":
+      case "Accepted":
+        return 1;
+      case "Processed":
+        return 2;
+      case "Shipped":
+      case "Picked up":
+        return 3;
+      case "On the way":
+      case "Out for Delivery":
+        return 4;
+      case "Delivered":
+      case "Completed":
+        return 5;
+      default:
+        return 1;
+    }
+  };
+  const currentStep = getStepIndex(orderStatus);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 md:pb-16">
       {/* Header */}
@@ -388,8 +442,8 @@ export default function OrderDetail() {
         <div className="lg:grid lg:grid-cols-12 lg:gap-6 items-start space-y-3.5 lg:space-y-0">
           {/* Left Column: Tracking, Live Map, OTP, Delivery Partner & Items */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-3.5">
-            {/* Status Header Banner */}
-            <div className="bg-[#FF2E7A] rounded-2xl p-4 sm:p-5 text-white shadow-xs">
+            {/* Status Header Banner with Visual Stepper */}
+            <div className="bg-[#FF2E7A] rounded-2xl p-4 sm:p-5 text-white shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-rose-100 block mb-0.5">
@@ -403,13 +457,63 @@ export default function OrderDetail() {
                       ? "Order was delivered successfully"
                       : (orderStatus as string) === "Cancelled"
                       ? "This order was cancelled"
-                      : `Estimated arrival in ~${estimatedTime} mins`}
+                      : (orderStatus as string) === "Rejected"
+                      ? "This order was rejected"
+                      : isDriverOnTheWay && eta
+                      ? `Partner is on the way • Estimated arrival in ~${eta} mins`
+                      : hasCourier
+                      ? `Partner ${assignedPartner.name} assigned • Heading to store`
+                      : "Store is preparing your items • Assigning courier"}
                   </p>
                 </div>
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white">
                   <TruckIcon size={22} />
                 </div>
               </div>
+
+              {/* Progress Stepper */}
+              {!["Cancelled", "Rejected", "Returned"].includes(orderStatus) && (
+                <div className="pt-3 border-t border-white/20">
+                  <div className="grid grid-cols-5 gap-1 text-center">
+                    {[
+                      { label: "Received", step: 1 },
+                      { label: "Processed", step: 2 },
+                      { label: "Shipped", step: 3 },
+                      { label: "Out for Delivery", step: 4 },
+                      { label: "Delivered", step: 5 },
+                    ].map((s) => {
+                      const isCompleted = currentStep >= s.step;
+                      const isCurrent = currentStep === s.step;
+                      return (
+                        <div key={s.step} className="flex flex-col items-center">
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-all ${
+                              isCurrent
+                                ? "bg-white text-[#FF2E7A] ring-2 ring-white/50 shadow-sm"
+                                : isCompleted
+                                ? "bg-white/90 text-[#FF2E7A]"
+                                : "bg-white/20 text-white/70"
+                            }`}
+                          >
+                            {isCompleted && !isCurrent ? "✓" : s.step}
+                          </div>
+                          <span
+                            className={`text-[10px] leading-tight font-medium ${
+                              isCurrent
+                                ? "font-bold text-white underline underline-offset-2"
+                                : isCompleted
+                                ? "text-rose-100"
+                                : "text-white/50"
+                            }`}
+                          >
+                            {s.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Live Delivery Tracking Map */}
@@ -420,16 +524,32 @@ export default function OrderDetail() {
                     <LocationPinIcon size={16} className="text-[#FF2E7A]" />
                     <div>
                       <h3 className="text-xs sm:text-sm font-bold text-slate-900">
-                        Live Partner Tracking
+                        {isDriverOnTheWay
+                          ? "Live Partner Tracking"
+                          : hasCourier
+                          ? "Courier Assigned"
+                          : "Order Route & Fulfillment"}
                       </h3>
                       <p className="text-[10px] text-slate-400 font-medium">
-                        {isConnected ? "Live GPS Connected" : "Updating location..."}
+                        {isDriverOnTheWay
+                          ? (isLiveTrackingActive ? "Live GPS Connected" : "Connecting to partner GPS...")
+                          : hasCourier
+                          ? `Courier ${assignedPartner.name} heading to store`
+                          : "Seller is packing your order • Assigning nearby courier"}
                       </p>
                     </div>
                   </div>
-                  {eta && (
+                  {isDriverOnTheWay && eta ? (
                     <span className="text-xs font-bold text-[#FF2E7A] bg-[#FFF1F4] border border-[#FFE4EA] px-2.5 py-0.5 rounded-full">
-                      ETA: {eta}
+                      ETA: {eta} mins
+                    </span>
+                  ) : hasCourier ? (
+                    <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">
+                      Assigned
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full">
+                      Preparing
                     </span>
                   )}
                 </div>
@@ -446,7 +566,21 @@ export default function OrderDetail() {
                       name: s.storeName || s.name,
                     }))}
                     deliveryLocation={deliveryLocation || undefined}
-                    isTracking={isConnected}
+                    isTracking={isLiveTrackingActive}
+                    showRoute={true}
+                    routeOrigin={
+                      deliveryLocation ||
+                      (sellerLocations.length > 0
+                        ? {
+                            lat: sellerLocations[0].latitude || sellerLocations[0].lat || 0,
+                            lng: sellerLocations[0].longitude || sellerLocations[0].lng || 0,
+                          }
+                        : undefined)
+                    }
+                    routeDestination={{
+                      lat: order.address?.latitude || 0,
+                      lng: order.address?.longitude || 0,
+                    }}
                   />
                 </div>
               </div>
@@ -484,12 +618,12 @@ export default function OrderDetail() {
             )}
 
             {/* Delivery Partner Card */}
-            {order.deliveryBoy && (
+            {assignedPartner && (
               <DeliveryPartnerCard
-                partner={order.deliveryBoy || null}
+                partner={assignedPartner}
                 eta={typeof eta === "number" ? eta : 0}
                 distance={distance || 0}
-                isTracking={isConnected}
+                isTracking={isLiveTrackingActive}
                 deliveryOtp={order.deliveryOtp}
               />
             )}

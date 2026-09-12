@@ -162,6 +162,13 @@ export default function GoogleMapsTracking({
                     left: 50,
                     right: 50
                 });
+                if (window.google?.maps?.event) {
+                    window.google.maps.event.addListenerOnce(mapRef.current, 'bounds_changed', () => {
+                        if (mapRef.current && mapRef.current.getZoom() > 16) {
+                            mapRef.current.setZoom(16);
+                        }
+                    });
+                }
                 hasInitialBoundsFitted.current = true;
             }
 

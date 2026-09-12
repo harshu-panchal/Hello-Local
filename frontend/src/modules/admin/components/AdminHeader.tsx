@@ -30,26 +30,44 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
-  // Real-time socket notification handler — fires immediately when a new order arrives
+  // Real-time socket notification handler — fires immediately when a new notification arrives
   const handleSocketNotification = useCallback((socketNotif: AdminSocketNotification) => {
-    if (socketNotif.type !== "NEW_ORDER") return;
+    if (socketNotif.type === "NEW_ORDER") {
+      const syntheticNotif: NotificationType = {
+        _id: `socket-${Date.now()}`,
+        recipientType: "Admin",
+        title: "📦 New Order Received",
+        message: `Order #${socketNotif.orderNumber} — ₹${(socketNotif.totalAmount || 0).toLocaleString("en-IN")} (${socketNotif.paymentMethod || "Unknown"})`,
+        type: "Order",
+        isRead: false,
+        priority: "High",
+        createdAt: new Date(socketNotif.timestamp || Date.now()).toISOString(),
+        link: `/admin/orders/${socketNotif.orderId}`,
+        actionLabel: "View Order",
+      };
 
-    // Prepend synthetic notification entry to the list
-    const syntheticNotif: NotificationType = {
-      _id: `socket-${Date.now()}`,
-      recipientType: "Admin",
-      title: "📦 New Order Received",
-      message: `Order #${socketNotif.orderNumber} — ₹${socketNotif.totalAmount.toLocaleString("en-IN")} (${socketNotif.paymentMethod || "Unknown"})`,
-      type: "Order",
-      isRead: false,
-      priority: "High",
-      createdAt: new Date(socketNotif.timestamp).toISOString(),
-      link: `/admin/orders/${socketNotif.orderId}`,
-      actionLabel: "View Order",
-    };
+      setNotifications((prev) => [syntheticNotif, ...prev].slice(0, 10));
+      setUnreadCount((prev) => prev + 1);
+    } else if (socketNotif.type === "NEW_DELIVERY_PARTNER") {
+      const syntheticNotif: NotificationType = {
+        _id: socketNotif.notificationId || `socket-${Date.now()}`,
+        recipientType: "Admin",
+        title: socketNotif.title || "🛵 New Driver Registered",
+        message: socketNotif.message || `${socketNotif.name} (${socketNotif.mobile}) registered as a delivery partner.`,
+        type: "Info",
+        isRead: false,
+        priority: "High",
+        createdAt: new Date(socketNotif.timestamp || Date.now()).toISOString(),
+        link: socketNotif.link || `/admin/delivery-boy/manage?search=${encodeURIComponent(socketNotif.mobile || "")}`,
+        actionLabel: socketNotif.actionLabel || "Review Courier",
+      };
 
-    setNotifications((prev) => [syntheticNotif, ...prev].slice(0, 10));
-    setUnreadCount((prev) => prev + 1);
+      setNotifications((prev) => [syntheticNotif, ...prev].slice(0, 10));
+      setUnreadCount((prev) => prev + 1);
+    } else {
+      // Refresh notifications on any other admin event
+      fetchNotifications();
+    }
   }, []);
 
   // Connect to socket for real-time admin notifications

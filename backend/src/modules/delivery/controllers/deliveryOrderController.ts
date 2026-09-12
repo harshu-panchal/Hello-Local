@@ -292,13 +292,22 @@ export const updateOrderStatus = asyncHandler(
 
     const previousStatus = order.status;
     order.status = check.status!;
-    order.deliveryBoyStatus = "Picked Up";
+    order.deliveryBoyStatus = check.status === "Out for Delivery" ? "In Transit" : "Picked Up";
 
     await order.save();
 
     // Emit socket events for status changes
     const io = (req.app as any).get("io");
     if (io) {
+      // Real-time socket notification to customer room
+      io.to(`order-${id}`).emit("order-status-update", {
+        orderId: id,
+        orderNumber: order.orderNumber,
+        status: check.status,
+        deliveryBoyStatus: order.deliveryBoyStatus,
+        updatedAt: new Date(),
+      });
+
       if (status === "Picked up" && previousStatus !== "Picked up") {
         // Emit order-taken event
         io.to(`order-${id}`).emit("order-taken", {
@@ -307,7 +316,7 @@ export const updateOrderStatus = asyncHandler(
         });
       }
 
-      // Delivery completion (and its order-delivered broadcast) now lives in
+      // Delivery completion (and its order-delivered broadcast) lives in
       // verifyDeliveryOtpController, the only path that can set "Delivered". (#C-08)
       if (previousStatus !== status) {
         notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");

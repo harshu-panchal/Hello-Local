@@ -59,7 +59,12 @@ export default function AdminOrderDetail() {
         showToast(response.message || "Failed to update order status", "error");
       }
     } catch (err: any) {
-      showToast(err.response?.data?.message || "Failed to update order status", "error");
+      console.error("Status update error:", err);
+      const serverMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to update order status";
+      showToast(serverMessage, "error");
     } finally {
       setUpdating(false);
     }
@@ -125,17 +130,21 @@ export default function AdminOrderDetail() {
   const deliveryBoy = typeof order.deliveryBoy === "object" ? order.deliveryBoy : null;
   const items = Array.isArray(order.items) ? order.items : [];
 
-  const statusOptions = [
-    "Received",
-    "Pending",
-    "Processed",
-    "Shipped",
-    "Out for Delivery",
-    "Delivered",
-    "Cancelled",
-    "Rejected",
-    "Returned",
-  ];
+  const ALLOWED_ADMIN_TRANSITIONS: Record<string, string[]> = {
+    Pending: ["Received", "Cancelled", "Rejected"],
+    Received: ["Accepted", "Processed", "Cancelled", "Rejected"],
+    Accepted: ["Processed", "Shipped", "Picked up", "Cancelled", "Rejected"],
+    Processed: ["Shipped", "Picked up", "Cancelled", "Rejected"],
+    Shipped: ["Picked up", "Out for Delivery", "Cancelled"],
+    "Picked up": ["Out for Delivery", "Cancelled"],
+    "Out for Delivery": ["Delivered", "Cancelled"],
+    Delivered: ["Returned"],
+    Cancelled: [],
+    Rejected: [],
+    Returned: [],
+  };
+
+  const allowedNextStatuses = ALLOWED_ADMIN_TRANSITIONS[order.status] || [];
 
   const getStatusBadge = (orderStatus: string) => {
     switch (orderStatus) {
@@ -323,11 +332,22 @@ export default function AdminOrderDetail() {
                 disabled={updating}
                 className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 outline-none min-h-[44px]"
               >
-                {statusOptions.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
+                <option value={order.status} disabled>
+                  {order.status} (Current Status)
+                </option>
+                {allowedNextStatuses.length > 0 ? (
+                  <optgroup label="Allowed Next Steps">
+                    {allowedNextStatuses.map((st) => (
+                      <option key={st} value={st}>
+                        → {st}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  <option value="" disabled>
+                    (No further status changes permitted)
                   </option>
-                ))}
+                )}
               </select>
               {updating && (
                 <div className="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 mt-2">
@@ -381,15 +401,27 @@ export default function AdminOrderDetail() {
                 <span className="font-mono font-semibold">₹{(order.subtotal || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-neutral-600">
-                <span>Tax:</span>
+                <span>Tax / GST:</span>
                 <span className="font-mono font-semibold">₹{(order.tax || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-neutral-600">
                 <span>Delivery / Shipping:</span>
                 <span className="font-mono font-semibold">₹{(order.shipping || 0).toFixed(2)}</span>
               </div>
+              {(order.platformFee ?? 0) > 0 && (
+                <div className="flex justify-between text-neutral-600">
+                  <span>Platform Fee:</span>
+                  <span className="font-mono font-semibold">₹{(order.platformFee || 0).toFixed(2)}</span>
+                </div>
+              )}
+              {(order.tipAmount ?? 0) > 0 && (
+                <div className="flex justify-between text-neutral-600">
+                  <span>Delivery Tip:</span>
+                  <span className="font-mono font-semibold">₹{(order.tipAmount || 0).toFixed(2)}</span>
+                </div>
+              )}
               {order.discount > 0 && (
-                <div className="flex justify-between text-red-600 font-semibold">
+                <div className="flex justify-between text-emerald-600 font-semibold">
                   <span>Discount {order.couponCode ? `(${order.couponCode})` : ""}:</span>
                   <span className="font-mono">-₹{(order.discount || 0).toFixed(2)}</span>
                 </div>
