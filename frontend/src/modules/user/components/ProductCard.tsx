@@ -213,11 +213,19 @@ export default function ProductCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
-      className="bg-white rounded-2xl border border-slate-100 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between relative overflow-hidden group"
+      className={`bg-white border border-slate-100 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between relative overflow-hidden group w-full ${
+        compact ? 'rounded-xl sm:rounded-2xl' : 'rounded-2xl'
+      }`}
     >
       <div onClick={handleCardClick} className="cursor-pointer flex-1 flex flex-col">
         {/* Product Image Area */}
-        <div className="w-full aspect-square bg-[#FAFBFD] flex items-center justify-center overflow-hidden relative p-2.5">
+        <div
+          className={`w-full bg-[#FAFBFD] flex items-center justify-center overflow-hidden relative ${
+            compact
+              ? 'aspect-square max-h-36 sm:max-h-44 p-2'
+              : 'aspect-square max-h-48 sm:max-h-56 p-2.5'
+          }`}
+        >
           <UserImage
             src={imageUrl}
             alt={productName}
@@ -244,13 +252,13 @@ export default function ProductCard({
             <button
               type="button"
               onClick={toggleWishlist}
-              className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center hover:bg-white transition-all shadow-2xs border border-slate-100"
+              className="absolute top-2 right-2 z-20 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center hover:bg-white transition-all shadow-2xs border border-slate-100"
               aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
             >
               {isWishlisted ? (
-                <HeartFilledIcon size={14} className="text-[#FF2E7A]" />
+                <HeartFilledIcon size={13} className="text-[#FF2E7A]" />
               ) : (
-                <HeartOutlineIcon size={14} className="text-slate-400 hover:text-slate-600" />
+                <HeartOutlineIcon size={13} className="text-slate-400 hover:text-slate-600" />
               )}
             </button>
           )}
@@ -263,38 +271,38 @@ export default function ProductCard({
         </div>
 
         {/* Product Details */}
-        <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
+        <div className={`${compact ? 'p-2 sm:p-2.5' : 'p-2.5 sm:p-3'} flex-1 flex flex-col justify-between`}>
           <div>
             <div className="flex items-center justify-between gap-1 mb-0.5 min-w-0">
               {brandName ? (
-                <span className="text-[10px] font-bold text-[#FF2E7A] uppercase tracking-wider truncate max-w-[60%]">
+                <span className="text-[9px] sm:text-[10px] font-bold text-[#FF2E7A] uppercase tracking-wider truncate max-w-[60%]">
                   {brandName}
                 </span>
               ) : (
-                <span className="text-[10px] text-slate-400 font-medium truncate">
+                <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate">
                   {packInfo}
                 </span>
               )}
               {brandName && (
-                <span className="text-[10px] text-slate-400 font-medium truncate ml-auto">
+                <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate ml-auto">
                   {packInfo}
                 </span>
               )}
             </div>
 
-            <h4 className="text-xs sm:text-sm font-semibold text-slate-900 line-clamp-2 leading-snug min-h-[2rem]">
+            <h4 className={`${compact ? 'text-xs sm:text-[13px] min-h-[1.9rem] leading-tight' : 'text-xs sm:text-sm min-h-[2rem] leading-snug'} font-semibold text-slate-900 line-clamp-2`}>
               {productName}
             </h4>
           </div>
 
           {/* Price & Add to Cart row */}
-          <div className="pt-2 mt-auto flex items-center justify-between gap-1.5">
+          <div className="pt-1.5 mt-auto flex items-center justify-between gap-1.5">
             <div className="flex flex-col">
               <span className="text-xs sm:text-sm font-bold text-slate-900">
                 ₹{displayPrice.toLocaleString('en-IN')}
               </span>
               {mrp && mrp > displayPrice && (
-                <span className="text-[10px] text-slate-400 line-through font-medium">
+                <span className="text-[9px] sm:text-[10px] text-slate-400 line-through font-medium">
                   ₹{mrp.toLocaleString('en-IN')}
                 </span>
               )}
@@ -308,7 +316,7 @@ export default function ProductCard({
                   type="button"
                   disabled={isActionDisabled}
                   onClick={handleAdd}
-                  className={`rounded-lg font-bold text-[11px] h-7 px-3 flex items-center justify-center uppercase tracking-wider transition-all active:scale-95 touch-target-min ${
+                  className={`rounded-lg font-bold text-[10px] sm:text-[11px] h-6 sm:h-7 px-2.5 sm:px-3 flex items-center justify-center uppercase tracking-wider transition-all active:scale-95 touch-target-min ${
                     isActionDisabled
                       ? 'border border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed'
                       : 'border border-[#FF2E7A] text-[#FF2E7A] bg-[#FFF1F4] hover:bg-[#FFE4EA]'

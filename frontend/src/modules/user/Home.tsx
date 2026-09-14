@@ -302,27 +302,25 @@ export default function Home() {
     const columnCount = Number(section.columns) || 4;
 
     if (section.displayType === "products" && section.data && section.data.length > 0) {
-      // Strict column mapping as requested - applies to ALL screen sizes including mobile
+      // Responsive column mapping: mobile 2 cols, tablet 3-4 cols, desktop 5-6 cols
       const gridClasses: Record<number, string> = {
-        2: "grid-cols-2",
-        3: "grid-cols-3",
-        4: "grid-cols-4",
-        6: "grid-cols-6",
-        8: "grid-cols-8"
+        2: "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
+        3: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
+        4: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6",
+        6: "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8",
+        8: "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10",
       };
-      const gridClass = gridClasses[columnCount] || "grid-cols-4";
+      const gridClass = gridClasses[columnCount] || "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
 
-      // Use compact mode for 4 or more columns to fit content on mobile
-      const isCompact = columnCount >= 4;
-      const gapClass = columnCount >= 4 ? "gap-2" : "gap-3 md:gap-4";
+      const gapClass = "gap-2.5 sm:gap-3 md:gap-4";
 
       return (
-        <div key={section.id || section._id || section.title} className="mt-6 mb-6 md:mt-8 md:mb-8">
+        <div key={section.id || section._id || section.title} className="max-w-[1440px] mx-auto mt-5 mb-5 md:mt-7 md:mb-7">
           {section.title && (
-            <div className="flex items-center justify-between px-3 sm:px-6 lg:px-8 mb-3 md:mb-5">
+            <div className="flex items-center justify-between px-3 sm:px-6 lg:px-8 mb-2.5 md:mb-4">
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-5 rounded-full bg-gradient-to-b from-[#FF8A00] to-[#FF2E7A]" />
-                <h2 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight capitalize">
+                <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-tight capitalize">
                   {section.title}
                 </h2>
               </div>
@@ -338,7 +336,7 @@ export default function Home() {
                   showBadge={true}
                   showPackBadge={false}
                   showStockInfo={false}
-                  compact={isCompact}
+                  compact={true}
                 />
               ))}
             </div>
