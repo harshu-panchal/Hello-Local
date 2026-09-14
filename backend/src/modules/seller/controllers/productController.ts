@@ -370,8 +370,8 @@ export const updateProduct = asyncHandler(
 
     if (updateData.isHomemade !== undefined) {
       updateData.isHomemade = updateData.isHomemade === true || updateData.isHomemade === "true" || updateData.isHomemade === "Yes";
-      if (updateData.isHomemade && !updateData.homemadeCategory && (updateData.category || productData.category)) {
-        updateData.homemadeCategory = (updateData.category || productData.category).toString();
+      if (updateData.isHomemade && !updateData.homemadeCategory && updateData.category) {
+        updateData.homemadeCategory = updateData.category.toString();
       }
     }
 
