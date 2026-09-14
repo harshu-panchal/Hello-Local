@@ -72,6 +72,9 @@ export default function SellerAddProduct() {
     galleryImageUrls: [] as string[],
     isShopByStoreOnly: "No",
     shopId: "",
+    isHomemade: "No",
+    homemadeCategory: "",
+    homemadeSubcategory: "",
   });
 
   const [variations, setVariations] = useState<ProductVariation[]>([]);
@@ -249,6 +252,9 @@ export default function SellerAddProduct() {
               galleryImageUrls: product.galleryImageUrls || [],
               isShopByStoreOnly: (product as any).isShopByStoreOnly ? "Yes" : "No",
               shopId: (product as any).shopId?._id || (product as any).shopId || "",
+              isHomemade: (product as any).isHomemade ? "Yes" : "No",
+              homemadeCategory: (product as any).homemadeCategory || "",
+              homemadeSubcategory: (product as any).homemadeSubcategory || "",
             });
             setVariations(product.variations);
             if (product.mainImageUrl || product.mainImage) {
@@ -580,6 +586,9 @@ export default function SellerAddProduct() {
         mainImageUrl: mainImageUrl,
         galleryImageUrls: galleryImageUrls,
         isShopByStoreOnly: formData.isShopByStoreOnly === "Yes",
+        isHomemade: formData.isHomemade === "Yes",
+        homemadeCategory: formData.isHomemade === "Yes" ? (formData.homemadeCategory || undefined) : undefined,
+        homemadeSubcategory: formData.isHomemade === "Yes" ? (formData.homemadeSubcategory || undefined) : undefined,
       };
 
       if (formData.headerCategory) {
@@ -851,6 +860,43 @@ export default function SellerAddProduct() {
                   className="w-full rounded-xl border border-slate-300 p-3 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600"
                 />
               </SellerFormField>
+            </div>
+
+            {/* Prominent Homemade / Artisan Product Classification */}
+            <div className="md:col-span-2 lg:col-span-3 p-4 bg-gradient-to-r from-[#FFF5F8] via-[#FFF8F2] to-white rounded-2xl border-2 border-[#FFE4EA] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#FFE4EA] flex items-center justify-center text-xl flex-shrink-0">
+                  🍲
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900">
+                      Homemade & Handcrafted Product?
+                    </h4>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#FF2E7A] text-white tracking-wide">
+                      HOMEMADE HUB
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    For Home Chefs, Bakers, Artisans & Home Makers. This product will appear on the customer Homemade Hub under the selected Category.
+                  </p>
+                </div>
+              </div>
+              <div className="flex-shrink-0 sm:min-w-[220px]">
+                <select
+                  name="isHomemade"
+                  value={formData.isHomemade}
+                  onChange={handleChange}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold border-2 transition-all outline-none cursor-pointer ${
+                    formData.isHomemade === "Yes"
+                      ? "bg-[#FF2E7A] text-white border-[#FF2E7A] shadow-xs"
+                      : "bg-white text-slate-800 border-slate-300 hover:border-slate-400"
+                  }`}
+                >
+                  <option value="No" className="bg-white text-slate-800">No (Standard Store Product)</option>
+                  <option value="Yes" className="bg-white text-slate-800">Yes (Home Chef / Artisan Made) ✨</option>
+                </select>
+              </div>
             </div>
           </div>
         </SellerCard>
@@ -1136,6 +1182,7 @@ export default function SellerAddProduct() {
                 </SellerFormField>
               </div>
             )}
+
           </div>
         </SellerCard>
 

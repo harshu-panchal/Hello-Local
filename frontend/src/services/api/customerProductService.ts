@@ -2,6 +2,8 @@ import api from './config';
 import { Product } from './productService'; // Reuse generic product type if compatible or define new one
 import { apiCache } from '../../utils/apiCache';
 
+export type { Product };
+
 export interface Category {
     _id: string; // MongoDB ID
     id?: string; // Virtual ID
@@ -30,6 +32,7 @@ export interface GetProductsParams {
     limit?: number;
     latitude?: number; // User location latitude
     longitude?: number; // User location longitude
+    foodType?: string;
 }
 
 export interface ProductListResponse {

@@ -18,8 +18,9 @@ import { getIconByName } from "../../utils/iconLibrary";
 const ShopAdCarousel = React.lazy(() => import("./components/ShopAdCarousel"));
 const LowestPricesEver = React.lazy(() => import("./components/LowestPricesEver"));
 const CategoryTileSection = React.lazy(() => import("./components/CategoryTileSection"));
-const ProductCard = React.lazy(() => import("./components/ProductCard"));
 import LocationPermissionRequest from "../../components/LocationPermissionRequest";
+import HomemadeHomeSection from "./components/HomemadeHomeSection";
+import ProductCard from "./components/ProductCard";
 
 import { useThemeContext } from "../../context/ThemeContext";
 
@@ -398,6 +399,9 @@ export default function Home() {
           <LowestPricesEver activeTab={activeTab} products={filteredLowestPrices} />
         </Suspense>
       </div>
+
+      {/* Fresh From Home Makers & Chefs */}
+      <HomemadeHomeSection />
 
       {/* Unlimited Fashion Section */}
       {unlimitedFashionSection && (

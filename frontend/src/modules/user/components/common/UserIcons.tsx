@@ -317,3 +317,5 @@ export const AcademicCapIcon: React.FC<IconProps> = ({ size = 18, className = ''
     <path d="M6 12v5c3 3 9 3 12 0v-5" />
   </svg>
 );
+
+

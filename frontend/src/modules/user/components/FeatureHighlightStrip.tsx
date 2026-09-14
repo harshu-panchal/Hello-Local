@@ -13,10 +13,10 @@ export default function FeatureHighlightStrip() {
       route: '/order-again',
     },
     {
-      title: 'Spin & Win',
-      subtitle: 'Win Coins',
-      icon: <SparklesIcon size={16} className="text-[#E11D48]" />,
-      iconBg: 'bg-[#FFE4E6] border-[#FECDD3]',
+      title: 'Homemade',
+      subtitle: 'Home Makers',
+      icon: <SparklesIcon size={16} className="text-[#FF2E7A]" />,
+      iconBg: 'bg-[#FFF1F4] border-[#FFE4EA]',
       route: '/homemade',
     },
     {

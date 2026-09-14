@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation as useLocationContext } from '../../../hooks/useLocation';
@@ -15,9 +15,9 @@ import {
 } from '../components/common/UserIcons';
 import {
   HOMEMADE_CATEGORIES,
-  HOMEMADE_FOOD_PRODUCTS,
   HomemadeProduct,
 } from './data/homemadeData';
+import { getHomemadeProducts, getHomemadeHub } from '../../../services/api/homemadeService';
 
 const CheckMarkIcon: React.FC<{ size?: number; className?: string }> = ({ size = 12, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -30,9 +30,35 @@ export default function HomemadeCategoryListing() {
   const { categorySlug } = useParams<{ categorySlug?: string }>();
   const [searchParams] = useSearchParams();
   const searchParamQuery = searchParams.get('q') || '';
+  const { location: userLocation } = useLocationContext();
 
   const { cart, addToCart } = useCart();
   const { showToast } = useToast();
+
+  const [dynamicCategory, setDynamicCategory] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCategoryMeta = async () => {
+      try {
+        const hubRes = await getHomemadeHub();
+        if (hubRes.success && hubRes.data?.categories) {
+          const matched = hubRes.data.categories.find(
+            (c) => c.slug === categorySlug || c.id === categorySlug || c._id === categorySlug
+          );
+          if (matched && isMounted) {
+            setDynamicCategory(matched);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch dynamic category metadata:", err);
+      }
+    };
+    fetchCategoryMeta();
+    return () => {
+      isMounted = false;
+    };
+  }, [categorySlug]);
 
   const cartItemCount = useMemo(() => {
     if (!cart) return 0;
@@ -40,12 +66,13 @@ export default function HomemadeCategoryListing() {
   }, [cart]);
 
   const currentCategory = useMemo(() => {
+    if (dynamicCategory) return dynamicCategory;
     const slug = categorySlug || 'food';
     return (
       HOMEMADE_CATEGORIES.find((c) => c.slug === slug) ||
       HOMEMADE_CATEGORIES[0]
     );
-  }, [categorySlug]);
+  }, [dynamicCategory, categorySlug]);
 
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'popular' | 'price_asc' | 'price_desc' | 'rating'>('popular');
@@ -56,6 +83,51 @@ export default function HomemadeCategoryListing() {
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({});
 
+  const [dbProducts, setDbProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const res = await getHomemadeProducts({
+          category: dynamicCategory?._id || dynamicCategory?.slug || categorySlug,
+          homemadeCategory: !dynamicCategory ? categorySlug : undefined,
+          subcategory: selectedSubcategory !== 'all' ? selectedSubcategory : undefined,
+          homemadeSubcategory: selectedSubcategory !== 'all' ? selectedSubcategory : undefined,
+          foodType: dietFilter !== 'all' ? (dietFilter === 'veg' ? 'Veg' : 'Non-Veg') : undefined,
+          maxDistanceKm: nearMeOnly ? 1.5 : undefined,
+          search: searchParamQuery || undefined,
+          sort: sortBy === 'price_asc' ? 'price_asc' : sortBy === 'price_desc' ? 'price_desc' : 'popular',
+          latitude: userLocation?.latitude,
+          longitude: userLocation?.longitude,
+        });
+        if (res.success && isMounted) {
+          setDbProducts(res.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch homemade category products:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchProducts();
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    categorySlug,
+    dynamicCategory,
+    selectedSubcategory,
+    dietFilter,
+    nearMeOnly,
+    searchParamQuery,
+    sortBy,
+    userLocation?.latitude,
+    userLocation?.longitude,
+  ]);
+
   const toggleWishlist = (e: React.MouseEvent, productId: string) => {
     e.stopPropagation();
     setWishlist((prev) => {
@@ -65,27 +137,29 @@ export default function HomemadeCategoryListing() {
     });
   };
 
-  const handleAddToCart = async (e: React.MouseEvent, product: HomemadeProduct) => {
+  const handleAddToCart = async (e: React.MouseEvent, product: any) => {
     e.stopPropagation();
     try {
+      const pId = product._id || product.id;
+      const sId = product.sellerId || product.seller?._id || product.seller;
       await addToCart({
-        id: product.id,
-        _id: product.id,
+        id: pId,
+        _id: pId,
         productName: product.name,
         price: product.price,
         discPrice: product.price,
         mainImage: product.imageUrl,
-        seller: product.sellerId as any,
+        seller: sId as any,
         sellerName: product.sellerName,
-        stock: 99,
+        stock: product.stock ?? 99,
         status: 'Active',
         publish: true,
       } as any);
 
-      setAddedItems((prev) => ({ ...prev, [product.id]: true }));
+      setAddedItems((prev) => ({ ...prev, [pId]: true }));
       showToast(`Added ${product.name} to Cart`, 'success');
       setTimeout(() => {
-        setAddedItems((prev) => ({ ...prev, [product.id]: false }));
+        setAddedItems((prev) => ({ ...prev, [pId]: false }));
       }, 1500);
     } catch {
       showToast('Could not add to cart', 'error');
@@ -93,50 +167,43 @@ export default function HomemadeCategoryListing() {
   };
 
   const filteredProducts = useMemo(() => {
-    let list = [...HOMEMADE_FOOD_PRODUCTS];
-
-    // Filter by search query
-    if (searchParamQuery) {
-      const q = searchParamQuery.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.sellerName.toLowerCase().includes(q) ||
-          p.description?.toLowerCase().includes(q)
-      );
+    if (dbProducts && dbProducts.length > 0) {
+      return dbProducts.map((p: any) => {
+        const pId = p._id?.toString() || p.id;
+        const sId = p.seller?._id?.toString() || p.seller?.toString() || p.sellerId;
+        const sName = p.seller?.storeName || p.sellerName || "Home Maker";
+        return {
+          id: pId,
+          _id: pId,
+          name: p.productName || p.name,
+          sellerId: sId,
+          sellerName: sName,
+          isSellerVerified: true,
+          rating: p.seller?.rating || 4.8,
+          reviewsCount: p.seller?.reviewsCount || 34,
+          distance: p.distance || "1.2 km",
+          distanceKm: p.distanceKm || 1.2,
+          price: p.discPrice && p.discPrice > 0 ? p.discPrice : p.price,
+          originalPrice: p.discPrice && p.discPrice > 0 ? p.price : undefined,
+          unit: p.pack || (p.variations && p.variations[0]?.title) || "250g",
+          badge: p.popular ? 'Bestseller' : p.dealOfDay ? 'Chef Special' : undefined,
+          categorySlug: p.homemadeCategory || categorySlug || 'food',
+          subcategorySlug: p.homemadeSubcategory || 'all',
+          imageUrl:
+            p.mainImage ||
+            (p.galleryImages && p.galleryImages[0]) ||
+            p.imageUrl ||
+            "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80",
+          foodType: p.foodType || "None",
+          description: p.smallDescription || p.description,
+          isAvailable: p.stock !== 0,
+          stock: p.stock,
+        };
+      });
     }
 
-    // Filter by subcategory
-    if (selectedSubcategory !== 'all') {
-      list = list.filter((p) => p.subcategorySlug === selectedSubcategory);
-    }
-
-    // Filter by diet
-    if (dietFilter === 'veg') {
-      list = list.filter((p) => p.foodType === 'Veg');
-    } else if (dietFilter === 'non-veg') {
-      list = list.filter((p) => p.foodType === 'Non-Veg');
-    }
-
-    // Filter by Near Me (<= 1.5 km)
-    if (nearMeOnly) {
-      list = list.filter((p) => p.distanceKm <= 1.5);
-    }
-
-    // Sort products
-    if (sortBy === 'price_asc') {
-      list.sort((a, b) => a.price - b.price);
-    } else if (sortBy === 'price_desc') {
-      list.sort((a, b) => b.price - a.price);
-    } else if (sortBy === 'rating') {
-      list.sort((a, b) => b.rating - a.rating);
-    } else {
-      // Default: Bestseller / Popular first
-      list.sort((a, b) => (b.reviewsCount || 0) - (a.reviewsCount || 0));
-    }
-
-    return list;
-  }, [selectedSubcategory, sortBy, dietFilter, nearMeOnly, searchParamQuery]);
+    return [];
+  }, [dbProducts, categorySlug]);
 
   return (
     <div className="min-h-screen bg-[#FAFAF9] pb-28">
@@ -202,7 +269,7 @@ export default function HomemadeCategoryListing() {
       {/* 3. SUBCATEGORY CIRCULAR PILLS (MATCHING IMAGE 1 RIGHT) */}
       <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-3">
         <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide pb-1 -mx-3.5 px-3.5">
-          {currentCategory.subcategories.map((sub) => {
+          {currentCategory.subcategories.map((sub: any) => {
             const isActive = selectedSubcategory === sub.slug;
             return (
               <button

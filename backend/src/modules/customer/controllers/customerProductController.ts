@@ -3,7 +3,7 @@ import Product from "../../../models/Product";
 import Category from "../../../models/Category";
 import SubCategory from "../../../models/SubCategory";
 import mongoose from "mongoose";
-import { findSellersWithinRange } from "../../../utils/locationHelper";
+import { findSellersWithinRange, calculateDistance } from "../../../utils/locationHelper";
 
 // Get products with filtering options (public)
 export const getProducts = async (req: Request, res: Response) => {
@@ -24,6 +24,8 @@ export const getProducts = async (req: Request, res: Response) => {
       foodType,  // "Veg" | "Non-Veg" — filter by food type
       isHomemade,
       homemadeCategory,
+      homemadeSubcategory,
+      maxDistanceKm,
     } = req.query;
 
     const query: any = {
@@ -42,7 +44,22 @@ export const getProducts = async (req: Request, res: Response) => {
 
     if (userLat && userLng && !isNaN(userLat) && !isNaN(userLng)) {
       // Find sellers within user's location range
-      const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
+      let nearbySellerIds = await findSellersWithinRange(userLat, userLng);
+
+      if (maxDistanceKm && !isNaN(Number(maxDistanceKm))) {
+        const maxDist = Number(maxDistanceKm);
+        const SellerModel = mongoose.model("Seller");
+        const candidateSellers = await SellerModel.find({ _id: { $in: nearbySellerIds } }).select("location");
+        const filteredIds: mongoose.Types.ObjectId[] = [];
+        for (const s of candidateSellers) {
+          const coords = (s as any).location?.coordinates;
+          if (coords && coords.length === 2) {
+            const d = calculateDistance(userLat, userLng, coords[1], coords[0]);
+            if (d <= maxDist) filteredIds.push(s._id);
+          }
+        }
+        nearbySellerIds = filteredIds;
+      }
 
       if (nearbySellerIds.length === 0) {
         // No sellers within range, return empty result
@@ -62,6 +79,11 @@ export const getProducts = async (req: Request, res: Response) => {
 
       // Filter products by sellers within range
       query.seller = { $in: nearbySellerIds };
+    } else if (isHomemade === "true" || (isHomemade as unknown) === true) {
+      // Graceful preview for Homemade Hub when user hasn't selected GPS location yet
+      const SellerModel = mongoose.model("Seller");
+      const approvedSellers = await SellerModel.find({ status: "Approved" }).select("_id").limit(50);
+      query.seller = { $in: approvedSellers.map((s: any) => s._id) };
     } else {
       // If no location provided, return empty result (strictly enforce location)
       return res.status(200).json({
@@ -185,8 +207,17 @@ export const getProducts = async (req: Request, res: Response) => {
     if (isHomemade === "true" || (isHomemade as unknown) === true) {
       query.isHomemade = true;
     }
-    if (homemadeCategory) {
+    if (homemadeCategory && !query.category) {
       query.homemadeCategory = { $regex: new RegExp(`^${homemadeCategory}$`, "i") };
+    }
+    if (homemadeSubcategory && homemadeSubcategory !== "all" && !query.subcategory) {
+      query.homemadeSubcategory = { $regex: new RegExp(`^${homemadeSubcategory}$`, "i") };
+    }
+    if ((isHomemade === "true" || (isHomemade as unknown) === true) && category && !query.category) {
+      query.homemadeCategory = { $regex: new RegExp(`^${category}$`, "i") };
+    }
+    if ((isHomemade === "true" || (isHomemade as unknown) === true) && subcategory && !query.subcategory && subcategory !== "all") {
+      query.homemadeSubcategory = { $regex: new RegExp(`^${subcategory}$`, "i") };
     }
 
     if (search) {
@@ -212,7 +243,7 @@ export const getProducts = async (req: Request, res: Response) => {
         .populate("category", "name icon image")
         .populate("subcategory", "name")
         .populate("brand", "name image")
-        .populate("seller", "storeName")
+        .populate("seller", "storeName location city rating reviewsCount fssaiLicNo")
         .sort(sortOptions)
         .skip(skip)
         .limit(Number(limit));
@@ -246,7 +277,7 @@ export const getProducts = async (req: Request, res: Response) => {
           .populate("category", "name icon image")
           .populate("subcategory", "name")
           .populate("brand", "name image")
-          .populate("seller", "storeName")
+          .populate("seller", "storeName location city rating reviewsCount fssaiLicNo")
           .sort(sortOptions)
           .skip(skip)
           .limit(Number(limit));
@@ -257,9 +288,20 @@ export const getProducts = async (req: Request, res: Response) => {
       }
     }
 
+    const formattedProducts = (products || []).map((p: any) => {
+      const prodObj = p.toObject ? p.toObject() : { ...p };
+      if (userLat && userLng && prodObj.seller?.location?.coordinates?.length === 2) {
+        const [sLng, sLat] = prodObj.seller.location.coordinates;
+        const d = calculateDistance(userLat, userLng, sLat, sLng);
+        prodObj.distanceKm = Math.round(d * 10) / 10;
+        prodObj.distance = `${prodObj.distanceKm} km`;
+      }
+      return prodObj;
+    });
+
     return res.status(200).json({
       success: true,
-      data: products,
+      data: formattedProducts,
       pagination: {
         page: Number(page),
         limit: Number(limit),

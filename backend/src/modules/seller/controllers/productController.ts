@@ -57,11 +57,19 @@ export const createProduct = asyncHandler(
       "seoTitle", "seoKeywords", "seoDescription", "seoImageAlt",
       "pack", "shelfLife", "marketer", "tags",
       "isShopByStoreOnly", "shopId", "tax",
+      "isHomemade", "homemadeCategory", "homemadeSubcategory",
     ];
 
     const safeData: Record<string, any> = {};
     for (const f of SELLER_WRITABLE_FIELDS) {
       if (productData[f] !== undefined) safeData[f] = productData[f];
+    }
+
+    if (safeData.isHomemade !== undefined) {
+      safeData.isHomemade = safeData.isHomemade === true || safeData.isHomemade === "true" || safeData.isHomemade === "Yes";
+      if (safeData.isHomemade && !safeData.homemadeCategory && (productData.categoryId || productData.category)) {
+        safeData.homemadeCategory = (productData.categoryId || productData.category).toString();
+      }
     }
 
     const newProductData: any = {
@@ -358,6 +366,13 @@ export const updateProduct = asyncHandler(
     if (updateData.galleryImageUrls) {
       updateData.galleryImages = updateData.galleryImageUrls;
       delete updateData.galleryImageUrls;
+    }
+
+    if (updateData.isHomemade !== undefined) {
+      updateData.isHomemade = updateData.isHomemade === true || updateData.isHomemade === "true" || updateData.isHomemade === "Yes";
+      if (updateData.isHomemade && !updateData.homemadeCategory && (updateData.category || productData.category)) {
+        updateData.homemadeCategory = (updateData.category || productData.category).toString();
+      }
     }
 
     // Validate variations if provided

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useLocation as useLocationContext } from '../../../hooks/useLocation';
@@ -17,10 +17,15 @@ import {
 } from '../components/common/UserIcons';
 import {
   HOMEMADE_CATEGORIES,
-  HOMEMADE_SELLERS,
-  HOMEMADE_TRENDING_PRODUCTS,
   HomemadeProduct,
 } from './data/homemadeData';
+import {
+  getHomemadeHub,
+  HomemadeHubData,
+  HomemadeCategory,
+  HomemadeSeller,
+  HomemadeProductItem,
+} from '../../../services/api/homemadeService';
 
 const CheckMarkIcon: React.FC<{ size?: number; className?: string }> = ({ size = 12, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -34,10 +39,50 @@ export default function HomemadeHub() {
   const { cart, addToCart } = useCart();
   const { showToast } = useToast();
 
+  const [hubData, setHubData] = useState<HomemadeHubData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [addedItems, setAddedItems] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchHub = async () => {
+      try {
+        setLoading(true);
+        const res = await getHomemadeHub({
+          latitude: userLocation?.latitude,
+          longitude: userLocation?.longitude,
+        });
+        if (res.success && isMounted) {
+          setHubData(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to load dynamic homemade hub:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchHub();
+    return () => {
+      isMounted = false;
+    };
+  }, [userLocation?.latitude, userLocation?.longitude]);
+
+  const categories = useMemo(() => {
+    return hubData?.categories && hubData.categories.length > 0
+      ? hubData.categories
+      : HOMEMADE_CATEGORIES;
+  }, [hubData]);
+
+  const sellers = useMemo(() => {
+    return hubData?.nearbySellers || [];
+  }, [hubData]);
+
+  const trendingProducts = useMemo(() => {
+    return hubData?.trendingProducts || [];
+  }, [hubData]);
 
   const cartItemCount = useMemo(() => {
     if (!cart) return 0;
@@ -60,27 +105,29 @@ export default function HomemadeHub() {
     });
   };
 
-  const handleAddToCart = async (e: React.MouseEvent, product: HomemadeProduct) => {
+  const handleAddToCart = async (e: React.MouseEvent, product: any) => {
     e.stopPropagation();
     try {
+      const pId = product._id || product.id;
+      const sId = product.sellerId || product.seller?._id || product.seller;
       await addToCart({
-        id: product.id,
-        _id: product.id,
+        id: pId,
+        _id: pId,
         productName: product.name,
         price: product.price,
         discPrice: product.price,
         mainImage: product.imageUrl,
-        seller: product.sellerId as any,
+        seller: sId as any,
         sellerName: product.sellerName,
-        stock: 99,
+        stock: product.stock ?? 99,
         status: 'Active',
         publish: true,
       } as any);
 
-      setAddedItems((prev) => ({ ...prev, [product.id]: true }));
+      setAddedItems((prev) => ({ ...prev, [pId]: true }));
       showToast(`Added ${product.name} to Cart`, 'success');
       setTimeout(() => {
-        setAddedItems((prev) => ({ ...prev, [product.id]: false }));
+        setAddedItems((prev) => ({ ...prev, [pId]: false }));
       }, 1500);
     } catch {
       showToast('Could not add to cart', 'error');
@@ -88,14 +135,20 @@ export default function HomemadeHub() {
   };
 
   const filteredTrending = useMemo(() => {
-    if (activeCategoryFilter === 'all') return HOMEMADE_TRENDING_PRODUCTS;
-    return HOMEMADE_TRENDING_PRODUCTS.filter((p) => p.categorySlug === activeCategoryFilter);
-  }, [activeCategoryFilter]);
+    if (activeCategoryFilter === 'all') return trendingProducts;
+    return trendingProducts.filter((p: any) => p.categorySlug === activeCategoryFilter);
+  }, [activeCategoryFilter, trendingProducts]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/homemade/category/food?q=${encodeURIComponent(searchQuery.trim())}`);
+      const targetSlug =
+        activeCategoryFilter !== 'all'
+          ? activeCategoryFilter
+          : categories && categories.length > 0
+          ? categories[0].slug
+          : 'food';
+      navigate(`/homemade/category/${targetSlug}?q=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -219,7 +272,7 @@ export default function HomemadeHub() {
             <span>All</span>
           </button>
 
-          {HOMEMADE_CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const isActive = activeCategoryFilter === cat.slug;
             return (
               <button
@@ -254,7 +307,7 @@ export default function HomemadeHub() {
             </p>
             <button
               type="button"
-              onClick={() => navigate('/homemade/category/food')}
+              onClick={() => navigate(`/homemade/category/${categories[0]?.slug || 'food'}`)}
               className="mt-3.5 px-4 sm:px-5 py-2 rounded-xl bg-[#6B46C1] hover:bg-[#5835A8] text-white text-xs font-extrabold shadow-2xs active:scale-95 transition-all inline-flex items-center gap-1.5"
             >
               <span>Shop Homemade</span>
@@ -275,23 +328,24 @@ export default function HomemadeHub() {
       </section>
 
       {/* 5. TRENDING NEAR YOU SHELF */}
-      <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-5 pb-2">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base">🔥</span>
-            <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
-              Trending Near You
-            </h3>
+      {filteredTrending.length > 0 && (
+        <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-5 pb-2">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base">🔥</span>
+              <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+                Trending Near You
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`/homemade/category/${activeCategoryFilter !== 'all' ? activeCategoryFilter : (categories[0]?.slug || 'food')}`)}
+              className="text-xs font-bold text-[#FF8A00] hover:text-[#E67C00] flex items-center gap-0.5"
+            >
+              <span>See all</span>
+              <ChevronRightIcon size={14} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/homemade/category/food')}
-            className="text-xs font-bold text-[#FF8A00] hover:text-[#E67C00] flex items-center gap-0.5"
-          >
-            <span>See all</span>
-            <ChevronRightIcon size={14} />
-          </button>
-        </div>
 
         {/* Horizontal Scroll Shelf */}
         <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 -mx-3.5 px-3.5">
@@ -392,6 +446,7 @@ export default function HomemadeHub() {
           })}
         </div>
       </section>
+      )}
 
       {/* 6. SHOP BY CATEGORY (6 TILES MATCHING IMAGE 1) */}
       <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-4 pb-2">
@@ -400,22 +455,26 @@ export default function HomemadeHub() {
         </h3>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
-          {HOMEMADE_CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <motion.div
               key={cat.id}
               whileTap={{ scale: 0.98 }}
               onClick={() => navigate(`/homemade/category/${cat.slug}`)}
               className={`${cat.accentBg} ${cat.accentBorder} border rounded-2xl p-3 sm:p-4 flex items-center gap-3 cursor-pointer shadow-2xs hover:shadow-xs transition-all group`}
             >
-              <div className="w-11 h-11 rounded-xl bg-white/90 border border-white flex items-center justify-center text-xl sm:text-2xl shadow-2xs group-hover:scale-110 transition-transform">
-                {cat.icon}
+              <div className="w-11 h-11 rounded-xl bg-white/90 border border-white flex items-center justify-center text-xl sm:text-2xl shadow-2xs group-hover:scale-110 transition-transform overflow-hidden">
+                {cat.image ? (
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{cat.icon || '✨'}</span>
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <h4 className={`text-xs sm:text-sm font-extrabold ${cat.accentText} leading-snug line-clamp-2`}>
                   {cat.name}
                 </h4>
                 <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                  {cat.subcategories.length} subcategories
+                  {cat.productCount !== undefined && cat.productCount > 0 ? `${cat.productCount} items available` : `${cat.subcategories.length} subcategories`}
                 </p>
               </div>
             </motion.div>
@@ -423,30 +482,38 @@ export default function HomemadeHub() {
         </div>
       </section>
 
-      {/* 7. SELLERS NEAR YOU (WITH 3 PREVIEW PHOTOS) */}
-      <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-5 pb-3">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
-              Sellers Near You
-            </h3>
-            <p className="text-[10px] text-slate-400 font-medium">Verified local home makers & cooks</p>
+      {/* 7. SELLERS NEAR YOU */}
+      {sellers.length > 0 && (
+        <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-5 pb-3">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+                Sellers Near You
+              </h3>
+              <p className="text-[10px] text-slate-400 font-medium">Verified local home makers & cooks</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`/homemade/category/${categories[0]?.slug || 'food'}`)}
+              className="text-xs font-bold text-[#FF8A00] hover:text-[#E67C00] flex items-center gap-0.5"
+            >
+              <span>See all</span>
+              <ChevronRightIcon size={14} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/homemade/category/food')}
-            className="text-xs font-bold text-[#FF8A00] hover:text-[#E67C00] flex items-center gap-0.5"
-          >
-            <span>See all</span>
-            <ChevronRightIcon size={14} />
-          </button>
-        </div>
 
-        <div className="space-y-3">
-          {HOMEMADE_SELLERS.slice(0, 3).map((seller) => (
-            <div
-              key={seller.id}
-              onClick={() => navigate('/homemade/category/food')}
+          <div className="space-y-3">
+            {sellers.slice(0, 5).map((seller) => (
+              <div
+                key={seller.id || (seller as any)._id}
+                onClick={() => {
+                  const sId = (seller as any)._id || seller.id;
+                  if (sId && sId.length === 24) {
+                    navigate(`/store/${sId}`);
+                  } else {
+                    navigate(`/homemade/category/${categories[0]?.slug || 'food'}`);
+                  }
+                }}
               className="bg-white rounded-2xl border border-slate-100 p-3 sm:p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group"
             >
               {/* Left Seller Profile */}
@@ -511,6 +578,7 @@ export default function HomemadeHub() {
           ))}
         </div>
       </section>
+      )}
 
       {/* 8. MAKER ONBOARDING CTA BANNER */}
       <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-3">

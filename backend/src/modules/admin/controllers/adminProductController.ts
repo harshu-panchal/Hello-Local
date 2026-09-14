@@ -1306,6 +1306,14 @@ export const createProduct = asyncHandler(
         });
       }
 
+      // Handle Homemade / Artisan flags
+      if (productData.isHomemade !== undefined) {
+        productData.isHomemade = productData.isHomemade === true || productData.isHomemade === "true" || productData.isHomemade === "Yes";
+        if (productData.isHomemade && !productData.homemadeCategory && productData.category) {
+          productData.homemadeCategory = productData.category.toString();
+        }
+      }
+
       // All products are published automatically without approval
       productData.status = "Active";
       productData.publish = true;
@@ -1504,6 +1512,14 @@ export const updateProduct = asyncHandler(
             0
           );
         }
+      }
+    }
+
+    // Handle Homemade / Artisan flags
+    if (updateData.isHomemade !== undefined) {
+      updateData.isHomemade = updateData.isHomemade === true || updateData.isHomemade === "true" || updateData.isHomemade === "Yes";
+      if (updateData.isHomemade && !updateData.homemadeCategory && updateData.category) {
+        updateData.homemadeCategory = updateData.category.toString();
       }
     }
 

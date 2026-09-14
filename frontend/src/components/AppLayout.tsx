@@ -19,6 +19,7 @@ import {
   MicIcon,
   ChevronDownIcon,
   CloseIcon,
+  SparklesIcon,
 } from '../modules/user/components/common/UserIcons';
 
 interface AppLayoutProps {
@@ -259,6 +260,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
               >
                 <CategoryNavIcon size={18} className={isCategoriesActive ? 'text-[#FF2E7A]' : 'text-slate-500'} />
                 <span>Categories</span>
+              </Link>
+
+              <Link
+                to="/homemade"
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[38px] ${
+                  isHomemadeActive
+                    ? 'bg-[#FFF1F4] text-[#FF2E7A] border border-[#FFE4EA]'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <SparklesIcon size={18} className={isHomemadeActive ? 'text-[#FF2E7A]' : 'text-slate-500'} />
+                <span>Homemade</span>
               </Link>
 
               <Link

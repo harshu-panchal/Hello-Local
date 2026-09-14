@@ -66,6 +66,9 @@ export default function AdminAddProduct() {
     galleryImageUrls: [] as string[],
     isShopByStoreOnly: "No",
     shopId: "",
+    isHomemade: "No",
+    homemadeCategory: "",
+    homemadeSubcategory: "",
   });
 
   const [variations, setVariations] = useState<ProductVariation[]>([]);
@@ -196,6 +199,9 @@ export default function AdminAddProduct() {
                 (product as any).shopId?._id ||
                 (product as any).shopId ||
                 "",
+              isHomemade: (product as any).isHomemade ? "Yes" : "No",
+              homemadeCategory: (product as any).homemadeCategory || "",
+              homemadeSubcategory: (product as any).homemadeSubcategory || "",
             });
             setVariations(product.variations || []);
             if (product.mainImageUrl || product.mainImage) {
@@ -504,6 +510,9 @@ export default function AdminAddProduct() {
           formData.isShopByStoreOnly === "Yes" && formData.shopId
             ? formData.shopId
             : undefined,
+        isHomemade: formData.isHomemade === "Yes",
+        homemadeCategory: formData.isHomemade === "Yes" ? (formData.homemadeCategory || undefined) : undefined,
+        homemadeSubcategory: formData.isHomemade === "Yes" ? (formData.homemadeSubcategory || undefined) : undefined,
       };
 
       let response;
@@ -982,6 +991,43 @@ export default function AdminAddProduct() {
                 placeholder="Brief summary of product features, key ingredients, or benefits..."
                 className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white resize-y"
               />
+            </div>
+
+            {/* Prominent Homemade / Artisan Product Classification */}
+            <div className="p-4 bg-gradient-to-r from-[#FFF5F8] via-[#FFF8F2] to-white rounded-2xl border-2 border-[#FFE4EA] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#FFE4EA] flex items-center justify-center text-xl flex-shrink-0">
+                  🍲
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900">
+                      Homemade & Handcrafted Product?
+                    </h4>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#FF2E7A] text-white tracking-wide">
+                      HOMEMADE HUB
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    For Home Makers, Chefs, Bakers & Artisans. Automatically features this item on the customer Homemade Hub under its selected Category.
+                  </p>
+                </div>
+              </div>
+              <div className="flex-shrink-0 sm:min-w-[220px]">
+                <select
+                  name="isHomemade"
+                  value={formData.isHomemade}
+                  onChange={handleChange}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold border-2 transition-all outline-none cursor-pointer ${
+                    formData.isHomemade === "Yes"
+                      ? "bg-[#FF2E7A] text-white border-[#FF2E7A] shadow-xs"
+                      : "bg-white text-slate-800 border-neutral-300 hover:border-neutral-400"
+                  }`}
+                >
+                  <option value="No" className="bg-white text-slate-800">No (Standard Catalog)</option>
+                  <option value="Yes" className="bg-white text-slate-800">Yes (Home Maker / Artisan Product) ✨</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
