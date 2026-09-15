@@ -103,28 +103,40 @@ export const getCategoriesWithSubs = async (_req: Request, res: Response) => {
       }
     });
 
-    // Group child categories by parentId
+    // Group child categories and legacy subcategories by parentId, prioritizing SubCategory where products are linked
     const subsByParent = new Map<string, any[]>();
-    for (const sub of childCategories) {
-      const pId = sub.parentId?.toString();
-      if (!pId) continue;
-      if (!subsByParent.has(pId)) subsByParent.set(pId, []);
-      subsByParent.get(pId)!.push({
-        ...sub,
-        totalProducts: subcategoryCountMap.get(sub._id.toString()) || 0,
-      });
-    }
+    const seenNamesByParent = new Map<string, Set<string>>();
 
-    // Merge legacy subcategories if any exist and aren't duplicated by name
+    // Prioritize legacySubcategories (SubCategory)
     for (const legSub of legacySubcategories) {
       const pId = (legSub as any).category?.toString();
       if (!pId) continue;
-      if (!subsByParent.has(pId)) subsByParent.set(pId, []);
-      const existing = subsByParent.get(pId)!;
-      if (!existing.some((s) => s.name.toLowerCase() === legSub.name.toLowerCase())) {
-        existing.push({
-          ...legSub,
-          totalProducts: subcategoryCountMap.get(legSub._id.toString()) || 0,
+      if (!subsByParent.has(pId)) {
+        subsByParent.set(pId, []);
+        seenNamesByParent.set(pId, new Set());
+      }
+      const normName = (legSub.name || "").toLowerCase().trim();
+      seenNamesByParent.get(pId)!.add(normName);
+      subsByParent.get(pId)!.push({
+        ...legSub,
+        totalProducts: subcategoryCountMap.get(legSub._id.toString()) || 0,
+      });
+    }
+
+    // Add childCategories that aren't already present
+    for (const sub of childCategories) {
+      const pId = sub.parentId?.toString();
+      if (!pId) continue;
+      if (!subsByParent.has(pId)) {
+        subsByParent.set(pId, []);
+        seenNamesByParent.set(pId, new Set());
+      }
+      const normName = (sub.name || "").toLowerCase().trim();
+      if (!seenNamesByParent.get(pId)!.has(normName)) {
+        seenNamesByParent.get(pId)!.add(normName);
+        subsByParent.get(pId)!.push({
+          ...sub,
+          totalProducts: subcategoryCountMap.get(sub._id.toString()) || 0,
         });
       }
     }
@@ -334,14 +346,23 @@ export const getCategoryById = async (req: Request, res: Response) => {
       .sort({ order: 1 })
       .lean();
 
-    // 3. Merge both sources, avoiding duplicates by _id
-    const seen = new Set<string>();
+    // 3. Merge both sources, deduplicating by normalized name
+    // Process SubCategory docs first (primary standard model that products link to)
+    const seenNames = new Set<string>();
     const subcategories: any[] = [];
 
-    for (const doc of [...categorySubcategories, ...subCategoryDocs]) {
-      const key = doc._id.toString();
-      if (!seen.has(key)) {
-        seen.add(key);
+    for (const doc of subCategoryDocs) {
+      const normName = (doc.name || "").toLowerCase().trim();
+      if (!seenNames.has(normName)) {
+        seenNames.add(normName);
+        subcategories.push(doc);
+      }
+    }
+
+    for (const doc of categorySubcategories) {
+      const normName = (doc.name || "").toLowerCase().trim();
+      if (!seenNames.has(normName)) {
+        seenNames.add(normName);
         subcategories.push(doc);
       }
     }

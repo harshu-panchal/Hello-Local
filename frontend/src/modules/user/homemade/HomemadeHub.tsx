@@ -307,7 +307,7 @@ export default function HomemadeHub() {
             </p>
             <button
               type="button"
-              onClick={() => navigate(`/homemade/category/${categories[0]?.slug || 'food'}`)}
+              onClick={() => navigate('/homemade/category/all')}
               className="mt-3.5 px-4 sm:px-5 py-2 rounded-xl bg-[#6B46C1] hover:bg-[#5835A8] text-white text-xs font-extrabold shadow-2xs active:scale-95 transition-all inline-flex items-center gap-1.5"
             >
               <span>Shop Homemade</span>
@@ -339,7 +339,7 @@ export default function HomemadeHub() {
             </div>
             <button
               type="button"
-              onClick={() => navigate(`/homemade/category/${activeCategoryFilter !== 'all' ? activeCategoryFilter : (categories[0]?.slug || 'food')}`)}
+              onClick={() => navigate(`/homemade/category/${activeCategoryFilter !== 'all' ? activeCategoryFilter : 'all'}`)}
               className="text-xs font-bold text-[#FF8A00] hover:text-[#E67C00] flex items-center gap-0.5"
             >
               <span>See all</span>
@@ -494,7 +494,7 @@ export default function HomemadeHub() {
             </div>
             <button
               type="button"
-              onClick={() => navigate(`/homemade/category/${categories[0]?.slug || 'food'}`)}
+              onClick={() => navigate('/homemade/category/all')}
               className="text-xs font-bold text-[#FF8A00] hover:text-[#E67C00] flex items-center gap-0.5"
             >
               <span>See all</span>
