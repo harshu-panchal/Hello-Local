@@ -221,8 +221,24 @@ export const getProducts = async (req: Request, res: Response) => {
     }
 
     if (search) {
-      // Use text search for broad matching
-      query.$text = { $search: search as string };
+      const q = String(search).trim();
+      if (q) {
+        const words = q.split(/\s+/).filter(Boolean);
+        query.$and = query.$and || [];
+        for (const word of words) {
+          const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const wordRegex = new RegExp(escaped, "i");
+          query.$and.push({
+            $or: [
+              { productName: { $regex: wordRegex } },
+              { smallDescription: { $regex: wordRegex } },
+              { description: { $regex: wordRegex } },
+              { tags: { $in: [wordRegex] } },
+              { sku: { $regex: wordRegex } },
+            ],
+          });
+        }
+      }
     }
 
     // Calculate skip for pagination
