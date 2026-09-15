@@ -579,28 +579,6 @@ export default function HomemadeHub() {
         </div>
       </section>
       )}
-
-      {/* 8. MAKER ONBOARDING CTA BANNER */}
-      <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-3">
-        <div className="bg-gradient-to-r from-[#FFF5F0] via-[#FFF1F4] to-[#FFF8E6] border border-orange-200/60 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-center sm:text-left">
-            <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
-              Do you make awesome homemade products?
-            </h3>
-            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-1">
-              Join thousands of home makers on Hello Local and sell to your neighborhood.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/seller/signup')}
-            className="px-6 py-2.5 rounded-2xl bg-[#FF8A00] hover:bg-[#E67C00] text-white text-xs font-black shadow-xs active:scale-95 transition-all whitespace-nowrap"
-          >
-            I Make & Sell
-          </button>
-        </div>
-      </section>
     </div>
   );
 }

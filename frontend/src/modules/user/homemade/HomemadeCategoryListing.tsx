@@ -568,33 +568,6 @@ export default function HomemadeCategoryListing() {
           </div>
         </div>
       </section>
-
-      {/* 7. HOMEMAKER ONBOARDING BANNER (MATCHING IMAGE 1 RIGHT) */}
-      <section className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-3">
-        <div className="bg-gradient-to-r from-[#FFF5F0] via-[#FFF9F2] to-[#FFF1F4] border border-orange-200/70 rounded-3xl p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3 text-center sm:text-left">
-            <div className="w-12 h-12 rounded-2xl bg-white border border-orange-100 flex items-center justify-center text-2xl shadow-2xs flex-shrink-0">
-              👩‍🍳
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-black text-slate-900">
-                Are you a home maker?
-              </h4>
-              <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">
-                Sell your homemade food and earn with Hello Local.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/seller/signup')}
-            className="px-5 py-2 rounded-xl bg-[#FF8A00] hover:bg-[#E67C00] text-white text-xs font-black shadow-2xs active:scale-95 transition-all whitespace-nowrap"
-          >
-            I Make & Sell
-          </button>
-        </div>
-      </section>
     </div>
   );
 }
