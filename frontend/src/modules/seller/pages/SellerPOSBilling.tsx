@@ -117,8 +117,9 @@ export default function SellerPOSBilling() {
         const updated = [...prev];
         const newQty = existing.quantity + 1;
         const subtotal = Math.round(unitPrice * newQty * 100) / 100;
-        const taxAmount = Math.round(((subtotal * product.taxRate) / 100) * 100) / 100;
-        const total = Math.round((subtotal + taxAmount) * 100) / 100;
+        // Prices are tax-inclusive (MRP): tax is embedded within line subtotal
+        const taxAmount = product.taxRate > 0 ? Math.round(((subtotal * product.taxRate) / (100 + product.taxRate)) * 100) / 100 : 0;
+        const total = subtotal;
 
         updated[existingIndex] = {
           ...existing,
@@ -133,8 +134,9 @@ export default function SellerPOSBilling() {
 
       // Add new item
       const subtotal = Math.round(unitPrice * 1 * 100) / 100;
-      const taxAmount = Math.round(((subtotal * product.taxRate) / 100) * 100) / 100;
-      const total = Math.round((subtotal + taxAmount) * 100) / 100;
+      // Prices are tax-inclusive (MRP): tax is embedded within line subtotal
+      const taxAmount = product.taxRate > 0 ? Math.round(((subtotal * product.taxRate) / (100 + product.taxRate)) * 100) / 100 : 0;
+      const total = subtotal;
 
       const newItem: POSCartItem = {
         productId: product.id,
@@ -182,8 +184,9 @@ export default function SellerPOSBilling() {
       }
 
       const subtotal = Math.round(item.unitPrice * newQty * 100) / 100;
-      const taxAmount = Math.round(((subtotal * item.taxRate) / 100) * 100) / 100;
-      const total = Math.round((subtotal + taxAmount) * 100) / 100;
+      // Prices are tax-inclusive (MRP): tax is embedded within line subtotal
+      const taxAmount = item.taxRate > 0 ? Math.round(((subtotal * item.taxRate) / (100 + item.taxRate)) * 100) / 100 : 0;
+      const total = subtotal;
 
       updated[index] = {
         ...item,
@@ -251,8 +254,8 @@ export default function SellerPOSBilling() {
   }, [cart]);
 
   const rawGrandTotal = useMemo(() => {
-    return Math.max(0, Math.round((cartSubtotal + cartTotalTax - discount) * 100) / 100);
-  }, [cartSubtotal, cartTotalTax, discount]);
+    return Math.max(0, Math.round((cartSubtotal - discount) * 100) / 100);
+  }, [cartSubtotal, discount]);
 
   const grandTotal = rawGrandTotal;
 
@@ -621,7 +624,7 @@ export default function SellerPOSBilling() {
                         </span>
                       )}
                       <span>₹{item.unitPrice.toFixed(2)}</span>
-                      {item.taxRate > 0 && <span className="text-slate-400">+{item.taxRate}% tax</span>}
+                      {item.taxRate > 0 && <span className="text-slate-400">(Incl. {item.taxRate}% tax)</span>}
                     </div>
                   </div>
 
@@ -783,7 +786,7 @@ export default function SellerPOSBilling() {
               </div>
               {cartTotalTax > 0 && (
                 <div className="flex items-center justify-between text-slate-600">
-                  <span>Tax (GST):</span>
+                  <span>Incl. Tax (GST):</span>
                   <span className="font-bold text-slate-900">₹{cartTotalTax.toFixed(2)}</span>
                 </div>
               )}

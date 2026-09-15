@@ -119,7 +119,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
             </tr>
             ${bill.pricing.tax > 0 ? `
               <tr class="totals-row">
-                <td>Taxes (GST/VAT):</td>
+                <td>Incl. GST:</td>
                 <td class="text-right">₹${bill.pricing.tax.toFixed(2)}</td>
               </tr>
             ` : ""}
@@ -262,7 +262,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
             </tr>
             ${bill.pricing.tax > 0 ? `
               <tr>
-                <td>Taxes (GST):</td>
+                <td>Incl. Taxes (GST):</td>
                 <td style="text-align: right; font-weight: 600;">₹${bill.pricing.tax.toFixed(2)}</td>
               </tr>
             ` : ""}
