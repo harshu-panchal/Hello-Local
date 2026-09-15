@@ -872,13 +872,13 @@ export const getHomeContent = async (req: Request, res: Response) => {
           .limit(4)
           .lean();
 
-        // Merge and deduplicate
-        const allChildren = [...childCategories, ...subCategoryDocs];
-        const seen = new Set<string>();
+        // Merge and deduplicate by normalized name
+        const allChildren = [...subCategoryDocs, ...childCategories];
+        const seenNames = new Set<string>();
         const uniqueChildren = allChildren.filter((c: any) => {
-          const key = c._id.toString();
-          if (seen.has(key)) return false;
-          seen.add(key);
+          const key = (c.name || "").toLowerCase().trim();
+          if (seenNames.has(key)) return false;
+          seenNames.add(key);
           return true;
         });
 

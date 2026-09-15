@@ -157,7 +157,7 @@ export const getProducts = async (req: Request, res: Response) => {
       return null;
     };
 
-    if (category) {
+    if (category && category !== "all") {
       const categoryId = await resolveId(
         Category,
         category as string,
@@ -167,21 +167,58 @@ export const getProducts = async (req: Request, res: Response) => {
     }
 
     if (subcategory) {
-      // Try to resolve from Category model first (new structure where subcategories are categories with parentId)
-      let subcategoryId = await resolveId(
+      const matchingSubcategoryIds: mongoose.Types.ObjectId[] = [];
+
+      // 1. Try resolving in SubCategory
+      const subCatId = await resolveId(
+        SubCategory,
+        subcategory as string,
+        "SubCategory"
+      );
+      if (subCatId) {
+        matchingSubcategoryIds.push(subCatId);
+        // Look up companion child Category with the same name
+        const subDoc = await SubCategory.findById(subCatId).select("name").lean();
+        if (subDoc) {
+          const escapedName = subDoc.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const companionCat = await Category.findOne({
+            name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+            parentId: { $exists: true, $ne: null },
+          }).select("_id").lean();
+          if (companionCat && !matchingSubcategoryIds.some((id) => id.toString() === companionCat._id.toString())) {
+            matchingSubcategoryIds.push(companionCat._id as mongoose.Types.ObjectId);
+          }
+        }
+      }
+
+      // 2. Try resolving in Category (child categories with parentId)
+      const childCatId = await resolveId(
         Category,
         subcategory as string,
         "Category"
       );
-      // If not found in Category, try old SubCategory model (backward compatibility)
-      if (!subcategoryId) {
-        subcategoryId = await resolveId(
-          SubCategory,
-          subcategory as string,
-          "SubCategory"
-        );
+      if (childCatId) {
+        if (!matchingSubcategoryIds.some((id) => id.toString() === childCatId.toString())) {
+          matchingSubcategoryIds.push(childCatId);
+        }
+        // Look up companion SubCategory with the same name
+        const catDoc = await Category.findById(childCatId).select("name parentId").lean();
+        if (catDoc) {
+          const escapedName = catDoc.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const companionSub = await SubCategory.findOne({
+            name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+          }).select("_id").lean();
+          if (companionSub && !matchingSubcategoryIds.some((id) => id.toString() === companionSub._id.toString())) {
+            matchingSubcategoryIds.push(companionSub._id as mongoose.Types.ObjectId);
+          }
+        }
       }
-      if (subcategoryId) query.subcategory = subcategoryId;
+
+      if (matchingSubcategoryIds.length === 1) {
+        query.subcategory = matchingSubcategoryIds[0];
+      } else if (matchingSubcategoryIds.length > 1) {
+        query.subcategory = { $in: matchingSubcategoryIds };
+      }
     }
 
     if (brand) {

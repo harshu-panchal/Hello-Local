@@ -36,6 +36,7 @@ export default function HomemadeCategoryListing() {
   const { showToast } = useToast();
 
   const [dynamicCategory, setDynamicCategory] = useState<any>(null);
+  const [allCategories, setAllCategories] = useState<any[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -43,8 +44,9 @@ export default function HomemadeCategoryListing() {
       try {
         const hubRes = await getHomemadeHub();
         if (hubRes.success && hubRes.data?.categories) {
+          if (isMounted) setAllCategories(hubRes.data.categories);
           const matched = hubRes.data.categories.find(
-            (c) => c.slug === categorySlug || c.id === categorySlug || c._id === categorySlug
+            (c: any) => c.slug === categorySlug || c.id === categorySlug || c._id === categorySlug
           );
           if (matched && isMounted) {
             setDynamicCategory(matched);
@@ -66,13 +68,33 @@ export default function HomemadeCategoryListing() {
   }, [cart]);
 
   const currentCategory = useMemo(() => {
+    if (categorySlug === 'all') {
+      const categoryPills = (allCategories || []).map((c: any) => ({
+        id: c.slug || c.id || c._id,
+        slug: c.slug || c.id || c._id,
+        name: c.name,
+        icon: c.icon || '🍲',
+      }));
+      return {
+        id: 'all',
+        _id: 'all',
+        name: 'All Trending Delights',
+        slug: 'all',
+        tagline: 'Discover all authentic homemade treats & handcrafted items near you',
+        heroImage: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=800&q=80',
+        subcategories: [
+          { id: 'all', slug: 'all', name: 'All', icon: '✨' },
+          ...categoryPills,
+        ],
+      };
+    }
     if (dynamicCategory) return dynamicCategory;
     const slug = categorySlug || 'food';
     return (
       HOMEMADE_CATEGORIES.find((c) => c.slug === slug) ||
       HOMEMADE_CATEGORIES[0]
     );
-  }, [dynamicCategory, categorySlug]);
+  }, [dynamicCategory, categorySlug, allCategories]);
 
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'popular' | 'price_asc' | 'price_desc' | 'rating'>('popular');
@@ -91,11 +113,19 @@ export default function HomemadeCategoryListing() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
+        const isAllCategory = categorySlug === 'all';
+        const targetCategory = isAllCategory
+          ? (selectedSubcategory !== 'all' ? selectedSubcategory : undefined)
+          : (dynamicCategory?._id || dynamicCategory?.slug || categorySlug);
+        const targetSubcategory = isAllCategory
+          ? undefined
+          : (selectedSubcategory !== 'all' ? selectedSubcategory : undefined);
+
         const res = await getHomemadeProducts({
-          category: dynamicCategory?._id || dynamicCategory?.slug || categorySlug,
-          homemadeCategory: !dynamicCategory ? categorySlug : undefined,
-          subcategory: selectedSubcategory !== 'all' ? selectedSubcategory : undefined,
-          homemadeSubcategory: selectedSubcategory !== 'all' ? selectedSubcategory : undefined,
+          category: targetCategory,
+          homemadeCategory: !dynamicCategory && !isAllCategory ? categorySlug : undefined,
+          subcategory: targetSubcategory,
+          homemadeSubcategory: targetSubcategory,
           foodType: dietFilter !== 'all' ? (dietFilter === 'veg' ? 'Veg' : 'Non-Veg') : undefined,
           maxDistanceKm: nearMeOnly ? 1.5 : undefined,
           search: searchParamQuery || undefined,
