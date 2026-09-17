@@ -145,9 +145,7 @@ export default function HomemadeHub() {
       const targetSlug =
         activeCategoryFilter !== 'all'
           ? activeCategoryFilter
-          : categories && categories.length > 0
-          ? categories[0].slug
-          : 'food';
+          : 'all';
       navigate(`/homemade/category/${targetSlug}?q=${encodeURIComponent(searchQuery.trim())}`);
     }
   };

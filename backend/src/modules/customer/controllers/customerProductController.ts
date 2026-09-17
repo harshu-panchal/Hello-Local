@@ -166,7 +166,7 @@ export const getProducts = async (req: Request, res: Response) => {
       if (categoryId) query.category = categoryId;
     }
 
-    if (subcategory) {
+    if (subcategory && subcategory !== "all") {
       const matchingSubcategoryIds: mongoose.Types.ObjectId[] = [];
 
       // 1. Try resolving in SubCategory
