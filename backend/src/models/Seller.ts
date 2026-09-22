@@ -344,7 +344,7 @@ SellerSchema.pre('save', function (next) {
 });
 
 // Create geospatial index on location field for efficient queries
-SellerSchema.index({ location: '2dsphere' }, { sparse: true });
+SellerSchema.index({ location: '2dsphere' });
 SellerSchema.index({ status: 1 }); // Compound index for status + location queries
 
 const Seller = (mongoose.models.Seller as mongoose.Model<ISeller>) || mongoose.model<ISeller>('Seller', SellerSchema);
