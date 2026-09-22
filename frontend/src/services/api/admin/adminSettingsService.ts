@@ -20,6 +20,8 @@ export interface SMSGatewaySettings {
   apiKey?: string;
   apiSecret?: string;
   senderId?: string;
+  dltTemplateId?: string;
+  template?: string;
   enabled: boolean;
 }
 

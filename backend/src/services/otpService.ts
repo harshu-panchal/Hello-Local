@@ -9,6 +9,7 @@ export interface SmsCredentials {
   apiKey?: string;
   senderId?: string;
   dltTemplateId?: string;
+  template?: string;
 }
 
 /**
@@ -21,15 +22,19 @@ export interface SmsCredentials {
  */
 export async function resolveSmsCredentials(): Promise<SmsCredentials> {
   try {
-    const AppSettings = (await import('../models/AppSettings')).default;
-    const settings = await AppSettings.findOne().select('smsGateway').lean();
-    const gw = (settings as any)?.smsGateway;
-    if (gw?.apiKey && gw?.senderId) {
-      return {
-        apiKey: String(gw.apiKey).trim(),
-        senderId: String(gw.senderId).trim(),
-        dltTemplateId: gw.dltTemplateId ? String(gw.dltTemplateId).trim() : undefined,
-      };
+    const mongoose = (await import('mongoose')).default;
+    if (mongoose.connection.readyState === 1) {
+      const AppSettings = (await import('../models/AppSettings')).default;
+      const settings = await AppSettings.findOne().select('smsGateway').lean();
+      const gw = (settings as any)?.smsGateway;
+      if (gw?.apiKey && gw?.senderId) {
+        return {
+          apiKey: String(gw.apiKey).trim(),
+          senderId: String(gw.senderId).trim(),
+          dltTemplateId: gw.dltTemplateId ? String(gw.dltTemplateId).trim() : (process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1077104580057767222'),
+          template: gw.template ? String(gw.template).trim() : (process.env.SMS_INDIA_HUB_TEMPLATE || 'Welcome to ##var##, powered by ##var##. Your OTP for registration ##var##. This OTP is valid for 10 minutes. Please do not share it with anyone.BGADPL'),
+        };
+      }
     }
   } catch (err) {
     console.error('Could not read SMS gateway settings, falling back to env:', err);
@@ -37,8 +42,9 @@ export async function resolveSmsCredentials(): Promise<SmsCredentials> {
 
   return {
     apiKey: process.env.SMS_INDIA_HUB_API_KEY,
-    senderId: process.env.SMS_INDIA_HUB_SENDER_ID,
-    dltTemplateId: process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID,
+    senderId: process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADPL',
+    dltTemplateId: process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1077104580057767222',
+    template: process.env.SMS_INDIA_HUB_TEMPLATE || 'Welcome to ##var##, powered by ##var##. Your OTP for registration ##var##. This OTP is valid for 10 minutes. Please do not share it with anyone.BGADPL',
   };
 }
 
@@ -102,11 +108,41 @@ function normalizeMobileNumber(mobile: string): string {
 }
 
 /**
- * Build DLT-compliant message
+ * Build DLT-compliant message according to registered DLT template
+ * Registered Template:
+ * "Welcome to ##var##, powered by ##var##. Your OTP for registration ##var##. This OTP is valid for 10 minutes. Please do not share it with anyone.BGADPL"
  */
-function buildOtpMessage(otp: string): string {
-  const appName = process.env.APP_NAME || 'Hello Local';
-  return `Welcome to the ${appName} powered by SMSINDIAHUB. Your OTP for registration is ${otp}`;
+export function buildOtpMessage(otp: string, customTemplate?: string): string {
+  const brand = process.env.SMS_VAR1 || process.env.APP_NAME || 'Hello Local';
+  const partner = process.env.SMS_VAR2 || process.env.SMS_POWERED_BY || 'BGADPL';
+  const otpPrefix = process.env.SMS_OTP_PREFIX !== undefined ? process.env.SMS_OTP_PREFIX : 'is';
+  const otpValue = otpPrefix ? `${otpPrefix} ${otp}`.trim() : otp;
+
+  const rawTemplate =
+    customTemplate ||
+    process.env.SMS_INDIA_HUB_TEMPLATE ||
+    'Welcome to ##var##, powered by ##var##. Your OTP for registration ##var##. This OTP is valid for 10 minutes. Please do not share it with anyone.BGADPL';
+
+  // Replace ##var##, {#var#}, or TRAI typed variable tags sequentially
+  const varPattern = /##var##|\{#var#\}|{#numeric#}|{#alphanumeric#}/i;
+  if (varPattern.test(rawTemplate)) {
+    const vars = [brand, partner, otpValue];
+    let filled = rawTemplate;
+    for (const val of vars) {
+      filled = filled.replace(varPattern, val);
+    }
+    return filled;
+  }
+
+  // Fallback for named tokens {appName}, {poweredBy}, {otp}
+  if (rawTemplate.includes('{otp}') || rawTemplate.includes('${otp}')) {
+    return rawTemplate
+      .replace(/\{appName\}|\$\{appName\}/g, brand)
+      .replace(/\{poweredBy\}|\$\{poweredBy\}/g, partner)
+      .replace(/\{otp\}|\$\{otp\}/g, otpValue);
+  }
+
+  return `Welcome to ${brand}, powered by ${partner}. Your OTP for registration ${otpValue}. This OTP is valid for 10 minutes. Please do not share it with anyone.BGADPL`;
 }
 
 /**
@@ -198,7 +234,7 @@ async function saveOtpToDb(mobile: string, otp: string, userType: UserType): Pro
     mobile: normalizedMobile,
     otp: otp.trim(),
     userType,
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiry (matches DLT template)
   });
 }
 
@@ -308,7 +344,8 @@ export async function sendSmsOtp(
 
     // Real mode - Send via SMS India HUB
     await saveOtpToDb(mobile, otp, userType);
-    const message = buildOtpMessage(otp);
+    const creds = await resolveSmsCredentials();
+    const message = buildOtpMessage(otp, creds.template);
     await sendSmsViaApi(mobile, message);
 
     return {
@@ -390,7 +427,8 @@ export async function sendOTP(
 
     // Real mode - Send via SMS India HUB
     await saveOtpToDb(mobile, otp, userType);
-    const message = buildOtpMessage(otp);
+    const creds = await resolveSmsCredentials();
+    const message = buildOtpMessage(otp, creds.template);
     await sendSmsViaApi(mobile, message);
 
     return {

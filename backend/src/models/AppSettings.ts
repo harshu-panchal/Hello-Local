@@ -41,10 +41,12 @@ export interface IAppSettings extends Document {
 
   // SMS Gateway Settings
   smsGateway?: {
-    provider: string; // e.g., 'Twilio', 'MSG91', 'TextLocal'
+    provider: string; // e.g., 'Twilio', 'MSG91', 'TextLocal', 'SMSIndiaHub'
     apiKey?: string;
     apiSecret?: string;
     senderId?: string;
+    dltTemplateId?: string;
+    template?: string;
     enabled: boolean;
   };
 
@@ -245,6 +247,14 @@ const AppSettingsSchema = new Schema<IAppSettings>(
         trim: true,
       },
       senderId: {
+        type: String,
+        trim: true,
+      },
+      dltTemplateId: {
+        type: String,
+        trim: true,
+      },
+      template: {
         type: String,
         trim: true,
       },
