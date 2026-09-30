@@ -142,34 +142,36 @@ export default function SellerDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto w-full space-y-4 sm:space-y-6 pb-12">
-      {/* Header */}
-      <SellerPageHeader
-        title="Seller Dashboard"
-        subtitle="Live sales overview, in-store POS, order fulfillment, and store controls."
-        action={
-          <div className="flex items-center gap-2">
-            <SellerButton
-              variant="outline"
-              size="md"
-              onClick={() => fetchDashboardData(true)}
-              isLoading={refreshing}
-              className="min-h-[44px]"
-              icon={<span>🔄</span>}
-            >
-              Refresh
-            </SellerButton>
-            <SellerButton
-              variant="primary"
-              size="md"
-              onClick={() => navigate('/seller/pos')}
-              className="min-h-[44px]"
-              icon={<span>⚡</span>}
-            >
-              Quick POS
-            </SellerButton>
-          </div>
-        }
-      />
+      {/* Header (Desktop/Tablet only so mobile viewport matches reference image directly) */}
+      <div className="hidden sm:block">
+        <SellerPageHeader
+          title="Seller Dashboard"
+          subtitle="Live sales overview, in-store POS, order fulfillment, and store controls."
+          action={
+            <div className="flex items-center gap-2">
+              <SellerButton
+                variant="outline"
+                size="md"
+                onClick={() => fetchDashboardData(true)}
+                isLoading={refreshing}
+                className="min-h-[44px]"
+                icon={<span>🔄</span>}
+              >
+                Refresh
+              </SellerButton>
+              <SellerButton
+                variant="primary"
+                size="md"
+                onClick={() => navigate('/seller/pos')}
+                className="min-h-[44px]"
+                icon={<span>⚡</span>}
+              >
+                Quick POS
+              </SellerButton>
+            </div>
+          }
+        />
+      </div>
 
       {/* 1. Royal Purple Store Identity Banner Card - Full Width */}
       <SellerStoreBannerCard
@@ -197,7 +199,7 @@ export default function SellerDashboard() {
           <SellerQuickActionsGrid />
 
           {/* Recent Orders Live Feed */}
-          <SellerRecentOrdersFeed orders={newOrders} />
+          <SellerRecentOrdersFeed orders={newOrders} storeSlug={storeSlug} />
 
           {/* Analytics Charts */}
           {stats && (stats.dailyOrderData || stats.yearlyOrderData) && (

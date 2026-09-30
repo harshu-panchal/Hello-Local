@@ -182,7 +182,7 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
       </div>
 
       {/* Mobile Bottom Navigation — hidden on desktop (lg+) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 flex items-stretch h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] shadow-lg">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 flex items-stretch h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] shadow-lg">
         {SELLER_BOTTOM_NAV_ITEMS.map((item) => {
           const active = item.isActive(location.pathname);
           const handleClick = () => {
@@ -197,12 +197,24 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
             <button
               key={item.path}
               onClick={handleClick}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors min-h-[44px] ${
-                active ? 'text-purple-600' : 'text-neutral-400 active:text-neutral-700'
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors min-h-[44px] cursor-pointer ${
+                active ? 'text-purple-600' : 'text-slate-400 active:text-slate-700'
               }`}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              {item.isStoreTab ? (
+                <div
+                  className={`px-3 py-0.5 rounded-xl transition-all ${
+                    active ? 'bg-purple-100 text-purple-700 shadow-2xs' : 'bg-purple-50/90 text-purple-600'
+                  }`}
+                >
+                  {item.icon}
+                </div>
+              ) : (
+                item.icon
+              )}
+              <span className={`text-[10px] font-bold ${active ? 'text-purple-600' : 'text-slate-500'}`}>
+                {item.label}
+              </span>
               {active && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-purple-600 rounded-t-full" />
               )}

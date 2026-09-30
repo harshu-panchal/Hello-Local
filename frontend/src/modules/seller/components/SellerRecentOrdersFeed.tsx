@@ -1,12 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SellerStatusBadge } from './common/SellerStatusBadge';
+import SellerStorePreviewBanner from './SellerStorePreviewBanner';
 
 interface SellerRecentOrdersFeedProps {
   orders?: any[];
+  storeSlug?: string;
 }
 
-export default function SellerRecentOrdersFeed({ orders = [] }: SellerRecentOrdersFeedProps) {
+export default function SellerRecentOrdersFeed({ orders = [], storeSlug = 'my-store' }: SellerRecentOrdersFeedProps) {
   const navigate = useNavigate();
 
   const displayOrders = orders && orders.length > 0 ? orders.slice(0, 5) : [];
@@ -15,25 +17,26 @@ export default function SellerRecentOrdersFeed({ orders = [] }: SellerRecentOrde
     <div className="w-full space-y-3">
       {/* Section Header */}
       <div className="flex items-center justify-between px-1">
-        <h3 className="text-base font-black text-slate-900 tracking-tight">
+        <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
           Recent Orders
         </h3>
-        {displayOrders.length > 0 && (
-          <button
-            onClick={() => navigate('/seller/orders')}
-            className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-0.5 min-h-[36px] py-1 px-2 rounded-lg hover:bg-purple-50 transition-colors"
-          >
-            <span>View All</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m9 18 6-6-6-6" />
-            </svg>
-          </button>
-        )}
+        <button
+          onClick={() => navigate('/seller/orders')}
+          className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-0.5 min-h-[36px] py-1 px-2 rounded-lg hover:bg-purple-50 transition-colors cursor-pointer"
+        >
+          <span>View All</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
       </div>
+
+      {/* "View Your Store" Preview Banner matching reference screenshot */}
+      <SellerStorePreviewBanner storeSlug={storeSlug} />
 
       {/* Orders List / Empty State */}
       {displayOrders.length === 0 ? (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 text-center space-y-3 shadow-2xs">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 text-center space-y-3 shadow-2xs">
           <span className="text-3xl">🛍️</span>
           <h4 className="text-sm font-bold text-slate-800">No recent orders yet</h4>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
@@ -42,7 +45,7 @@ export default function SellerRecentOrdersFeed({ orders = [] }: SellerRecentOrde
           <div className="flex items-center justify-center gap-2 pt-1">
             <button
               onClick={() => navigate('/seller/pos')}
-              className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all min-h-[40px]"
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all min-h-[40px] cursor-pointer shadow-xs active:scale-95"
             >
               ⚡ Open POS Billing
             </button>

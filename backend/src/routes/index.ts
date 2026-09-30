@@ -44,6 +44,8 @@ import { submitContactForm } from "../modules/website/controllers/contactControl
 
 import customerOrderRoutes from "./customerOrderRoutes";
 import customerReturnRoutes from "./customerReturnRoutes";
+import { getSellerCustomers } from "../modules/seller/controllers/customerController";
+import sellerSupplierRoutes from "./sellerSupplierRoutes";
 
 const router = Router();
 
@@ -151,6 +153,12 @@ router.use("/seller/wallet", authenticate, requireUserType("Seller"), sellerWall
 
 // Tax routes (protected, seller/admin)
 router.use("/seller/taxes", taxRoutes);
+
+// Seller customer directory route (protected, seller only)
+router.get("/seller/customers", authenticate, requireUserType("Seller"), getSellerCustomers);
+
+// Seller suppliers routes (protected, seller only)
+router.use("/seller/suppliers", authenticate, requireUserType("Seller"), sellerSupplierRoutes);
 
 // Payment routes (Razorpay integration)
 router.use("/payment", paymentRoutes);

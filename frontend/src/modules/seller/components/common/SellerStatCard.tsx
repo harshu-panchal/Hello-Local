@@ -27,20 +27,12 @@ export const SellerStatCard: React.FC<SellerStatCardProps> = ({
   onClick,
   className = '',
 }) => {
-  const variantStyles = {
-    default: 'border-slate-200/80 bg-white text-slate-900',
-    purple: 'border-purple-200/80 bg-purple-50/40 text-purple-950',
-    emerald: 'border-emerald-200/80 bg-emerald-50/40 text-emerald-950',
-    amber: 'border-amber-200/80 bg-amber-50/40 text-amber-950',
-    rose: 'border-rose-200/80 bg-rose-50/40 text-rose-950',
-  };
-
   const iconBgStyles = {
     default: 'bg-slate-100 text-slate-600',
-    purple: 'bg-purple-100 text-purple-600',
-    emerald: 'bg-emerald-100 text-emerald-600',
-    amber: 'bg-amber-100 text-amber-600',
-    rose: 'bg-rose-100 text-rose-600',
+    purple: 'bg-[#F3E8FF] text-[#9333EA]',
+    emerald: 'bg-[#DCFCE7] text-[#16A34A]',
+    amber: 'bg-[#FEF3C7] text-[#D97706]',
+    rose: 'bg-[#FFE4E6] text-[#E11D48]',
   };
 
   const displaySubtitle = subtitle || subtext;
@@ -48,16 +40,16 @@ export const SellerStatCard: React.FC<SellerStatCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border p-4 sm:p-5 shadow-xs transition-all flex flex-col justify-between ${
-        onClick ? 'cursor-pointer hover:shadow-md hover:border-purple-300' : ''
-      } ${variantStyles[variant]} ${className}`}
+      className={`rounded-2xl border border-slate-100/90 bg-white p-3.5 sm:p-4 shadow-xs transition-all flex flex-col justify-between ${
+        onClick ? 'cursor-pointer hover:shadow-md hover:border-purple-200' : ''
+      } ${className}`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">
             {label}
           </span>
-          <div className="mt-1 flex items-baseline gap-2">
+          <div className="mt-1 flex items-baseline gap-1.5">
             <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 truncate">
               {value}
             </span>
@@ -72,7 +64,7 @@ export const SellerStatCard: React.FC<SellerStatCardProps> = ({
 
         {icon && (
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBgStyles[variant]}`}
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-2xs ${iconBgStyles[variant]}`}
           >
             {icon}
           </div>
@@ -80,7 +72,7 @@ export const SellerStatCard: React.FC<SellerStatCardProps> = ({
       </div>
 
       {trend && (
-        <div className="mt-3 pt-2.5 border-t border-slate-100/80 flex items-center gap-1.5 text-xs">
+        <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex items-center gap-1.5 text-xs">
           <span
             className={`font-bold flex items-center ${
               trend.isPositive ? 'text-emerald-600' : 'text-rose-600'
