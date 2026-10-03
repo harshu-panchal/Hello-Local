@@ -71,7 +71,7 @@ export default function SellerStorePreview() {
 
     try {
       setUploadingCover(true);
-      const imageUrl = await uploadMediaFile(file, 'store_banners');
+      const imageUrl = await uploadMediaFile(file, 'hellolocal/stores');
       if (imageUrl) {
         await updateSellerProfile({ storeBanner: imageUrl });
         setStoreData((prev: any) => ({ ...prev, storeBanner: imageUrl }));
@@ -92,9 +92,9 @@ export default function SellerStorePreview() {
 
     try {
       setUploadingLogo(true);
-      const imageUrl = await uploadMediaFile(file, 'store_logos');
+      const imageUrl = await uploadMediaFile(file, 'hellolocal/sellers/profile');
       if (imageUrl) {
-        await updateSellerProfile({ profile: imageUrl });
+        await updateSellerProfile({ profile: imageUrl, logo: imageUrl });
         setStoreData((prev: any) => ({ ...prev, logo: imageUrl }));
         showToast('Store logo updated successfully!', 'success');
       }

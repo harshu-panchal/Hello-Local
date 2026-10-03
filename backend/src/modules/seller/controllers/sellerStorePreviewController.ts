@@ -15,7 +15,7 @@ export const getStorePreview = asyncHandler(async (req: Request, res: Response) 
 
   const seller = await Seller.findById(sellerObjId)
     .select(
-      "sellerName storeName storeBanner profile slug address city mobile isShopOpen category categories storeDescription"
+      "sellerName storeName storeBanner profile logo slug address city mobile isShopOpen category categories storeDescription"
     )
     .lean();
 
@@ -40,7 +40,7 @@ export const getStorePreview = asyncHandler(async (req: Request, res: Response) 
         id: (seller as any)._id,
         name: seller.storeName || (seller as any).sellerName || "Hello Local Vendor Store",
         storeBanner: seller.storeBanner || "",
-        logo: seller.profile || "",
+        logo: (seller as any).logo || seller.profile || "",
         address: seller.address || "",
         city: seller.city || "",
         mobile: seller.mobile || "",
