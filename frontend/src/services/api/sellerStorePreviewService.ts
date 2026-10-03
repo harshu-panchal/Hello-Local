@@ -77,12 +77,18 @@ export const reorderProducts = async (
   return response.data;
 };
 
-export const uploadMediaFile = async (file: File, folder = 'store_banners'): Promise<string> => {
+export const uploadMediaFile = async (file: File, folder = 'hellolocal/stores'): Promise<string> => {
   const formData = new FormData();
   formData.append('image', file);
   formData.append('folder', folder);
   const response = await api.post('/upload/image', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-  return response.data?.data?.url || response.data?.url || '';
+  return (
+    response.data?.data?.secureUrl ||
+    response.data?.data?.url ||
+    response.data?.secureUrl ||
+    response.data?.url ||
+    ''
+  );
 };
