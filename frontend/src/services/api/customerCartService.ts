@@ -94,3 +94,25 @@ export const clearCart = async (): Promise<CartResponse> => {
     const response = await api.delete<CartResponse>('/customer/cart');
     return response.data;
 };
+
+export interface GuestCartItemPayload {
+    productId: string;
+    quantity: number;
+    variation?: string;
+}
+
+/**
+ * Merge guest cart items into customer cart
+ */
+export const mergeCart = async (guestItems: GuestCartItemPayload[], latitude?: number, longitude?: number): Promise<CartResponse> => {
+    const params: any = {};
+    if (latitude !== undefined && longitude !== undefined) {
+        params.latitude = latitude;
+        params.longitude = longitude;
+    }
+    const response = await api.post<CartResponse>('/customer/cart/merge', {
+        guestItems,
+        items: guestItems
+    }, { params });
+    return response.data;
+};

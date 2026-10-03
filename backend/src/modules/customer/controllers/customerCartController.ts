@@ -475,3 +475,97 @@ export const clearCart = async (req: Request, res: Response) => {
         });
     }
 };
+
+// Merge guest cart with authenticated user's cart
+export const mergeCart = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const guestItems = req.body.items || req.body.guestItems || [];
+        const latitude = req.query.latitude || req.body.latitude;
+        const longitude = req.query.longitude || req.body.longitude;
+
+        // Parse location
+        const userLat = latitude !== undefined && latitude !== null ? parseFloat(latitude as string) : null;
+        const userLng = longitude !== undefined && longitude !== null ? parseFloat(longitude as string) : null;
+
+        if (userLat === null || userLng === null || isNaN(userLat) || isNaN(userLng)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Location is required to sync cart items'
+            });
+        }
+
+        const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
+
+        let cart = await Cart.findOne({ customer: userId });
+        if (!cart) {
+            cart = await Cart.create({ customer: userId, items: [], total: 0 });
+        }
+
+        // Process guest items if provided
+        if (Array.isArray(guestItems) && guestItems.length > 0) {
+            for (const guestItem of guestItems) {
+                const productId = guestItem.productId || guestItem.product?._id || guestItem.product?.id;
+                const quantity = Math.max(1, parseInt(String(guestItem.quantity), 10) || 1);
+                const variation = guestItem.variation || guestItem.variant || (guestItem.product as any)?.variantId || (guestItem.product as any)?.variantTitle || null;
+
+                if (!productId || !mongoose.isValidObjectId(productId)) continue;
+
+                // Validate product is active and available
+                const product = await Product.findOne({ _id: productId, status: 'Active', publish: true }).populate('seller');
+                if (!product) continue;
+
+                const seller = product.seller as any;
+                if (seller && seller.isShopOpen === false) continue;
+
+                const isAvailable = nearbySellerIds.some(id => id.toString() === (seller?._id || seller || product.seller).toString());
+                if (!isAvailable) continue;
+
+                // Check for existing cart item matching product and variant
+                let existingCartItem = await CartItem.findOne({
+                    cart: cart._id,
+                    product: productId,
+                    variation: variation || null
+                });
+
+                if (existingCartItem) {
+                    // Deterministic, idempotent merge: Math.max ensures repeated calls don't exponentially multiply
+                    existingCartItem.quantity = Math.max(existingCartItem.quantity, quantity);
+                    await existingCartItem.save();
+                } else {
+                    const newCartItem = await CartItem.create({
+                        cart: cart._id,
+                        product: productId,
+                        quantity,
+                        variation: variation || null
+                    });
+                    cart.items.push(newCartItem._id as any);
+                    await cart.save();
+                }
+            }
+        }
+
+        // Sync with location and recalculate totals
+        const updatedCart = await syncCartWithLocation(cart._id, nearbySellerIds, true);
+        const filteredItems = updatedCart?.items || [];
+        const total = updatedCart?.total || 0;
+        const fees = await calculateDeliveryStuff(total, filteredItems, userLat, userLng);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cart merged successfully',
+            data: {
+                ...updatedCart?.toObject(),
+                items: filteredItems,
+                total,
+                ...fees
+            }
+        });
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: 'Error merging cart',
+            error: error.message
+        });
+    }
+};

@@ -45,6 +45,7 @@ export interface IProduct extends Document {
   popular: boolean;
   dealOfDay: boolean;
   status: "Active" | "Inactive" | "Pending" | "Rejected";
+  displayOrder?: number;
 
   // Product Details
   manufacturer?: string;
@@ -251,6 +252,11 @@ const ProductSchema = new Schema<IProduct>(
     homemadeSubcategory: {
       type: String,
       trim: true,
+    },
+    displayOrder: {
+      type: Number,
+      default: 0,
+      index: true,
     },
 
     // Product Details

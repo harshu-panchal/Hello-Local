@@ -22,7 +22,7 @@ export default function ProductDetail() {
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
   const { cart, addToCart, updateQuantity } = useCart();
-  const { location } = useLocation();
+  const { location, openLocationModal } = useLocation();
   const { showToast } = useToast();
   const { startLoading, stopLoading } = useLoading();
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -212,6 +212,11 @@ export default function ProductDetail() {
       : null;
 
   const handleAddToCart = () => {
+    if (!location?.latitude || !location?.longitude) {
+      openLocationModal();
+      showToast("Please set your delivery location to check store availability", "info");
+      return;
+    }
     if (!isAvailableAtLocation) {
       showToast("This product is not available for delivery at your location", "error");
       return;
@@ -650,14 +655,16 @@ export default function ProductDetail() {
                   ref={addButtonRef}
                   type="button"
                   onClick={handleAddToCart}
-                  disabled={!isAvailableAtLocation || !isVariantAvailable}
+                  disabled={Boolean(location?.latitude && location?.longitude && !isAvailableAtLocation) || !isVariantAvailable}
                   className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all active:scale-95 touch-target-min ${
-                    !isAvailableAtLocation || !isVariantAvailable
+                    Boolean(location?.latitude && location?.longitude && !isAvailableAtLocation) || !isVariantAvailable
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                       : "bg-[#FF2E7A] text-white hover:bg-[#E02269] shadow-xs"
                   }`}
                 >
-                  {!isAvailableAtLocation
+                  {!location?.latitude || !location?.longitude
+                    ? "Set Location to Add"
+                    : !isAvailableAtLocation
                     ? "Unavailable"
                     : !isVariantAvailable
                     ? "Out of Stock"

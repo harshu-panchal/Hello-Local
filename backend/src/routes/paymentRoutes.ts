@@ -167,14 +167,15 @@ router.post(
             const io = req.app.get('io');
             const result = await handleWebhook(rawBody, signature, io);
 
-            // Always 200 on a signature/processing failure we've logged, EXCEPT
-            // for an invalid signature, which must not be retried.
-            if (!result.success) {
-                return res.status(400).json(result);
-            }
+            // Per payment provider best practices, acknowledge webhook receipt (200 OK)
+            // for logged rejections to prevent infinite retry storms from Razorpay.
             return res.status(200).json(result);
         } catch (error: any) {
             console.error('Error handling webhook:', error?.message || error);
+            // If signature verification failed, return 200 to acknowledge and prevent retry storms
+            if (error?.message === 'Invalid webhook signature') {
+                return res.status(200).json({ success: false, message: 'Invalid webhook signature acknowledged' });
+            }
             return res.status(500).json({ success: false, message: 'Failed to handle webhook' });
         }
     },

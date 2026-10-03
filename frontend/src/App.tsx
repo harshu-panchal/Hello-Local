@@ -101,6 +101,7 @@ const SellerProfile = lazy(() => import("./modules/seller/pages/SellerProfile"))
 const SellerCustomers = lazy(() => import("./modules/seller/pages/SellerCustomers"));
 const SellerSuppliers = lazy(() => import("./modules/seller/pages/SellerSuppliers"));
 const SellerWhatsApp = lazy(() => import("./modules/seller/pages/SellerWhatsApp"));
+const SellerStorePreview = lazy(() => import("./modules/seller/pages/SellerStorePreview"));
 const SellerLogin = lazy(() => import("./modules/seller/pages/SellerLogin"));
 const SellerSignUp = lazy(() => import("./modules/seller/pages/SellerSignUp"));
 
@@ -326,6 +327,7 @@ function App() {
                                 <Route path="reports/sales" element={<SellerSalesReport />} />
                                 <Route path="account-settings" element={<SellerAccountSettings />} />
                                 <Route path="profile" element={<SellerProfile />} />
+                                <Route path="store" element={<SellerStorePreview />} />
                                 <Route path="customers" element={<SellerCustomers />} />
                                 <Route path="suppliers" element={<SellerSuppliers />} />
                                 <Route path="whatsapp" element={<SellerWhatsApp />} />

@@ -4,6 +4,7 @@ import GoogleMapsAutocomplete from './GoogleMapsAutocomplete';
 
 interface LocationPermissionRequestProps {
   onLocationGranted: () => void;
+  onClose?: () => void;
   skipable?: boolean;
   title?: string;
   description?: string;
@@ -12,6 +13,7 @@ interface LocationPermissionRequestProps {
 
 export default function LocationPermissionRequest({
   onLocationGranted,
+  onClose,
   skipable = false,
   title = 'Location Access Required',
   description = 'We need your location to show you products available near you and enable delivery services.',
@@ -178,9 +180,30 @@ export default function LocationPermissionRequest({
     return null;
   }
 
+  const handleDismiss = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      onLocationGranted();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-7 border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-7 border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+        {(forceOpen || skipable || onClose) && (
+          <button
+            type="button"
+            onClick={handleDismiss}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            aria-label="Close"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        )}
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-[#FFF1F4] border border-[#FECDD3] rounded-full flex items-center justify-center mx-auto mb-4 text-[#FF2E7A] shadow-2xs">
             <svg
@@ -250,7 +273,7 @@ export default function LocationPermissionRequest({
 
               {skipable && (
                 <button
-                  onClick={onLocationGranted}
+                  onClick={handleDismiss}
                   className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   Skip for now

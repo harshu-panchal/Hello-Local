@@ -170,7 +170,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  console.log(`Registration attempt for: Mobile: ${mobile}, Email: ${email}`);
+  const maskedMobile = mobile ? `${mobile.slice(0, 2)}******${mobile.slice(-2)}` : "N/A";
+  console.log(`[Delivery] Registration attempt for mobile: ${maskedMobile}`);
 
   // Check if delivery partner already exists
   const existingByMobile = await Delivery.findOne({ mobile });

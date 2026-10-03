@@ -287,12 +287,12 @@ export default function AdminUsers() {
 
             {/* Search Input */}
             <div>
-              <label htmlFor="userSearchInput" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+              <label htmlFor="user-search" className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
                 Search Customers
               </label>
               <div className="relative">
                 <input
-                  id="userSearchInput"
+                  id="user-search"
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}

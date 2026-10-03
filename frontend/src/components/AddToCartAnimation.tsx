@@ -335,10 +335,15 @@ export default function AddToCartAnimation({
             >
               {/* Left: Product thumbnails */}
               <div className="flex items-center -space-x-4">
-                {thumbnailItems.map((item, idx) => (
-                  <motion.div
-                    key={item.product._id || item.product.id || `item-${idx}`}
-                    initial={{ scale: 0, opacity: 0 }}
+                {thumbnailItems.map((item, idx) => {
+                  const itemKey =
+                    (item as any).id ||
+                    (item as any)._id ||
+                    `${item.product._id || item.product.id || 'item'}-${item.variant || (item.product as any)?.variantId || (item.product as any)?.variantTitle || idx}`;
+                  return (
+                    <motion.div
+                      key={itemKey}
+                      initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{
                       delay: idx * 0.1,
@@ -360,7 +365,8 @@ export default function AddToCartAnimation({
                       </div>
                     )}
                   </motion.div>
-                ))}
+                );
+              })}
               </div>
 
               {/* Middle: Text */}

@@ -222,7 +222,6 @@ router.get("/notifications/:id", notificationController.getNotificationById);
 router.put("/notifications/:id", notificationController.updateNotification);
 router.delete("/notifications/:id", notificationController.deleteNotification);
 router.post("/notifications/:id/send", notificationController.sendNotification);
-router.patch("/notifications/:id/read", notificationController.markAsRead);
 router.patch(
   "/notifications/read-all",
   notificationController.markMultipleAsRead
@@ -231,6 +230,7 @@ router.patch(
   "/notifications/mark-read",
   notificationController.markMultipleAsRead
 ); // Legacy support
+router.patch("/notifications/:id/read", notificationController.markAsRead);
 
 // ==================== Wallet & Withdrawal Routes ====================
 router.get("/financial/dashboard", walletController.getFinancialDashboard);

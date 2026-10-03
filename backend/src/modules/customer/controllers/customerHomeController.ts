@@ -926,44 +926,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
       })
     );
 
-    // Fallback to hardcoded cards if no categories with headerCategoryId exist
-    const finalPromoCards =
-      promoCards.length > 0
-        ? promoCards
-        : [
-          {
-            id: "self-care",
-            badge: "Up to 55% OFF",
-            title: "Self Care & Wellness",
-            categoryId: "personal-care",
-            bgColor: "bg-yellow-50",
-            subcategoryImages: [],
-          },
-          {
-            id: "hot-meals",
-            badge: "Up to 55% OFF",
-            title: "Hot Meals & Drinks",
-            categoryId: "breakfast-instant",
-            bgColor: "bg-yellow-50",
-            subcategoryImages: [],
-          },
-          {
-            id: "kitchen-essentials",
-            badge: "Up to 55% OFF",
-            title: "Kitchen Essentials",
-            categoryId: "atta-rice",
-            bgColor: "bg-yellow-50",
-            subcategoryImages: [],
-          },
-          {
-            id: "cleaning-home",
-            badge: "Up to 75% OFF",
-            title: "Cleaning & Home Needs",
-            categoryId: "household",
-            bgColor: "bg-yellow-50",
-            subcategoryImages: [],
-          },
-        ];
+    // If no dynamic categories exist, return empty array to prevent broken category links
+    const finalPromoCards = promoCards.length > 0 ? promoCards : [];
 
     // 9. Dynamic Home Sections - Fetch from database
     let homeSectionQuery: any = { isActive: true };
@@ -1071,19 +1035,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
       description: ad.tagline
     }));
 
-    // If no dynamic ads, use fallbacks
-    const promoBanners = mappedAds.length > 0 ? mappedAds : [
-      {
-        id: "promo-fallback-1",
-        image: "https://img.freepik.com/free-vector/horizontal-banner-template-grocery-sales_23-2149432421.jpg",
-        link: "/category/grocery",
-      },
-      {
-        id: "promo-fallback-2",
-        image: "https://img.freepik.com/free-vector/flat-supermarket-social-media-cover-template_23-2149363385.jpg",
-        link: "/category/snacks",
-      }
-    ];
+    // If no dynamic ads, return empty array (prevent external CDN dependence)
+    const promoBanners = mappedAds.length > 0 ? mappedAds : [];
 
     // 12. Fetch Products for the Header Category (when a specific category tab is selected)
     let headerCategoryProducts: any[] = [];

@@ -612,7 +612,7 @@ export default function OrderDetail() {
                   disabled={isRefreshing}
                   className="text-xs font-bold text-[#FF2E7A] hover:text-[#E02269] bg-[#FFF1F4] px-2.5 py-1 rounded-full border border-[#FFE4EA] transition-colors touch-target-min"
                 >
-                  Refresh OTP
+                  {isRefreshing ? "Refreshing..." : "Refresh delivery OTP"}
                 </button>
               </div>
             )}

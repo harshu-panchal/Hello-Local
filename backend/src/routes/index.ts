@@ -46,6 +46,7 @@ import customerOrderRoutes from "./customerOrderRoutes";
 import customerReturnRoutes from "./customerReturnRoutes";
 import { getSellerCustomers } from "../modules/seller/controllers/customerController";
 import sellerSupplierRoutes from "./sellerSupplierRoutes";
+import sellerStorePreviewRoutes from "./sellerStorePreviewRoutes";
 
 const router = Router();
 
@@ -159,6 +160,9 @@ router.get("/seller/customers", authenticate, requireUserType("Seller"), getSell
 
 // Seller suppliers routes (protected, seller only)
 router.use("/seller/suppliers", authenticate, requireUserType("Seller"), sellerSupplierRoutes);
+
+// Seller store preview & editor routes (protected, seller only)
+router.use("/seller/store-preview", authenticate, requireUserType("Seller"), sellerStorePreviewRoutes);
 
 // Payment routes (Razorpay integration)
 router.use("/payment", paymentRoutes);

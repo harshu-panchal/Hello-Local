@@ -32,7 +32,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const mainRef = useRef<HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
-  const { isLocationEnabled, isLocationLoading, location: userLocation } = useLocationContext();
+  const { isLocationEnabled, isLocationLoading, location: userLocation, isLocationModalOpen, closeLocationModal } = useLocationContext();
   const [showLocationRequest, setShowLocationRequest] = useState(false);
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
   const { activeCategory } = useThemeContext();
@@ -381,18 +381,34 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <AdPopupAutoWidget />
 
         {/* 5. Location Permission Request Modals */}
-        {showLocationRequest && (
+        {showLocationRequest && !isLocationModalOpen && (
           <LocationPermissionRequest
             onLocationGranted={() => setShowLocationRequest(false)}
+            onClose={() => setShowLocationRequest(false)}
             skipable={true}
             title="Select Your Location"
             description="We need your location to show products and stores available near you."
           />
         )}
 
+        {isLocationModalOpen && (
+          <LocationPermissionRequest
+            onLocationGranted={() => {
+              closeLocationModal();
+              setShowLocationRequest(false);
+            }}
+            onClose={() => closeLocationModal()}
+            skipable={true}
+            title="Location Required"
+            description="Please set your delivery location to view available stores and add items to your cart."
+            forceOpen={true}
+          />
+        )}
+
         {showLocationChangeModal && (
           <LocationPermissionRequest
             onLocationGranted={() => setShowLocationChangeModal(false)}
+            onClose={() => setShowLocationChangeModal(false)}
             skipable={true}
             title="Change Location"
             description="Update your location to see products available near you."

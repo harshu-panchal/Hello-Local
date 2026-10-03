@@ -15,6 +15,9 @@ export interface LocationContextType {
   isLocationLoading: boolean;
   locationError: string | null;
   locationPermissionStatus: 'granted' | 'denied' | 'prompt' | 'session_granted';
+  isLocationModalOpen: boolean;
+  openLocationModal: () => void;
+  closeLocationModal: () => void;
   requestLocation: () => Promise<void>;
   updateLocation: (location: Location) => Promise<void>;
   clearLocation: () => void;

@@ -144,7 +144,6 @@ const OrderSchema = new Schema<IOrder>(
     orderNumber: {
       type: String,
       required: [true, "Order number is required"],
-      unique: true,
       trim: true,
     },
     invoiceNumber: {
@@ -543,7 +542,7 @@ OrderSchema.index({ orderChannel: 1, status: 1, orderDate: -1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ orderDate: -1 });
 OrderSchema.index({ deliveryBoy: 1 });
-OrderSchema.index({ orderNumber: 1 });
+OrderSchema.index({ orderNumber: 1 }, { unique: true });
 OrderSchema.index({ paymentStatus: 1, status: 1 });
 OrderSchema.index({ deliveryBoy: 1, status: 1 });
 OrderSchema.index({ createdAt: -1 });

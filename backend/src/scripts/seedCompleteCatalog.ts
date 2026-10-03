@@ -77,12 +77,12 @@ async function seedCatalog() {
     // 1. Verify and configure Sellers
     console.log("1. Setting up target sellers...");
     
-    // Seller 1: vendor9111966732@hellolocal.com
+    // Seller 1: Hello Local Vendor Store
     const seller1 = await Seller.findOneAndUpdate(
-      { email: "vendor9111966732@hellolocal.com" },
+      { storeName: "Hello Local Vendor Store" },
       {
         storeName: "Hello Local Vendor Store",
-        sellerName: "Vendor 9111966732",
+        sellerName: "Vendor Indore",
         status: "Approved",
         isShopOpen: true,
         serviceRadiusKm: 80,
@@ -94,8 +94,8 @@ async function seedCatalog() {
         },
       },
       { upsert: false, new: true }
-    );
-    if (!seller1) throw new Error("Seller 1 (vendor9111966732@hellolocal.com) not found!");
+    ) || await Seller.findOne({ status: "Approved" });
+    if (!seller1) throw new Error("Seller 1 not found!");
     console.log(`✓ Seller 1: ${seller1.storeName} (${seller1._id})`);
 
     // Seller 2: Testseller
@@ -360,7 +360,7 @@ async function seedCatalog() {
     }
 
     const productsToSeed: ProductSeed[] = [
-      // --- SELLER 1 (vendor9111966732@hellolocal.com): Grocery, Fruits, Vegetables, Atta, Dal, Dairy ---
+      // --- SELLER 1: Grocery, Fruits, Vegetables, Atta, Dal, Dairy ---
       {
         productName: "Farm Fresh Sharbati Wheat Atta",
         categorySlug: "atta-rice-dal",

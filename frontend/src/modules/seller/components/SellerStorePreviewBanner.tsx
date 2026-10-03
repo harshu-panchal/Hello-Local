@@ -1,13 +1,15 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface SellerStorePreviewBannerProps {
   storeSlug?: string;
 }
 
 export default function SellerStorePreviewBanner({ storeSlug = 'my-store' }: SellerStorePreviewBannerProps) {
+  const navigate = useNavigate();
+
   const handleOpenStorePreview = () => {
-    const url = `/store/${storeSlug}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    navigate('/seller/store');
   };
 
   return (

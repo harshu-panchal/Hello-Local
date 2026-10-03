@@ -63,6 +63,15 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const [isLocationLoading, setIsLocationLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationPermissionStatus, setLocationPermissionStatus] = useState<'granted' | 'denied' | 'prompt' | 'session_granted'>('prompt');
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+
+  const openLocationModal = useCallback(() => {
+    setIsLocationModalOpen(true);
+  }, []);
+
+  const closeLocationModal = useCallback(() => {
+    setIsLocationModalOpen(false);
+  }, []);
 
   // Constants for storage
   const SESSION_PERMISSION_KEY = 'location_permission_granted_session';
@@ -624,6 +633,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         isLocationLoading,
         locationError,
         locationPermissionStatus,
+        isLocationModalOpen,
+        openLocationModal,
+        closeLocationModal,
         requestLocation,
         updateLocation,
         clearLocation,

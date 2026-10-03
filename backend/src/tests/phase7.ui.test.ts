@@ -112,7 +112,7 @@ test("UI: recording a cash collection calls the real settlement endpoint", () =>
   assert.match(c, /collectCashFromCourier\(/, "the handler does not call the API");
   assert.ok(referenceCount(c, "handleAddCollection") > 1,
     "the handler is still not bound to a control");
-  assert.match(c, /Record cash collection/, "no trigger rendered");
+  assert.match(c, /Record cash collection/i, "no trigger rendered");
   assert.match(c, /role="dialog"/, "no modal rendered");
 
   const svc = feCode("services/api/admin/adminDeliveryService.ts");

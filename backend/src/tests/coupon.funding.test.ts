@@ -181,7 +181,7 @@ test("Test 1: No coupon applies zero discount and assigns zero discountAmount to
     assert.equal(res.pricing.discount, 0);
     assert.equal(res.pricing.couponFunding, "PLATFORM");
     assert.equal(res.lines[0].discountAmount, 0);
-    assert.equal(res.pricing.total, 1110); // 1000 + 50 tax + 50 delivery + 10 fee
+    assert.equal(res.pricing.total, 1060); // 1000 subtotal (tax-inclusive) + 50 delivery + 10 fee
   } finally {
     AppSettings.getSettings = origSettings;
     Seller.find = origSellerFind;
@@ -234,7 +234,7 @@ test("Test 2: Platform-funded coupon applies discount and records couponFunding 
     assert.equal(res.pricing.discount, 100);
     assert.equal(res.pricing.couponFunding, "PLATFORM");
     assert.equal(res.lines[0].discountAmount, 100);
-    assert.equal(res.pricing.total, 1010); // 1000 + 50 + 50 + 10 - 100
+    assert.equal(res.pricing.total, 960); // 1000 subtotal (tax-inclusive) + 50 delivery + 10 fee - 100 discount
   } finally {
     AppSettings.getSettings = origSettings;
     Seller.find = origSellerFind;
@@ -985,9 +985,9 @@ test("Test 16: Complete Financial Conservation Equation with Platform-Funded Cou
     assert.equal(p.discount, 100);
     assert.equal(p.platformFee, 10);
     assert.equal(p.shipping, 50);
-    assert.equal(p.tax, 50);
+    assert.equal(p.tax, 47.62); // (1000 * 5) / 105 = 47.62
     assert.equal(p.tip, 20);
-    assert.equal(p.total, 1030); // 1000 - 100 + 50 + 50 + 10 + 20
+    assert.equal(p.total, 980); // 1000 subtotal (tax-inclusive) - 100 discount + 50 shipping + 10 fee + 20 tip
     assert.equal(p.couponFunding, "PLATFORM");
 
     const commissionRate = 10;
@@ -999,14 +999,13 @@ test("Test 16: Complete Financial Conservation Equation with Platform-Funded Cou
 
     // Rider payable = base + tip
     const riderPayable = riderBaseDelivery + p.tip; // 40 + 20 = 60
-    const taxLiability = p.tax; // 50
 
     // Platform revenue = Product commission (100) + platform fee (10) + admin delivery margin (50 - 40 = 10) - platform coupon subsidy (100)
     const grossPlatformRevenue = sellerCommission + p.platformFee + (p.shipping - riderBaseDelivery); // 120
     const platformRevenue = grossPlatformRevenue - p.discount; // 20
 
     // Financial conservation equation:
-    const totalAllocated = sellerPayable + riderPayable + taxLiability + platformRevenue;
+    const totalAllocated = sellerPayable + riderPayable + platformRevenue;
     assert.equal(totalAllocated, p.total);
     const unallocated = p.total - totalAllocated;
     assert.equal(unallocated, 0, "Unallocated money must be exactly 0 paise");
@@ -1091,7 +1090,7 @@ test("Test 17: Complete Financial Conservation Equation with Seller-Funded Coupo
       (totalPlatformProductComm + p.platformFee + (p.shipping - riderFee)) * 100
     ) / 100;
 
-    const totalAllocated = Math.round((totalSellerPayable + riderFee + p.tax + platformRevenue) * 100) / 100;
+    const totalAllocated = Math.round((totalSellerPayable + riderFee + platformRevenue) * 100) / 100;
     assert.equal(totalAllocated, p.total);
     assert.equal(Math.round((p.total - totalAllocated) * 100) / 100, 0, "Paise discrepancy must be exactly 0");
   } finally {

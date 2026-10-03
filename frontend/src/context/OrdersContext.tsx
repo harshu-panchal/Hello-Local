@@ -114,7 +114,13 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
             id: item.product.id || (item.product as { _id?: string })._id || '',
           },
           quantity: item.quantity,
-          variant: item.variant, // Pass variant if available
+          variant:
+            item.variant ||
+            (item.product as any)?.variantId ||
+            (item.product as any)?.variantTitle ||
+            (item.product as any)?.selectedVariant?.title ||
+            (item.product as any)?.selectedVariant?.value ||
+            ((item.product as any)?.variations?.length === 1 ? (item.product as any)?.variations[0]?.title || (item.product as any)?.variations[0]?.value : undefined),
         })),
         // The coupon and tip used to be dropped here while the checkout screen
         // showed a discounted grand total, so the customer was charged the

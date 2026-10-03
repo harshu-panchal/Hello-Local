@@ -9,6 +9,7 @@ import { useToast } from '../../../context/ToastContext';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../../../services/api/customerWishlistService';
 import { calculateProductPrice } from '../../../utils/priceUtils';
 import { UserImage } from './common/UserImage';
+import { UserModal } from './common/UserModal';
 import { HeartOutlineIcon, HeartFilledIcon, PlusIcon, MinusIcon, ClockIcon } from './common/UserIcons';
 
 interface ProductCardProps {
@@ -48,6 +49,11 @@ export default function ProductCard({
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const isOperationPendingRef = useRef(false);
+  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState<number>(0);
+
+  const variations = Array.isArray(product.variations) ? product.variations : [];
+  const hasMultipleVariations = variations.length > 1;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -110,13 +116,14 @@ export default function ProductCard({
     }
   };
 
-  const cartItem = cart.items.find((item) => {
+  // Find all cart items matching this product ID (across all variants)
+  const matchingCartItems = cart.items.filter((item) => {
     if (!item?.product) return false;
     const itemProdId = String(item.product.id || item.product._id);
     const prodId = String((product as any).id || product._id);
     return itemProdId === prodId;
   });
-  const inCartQty = cartItem?.quantity || 0;
+  const inCartQty = matchingCartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
   const { displayPrice, mrp, discount } = calculateProductPrice(product);
 
@@ -132,9 +139,73 @@ export default function ProductCard({
       return;
     }
 
+    // Product with multiple selectable variants: REQUIRE user selection!
+    if (hasMultipleVariations) {
+      const firstAvailableIdx = variations.findIndex(
+        (v: any) => v.status !== 'Sold out' && (v.stock === undefined || v.stock === null || v.stock > 0)
+      );
+      setSelectedVariantIndex(firstAvailableIdx >= 0 ? firstAvailableIdx : 0);
+      setIsVariantModalOpen(true);
+      return;
+    }
+
     isOperationPendingRef.current = true;
     try {
-      await addToCart(product, addButtonRef.current);
+      if (variations.length === 1) {
+        // Exactly one selectable variant: attach unambiguous variant
+        const singleVar = variations[0];
+        const vTitle = singleVar.title || singleVar.value || singleVar.name || product.pack || 'Standard';
+        const vId = typeof singleVar._id === 'object' && singleVar._id !== null
+          ? (singleVar._id as any).$oid || String(singleVar._id)
+          : String(singleVar._id || '');
+        const { displayPrice: varPrice, mrp: varMrp } = calculateProductPrice(product, 0);
+        const productWithVariant = {
+          ...product,
+          price: varPrice,
+          mrp: varMrp,
+          pack: vTitle,
+          selectedVariant: singleVar,
+          variantId: vId,
+          variantTitle: vTitle,
+        };
+        await addToCart(productWithVariant, addButtonRef.current);
+      } else {
+        // Non-variant product
+        await addToCart(product, addButtonRef.current);
+      }
+    } finally {
+      isOperationPendingRef.current = false;
+    }
+  };
+
+  const handleAddSelectedVariant = async () => {
+    if (selectedVariantIndex === null || !variations[selectedVariantIndex]) return;
+    const selectedVar = variations[selectedVariantIndex];
+    if (selectedVar.status === 'Sold out' || (selectedVar.stock !== undefined && selectedVar.stock !== null && selectedVar.stock <= 0)) {
+      showToast('Selected option is out of stock', 'error');
+      return;
+    }
+
+    const vTitle = selectedVar.title || selectedVar.value || selectedVar.name || product.pack || 'Standard';
+    const vId = typeof selectedVar._id === 'object' && selectedVar._id !== null
+      ? (selectedVar._id as any).$oid || String(selectedVar._id)
+      : String(selectedVar._id || '');
+    const { displayPrice: varPrice, mrp: varMrp } = calculateProductPrice(product, selectedVariantIndex);
+    const productWithVariant = {
+      ...product,
+      price: varPrice,
+      mrp: varMrp,
+      pack: vTitle,
+      selectedVariant: selectedVar,
+      variantId: vId,
+      variantTitle: vTitle,
+    };
+
+    setIsVariantModalOpen(false);
+    isOperationPendingRef.current = true;
+    try {
+      await addToCart(productWithVariant, addButtonRef.current);
+      showToast(`Added ${vTitle} to cart`, 'success');
     } finally {
       isOperationPendingRef.current = false;
     }
@@ -150,15 +221,37 @@ export default function ProductCard({
 
     isOperationPendingRef.current = true;
     try {
-      const vId =
-        (cartItem?.product as any)?.variantId ||
-        (cartItem?.product as any)?.selectedVariant?._id ||
-        cartItem?.variant;
-      await updateQuantity(
-        ((product as any).id || product._id) as string,
-        inCartQty - 1,
-        vId
-      );
+      if (matchingCartItems.length === 1) {
+        const targetItem = matchingCartItems[0];
+        const vId =
+          (targetItem?.product as any)?.variantId ||
+          (targetItem?.product as any)?.selectedVariant?._id ||
+          targetItem?.variant;
+        const vTitle =
+          (targetItem?.product as any)?.variantTitle ||
+          (targetItem?.product as any)?.pack;
+        await updateQuantity(
+          ((product as any).id || product._id) as string,
+          targetItem.quantity - 1,
+          vId,
+          vTitle
+        );
+      } else if (matchingCartItems.length > 1) {
+        const lastItem = matchingCartItems[matchingCartItems.length - 1];
+        const vId =
+          (lastItem?.product as any)?.variantId ||
+          (lastItem?.product as any)?.selectedVariant?._id ||
+          lastItem?.variant;
+        const vTitle =
+          (lastItem?.product as any)?.variantTitle ||
+          (lastItem?.product as any)?.pack;
+        await updateQuantity(
+          ((product as any).id || product._id) as string,
+          lastItem.quantity - 1,
+          vId,
+          vTitle
+        );
+      }
     } finally {
       isOperationPendingRef.current = false;
     }
@@ -172,20 +265,34 @@ export default function ProductCard({
       return;
     }
 
+    if (hasMultipleVariations) {
+      const firstAvailableIdx = variations.findIndex(
+        (v: any) => v.status !== 'Sold out' && (v.stock === undefined || v.stock === null || v.stock > 0)
+      );
+      setSelectedVariantIndex(firstAvailableIdx >= 0 ? firstAvailableIdx : 0);
+      setIsVariantModalOpen(true);
+      return;
+    }
+
     isOperationPendingRef.current = true;
     try {
       if (inCartQty > 0) {
+        const targetItem = matchingCartItems[0];
         const vId =
-          (cartItem?.product as any)?.variantId ||
-          (cartItem?.product as any)?.selectedVariant?._id ||
-          cartItem?.variant;
+          (targetItem?.product as any)?.variantId ||
+          (targetItem?.product as any)?.selectedVariant?._id ||
+          targetItem?.variant;
+        const vTitle =
+          (targetItem?.product as any)?.variantTitle ||
+          (targetItem?.product as any)?.pack;
         await updateQuantity(
           ((product as any).id || product._id) as string,
           inCartQty + 1,
-          vId
+          vId,
+          vTitle
         );
       } else {
-        await addToCart(product, addButtonRef.current);
+        await handleAdd(e);
       }
     } finally {
       isOperationPendingRef.current = false;
@@ -322,7 +429,16 @@ export default function ProductCard({
                       : 'border border-[#FF2E7A] text-[#FF2E7A] bg-[#FFF1F4] hover:bg-[#FFE4EA]'
                   }`}
                 >
-                  {isOutOfRange ? 'N/A' : isSoldOut ? 'Sold' : 'ADD'}
+                  {isOutOfRange ? 'N/A' : isSoldOut ? 'Sold' : (
+                    hasMultipleVariations ? (
+                      <span className="flex items-center gap-1">
+                        <span>ADD</span>
+                        <span className="text-[8px] opacity-75 font-normal lowercase tracking-tight">+options</span>
+                      </span>
+                    ) : (
+                      'ADD'
+                    )
+                  )}
                 </button>
               ) : (
                 <div className="flex items-center gap-1.5 bg-[#FFF1F4] border border-[#FFE4EA] rounded-lg px-1.5 h-7 text-[#FF2E7A] font-bold">
@@ -352,6 +468,109 @@ export default function ProductCard({
           </div>
         </div>
       </div>
+
+      {/* Explicit Variant Selection Modal */}
+      <UserModal
+        isOpen={isVariantModalOpen}
+        onClose={() => setIsVariantModalOpen(false)}
+        title={
+          <div>
+            <h3 className="text-sm sm:text-base font-bold text-slate-900">Select Option</h3>
+            <p className="text-[11px] text-slate-500 truncate max-w-xs">{productName}</p>
+          </div>
+        }
+        maxWidth="sm"
+      >
+        <div className="py-2 space-y-3">
+          <div className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+            <UserImage
+              src={imageUrl}
+              alt={productName}
+              className="w-12 h-12 object-contain rounded-lg bg-white p-1"
+            />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-slate-900 truncate">{productName}</h4>
+              <p className="text-[11px] text-slate-500">{brandName || 'Choose preferred size/pack'}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
+              Available Options:
+            </label>
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              {variations.map((variant: any, idx: number) => {
+                const vTitle = variant.title || variant.value || variant.name || `Option ${idx + 1}`;
+                const isOutOfStock =
+                  variant.status === 'Sold out' ||
+                  (variant.stock !== undefined && variant.stock !== null && variant.stock <= 0);
+                const isSelected = selectedVariantIndex === idx;
+                const { displayPrice: optPrice, mrp: optMrp } = calculateProductPrice(product, idx);
+
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={isOutOfStock}
+                    onClick={() => setSelectedVariantIndex(idx)}
+                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-left transition-all ${
+                      isSelected
+                        ? 'border-[#FF2E7A] bg-[#FFF1F4]/70 ring-1 ring-[#FF2E7A]'
+                        : isOutOfStock
+                        ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? 'border-[#FF2E7A] bg-[#FF2E7A]' : 'border-slate-300 bg-white'
+                        }`}
+                      >
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div className="truncate">
+                        <div className="text-xs font-bold text-slate-900 truncate">{vTitle}</div>
+                        {isOutOfStock && <div className="text-[10px] text-red-500 font-semibold">Sold Out</div>}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <div className="text-xs font-bold text-slate-900">₹{optPrice.toLocaleString('en-IN')}</div>
+                      {optMrp > optPrice && (
+                        <div className="text-[10px] text-slate-400 line-through">₹{optMrp.toLocaleString('en-IN')}</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsVariantModalOpen(false)}
+              className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={
+                selectedVariantIndex === null ||
+                variations[selectedVariantIndex]?.status === 'Sold out' ||
+                (variations[selectedVariantIndex]?.stock !== undefined &&
+                  variations[selectedVariantIndex]?.stock !== null &&
+                  variations[selectedVariantIndex]?.stock <= 0)
+              }
+              onClick={handleAddSelectedVariant}
+              className="flex-1 py-2 rounded-xl bg-[#FF2E7A] hover:bg-[#E02269] text-white text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+            >
+              Add to Cart
+            </button>
+          </div>
+        </div>
+      </UserModal>
     </motion.div>
   );
 }
