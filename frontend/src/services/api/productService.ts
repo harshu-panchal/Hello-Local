@@ -228,3 +228,50 @@ export const getShops = async (): Promise<ApiResponse<Shop[]>> => {
   const response = await api.get<ApiResponse<Shop[]>>("/products/shops");
   return response.data;
 };
+
+export interface BulkUploadErrorItem {
+  rowNumber: number;
+  productName: string;
+  error: string;
+}
+
+export interface BulkUploadResult {
+  totalRows: number;
+  successCount: number;
+  failedCount: number;
+  errors: BulkUploadErrorItem[];
+}
+
+/**
+ * Download sample CSV template for bulk product upload
+ */
+export const downloadBulkProductTemplate = async (): Promise<Blob> => {
+  const response = await api.get("/products/bulk-template", {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
+/**
+ * Bulk upload products from CSV file
+ */
+export const bulkUploadProducts = async (
+  file: File,
+  updateExisting: boolean = false
+): Promise<ApiResponse<BulkUploadResult>> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("updateExisting", String(updateExisting));
+
+  const response = await api.post<ApiResponse<BulkUploadResult>>(
+    "/products/bulk-upload",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return response.data;
+};
+

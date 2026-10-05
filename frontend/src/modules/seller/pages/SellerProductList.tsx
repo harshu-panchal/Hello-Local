@@ -11,6 +11,7 @@ import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerDataTable, ColumnDef } from "../components/common/SellerDataTable";
 import { SellerButton } from "../components/common/SellerButton";
 import { SellerModal } from "../components/common/SellerModal";
+import SellerBulkProductModal from "../components/SellerBulkProductModal";
 import { useToast } from "../../../context/ToastContext";
 
 export default function SellerProductList() {
@@ -37,6 +38,9 @@ export default function SellerProductList() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Bulk upload modal state
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   // 300ms Search Debouncing
   useEffect(() => {
@@ -377,6 +381,19 @@ export default function SellerProductList() {
             <SellerButton
               variant="outline"
               size="md"
+              onClick={() => setBulkModalOpen(true)}
+              className="min-h-[44px]"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+                </svg>
+              }
+            >
+              Bulk Upload
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
               onClick={() => navigate("/seller/stock-management")}
               className="min-h-[44px]"
               icon={<span>📊</span>}
@@ -603,6 +620,13 @@ export default function SellerProductList() {
           </p>
         </div>
       </SellerModal>
+
+      {/* Bulk Product Upload Modal */}
+      <SellerBulkProductModal
+        isOpen={bulkModalOpen}
+        onClose={() => setBulkModalOpen(false)}
+        onSuccess={fetchProducts}
+      />
     </div>
   );
 }

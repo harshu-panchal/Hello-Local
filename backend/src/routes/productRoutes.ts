@@ -13,6 +13,12 @@ import {
 import { getBrands } from "../modules/admin/controllers/adminProductController";
 import { authenticate, requireUserType } from "../middleware/auth";
 
+import {
+  downloadSampleTemplate,
+  bulkUploadProducts,
+} from "../modules/seller/controllers/sellerBulkProductController";
+import { uploadCsvFile } from "../middleware/upload";
+
 const router = Router();
 
 // All routes require authentication
@@ -26,6 +32,12 @@ router.get("/shops", requireUserType("Seller", "Admin"), getShops);
 
 // Remaining routes require seller user type
 router.use(requireUserType("Seller"));
+
+// Download sample CSV template for bulk product upload
+router.get("/bulk-template", downloadSampleTemplate);
+
+// Bulk upload products from CSV file
+router.post("/bulk-upload", uploadCsvFile.single("file"), bulkUploadProducts);
 
 // Create product
 router.post("/", createProduct);

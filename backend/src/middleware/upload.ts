@@ -94,6 +94,27 @@ export const uploadMultipleDocuments = multer({
   fileFilter: documentFileFilter,
 });
 
+// Multer instance for CSV files
+export const uploadCsvFile = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+  fileFilter: (_req: Request, file: any, cb: multer.FileFilterCallback) => {
+    const isCsvName = file.originalname.toLowerCase().endsWith(".csv") || file.originalname.toLowerCase().endsWith(".txt");
+    if (
+      isCsvName ||
+      file.mimetype.includes("csv") ||
+      file.mimetype.includes("text") ||
+      file.mimetype === "application/vnd.ms-excel"
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only CSV files (.csv) are allowed for bulk upload."));
+    }
+  },
+});
+
 // Error handler middleware for multer errors
 export const handleUploadError = (
   err: any,
