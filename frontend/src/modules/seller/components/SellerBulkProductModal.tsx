@@ -89,12 +89,7 @@ export default function SellerBulkProductModal({
 
       setTotalParsedRows(lines.length - 1);
 
-      // Parse first 5 data rows
-      const parsed: PreviewRow[] = [];
-      const sampleLines = lines.slice(1, 6);
-
-      sampleLines.forEach((line, idx) => {
-        // Simple comma split handling quotes
+      const splitCsvLine = (line: string): string[] => {
         const cols: string[] = [];
         let insideQuote = false;
         let entry = "";
@@ -110,14 +105,43 @@ export default function SellerBulkProductModal({
           }
         }
         cols.push(entry.replace(/^"|"$/g, "").trim());
+        return cols;
+      };
 
-        const name = cols[0] || "";
-        const category = cols[1] || "";
-        const mrp = cols[4] || "";
-        const price = cols[5] || "";
-        const stock = cols[6] || "";
-        const unit = cols[7] || "Default";
-        const sku = cols[8] || "";
+      const headerCols = splitCsvLine(lines[0]).map((h) =>
+        h.toLowerCase().replace(/[^a-z0-9]/g, "")
+      );
+      const findIdx = (aliases: string[], fallbackIdx: number) => {
+        for (const alias of aliases) {
+          const norm = alias.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const idx = headerCols.indexOf(norm);
+          if (idx !== -1) return idx;
+        }
+        return fallbackIdx;
+      };
+
+      const nameIdx = findIdx(["productname", "product", "name", "title"], 0);
+      const catIdx = findIdx(["category", "categoryname"], 1);
+      const mrpIdx = findIdx(["mrp", "compareatprice", "originalprice"], 4);
+      const priceIdx = findIdx(["sellingprice", "price", "discountprice"], 5);
+      const stockIdx = findIdx(["stock", "quantity", "qty"], 6);
+      const unitIdx = findIdx(["unitvariation", "unit", "variation", "pack"], 7);
+      const skuIdx = findIdx(["skuoptional", "sku", "itemcode", "barcode"], 8);
+
+      // Parse first 5 data rows
+      const parsed: PreviewRow[] = [];
+      const sampleLines = lines.slice(1, 6);
+
+      sampleLines.forEach((line, idx) => {
+        const cols = splitCsvLine(line);
+
+        const name = cols[nameIdx] || "";
+        const category = cols[catIdx] || "";
+        const mrp = cols[mrpIdx] || "";
+        const price = cols[priceIdx] || "";
+        const stock = cols[stockIdx] || "";
+        const unit = cols[unitIdx] || "Default";
+        const sku = cols[skuIdx] || "";
 
         let status: "valid" | "warning" = "valid";
         let statusText = "Ready";
@@ -274,6 +298,12 @@ export default function SellerBulkProductModal({
               <p className="text-[11px] text-slate-500">
                 Pre-configured with sample products and your store's approved categories.
               </p>
+              <div className="pt-1">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-purple-700 bg-purple-100/70 px-2.5 py-1 rounded-lg">
+                  <span>✨</span>
+                  <span>SKU is 100% optional — leave blank and Hello Local auto-generates unique SKUs!</span>
+                </span>
+              </div>
             </div>
             <button
               onClick={handleDownloadTemplate}
@@ -382,6 +412,7 @@ export default function SellerBulkProductModal({
                           <th className="p-2 border-b">MRP</th>
                           <th className="p-2 border-b">Price</th>
                           <th className="p-2 border-b">Stock</th>
+                          <th className="p-2 border-b">SKU</th>
                           <th className="p-2 border-b">Status</th>
                         </tr>
                       </thead>
@@ -398,6 +429,15 @@ export default function SellerBulkProductModal({
                             <td className="p-2 text-slate-500">₹{row.mrp || "0"}</td>
                             <td className="p-2 font-black text-slate-900">₹{row.price || "0"}</td>
                             <td className="p-2 text-slate-700">{row.stock || "0"}</td>
+                            <td className="p-2">
+                              {row.sku ? (
+                                <span className="font-mono text-[10px] text-slate-700">{row.sku}</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                  ✨ Auto
+                                </span>
+                              )}
+                            </td>
                             <td className="p-2">
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[9px] font-black ${

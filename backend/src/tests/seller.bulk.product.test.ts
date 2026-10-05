@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { parseCsv, buildCsv } from "../utils/csvParser";
+import { generateAutoSku } from "../modules/seller/controllers/sellerBulkProductController";
 
 const be = (rel: string) => path.join(process.cwd(), "src", rel);
 const fe = (rel: string) => path.join(process.cwd(), "..", "frontend", "src", rel);
@@ -62,4 +63,18 @@ test("BULK-004: Frontend integrates Bulk Upload button and modal", () => {
   const serviceCode = readCode(fe("services/api/productService.ts"));
   assert.ok(serviceCode.includes("downloadBulkProductTemplate"), "productService must export downloadBulkProductTemplate");
   assert.ok(serviceCode.includes("bulkUploadProducts"), "productService must export bulkUploadProducts");
+});
+
+test("BULK-005: Auto-SKU generator creates unique readable SKU codes", () => {
+  const sku1 = generateAutoSku("Farm Fresh Wheat Atta", "5 kg");
+  const sku2 = generateAutoSku("Farm Fresh Wheat Atta", "5 kg");
+  const sku3 = generateAutoSku("Daawat Rozana Rice");
+
+  assert.ok(sku1.length >= 6, "SKU must have substantial length");
+  assert.ok(sku1.includes("5KG"), "SKU should incorporate variation tag");
+  assert.notEqual(sku1, sku2, "Auto-generated SKUs should be distinct due to random suffix");
+  assert.ok(sku3.length >= 6, "Single product without variation should generate valid SKU");
+
+  const ctrlCode = readCode(be("modules/seller/controllers/sellerBulkProductController.ts"));
+  assert.ok(ctrlCode.includes('"SKU (Optional)"'), "Sample CSV template must label column SKU (Optional)");
 });
