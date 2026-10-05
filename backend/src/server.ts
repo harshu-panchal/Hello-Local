@@ -153,6 +153,19 @@ async function startServer() {
       `   \x1b[36mEnvironment:\x1b[0m ${process.env.NODE_ENV || "development"}`,
     );
     console.log(`   \x1b[36mSocket.IO:\x1b[0m ✓ Ready for connections\n`);
+
+    // Periodically sweep abandoned pending orders (older than 30m) to return locked stock and coupons
+    const sweepInterval = setInterval(async () => {
+      try {
+        const { cleanupExpiredPendingOrders } = await import("./modules/customer/controllers/customerOrderController");
+        await cleanupExpiredPendingOrders();
+      } catch (sweepErr) {
+        console.error("Pending orders sweep error:", sweepErr);
+      }
+    }, 15 * 60 * 1000);
+    if (typeof (sweepInterval as any)?.unref === "function") {
+      (sweepInterval as any).unref();
+    }
   });
 }
 

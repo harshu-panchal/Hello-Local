@@ -15,6 +15,8 @@ import {
   getSellerLocationsForOrder,
   refreshDeliveryOtp,
 } from "../../services/api/customerOrderService";
+import RazorpayCheckout from "../../components/RazorpayCheckout";
+import { useAuth } from "../../context/AuthContext";
 import { UserImage } from "./components/common";
 import { ArrowLeftIcon, LocationPinIcon, ClockIcon, ShieldCheckIcon, RefreshIcon, ShareIcon, TruckIcon } from "./components/common/UserIcons";
 
@@ -23,6 +25,7 @@ export default function OrderDetail() {
   const [searchParams] = useSearchParams();
   const confirmed = searchParams.get("confirmed") === "true";
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { getOrderById, fetchOrderById } = useOrders();
   const [order, setOrder] = useState<any>(id ? getOrderById(id) : undefined);
   const [loading, setLoading] = useState(!order);
@@ -33,6 +36,7 @@ export default function OrderDetail() {
   );
   const [estimatedTime, setEstimatedTime] = useState(29);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showRazorpayCheckout, setShowRazorpayCheckout] = useState(false);
 
   // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -761,12 +765,33 @@ export default function OrderDetail() {
               )}
 
               <div className="border-t border-slate-100 pt-2 flex justify-between items-baseline font-bold text-xs text-slate-900">
-                <span>Total Paid</span>
+                <span>{order.paymentStatus === "Pending" ? "Total Due" : "Total Paid"}</span>
                 <span className="text-sm font-bold text-[#FF2E7A]">
                   ₹{(order.totalAmount || 0).toLocaleString("en-IN")}
                 </span>
               </div>
             </div>
+
+            {/* Complete Payment for Pending online order */}
+            {order.status === "Pending" && order.paymentStatus === "Pending" && order.paymentMethod !== "COD" && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-900">Payment Incomplete</h4>
+                    <p className="text-[10px] text-amber-700">
+                      Complete payment now to confirm this order.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRazorpayCheckout(true)}
+                    className="text-xs font-bold text-white bg-[#FF2E7A] hover:bg-[#E02269] px-3.5 py-1.5 rounded-full transition-colors shadow-xs"
+                  >
+                    Pay ₹{(order.totalAmount || 0).toLocaleString("en-IN")}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Order Actions: Cancel */}
             {isCancellable && (
@@ -911,6 +936,28 @@ export default function OrderDetail() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Razorpay Payment Modal for Incomplete Orders */}
+      {showRazorpayCheckout && order && user && (
+        <RazorpayCheckout
+          orderId={id!}
+          amount={order.totalAmount || 0}
+          customerDetails={{
+            name: user.name || "Customer",
+            email: user.email || "",
+            phone: user.phone || "",
+          }}
+          onSuccess={() => {
+            setShowRazorpayCheckout(false);
+            showToast("Payment successful! Order confirmed.", "success");
+            handleRefresh();
+          }}
+          onFailure={(error) => {
+            setShowRazorpayCheckout(false);
+            showToast(error || "Payment failed. Please try again.", "error");
+          }}
+        />
+      )}
     </div>
   );
 }

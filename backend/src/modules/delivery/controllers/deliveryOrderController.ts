@@ -395,28 +395,42 @@ export const getSellerLocationsForOrder = asyncHandler(
         .json({ success: false, message: "This order is not assigned to you" });
     }
 
-    // Get all unique seller IDs from order items
-    const orderItems = await OrderItem.find({ order: id });
+    // Get all unique seller IDs from active (non-cancelled) order items
+    const orderItems = await OrderItem.find({ order: id, status: { $ne: "Cancelled" } });
     const sellerIds = [
       ...new Set(orderItems.map((item) => item.seller.toString())),
     ];
 
     // Get seller details including locations
     const sellers = await Seller.find({ _id: { $in: sellerIds } }).select(
-      "storeName address city latitude longitude",
+      "storeName address city latitude longitude location",
     );
 
-    // Format seller locations
+    // Format seller locations supporting GeoJSON coordinates and legacy strings
     const sellerLocations = sellers
-      .filter((seller) => seller.latitude && seller.longitude) // Only include sellers with location data
-      .map((seller) => ({
-        sellerId: seller._id.toString(),
-        storeName: seller.storeName,
-        address: seller.address,
-        city: seller.city,
-        latitude: parseFloat(seller.latitude || "0"),
-        longitude: parseFloat(seller.longitude || "0"),
-      }));
+      .map((seller) => {
+        let lat: number | undefined;
+        let lng: number | undefined;
+        if (seller.location?.coordinates?.length === 2) {
+          lng = seller.location.coordinates[0];
+          lat = seller.location.coordinates[1];
+        } else if (seller.latitude && seller.longitude) {
+          lat = parseFloat(seller.latitude);
+          lng = parseFloat(seller.longitude);
+        }
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        return {
+          sellerId: seller._id.toString(),
+          storeName: seller.storeName,
+          address: seller.address,
+          city: seller.city,
+          latitude: lat,
+          longitude: lng,
+        };
+      })
+      .filter(Boolean);
 
     return res.status(200).json({
       success: true,
@@ -723,20 +737,36 @@ export const confirmSellerPickup = asyncHandler(
 
     // Verify proximity to seller
     const seller = await Seller.findById(sellerId).select(
-      "latitude longitude storeName",
+      "latitude longitude storeName location",
     );
-    if (!seller || !seller.latitude || !seller.longitude) {
+    if (!seller) {
       return res
         .status(404)
-        .json({ success: false, message: "Seller location not found" });
+        .json({ success: false, message: "Seller not found" });
+    }
+
+    let sellerLat: number | undefined;
+    let sellerLng: number | undefined;
+    if (seller.location?.coordinates?.length === 2) {
+      sellerLng = seller.location.coordinates[0];
+      sellerLat = seller.location.coordinates[1];
+    } else if (seller.latitude && seller.longitude) {
+      sellerLat = parseFloat(seller.latitude);
+      sellerLng = parseFloat(seller.longitude);
+    }
+
+    if (!Number.isFinite(sellerLat) || !Number.isFinite(sellerLng)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Seller location not set" });
     }
 
     const { calculateDistance } = await import("../../../utils/locationHelper");
     const distance = calculateDistance(
       latitude,
       longitude,
-      parseFloat(seller.latitude),
-      parseFloat(seller.longitude),
+      sellerLat as number,
+      sellerLng as number,
     );
 
     if (distance > 0.5) {
@@ -759,8 +789,8 @@ export const confirmSellerPickup = asyncHandler(
       });
     }
 
-    // Get all unique seller IDs from order items
-    const orderItems = await OrderItem.find({ order: id });
+    // Get all unique seller IDs from active (non-cancelled) order items
+    const orderItems = await OrderItem.find({ order: id, status: { $ne: "Cancelled" } });
     const allSellerIds = [
       ...new Set(orderItems.map((item) => item.seller.toString())),
     ];

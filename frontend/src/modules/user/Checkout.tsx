@@ -33,6 +33,7 @@ import { addToWishlist } from "../../services/api/customerWishlistService";
 import { updateProfile } from "../../services/api/customerService";
 import { calculateProductPrice } from "../../utils/priceUtils";
 import RazorpayCheckout from "../../components/RazorpayCheckout";
+import { cancelOrder } from "../../services/api/customerOrderService";
 import { UserImage, UserEmptyState } from "./components/common";
 import { ArrowLeftIcon, LocationPinIcon, ClockIcon, TagIcon, CreditCardIcon, ChevronRightIcon, PlusIcon, MinusIcon } from "./components/common/UserIcons";
 
@@ -1438,9 +1439,17 @@ export default function Checkout() {
             setShowOrderSuccess(true);
             showGlobalToast("Payment successful!", "success");
           }}
-          onFailure={(error) => {
+          onFailure={async (error) => {
             setShowRazorpayCheckout(false);
+            const failedId = pendingOrderId;
             setPendingOrderId(null);
+            if (failedId) {
+              try {
+                await cancelOrder(failedId, "Online payment cancelled or failed at checkout");
+              } catch (cancelErr) {
+                console.warn("Failed to cancel abandoned pending order:", cancelErr);
+              }
+            }
             showGlobalToast(
               error || "Payment failed. Please try again.",
               "error"

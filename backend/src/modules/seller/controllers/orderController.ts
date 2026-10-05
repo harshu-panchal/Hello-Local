@@ -334,22 +334,95 @@ export const updateOrderStatus = asyncHandler(
     const isSoleSeller = sellerCountAgg.length <= 1;
 
     if (!isSoleSeller && (nextStatus === "Cancelled" || nextStatus === "Rejected")) {
+      const myItems = await OrderItem.find({ order: id, seller: sellerId });
+
+      // Calculate cancelled amount for customer refund
+      const cancelledSubtotal = myItems.reduce((sum, oi) => {
+        const lineTotal = oi.total || ((oi.unitPrice || 0) * (oi.quantity || 1));
+        const lineDiscount = (oi as any).discountAmount || 0;
+        return sum + Math.max(0, lineTotal - lineDiscount);
+      }, 0);
+
       await OrderItem.updateMany(
         { order: id, seller: sellerId },
         { $set: { status: "Cancelled" } },
       );
 
       // Return only this seller's stock to the shelf. (#H-08)
-      const myItems = await OrderItem.find({ order: id, seller: sellerId });
       const myReservations = await reservationsFromOrderItems(
         myItems.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
       );
       await releaseMany(myReservations);
 
+      // Cancel any pending commissions for this seller on this order
+      try {
+        const Commission = (await import("../../../models/Commission")).default;
+        await Commission.updateMany(
+          { order: id, seller: sellerId, status: "Pending" },
+          { $set: { status: "Cancelled" } },
+        );
+      } catch (commErr) {
+        console.error(`Failed to cancel pending commissions for seller ${sellerId} on order ${id}:`, commErr);
+      }
+
+      // Check if all items in the order across all sellers are now cancelled
+      const activeCount = await OrderItem.countDocuments({
+        order: id,
+        status: { $ne: "Cancelled" },
+      });
+
+      if (activeCount === 0) {
+        order.status = "Cancelled";
+        order.cancelledAt = new Date();
+        await order.save();
+
+        try {
+          const { releaseCoupon } = await import("../../../services/orderPricingService");
+          await releaseCoupon(order.couponCode);
+        } catch (couponErr) {
+          console.error(`Failed to release coupon on full cancellation of order ${id}:`, couponErr);
+        }
+      }
+
+      // If prepaid, issue partial refund for the cancelled seller's items
+      if (
+        ["Paid", "PartiallyRefunded"].includes(order.paymentStatus) &&
+        order.paymentMethod !== "COD" &&
+        cancelledSubtotal > 0
+      ) {
+        try {
+          const { refundOrder } = await import("../../../services/refundService");
+          await refundOrder(
+            id,
+            `Seller cancelled items (${myItems.length} items)`,
+            Math.round(cancelledSubtotal * 100) / 100,
+          );
+        } catch (refundErr) {
+          console.error(`Refund failed for multi-seller cancellation on order ${id}:`, refundErr);
+        }
+      }
+
+      // Notify socket rooms (customer and couriers)
+      try {
+        const io = (req.app as any).get("io");
+        if (io) {
+          io.to(`order-${id}`).emit("order-items-updated", {
+            orderId: id,
+            sellerId,
+            status: "Cancelled",
+            allCancelled: activeCount === 0,
+          });
+        }
+      } catch (ioErr) {
+        console.warn("Socket notification failed:", ioErr);
+      }
+
       return res.status(200).json({
         success: true,
         message:
-          "Your items were cancelled. Other sellers' items in this order are unaffected.",
+          activeCount === 0
+            ? "All items in this order have been cancelled. The order is now cancelled."
+            : "Your items were cancelled and refunded. Other sellers' items in this order are unaffected.",
         data: { id: order._id, status: order.status, sellerItemsStatus: "Cancelled" },
       });
     }

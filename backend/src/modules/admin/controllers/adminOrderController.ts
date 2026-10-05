@@ -155,6 +155,9 @@ export const updateOrderStatus = asyncHandler(
 
     if (nextStatus === "Delivered") {
       updateData.deliveredAt = new Date();
+      if (current.paymentMethod === "COD" && current.paymentStatus !== "Paid") {
+        updateData.paymentStatus = "Paid";
+      }
     }
 
     if (nextStatus === "Cancelled") {

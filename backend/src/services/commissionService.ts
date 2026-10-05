@@ -275,7 +275,10 @@ export const calculateOrderCommissions = async (orderId: string) => {
  */
 export const createPendingCommissions = async (orderId: string) => {
   try {
-    const order = await Order.findById(orderId).populate("items");
+    const orderQuery = Order.findById(orderId);
+    const order = typeof (orderQuery as any)?.populate === "function"
+      ? await (orderQuery as any).populate("items")
+      : await orderQuery;
     if (!order) throw new Error("Order not found");
 
     // Check if commissions already exist
@@ -285,15 +288,24 @@ export const createPendingCommissions = async (orderId: string) => {
       return;
     }
 
-    const items = order.items;
-    // Group items by seller to aggregate earnings (though we store per item mostly)
-    // We'll calculate per item as per original logic
+    const items = (order.items || []) as any[];
+    const sellerCache = new Map<string, any>();
 
-    for (const itemId of items) {
-      const item = await OrderItem.findById(itemId);
+    for (const itemRef of items) {
+      let item = itemRef;
+      if (!item || !item.product || !item.seller) {
+        item = await OrderItem.findById(itemRef);
+      }
       if (!item) continue;
 
-      const seller = await Seller.findById(item.seller);
+      const sId = item.seller?.toString();
+      if (!sId) continue;
+
+      let seller = sellerCache.get(sId);
+      if (!seller) {
+        seller = await Seller.findById(sId);
+        if (seller) sellerCache.set(sId, seller);
+      }
       if (!seller) continue;
 
       const isSellerFunded = (order as any).couponFunding === "SELLER";

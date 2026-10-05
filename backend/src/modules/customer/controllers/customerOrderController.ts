@@ -372,6 +372,69 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * Cancel abandoned orders that have been pending payment for more than 30 minutes,
+ * returning reserved stock to the shelf and releasing unused coupons.
+ */
+export async function cleanupExpiredPendingOrders(customerFilter?: string): Promise<number> {
+    try {
+        const threshold = new Date(Date.now() - 30 * 60 * 1000);
+        const query: any = {
+            status: "Pending",
+            paymentStatus: "Pending",
+            createdAt: { $lt: threshold },
+        };
+        if (customerFilter) {
+            query.customer = customerFilter;
+        }
+
+        const expiredOrders = await Order.find(query);
+        if (expiredOrders.length === 0) return 0;
+
+        for (const order of expiredOrders) {
+            try {
+                const claimed = await Order.findOneAndUpdate(
+                    { _id: order._id, status: "Pending" },
+                    {
+                        $set: {
+                            status: "Cancelled",
+                            cancellationReason: "Online payment timed out / abandoned",
+                            cancelledAt: new Date(),
+                        },
+                    },
+                    { new: true }
+                );
+
+                if (!claimed) continue;
+
+                const orderItems = await OrderItem.find({ _id: { $in: claimed.items } });
+                const reservations = await reservationsFromOrderItems(
+                    orderItems.map((oi) => ({
+                        product: oi.product,
+                        quantity: oi.quantity,
+                        variation: oi.variation,
+                    }))
+                );
+                await releaseMany(reservations);
+                await OrderItem.updateMany(
+                    { _id: { $in: claimed.items } },
+                    { $set: { status: "Cancelled" } }
+                );
+
+                if (claimed.couponCode) {
+                    await releaseCoupon(claimed.couponCode);
+                }
+            } catch (singleErr) {
+                console.error(`Failed to cleanup expired pending order ${order._id}:`, singleErr);
+            }
+        }
+        return expiredOrders.length;
+    } catch (err) {
+        console.error("Error in cleanupExpiredPendingOrders:", err);
+        return 0;
+    }
+}
+
 // Get authenticated customer's orders
 export const getMyOrders = async (req: Request, res: Response) => {
     try {
@@ -382,6 +445,10 @@ export const getMyOrders = async (req: Request, res: Response) => {
                 message: "Authentication required"
             });
         }
+
+        // Clean up any stale abandoned pending orders for this customer
+        await cleanupExpiredPendingOrders(userId);
+
         const { status, page = 1, limit = 10 } = req.query;
 
         const query: any = { customer: userId };

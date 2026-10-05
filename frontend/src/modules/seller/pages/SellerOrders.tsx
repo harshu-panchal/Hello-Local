@@ -230,17 +230,22 @@ export default function SellerOrders() {
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <select
             value={order.status}
-            disabled={updatingId === order.id}
+            disabled={
+              updatingId === order.id ||
+              ["Picked up", "Out for Delivery", "Delivered", "Cancelled", "Rejected"].includes(order.status)
+            }
             onChange={(e) => handleStatusUpdate(order.id, order.orderId, e.target.value)}
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-purple-600 disabled:opacity-50 min-h-[44px]"
           >
             <option value="Received">Received</option>
             <option value="Accepted">Accepted</option>
             <option value="Processed">Processed</option>
-            <option value="On the way">On the way</option>
-            <option value="Delivered">Delivered</option>
+            <option value="Shipped">Shipped</option>
             <option value="Rejected">Rejected</option>
             <option value="Cancelled">Cancelled</option>
+            {["Picked up", "Out for Delivery", "Delivered"].includes(order.status) && (
+              <option value={order.status} disabled>{order.status}</option>
+            )}
           </select>
           {updatingId === order.id && (
             <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-r-transparent" />

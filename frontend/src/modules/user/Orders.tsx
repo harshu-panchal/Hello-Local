@@ -18,9 +18,11 @@ const getStatusBadge = (status: string) => {
     case 'Rejected':
       return { label: 'Cancelled', bg: 'bg-[#FFF1F4] text-[#FF2E7A] border-[#FFE4EA]' };
     case 'Received':
-    case 'Pending':
-    default:
       return { label: 'Order Placed', bg: 'bg-slate-50 text-slate-700 border-slate-200' };
+    case 'Pending':
+      return { label: 'Payment Pending', bg: 'bg-amber-50 text-amber-700 border-amber-200' };
+    default:
+      return { label: status || 'Order Placed', bg: 'bg-slate-50 text-slate-700 border-slate-200' };
   }
 };
 
