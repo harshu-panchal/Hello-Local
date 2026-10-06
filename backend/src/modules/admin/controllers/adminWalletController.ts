@@ -198,10 +198,13 @@ export const getFinancialDashboard = asyncHandler(
  */
 export const getAdminEarnings = asyncHandler(
   async (req: Request, res: Response) => {
-    const { page = 1, limit = 20, status, dateFrom, dateTo } = req.query;
+    const { page = 1, limit = 20, status, dateFrom, dateTo, type } = req.query;
 
     const query: any = {};
     if (status) query.status = status;
+    if (type && ["SELLER", "DELIVERY_BOY"].includes(String(type))) {
+      query.type = type;
+    }
     if (dateFrom || dateTo) {
       query.createdAt = {};
       if (dateFrom) query.createdAt.$gte = new Date(dateFrom as string);
@@ -223,17 +226,21 @@ export const getAdminEarnings = asyncHandler(
     // Format data for frontend
     const formattedEarnings = earnings.map((e) => {
       let sourceName = "Unknown";
+      let roleDescription = "Platform Revenue";
       if (e.type === "SELLER" && e.seller) {
         sourceName =
           (e.seller as any).storeName || (e.seller as any).sellerName;
+        roleDescription = "Seller Commission (Revenue)";
       } else if (e.type === "DELIVERY_BOY" && e.deliveryBoy) {
         sourceName = (e.deliveryBoy as any).name;
+        roleDescription = "Courier Delivery Wage (Expense)";
       }
 
       return {
         id: e._id,
         source: sourceName,
         sourceType: e.type,
+        roleDescription,
         amount: e.commissionAmount,
         date: e.createdAt,
         status: e.status,

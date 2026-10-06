@@ -259,6 +259,54 @@ export async function processReturn(params: {
       if (outcome.refundId) {
         ret.refundId = new mongoose.Types.ObjectId(outcome.refundId);
       }
+    } else if (order.paymentMethod === "COD" && ret.refundAmount && ret.refundAmount > 0) {
+      // ── COD Return: Credit Customer Wallet Balance ─────────────────────────
+      try {
+        const Customer = (await import("../models/Customer")).default;
+        const WalletTransaction = (await import("../models/WalletTransaction")).default;
+        const Refund = (await import("../models/Refund")).default;
+
+        const customer = await Customer.findByIdAndUpdate(
+          order.customer,
+          { $inc: { walletAmount: ret.refundAmount } },
+          { new: true }
+        );
+
+        await WalletTransaction.create({
+          userId: order.customer,
+          userType: "Customer",
+          type: "CREDIT",
+          amount: ret.refundAmount,
+          balance: customer?.walletAmount || ret.refundAmount,
+          description: `Refund for returned item in COD order #${order.orderNumber}`,
+          reference: `REF-COD-${ret._id}`,
+          relatedOrder: order._id,
+        });
+
+        const refundDoc = await Refund.create({
+          order: order._id,
+          customer: order.customer,
+          returnRequest: ret._id,
+          amount: ret.refundAmount,
+          reason: `COD Return refund: ${ret.reason}`,
+          status: "Completed",
+          processedBy: new mongoose.Types.ObjectId(processedBy),
+          processedAt: new Date(),
+          gatewayResponse: {
+            refundType: "WALLET_CREDIT",
+            message: "Credited to Hello Local customer wallet balance",
+          },
+        });
+
+        ret.refundId = refundDoc._id as any;
+
+        const priorReturns = await Return.find({ order: order._id, status: "Completed", _id: { $ne: ret._id } });
+        const totalRefundedSum = priorReturns.reduce((sum, r) => sum + (r.refundAmount || 0), 0) + ret.refundAmount;
+        const newPaymentStatus = (totalRefundedSum >= (order.total || 0) - 0.01) ? "Refunded" : "PartiallyRefunded";
+        await Order.updateOne({ _id: order._id }, { $set: { paymentStatus: newPaymentStatus } });
+      } catch (codRefErr) {
+        console.error(`Return ${returnId}: failed to credit customer wallet for COD order:`, codRefErr);
+      }
     }
 
     const { reverseCommissions } = await import("./commissionService");

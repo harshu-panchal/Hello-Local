@@ -958,6 +958,19 @@ export default function Checkout() {
                 </h3>
               </div>
 
+              {user?.walletAmount && Number(user.walletAmount) > 0 ? (
+                <div className="mb-2.5 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">👛</span>
+                    <div>
+                      <p className="font-bold text-emerald-900 leading-tight">Hello Local Wallet</p>
+                      <p className="text-[10px] text-emerald-700">Return refund balance available</p>
+                    </div>
+                  </div>
+                  <span className="font-black text-emerald-800 font-mono">₹{Number(user.walletAmount).toFixed(2)}</span>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
