@@ -182,6 +182,20 @@ export default function Account() {
               </div>
             </div>
 
+            {/* Hello Local Wallet Card */}
+            <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-4 text-white shadow-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-rose-100">Hello Local Wallet</span>
+                <span className="text-lg">👛</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <p className="text-2xl font-black tracking-tight">
+                  ₹{Number(profile?.walletAmount ?? user?.walletAmount ?? 0).toFixed(2)}
+                </p>
+                <span className="text-[10px] text-rose-100 font-medium">Automatic return refunds</span>
+              </div>
+            </div>
+
             {/* Quick Action Tiles */}
             <div className="grid grid-cols-2 gap-2.5">
               <button

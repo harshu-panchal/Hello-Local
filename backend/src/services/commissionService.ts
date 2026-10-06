@@ -600,6 +600,89 @@ export const distributeCommissions = async (orderId: string) => {
       }
     }
 
+    // ── Platform Wallet Accounting (For Prepaid / Online Orders) ─────────
+    try {
+      const PlatformWallet = (await import("../models/PlatformWallet")).default;
+      const WalletTransaction = (await import("../models/WalletTransaction")).default;
+
+      const existingAdminTx = await WalletTransaction.findOne({
+        reference: `ADM-ORD-EARN-${orderId}`,
+      }).session(session);
+
+      if (!existingAdminTx) {
+        let platformWallet = await PlatformWallet.findOne().session(session);
+        if (!platformWallet) {
+          platformWallet = (
+            await PlatformWallet.create(
+              [
+                {
+                  totalPlatformEarning: 0,
+                  currentPlatformBalance: 0,
+                  totalAdminEarning: 0,
+                  pendingFromDeliveryBoy: 0,
+                  sellerPendingPayouts: 0,
+                  deliveryBoyPendingPayouts: 0,
+                },
+              ],
+              { session }
+            )
+          )[0];
+        }
+
+        const adminProductCommission = commissionsToProcess
+          .filter((c) => c.type === "SELLER")
+          .reduce((sum, c) => sum + (c.commissionAmount || 0), 0);
+
+        const platformFee = Math.round((Number(order.platformFee || (order as any).fees?.platformFee) || 0) * 100) / 100;
+        const totalDeliveryCharge = Math.round((Number(order.shipping || (order as any).fees?.deliveryFee) || 0) * 100) / 100;
+
+        let courierBaseEarning = 0;
+        const delComm = processedCommissions.find((c) => c.type === "DELIVERY_BOY");
+        if (delComm) {
+          courierBaseEarning = Math.max(
+            0,
+            Math.round(((delComm.commissionAmount || 0) - (delComm.tipAmount || 0)) * 100) / 100
+          );
+        }
+
+        const adminDeliveryCommission = Math.max(0, Math.round((totalDeliveryCharge - courierBaseEarning) * 100) / 100);
+
+        const isSellerFunded = (order as any).couponFunding === "SELLER";
+        const platformDiscountSubsidy =
+          !isSellerFunded && (order as any).discount ? Number((order as any).discount) : 0;
+
+        const grossAdminEarning = Math.round((adminProductCommission + platformFee + adminDeliveryCommission) * 100) / 100;
+        const totalAdminEarning = Math.max(0, Math.round((grossAdminEarning - platformDiscountSubsidy) * 100) / 100);
+
+        platformWallet.totalPlatformEarning =
+          Math.round(((platformWallet.totalPlatformEarning || 0) + (order.total || 0)) * 100) / 100;
+        platformWallet.totalAdminEarning =
+          Math.round(((platformWallet.totalAdminEarning || 0) + totalAdminEarning) * 100) / 100;
+        platformWallet.currentPlatformBalance =
+          Math.round(((platformWallet.currentPlatformBalance || 0) + totalAdminEarning) * 100) / 100;
+
+        await platformWallet.save({ session });
+
+        await WalletTransaction.create(
+          [
+            {
+              userId: null,
+              userType: "Admin",
+              type: "CREDIT",
+              amount: totalAdminEarning,
+              balance: platformWallet.currentPlatformBalance,
+              description: `Platform earnings for online order ${order.orderNumber}`,
+              reference: `ADM-ORD-EARN-${orderId}`,
+              relatedOrder: order._id,
+            },
+          ],
+          { session }
+        );
+      }
+    } catch (pwErr) {
+      console.error(`[PlatformWallet] Failed to record online earnings for order ${orderId}:`, pwErr);
+    }
+
     await session.commitTransaction();
 
     return {

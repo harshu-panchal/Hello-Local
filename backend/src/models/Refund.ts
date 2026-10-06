@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IRefund extends Document {
   order?: mongoose.Types.ObjectId;
-  payment: mongoose.Types.ObjectId;
+  payment?: mongoose.Types.ObjectId;
   customer?: mongoose.Types.ObjectId;
   adRequest?: mongoose.Types.ObjectId;
   seller?: mongoose.Types.ObjectId;
@@ -44,7 +44,12 @@ const RefundSchema = new Schema<IRefund>(
     payment: {
       type: Schema.Types.ObjectId,
       ref: "Payment",
-      required: [true, "Payment is required"],
+      required: [
+        function (this: any) {
+          return !this.returnRequest && !this.adRequest && !this.seller;
+        },
+        "Payment is required for gateway refunds",
+      ],
     },
     customer: {
       type: Schema.Types.ObjectId,

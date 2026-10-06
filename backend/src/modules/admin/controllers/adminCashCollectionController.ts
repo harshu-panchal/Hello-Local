@@ -144,57 +144,46 @@ export const getCashCollectionById = asyncHandler(
  */
 export const createCashCollection = asyncHandler(
     async (req: Request, res: Response) => {
-        const { deliveryBoyId, orderId, amount, remark } = req.body;
+        const { deliveryBoyId, amount, remark } = req.body;
 
-        if (!deliveryBoyId || !orderId || !amount) {
+        const requested = Math.round(Number(amount) * 100) / 100;
+        if (!deliveryBoyId || !Number.isFinite(requested) || requested <= 0) {
             return res.status(400).json({
                 success: false,
-                message: "Delivery boy ID, order ID, and amount are required",
+                message: "A valid delivery partner ID and positive amount are required",
             });
         }
 
-        // Verify delivery boy exists
-        const deliveryBoy = await Delivery.findById(deliveryBoyId);
-        if (!deliveryBoy) {
-            return res.status(404).json({
+        try {
+            const { settleCourierCodDebt } = await import("../../../services/codSettlementService");
+            const settlement = await settleCourierCodDebt({
+                deliveryBoyId,
+                amount: requested,
+                source: "CASH",
+                reference: `ADMIN-COLL-${deliveryBoyId}-${Date.now()}`,
+                remark: remark,
+                adminId: req.user?.userId,
+            });
+
+            const populatedCollection = await CashCollection.findOne({
+                deliveryBoy: deliveryBoyId,
+            })
+                .sort({ createdAt: -1 })
+                .populate("deliveryBoy", "name mobile")
+                .populate("order", "orderNumber total")
+                .populate("collectedBy", "name");
+
+            return res.status(201).json({
+                success: true,
+                message: "Cash collection created and settled successfully",
+                data: populatedCollection || settlement,
+            });
+        } catch (err: any) {
+            return res.status(err.statusCode || 400).json({
                 success: false,
-                message: "Delivery boy not found",
+                message: err.message || "Failed to process cash collection",
             });
         }
-
-        // Verify order exists
-        const order = await Order.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: "Order not found",
-            });
-        }
-
-        // Create cash collection
-        const collection = await CashCollection.create({
-            deliveryBoy: deliveryBoyId,
-            order: orderId,
-            amount,
-            remark,
-            collectedBy: req.user?.userId,
-            collectedAt: new Date(),
-        });
-
-        // Update delivery boy's cash collected
-        deliveryBoy.cashCollected = (deliveryBoy.cashCollected || 0) - amount;
-        await deliveryBoy.save();
-
-        const populatedCollection = await CashCollection.findById(collection._id)
-            .populate("deliveryBoy", "name mobile")
-            .populate("order", "orderNumber total")
-            .populate("collectedBy", "name");
-
-        return res.status(201).json({
-            success: true,
-            message: "Cash collection created successfully",
-            data: populatedCollection,
-        });
     }
 );
 
@@ -202,46 +191,10 @@ export const createCashCollection = asyncHandler(
  * Update cash collection
  */
 export const updateCashCollection = asyncHandler(
-    async (req: Request, res: Response) => {
-        const { id } = req.params;
-        const { amount, remark } = req.body;
-
-        const collection = await CashCollection.findById(id);
-
-        if (!collection) {
-            return res.status(404).json({
-                success: false,
-                message: "Cash collection not found",
-            });
-        }
-
-        // If amount is being updated, adjust delivery boy's cash collected
-        if (amount !== undefined && amount !== collection.amount) {
-            const deliveryBoy = await Delivery.findById(collection.deliveryBoy);
-            if (deliveryBoy) {
-                const difference = collection.amount - amount;
-                deliveryBoy.cashCollected =
-                    (deliveryBoy.cashCollected || 0) + difference;
-                await deliveryBoy.save();
-            }
-            collection.amount = amount;
-        }
-
-        if (remark !== undefined) {
-            collection.remark = remark;
-        }
-
-        await collection.save();
-
-        const updatedCollection = await CashCollection.findById(id)
-            .populate("deliveryBoy", "name mobile")
-            .populate("order", "orderNumber total")
-            .populate("collectedBy", "name");
-
-        return res.status(200).json({
-            success: true,
-            message: "Cash collection updated successfully",
-            data: updatedCollection,
+    async (_req: Request, res: Response) => {
+        return res.status(400).json({
+            success: false,
+            message: "Settled cash collections are immutable financial audit records. To adjust courier debt, perform a new cash collection entry.",
         });
     }
 );
@@ -250,31 +203,11 @@ export const updateCashCollection = asyncHandler(
  * Delete cash collection
  */
 export const deleteCashCollection = asyncHandler(
-    async (req: Request, res: Response) => {
-        const { id } = req.params;
-
-        const collection = await CashCollection.findById(id);
-
-        if (!collection) {
-            return res.status(404).json({
-                success: false,
-                message: "Cash collection not found",
-            });
-        }
-
-        // Restore the amount to delivery boy's cash collected
-        const deliveryBoy = await Delivery.findById(collection.deliveryBoy);
-        if (deliveryBoy) {
-            deliveryBoy.cashCollected =
-                (deliveryBoy.cashCollected || 0) + collection.amount;
-            await deliveryBoy.save();
-        }
-
-        await CashCollection.findByIdAndDelete(id);
-
-        return res.status(200).json({
-            success: true,
-            message: "Cash collection deleted successfully",
+    async (_req: Request, res: Response) => {
+        return res.status(400).json({
+            success: false,
+            message: "Settled cash collections cannot be deleted. All cash collections are permanent ledger records.",
         });
     }
 );
+
