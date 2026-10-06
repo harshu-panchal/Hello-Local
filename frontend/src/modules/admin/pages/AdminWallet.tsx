@@ -34,6 +34,7 @@ export default function AdminWallet() {
   const [earnings, setEarnings] = useState<AdminEarning[]>([]);
   const [earnLoading, setEarnLoading] = useState(false);
   const [earnSearch, setEarnSearch] = useState("");
+  const [earnTypeFilter, setEarnTypeFilter] = useState<string>("ALL");
 
   // Debounce search query (300ms)
   useEffect(() => {
@@ -84,7 +85,9 @@ export default function AdminWallet() {
   const fetchEarnings = useCallback(async () => {
     setEarnLoading(true);
     try {
-      const response = await getAdminEarnings();
+      const response = await getAdminEarnings({
+        type: earnTypeFilter === "ALL" ? undefined : earnTypeFilter,
+      });
       if (response.success && Array.isArray(response.data)) {
         setEarnings(response.data);
       } else {
@@ -97,7 +100,7 @@ export default function AdminWallet() {
     } finally {
       setEarnLoading(false);
     }
-  }, [showToast]);
+  }, [earnTypeFilter, showToast]);
 
   useEffect(() => {
     fetchStats();
@@ -626,23 +629,39 @@ export default function AdminWallet() {
           {/* TAB 2: ADMIN EARNINGS */}
           {activeTab === "earnings" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2">
-                <h3 className="text-sm font-bold text-neutral-800">
-                  Platform Commission & Fee Ledger
-                </h3>
-                <button
-                  type="button"
-                  onClick={handleExportEarnings}
-                  disabled={earnings.length === 0}
-                  className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[36px] disabled:opacity-50"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  <span>Export CSV</span>
-                </button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-800">
+                    Platform Commission & Fee Ledger
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 font-medium">
+                    Audit log of platform revenue cuts and courier delivery disbursements
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={earnTypeFilter}
+                    onChange={(e) => setEarnTypeFilter(e.target.value)}
+                    className="bg-white border border-neutral-200 text-neutral-800 text-xs font-bold rounded-xl px-3 py-1.5 outline-none min-h-[36px]"
+                  >
+                    <option value="ALL">All Entries</option>
+                    <option value="SELLER">Seller Commissions (Revenue)</option>
+                    <option value="DELIVERY_BOY">Courier Wages (Expense)</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleExportEarnings}
+                    disabled={earnings.length === 0}
+                    className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors min-h-[36px] disabled:opacity-50"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Export CSV</span>
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -651,9 +670,10 @@ export default function AdminWallet() {
                     <tr className="bg-neutral-100/70 border-b border-neutral-200 text-[11px] font-bold uppercase tracking-wider text-neutral-700 select-none">
                       <th className="py-3 px-4">Date</th>
                       <th className="py-3 px-4">Source</th>
+                      <th className="py-3 px-4">Type</th>
                       <th className="py-3 px-4">Description</th>
                       <th className="py-3 px-3 text-center">Status</th>
-                      <th className="py-3 px-4 text-right">Commission Net</th>
+                      <th className="py-3 px-4 text-right">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100 text-xs">
@@ -662,6 +682,7 @@ export default function AdminWallet() {
                         <tr key={i} className="animate-pulse">
                           <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-24" /></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-24" /></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-48" /></td>
                           <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-14 mx-auto" /></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-neutral-200 rounded w-16 ml-auto" /></td>
@@ -669,28 +690,46 @@ export default function AdminWallet() {
                       ))
                     ) : earnings.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-12 px-4 text-center">
+                        <td colSpan={6} className="py-12 px-4 text-center">
                           <p className="text-sm font-bold text-neutral-800">No earning records found</p>
                         </td>
                       </tr>
                     ) : (
-                      earnings.map((earning) => (
-                        <tr key={earning.id} className="hover:bg-neutral-50/80 transition-colors">
-                          <td className="py-3 px-4 font-mono text-neutral-600">
-                            {new Date(earning.date).toLocaleDateString("en-IN")}
-                          </td>
-                          <td className="py-3 px-4 font-bold text-neutral-900">{earning.source}</td>
-                          <td className="py-3 px-4 text-neutral-600">{earning.description}</td>
-                          <td className="py-3 px-3 text-center">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                              {earning.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-rose-700">
-                            ₹{(earning.amount || 0).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))
+                      earnings.map((earning) => {
+                        const isCourier = earning.sourceType === "DELIVERY_BOY";
+                        return (
+                          <tr key={earning.id} className="hover:bg-neutral-50/80 transition-colors">
+                            <td className="py-3 px-4 font-mono text-neutral-600">
+                              {new Date(earning.date).toLocaleDateString("en-IN")}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-neutral-900">{earning.source}</td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  isCourier
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                }`}
+                              >
+                                {isCourier ? "Courier Wage (Cost)" : "Platform Cut (Revenue)"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-neutral-600">{earning.description}</td>
+                            <td className="py-3 px-3 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                {earning.status}
+                              </span>
+                            </td>
+                            <td
+                              className={`py-3 px-4 text-right font-mono font-bold ${
+                                isCourier ? "text-amber-700" : "text-rose-700"
+                              }`}
+                            >
+                              ₹{(earning.amount || 0).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
