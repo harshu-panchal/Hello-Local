@@ -52,6 +52,8 @@ export interface WithdrawalRequest {
 export interface AdminEarning {
   id: string;
   source: string;
+  sourceType?: string;
+  roleDescription?: string;
   amount: number;
   date: string;
   status: string;
@@ -89,6 +91,7 @@ export const getAdminEarnings = async (params?: {
   page?: number;
   limit?: number;
   status?: string;
+  type?: string;
   startDate?: string;
   endDate?: string;
 }): Promise<ApiResponse<AdminEarning[]>> => {

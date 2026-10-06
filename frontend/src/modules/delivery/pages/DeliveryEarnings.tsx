@@ -56,11 +56,18 @@ export default function DeliveryEarnings() {
     0,
   );
 
+  const [paymentMethod, setPaymentMethod] = useState<"Bank Transfer" | "UPI">("Bank Transfer");
+
   const handleWithdraw = async () => {
     try {
       const amount = parseFloat(withdrawAmount);
       if (!amount || isNaN(amount) || amount <= 0) {
         showToast("Please enter a valid withdrawal amount", "error");
+        return;
+      }
+
+      if (amount < 100) {
+        showToast("Minimum withdrawal amount is ₹100", "error");
         return;
       }
 
@@ -70,7 +77,7 @@ export default function DeliveryEarnings() {
       }
 
       setIsWithdrawing(true);
-      await requestWithdrawal(amount);
+      await requestWithdrawal(amount, paymentMethod);
       showToast("Withdrawal request submitted successfully", "success");
       setWithdrawAmount("");
       fetchData(true);
@@ -283,6 +290,36 @@ export default function DeliveryEarnings() {
                   Max (₹{availableBal.toFixed(2)})
                 </button>
               )}
+            </div>
+            {/* Payout Destination Selector */}
+            <div className="pt-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Payout Method
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("Bank Transfer")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                    paymentMethod === "Bank Transfer"
+                      ? "bg-rose-50 border-rose-500 text-rose-700 shadow-2xs"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  🏦 Bank Transfer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("UPI")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                    paymentMethod === "UPI"
+                      ? "bg-rose-50 border-rose-500 text-rose-700 shadow-2xs"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  ⚡ UPI
+                </button>
+              </div>
             </div>
           </div>
 

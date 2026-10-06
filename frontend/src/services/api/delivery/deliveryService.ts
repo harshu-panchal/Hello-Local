@@ -240,9 +240,12 @@ export const getEarningsHistory = async () => {
   }
 };
 
-export const requestWithdrawal = async (amount?: number) => {
+export const requestWithdrawal = async (
+  amount?: number,
+  paymentMethod: "Bank Transfer" | "UPI" = "Bank Transfer",
+) => {
   try {
-    const response = await api.post(`${BASE_URL}/withdraw`, { amount });
+    const response = await api.post("/delivery/wallet/withdraw", { amount, paymentMethod });
     return response.data;
   } catch (error) {
     throw handleApiError(error);
