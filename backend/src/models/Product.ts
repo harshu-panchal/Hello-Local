@@ -370,7 +370,7 @@ const ProductSchema = new Schema<IProduct>(
 
 // Virtual for mrp (alias for compareAtPrice to match frontend)
 ProductSchema.virtual("mrp").get(function () {
-  return this.compareAtPrice;
+  return this.compareAtPrice || this.price;
 });
 
 // Calculate discount and sync stock/price from variations before saving
@@ -381,6 +381,9 @@ ProductSchema.pre("save", function (next) {
     if (this.variations[0].price !== undefined) {
       this.price = this.variations[0].price;
     }
+    if (this.variations[0].discPrice !== undefined && this.variations[0].discPrice !== null) {
+      this.discPrice = this.variations[0].discPrice;
+    }
 
     // Calculate total stock as sum of all variation stocks
     this.stock = this.variations.reduce(
@@ -389,8 +392,21 @@ ProductSchema.pre("save", function (next) {
     );
   }
 
+  // Ensure compareAtPrice is populated if unset and MRP exceeds discPrice
+  if (!this.compareAtPrice && this.price !== undefined && this.price !== null) {
+    if (Number(this.discPrice) > 0 && Number(this.price) > Number(this.discPrice)) {
+      this.compareAtPrice = this.price;
+    }
+  }
+
   // Calculate discount
-  if (this.compareAtPrice && this.compareAtPrice > this.price) {
+  const mrp = Number(this.compareAtPrice) || Number(this.price) || 0;
+  const effectiveSellingPrice =
+    Number(this.discPrice) > 0 ? Number(this.discPrice) : Number(this.price) || 0;
+
+  if (mrp > effectiveSellingPrice && effectiveSellingPrice > 0) {
+    this.discount = Math.round(((mrp - effectiveSellingPrice) / mrp) * 100);
+  } else if (this.compareAtPrice && this.compareAtPrice > this.price) {
     this.discount = Math.round(
       ((this.compareAtPrice - this.price) / this.compareAtPrice) * 100
     );

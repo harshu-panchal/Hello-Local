@@ -52,7 +52,8 @@ export interface Product {
   foodType?: "Veg" | "Non-Veg" | "None";
   mainImageUrl?: string;
   mainImage?: string; // Mapped directly from Product model
-  galleryImageUrls: string[];
+  galleryImageUrls?: string[];
+  galleryImages?: string[]; // Mapped directly from Product model
   variations: ProductVariation[];
   variationType?: string;
   createdAt?: string;

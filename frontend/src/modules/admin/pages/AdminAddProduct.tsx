@@ -355,6 +355,10 @@ export default function AdminAddProduct() {
   const removeGalleryImage = (index: number) => {
     setGalleryImageFiles((prev) => prev.filter((_, i) => i !== index));
     setGalleryImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    setFormData((prev) => ({
+      ...prev,
+      galleryImageUrls: prev.galleryImageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const addVariation = () => {
@@ -445,7 +449,8 @@ export default function AdminAddProduct() {
           compressedGallery,
           "hellolocal/products/gallery"
         );
-        galleryImageUrls = galleryResults.map((result) => result.secureUrl);
+        const uploadedGalleryUrls = galleryResults.map((result) => result.secureUrl);
+        galleryImageUrls = [...galleryImageUrls, ...uploadedGalleryUrls];
         setFormData((prev) => ({ ...prev, galleryImageUrls }));
       }
 

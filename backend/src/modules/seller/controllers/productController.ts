@@ -102,10 +102,22 @@ export const createProduct = asyncHandler(
       // Use the price of the first variation as the base price
       newProductData.price = newProductData.variations[0].price;
       newProductData.discPrice = newProductData.variations[0].discPrice || 0;
+      if (!newProductData.compareAtPrice && newProductData.variations[0].price) {
+        newProductData.compareAtPrice = newProductData.variations[0].price;
+      }
+      if (
+        newProductData.compareAtPrice &&
+        newProductData.discPrice &&
+        newProductData.compareAtPrice > newProductData.discPrice
+      ) {
+        newProductData.discount = Math.round(
+          ((newProductData.compareAtPrice - newProductData.discPrice) /
+            newProductData.compareAtPrice) *
+            100
+        );
+      }
 
       // Calculate total stock (sum of all variations)
-      // Note: If any variation has stock 0 (unlimited), how should we handle top level?
-      // For now, let's sum them up. If purely unlimited, logic might differ.
       newProductData.stock = newProductData.variations.reduce(
         (acc: number, curr: any) => acc + (parseInt(curr.stock) || 0),
         0
@@ -120,27 +132,34 @@ export const createProduct = asyncHandler(
       });
     }
 
-    // 5. Clean up undefined fields
+    // 5. Clean up undefined or empty fields
     if (!newProductData.headerCategoryId)
       delete newProductData.headerCategoryId;
     if (!newProductData.subcategory) delete newProductData.subcategory;
+    if (!newProductData.subSubCategory) delete newProductData.subSubCategory;
     if (!newProductData.brand) delete newProductData.brand;
+    if (!newProductData.tax) delete newProductData.tax;
+    if (!newProductData.shopId) delete newProductData.shopId;
+    if (newProductData.isShopByStoreOnly && !newProductData.category) {
+      delete newProductData.category;
+    }
 
     // Handle Tax: Frontend sends taxId, Model expects 'tax' (string) or something else?
-    // Checking SellerAddProduct.tsx sending taxId -> formData.tax
-    // Model Product.ts -> tax: { type: String }
-    // Ideally we should store the Tax ID or Name. Since frontend sends ID, let's map it.
     if (productData.taxId) {
       newProductData.tax = productData.taxId;
+    } else if (!newProductData.tax) {
+      delete newProductData.tax;
     }
 
     // Validate variation prices
-    for (const variation of productData.variations) {
-      if (Number(variation.discPrice) > Number(variation.price)) {
-        return res.status(400).json({
-          success: false,
-          message: `Discounted price (${variation.discPrice}) cannot be greater than price (${variation.price}) for variation ${variation.title}`,
-        });
+    if (productData.variations && Array.isArray(productData.variations)) {
+      for (const variation of productData.variations) {
+        if (Number(variation.discPrice) > Number(variation.price)) {
+          return res.status(400).json({
+            success: false,
+            message: `Discounted price (${variation.discPrice}) cannot be greater than price (${variation.price}) for variation ${variation.title || variation.value || 'variation'}`,
+          });
+        }
       }
     }
 
@@ -347,18 +366,26 @@ export const updateProduct = asyncHandler(
       updateData.category = updateData.categoryId;
       delete updateData.categoryId;
     }
-    if (updateData.subcategoryId) {
-      updateData.subcategory = updateData.subcategoryId;
+    if (updateData.subcategoryId !== undefined) {
+      updateData.subcategory = updateData.subcategoryId || null;
       delete updateData.subcategoryId;
     }
-    if (updateData.brandId) {
-      updateData.brand = updateData.brandId;
+    if (updateData.subSubCategoryId !== undefined) {
+      updateData.subSubCategory = updateData.subSubCategoryId || null;
+      delete updateData.subSubCategoryId;
+    }
+    if (updateData.brandId !== undefined) {
+      updateData.brand = updateData.brandId || null;
       delete updateData.brandId;
     }
-    if (updateData.taxId) {
-      updateData.tax = updateData.taxId;
+    if (updateData.taxId !== undefined) {
+      updateData.tax = updateData.taxId || null;
       delete updateData.taxId;
     }
+    if (updateData.subcategory === "") updateData.subcategory = null;
+    if (updateData.subSubCategory === "") updateData.subSubCategory = null;
+    if (updateData.brand === "") updateData.brand = null;
+    if (updateData.tax === "") updateData.tax = null;
     if (updateData.mainImageUrl) {
       updateData.mainImage = updateData.mainImageUrl;
       delete updateData.mainImageUrl;
@@ -406,6 +433,22 @@ export const updateProduct = asyncHandler(
       // Sync top-level price and stock from variations (same as createProduct)
       updateData.price = updateData.variations[0].price;
       updateData.discPrice = updateData.variations[0].discPrice || 0;
+      if (!updateData.compareAtPrice && updateData.variations[0].price) {
+        updateData.compareAtPrice = updateData.variations[0].price;
+      }
+      if (
+        updateData.compareAtPrice &&
+        updateData.discPrice &&
+        updateData.compareAtPrice > updateData.discPrice
+      ) {
+        updateData.discount = Math.round(
+          ((updateData.compareAtPrice - updateData.discPrice) /
+            updateData.compareAtPrice) *
+            100
+        );
+      } else {
+        updateData.discount = 0;
+      }
       updateData.stock = updateData.variations.reduce(
         (acc: number, curr: any) => acc + (parseInt(curr.stock) || 0),
         0

@@ -232,7 +232,9 @@ export default function SellerAddProduct() {
               popular: product.popular ? "Yes" : "No",
               dealOfDay: product.dealOfDay ? "Yes" : "No",
               brand: (product.brand as any)?._id || product.brandId || "",
-              tags: product.tags.join(", "),
+              tags: Array.isArray(product.tags)
+                ? product.tags.join(", ")
+                : (typeof product.tags === "string" ? product.tags : ""),
               smallDescription: product.smallDescription || "",
               seoTitle: product.seoTitle || "",
               seoKeywords: product.seoKeywords || "",
@@ -249,21 +251,29 @@ export default function SellerAddProduct() {
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
-              galleryImageUrls: product.galleryImageUrls || [],
+              galleryImageUrls: product.galleryImageUrls || product.galleryImages || [],
               isShopByStoreOnly: (product as any).isShopByStoreOnly ? "Yes" : "No",
               shopId: (product as any).shopId?._id || (product as any).shopId || "",
               isHomemade: (product as any).isHomemade ? "Yes" : "No",
               homemadeCategory: (product as any).homemadeCategory || "",
               homemadeSubcategory: (product as any).homemadeSubcategory || "",
             });
-            setVariations(product.variations);
+            const normalizedVariations = Array.isArray(product.variations)
+              ? product.variations.map((v: any, idx: number) => ({
+                  ...v,
+                  title: v.title || v.value || `Variant ${idx + 1}`,
+                  value: v.value || v.title || `Variant ${idx + 1}`,
+                }))
+              : [];
+            setVariations(normalizedVariations);
             if (product.mainImageUrl || product.mainImage) {
               setMainImagePreview(
                 product.mainImageUrl || product.mainImage || ""
               );
             }
-            if (product.galleryImageUrls) {
-              setGalleryImagePreviews(product.galleryImageUrls);
+            const existingGallery = product.galleryImageUrls || product.galleryImages || [];
+            if (Array.isArray(existingGallery) && existingGallery.length > 0) {
+              setGalleryImagePreviews(existingGallery);
             }
           }
         } catch (err) {
@@ -408,6 +418,10 @@ export default function SellerAddProduct() {
   const removeGalleryImage = (index: number) => {
     setGalleryImageFiles((prev) => prev.filter((_, i) => i !== index));
     setGalleryImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    setFormData((prev) => ({
+      ...prev,
+      galleryImageUrls: prev.galleryImageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const addVariation = () => {
@@ -542,7 +556,8 @@ export default function SellerAddProduct() {
           compressedGallery,
           "hellolocal/products/gallery"
         );
-        galleryImageUrls = galleryResults.map((result) => result.secureUrl);
+        const uploadedGalleryUrls = galleryResults.map((result) => result.secureUrl);
+        galleryImageUrls = [...galleryImageUrls, ...uploadedGalleryUrls];
         setFormData((prev) => ({ ...prev, galleryImageUrls }));
       }
 
@@ -1037,7 +1052,7 @@ export default function SellerAddProduct() {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {variations.map((v, idx) => (
                       <tr key={idx} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-bold text-slate-900">{v.title}</td>
+                        <td className="px-4 py-3 font-bold text-slate-900">{v.title || (v as any).value || `Variant ${idx + 1}`}</td>
                         <td className="px-4 py-3 text-slate-600">₹{Number(v.price).toFixed(2)}</td>
                         <td className="px-4 py-3 font-black text-purple-700">₹{Number(v.discPrice || v.price).toFixed(2)}</td>
                         <td className="px-4 py-3 text-slate-800 font-bold">{v.stock}</td>

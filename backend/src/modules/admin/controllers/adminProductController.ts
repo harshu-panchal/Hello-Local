@@ -1269,6 +1269,20 @@ export const createProduct = asyncHandler(
           productData.variations[0].discPrice !== undefined
             ? Number(productData.variations[0].discPrice)
             : productData.price;
+        if (!productData.compareAtPrice && productData.variations[0].price) {
+          productData.compareAtPrice = Number(productData.variations[0].price) || 0;
+        }
+        if (
+          productData.compareAtPrice &&
+          productData.discPrice &&
+          productData.compareAtPrice > productData.discPrice
+        ) {
+          productData.discount = Math.round(
+            ((productData.compareAtPrice - productData.discPrice) /
+              productData.compareAtPrice) *
+              100
+          );
+        }
         if (productData.stock === undefined || productData.stock === null || productData.stock === "") {
           productData.stock = productData.variations.reduce(
             (acc: number, curr: any) => acc + (parseInt(curr.stock) || 0),
