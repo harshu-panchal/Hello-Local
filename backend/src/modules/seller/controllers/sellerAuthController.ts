@@ -252,6 +252,17 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     commission: 0,
     balance: 0,
     categories: req.body.categories || [],
+    ...(req.body.panCard && { panCard: req.body.panCard }),
+    ...(req.body.taxName && { taxName: req.body.taxName }),
+    ...(req.body.taxNumber && { taxNumber: req.body.taxNumber }),
+    ...(req.body.fssaiLicNo && { fssaiLicNo: req.body.fssaiLicNo }),
+    ...(req.body.workingHours && { workingHours: req.body.workingHours }),
+    ...(req.body.storeDescription && { storeDescription: req.body.storeDescription }),
+    ...(req.body.bankName && { bankName: req.body.bankName }),
+    ...(req.body.accountName && { accountName: req.body.accountName }),
+    ...(req.body.accountNumber && { accountNumber: req.body.accountNumber }),
+    ...(req.body.ifsc && { ifsc: req.body.ifsc }),
+    ...(req.body.branch && { branch: req.body.branch }),
   });
 
   // Generate token
