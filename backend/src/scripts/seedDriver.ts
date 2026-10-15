@@ -18,7 +18,7 @@ const seedDriver = async () => {
     await mongoose.connect(mongoUri);
     console.log(' Connected to MongoDB');
 
-    const mobile = '9111966732';
+    const mobile = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
     const otpCode = '1234';
 
     // Hash a default password

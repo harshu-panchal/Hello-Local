@@ -150,8 +150,19 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     serviceableArea,
   } = req.body;
 
+  const resolvedCategory =
+    (category && typeof category === 'string' && category.trim()) ||
+    (Array.isArray(req.body.categories) && req.body.categories.length > 0 && String(req.body.categories[0]).trim()) ||
+    "";
+  const resolvedCategories =
+    Array.isArray(req.body.categories) && req.body.categories.length > 0
+      ? req.body.categories.map((c: any) => String(c).trim()).filter(Boolean)
+      : resolvedCategory
+      ? [resolvedCategory]
+      : [];
+
   // Validation (password removed - sellers don't need password during signup)
-  if (!sellerName || !mobile || !email || !storeName || !category) {
+  if (!sellerName || !mobile || !email || !storeName || !resolvedCategory) {
     return res.status(400).json({
       success: false,
       message:
@@ -237,7 +248,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     email,
     // password field removed - sellers don't need password during signup
     storeName,
-    category,
+    category: resolvedCategory,
     address,
     city,
     ...(serviceableArea && { serviceableArea }),
@@ -251,7 +262,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     viewCustomerDetails: false,
     commission: 0,
     balance: 0,
-    categories: req.body.categories || [],
+    categories: resolvedCategories,
     ...(req.body.panCard && { panCard: req.body.panCard }),
     ...(req.body.taxName && { taxName: req.body.taxName }),
     ...(req.body.taxNumber && { taxNumber: req.body.taxNumber }),
