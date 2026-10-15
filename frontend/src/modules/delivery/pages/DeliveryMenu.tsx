@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DeliveryHeader from "../components/DeliveryHeader";
 import DeliveryBottomNav from "../components/DeliveryBottomNav";
-import { clearSession } from '../../../services/api/session';
 import { useAuth } from "../../../context/AuthContext";
 import { useDeliveryUser } from "../context/DeliveryUserContext";
 import { useDeliveryStatus } from "../context/DeliveryStatusContext";
@@ -134,7 +133,6 @@ export default function DeliveryMenu() {
   };
 
   const handleConfirmLogout = () => {
-    clearSession('delivery');
     logout();
     showToast('Logged out successfully', 'info');
     navigate('/delivery/login');

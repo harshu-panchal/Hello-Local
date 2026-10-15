@@ -11,6 +11,7 @@ import {
   setAuthToken,
 } from "../services/api/config";
 import { getStoredUser, setStoredUser } from "../services/api/session";
+import { registerFCMToken, removeFCMToken } from "../services/pushNotificationService";
 
 interface User {
   id: string;
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = getStoredUser<User>();
 
     if (storedToken && storedUser) {
+      void registerFCMToken(true, { requestPermission: false });
       if (!isAuthenticated || token !== storedToken) {
         setToken(storedToken);
         setUser(storedUser);
@@ -73,27 +75,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //
     // A debug call to /fcm-tokens/test used to fire here, so every user of every
     // portal received a "test push notification" on each sign-in. (#H-26)
-    import("../services/pushNotificationService").then(
-      ({ registerFCMToken }) => {
-        registerFCMToken(true).catch((error) => {
-          console.error("Failed to register FCM token:", error);
-        });
-      },
-    );
+    void registerFCMToken(true);
   };
 
   const logout = () => {
+    // Capture this account's credentials before clearing the session.
+    void removeFCMToken();
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
     removeAuthToken();
-
-    // Remove FCM token on logout
-    import("../services/pushNotificationService").then(({ removeFCMToken }) => {
-      removeFCMToken().catch((error) => {
-        console.error("Failed to remove FCM token:", error);
-      });
-    });
   };
 
   const updateUser = (userData: User) => {

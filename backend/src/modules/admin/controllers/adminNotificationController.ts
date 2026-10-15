@@ -318,7 +318,7 @@ export const sendNotification = asyncHandler(
       success: true,
       message:
         delivered > 0
-          ? `Notification sent to ${delivered} device(s).`
+          ? `Firebase accepted notifications for ${delivered} device(s).`
           : "Notification recorded, but no devices were reachable.",
       data: { notification, delivered, failed },
     });

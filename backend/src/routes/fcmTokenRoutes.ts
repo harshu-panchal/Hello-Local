@@ -289,8 +289,10 @@ router.post("/test", async (req: Request, res: Response): Promise<void> => {
     console.log(`✅ Test notification sent to ${userType} user ${userId}`);
 
     res.json({
-      success: true,
-      message: "Test notification sent successfully",
+      success: response.successCount > 0,
+      message: response.successCount > 0
+        ? "Test notification accepted by Firebase for sending"
+        : "Firebase did not accept any test notifications",
       details: {
         totalTokens: uniqueTokens.length,
         successCount: response.successCount,

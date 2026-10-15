@@ -148,26 +148,31 @@ export function buildOtpMessage(otp: string, customTemplate?: string): string {
 /**
  * Parse and handle SMS India HUB API response
  */
-function handleSmsResponse(responseData: SmsIndiaHubResponse | string): void {
+export function handleSmsResponse(responseData: unknown): void {
   if (typeof responseData === 'string') {
     const trimmed = responseData.trim();
-    if (trimmed.startsWith('Failed#') || trimmed.toLowerCase().includes('failed') || trimmed.toLowerCase().includes('error')) {
-      throw new Error(`SMS India HUB: ${trimmed}`);
+    // Some gateway responses arrive as JSON text rather than application/json.
+    if (trimmed.startsWith('{')) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(trimmed); } catch {
+        throw new Error('SMS India HUB: Invalid gateway response.');
+      }
+      return handleSmsResponse(parsed);
     }
-    // String formats like "JobId#123..." or numbers indicate success
-    return;
+    // Retain the legacy job-id response, but reject empty/HTML/unknown text.
+    if (/^JobId#[a-z0-9-]+$/i.test(trimmed) || /^[1-9]\d*$/.test(trimmed)) return;
+    throw new Error('SMS India HUB: Gateway did not confirm SMS acceptance.');
   }
 
-  const errorCode = responseData.ErrorCode || '';
-  const errorMsg = responseData.ErrorMessage || '';
-
-  // Success indicators
-  if (errorCode === '000' || errorMsg === 'Done' || responseData.JobId || responseData.MessageData) {
-    return; // Success
+  if (!responseData || typeof responseData !== 'object' || Array.isArray(responseData)) {
+    throw new Error('SMS India HUB: Invalid gateway response.');
   }
+  const response = responseData as SmsIndiaHubResponse;
+  const errorCode = String(response.ErrorCode ?? '').trim();
+  const errorMsg = String(response.ErrorMessage ?? '').trim();
 
-  // Error handling
-  if (errorCode || errorMsg) {
+  // An explicit error must win even if the response also contains a job id.
+  if (errorCode && !/^0+$/.test(errorCode)) {
     switch (errorCode) {
       case '001':
         throw new Error('SMS India HUB: Account details cannot be blank.');
@@ -178,9 +183,14 @@ function handleSmsResponse(responseData: SmsIndiaHubResponse | string): void {
       case '021':
         throw new Error('SMS India HUB: Insufficient credits in your account.');
       default:
-        throw new Error(`SMS India HUB API Error (Code: ${errorCode}): ${errorMsg}`);
+        throw new Error(`SMS India HUB API Error (Code: ${errorCode}).`);
     }
   }
+  if (errorMsg && !/^(success|done|ok)$/i.test(errorMsg)) {
+    throw new Error('SMS India HUB: Gateway rejected the SMS.');
+  }
+  if (/^0+$/.test(errorCode) || /^(success|done|ok)$/i.test(errorMsg)) return;
+  throw new Error('SMS India HUB: Gateway did not confirm SMS acceptance.');
 }
 
 /**

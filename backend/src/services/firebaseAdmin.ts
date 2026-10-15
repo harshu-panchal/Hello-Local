@@ -87,6 +87,15 @@ export async function sendPushNotification(
                 ...(payload.data || {}),
                 ...(payload.icon && { icon: payload.icon })
             },
+            // Firebase displays background notification payloads automatically.
+            // Supply browser presentation here instead of displaying a second copy.
+            webpush: {
+                notification: {
+                    icon: payload.icon?.startsWith('/') || payload.icon?.startsWith('https://')
+                        ? payload.icon : '/logo.png',
+                    badge: '/logo.png'
+                }
+            },
             tokens: tokens
         };
 
