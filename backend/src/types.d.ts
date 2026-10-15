@@ -8,6 +8,12 @@ declare module 'cloudinary' {
     }
 }
 
+// Manually declare nodemailer if missing
+declare module 'nodemailer' {
+    const nodemailer: any;
+    export default nodemailer;
+}
+
 // Manually declare multer if missing/unresolvable
 declare module 'multer' {
     import * as express from 'express';
