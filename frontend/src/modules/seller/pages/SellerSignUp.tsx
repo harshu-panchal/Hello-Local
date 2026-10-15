@@ -136,6 +136,7 @@ export default function SellerSignUp() {
         category: updated[0] || '',
       };
     });
+    setFieldErrors((prev) => ({ ...prev, categories: '' }));
   };
 
   const handleInitialSubmit = async (e: React.FormEvent) => {
@@ -147,6 +148,10 @@ export default function SellerSignUp() {
       const msg = validateField(field, (formData as any)[field] || '');
       if (msg) newErrors[field] = msg;
     });
+
+    if (!formData.category && (!formData.categories || formData.categories.length === 0)) {
+      newErrors.categories = 'Please select at least one product category';
+    }
 
     if (!formData.address && !formData.searchLocation) {
       newErrors.address = 'Store address is required';
@@ -192,6 +197,8 @@ export default function SellerSignUp() {
       if (verifyRes.success) {
         const registerPayload = {
           ...formData,
+          category: formData.category || (formData.categories && formData.categories[0]) || '',
+          categories: formData.categories || [],
           serviceRadiusKm: parseFloat(formData.serviceRadiusKm) || 10,
         };
         const regRes = await register(registerPayload);
@@ -332,7 +339,7 @@ export default function SellerSignUp() {
                   </SellerFormField>
                 </div>
 
-                <SellerFormField label="Select Product Categories Sold">
+                <SellerFormField label="Select Product Categories Sold" error={fieldErrors.categories} required>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {categories.map((c) => {
                       const isSelected = formData.categories.includes(c.name);
