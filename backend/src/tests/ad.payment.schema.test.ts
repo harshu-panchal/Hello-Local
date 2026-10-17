@@ -379,6 +379,10 @@ test("P0 #3 - Test 10: capturePayment for AdRequest creates valid payment withou
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
 
+  const Notification = (await import("../models/Notification")).default;
+  const Lock = mongoose.models.AdScheduleLock;
+  const origLockUpdate = Lock.updateOne;
+  const origNotificationCreate = Notification.create;
   const origAdFindById = SellerAdRequest.findById;
   const origPaymentFindOne = Payment.findOne;
   const origPaymentCreate = Payment.create;
@@ -389,6 +393,8 @@ test("P0 #3 - Test 10: capturePayment for AdRequest creates valid payment withou
   let savedAdRequest: any = null;
 
   try {
+    Lock.updateOne = async () => ({});
+    (Notification as any).create = async () => ({});
     (Razorpay.prototype as any).addResources = function () {
       origAddResources.call(this);
       this.payments = {
@@ -424,6 +430,7 @@ test("P0 #3 - Test 10: capturePayment for AdRequest creates valid payment withou
     (Payment as any).findOne = async () => null;
 
     (mongoose as any).startSession = async () => ({
+      withTransaction: async (work: any) => work(),
       startTransaction: () => {},
       commitTransaction: async () => {},
       abortTransaction: async () => {},
@@ -461,6 +468,8 @@ test("P0 #3 - Test 10: capturePayment for AdRequest creates valid payment withou
     assert.equal(savedAdRequest.status, "PaymentVerified");
     assert.equal(savedAdRequest.paymentReference, razorpayPaymentId);
   } finally {
+    Lock.updateOne = origLockUpdate;
+    Notification.create = origNotificationCreate;
     SellerAdRequest.findById = origAdFindById;
     Payment.findOne = origPaymentFindOne;
     Payment.create = origPaymentCreate;

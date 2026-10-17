@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { applySessionVersioning } from '../utils/sessionVersioning';
 import bcrypt from 'bcrypt';
 
 export interface ISeller extends Document {
@@ -347,6 +348,7 @@ SellerSchema.pre('save', function (next) {
 SellerSchema.index({ location: '2dsphere' });
 SellerSchema.index({ status: 1 }); // Compound index for status + location queries
 
+applySessionVersioning(SellerSchema, ['Pending', 'Rejected']);
 const Seller = (mongoose.models.Seller as mongoose.Model<ISeller>) || mongoose.model<ISeller>('Seller', SellerSchema);
 
 // Register Alias for refPath 'SELLER'

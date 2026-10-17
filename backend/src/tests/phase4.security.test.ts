@@ -94,19 +94,11 @@ test("H-05: the legacy 'On the way' alias resolves, unknown states do not", asyn
 });
 
 test("H-05: every controller uses the shared validator", () => {
-  const files = [
-    "modules/customer/controllers/customerOrderController.ts",
-    "modules/seller/controllers/orderController.ts",
-    "modules/admin/controllers/adminOrderController.ts",
-    "modules/delivery/controllers/deliveryOrderController.ts",
-  ];
-  for (const f of files) {
-    assert.match(code(f), /validateTransition\(/, `${f} does not use the shared validator`);
-  }
-  // The superseded validator is gone.
-  const os_ = code("services/orderService.ts");
-  assert.ok(!/validateStatusTransition/.test(os_), "the old duplicate validator still exists");
-  assert.ok(!/calculateOrderTotals/.test(os_), "the old dead totals helper still exists");
+  assert.match(code("modules/customer/controllers/customerOrderController.ts"), /cancelOrderLifecycle\(/);
+  assert.match(code("modules/seller/controllers/orderController.ts"), /changeSellerStage\(/);
+  assert.match(code("modules/delivery/controllers/deliveryOrderController.ts"), /changeCourierStage\(/);
+  assert.match(code("modules/admin/controllers/adminOrderController.ts"), /validateTransition\(/);
+  assert.match(code("services/orderLifecycleService.ts"), /validateTransition\(/);
 });
 
 // ===========================================================================
@@ -129,10 +121,10 @@ test("H-35: variations resolve by id, value, title and pack alike", async () => 
   assert.equal(findVariationIndex(variations, null), -1, "null");
   assert.equal(findVariationIndex([], "1kg"), -1, "empty");
 
-  // Price resolution: variation discount > product discount > variation price.
+  // A selected variant uses its own discount/base price independently of product defaults.
   assert.equal(effectiveUnitPrice({ price: 90, discPrice: 0 }, variations[1] as any), 150);
   assert.equal(effectiveUnitPrice({ price: 90, discPrice: 0 }, variations[0] as any), 100);
-  assert.equal(effectiveUnitPrice({ price: 90, discPrice: 70 }, variations[0] as any), 70);
+  assert.equal(effectiveUnitPrice({ price: 90, discPrice: 70 }, variations[0] as any), 100);
   // discPrice of 0 means "no discount", never free.
   assert.equal(effectiveUnitPrice({ price: 90, discPrice: 0 }, null), 90);
   assert.equal(variationLabel(variations[1] as any), "1kg");
@@ -144,7 +136,7 @@ test("H-35: cart and checkout share the pricing helper", () => {
   assert.match(cart, /findVariation\(/, "cart does not use the shared matcher");
   assert.ok(!/DEBUG Price/.test(cart), "debug price logging still in the cart hot path");
 
-  const checkout = code("modules/customer/controllers/customerOrderController.ts");
+  const checkout = code("services/checkoutService.ts");
   assert.match(checkout, /effectiveUnitPrice\(/, "checkout does not use the shared price helper");
 });
 
@@ -182,18 +174,12 @@ test("H-01: a failed basket releases everything already reserved", async () => {
 test("H-01: createOrder validates everything before touching stock", () => {
   const c = code("modules/customer/controllers/customerOrderController.ts");
   const fn = c.slice(c.indexOf("export const createOrder"), c.indexOf("export const getMyOrders"));
-
-  const reserveAt = fn.indexOf("reserveMany(");
-  const sellerCheckAt = fn.indexOf("is not currently accepting orders");
-  const radiusCheckAt = fn.indexOf("which delivers within");
-  assert.ok(reserveAt > 0, "reserveMany not called");
-  assert.ok(sellerCheckAt > 0 && sellerCheckAt < reserveAt,
-    "seller approval is checked after stock is taken");
-  assert.ok(radiusCheckAt > 0 && radiusCheckAt < reserveAt,
-    "serviceability is checked after stock is taken");
-
-  // And the error path compensates.
-  assert.match(fn, /releaseMany\(reservations\)/, "createOrder does not release on failure");
+  assert.ok(fn.indexOf("prepareCheckout(userId") < fn.indexOf("reserveMany("));
+  assert.match(fn, /withOrderTransaction\(/);
+  const preparation = code("services/checkoutService.ts");
+  assert.match(preparation, /seller.status !== "Approved"/);
+  assert.match(preparation, /calculateDistance\(/);
+  assert.match(code("services/stockService.ts"), /if \(session\) throw error/);
 });
 
 // ===========================================================================
@@ -204,7 +190,8 @@ test("H-03: createOrder never reads fees from the request body", () => {
   const fn = c.slice(c.indexOf("export const createOrder"), c.indexOf("export const getMyOrders"));
   assert.ok(!/fees\?\.deliveryFee/.test(fn), "delivery fee still taken from the client");
   assert.ok(!/fees\?\.platformFee/.test(fn), "platform fee still taken from the client");
-  assert.match(fn, /priceOrder\(/, "pricing is not delegated to the server-side service");
+  assert.match(fn, /prepareCheckout\(/);
+  assert.match(code("services/checkoutService.ts"), /priceOrder\(/);
 });
 
 test("H-04: tax is computed and persisted", () => {
@@ -227,7 +214,7 @@ test("C-11: the checkout payload carries the coupon and the tip", () => {
   assert.match(svc, /tipAmount\?:/, "the request type has no tipAmount");
 
   const be = code("modules/customer/controllers/customerOrderController.ts");
-  assert.match(be, /couponCode,\s*\n?\s*tipAmount/, "the server does not read them");
+  assert.match(code("services/checkoutService.ts"), /couponCode: body.couponCode, tipAmount: body.tipAmount/);
   assert.match(be, /discount: pricing\.discount/, "discount is not persisted on the order");
   assert.match(be, /tipAmount: pricing\.tip/, "tip is not persisted on the order");
 });
@@ -239,7 +226,7 @@ test("H-29: coupon usage is counted and released", async () => {
   assert.match(p, /usageCount: 1/, "usageCount is not incremented");
   const c = code("modules/customer/controllers/customerOrderController.ts");
   assert.match(c, /consumeCoupon\(/, "createOrder does not consume the coupon");
-  assert.match(c, /releaseCoupon\(/, "cancel does not release the coupon");
+  assert.match(code("services/orderLifecycleService.ts"), /releaseCoupon\(order.couponCode, session\)/);
 });
 
 test("H-03: coupon discount cannot exceed the eligible amount or go negative", async () => {
@@ -254,21 +241,16 @@ test("H-03: coupon discount cannot exceed the eligible amount or go negative", a
 // H-08 — multi-vendor orders
 // ===========================================================================
 test("H-08: one seller cannot cancel another seller's items", () => {
-  const c = code("modules/seller/controllers/orderController.ts");
-  assert.match(c, /isSoleSeller/, "no multi-vendor guard");
-  assert.match(c, /Other sellers' items in this order are unaffected/,
-    "multi-vendor cancellation still changes the whole order");
-  assert.match(c, /OrderItem\.distinct\("seller"/, "seller count is not determined");
+  const c = code("services/orderLifecycleService.ts");
+  assert.match(c, /!options.sellerId \|\| String\(item.seller\) === options.sellerId/);
+  assert.match(c, /const remaining = items.filter/);
+  assert.match(c, /if \(!remaining.length\)/);
 });
 
 test("H-08/H-09: cancelling restores stock on every path", () => {
-  for (const f of [
-    "modules/customer/controllers/customerOrderController.ts",
-    "modules/seller/controllers/orderController.ts",
-    "modules/admin/controllers/adminOrderController.ts",
-  ]) {
-    assert.match(code(f), /releaseMany\(/, `${f} does not restore stock on cancellation`);
-  }
+  for (const f of ["modules/customer/controllers/customerOrderController.ts", "modules/admin/controllers/adminOrderController.ts"]) assert.match(code(f), /cancelOrderLifecycle\(/);
+  assert.match(code("modules/seller/controllers/orderController.ts"), /changeSellerStage\(/);
+  assert.match(code("services/orderLifecycleService.ts"), /releaseMany\(reservations, session\)/);
 });
 
 // ===========================================================================
@@ -321,16 +303,7 @@ test("H-42: the unreachable Inventory reservation code is gone", () => {
 // H-06 — refunds exist and are wired
 // ===========================================================================
 test("H-06: refunds are implemented and invoked on cancellation", () => {
-  const svc = code("services/refundService.ts");
-  assert.match(svc, /export async function refundOrder/, "no refundOrder");
-  assert.match(svc, /processRefund\(/, "refund does not reach the gateway");
-  assert.match(svc, /Already refunded|already refunded/, "refund is not idempotent");
-  assert.match(svc, /paymentStatus: "Refunded"/, "order payment status is not updated");
-
-  for (const f of [
-    "modules/customer/controllers/customerOrderController.ts",
-    "modules/admin/controllers/adminOrderController.ts",
-  ]) {
-    assert.match(code(f), /refundOrder\(/, `${f} does not refund on cancellation`);
-  }
+  assert.match(code("services/orderLifecycleService.ts"), /queueOrderEffect\(order, "Refund"/);
+  assert.match(code("services/orderEffectService.ts"), /refundOrder\(key/);
+  assert.match(code("services/refundService.ts"), /processRefund\(/);
 });

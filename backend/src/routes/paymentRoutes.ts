@@ -33,7 +33,7 @@ async function loadOwnedPayable(
         if (order.customer.toString() !== userId) {
             return { ok: false, status: 403, message: 'Unauthorized access to order' };
         }
-        return { ok: true, kind: 'Order', doc: order, amountDue: order.total };
+        return { ok: true, kind: 'Order', doc: order, amountDue: order.originalTotal ?? order.total };
     }
 
     const adReq = await SellerAdRequest.findById(id);
@@ -70,11 +70,18 @@ router.post('/create-order', authenticate, async (req: Request, res: Response) =
             return res.status(loaded.status).json({ success: false, message: loaded.message });
         }
 
+        if (loaded.kind === 'Order' && (loaded.doc.paymentMethod === 'COD' || ['Cancelled', 'Rejected', 'Returned', 'Delivered'].includes(loaded.doc.status))) {
+            return res.status(400).json({ success: false, message: 'This order cannot accept a new payment' });
+        }
         if (loaded.kind === 'Order' && loaded.doc.paymentStatus === 'Paid') {
             return res.status(400).json({ success: false, message: 'This order is already paid' });
         }
         if (loaded.kind === 'AdRequest' && loaded.doc.paymentStatus === 'Paid') {
             return res.status(400).json({ success: false, message: 'This ad request is already paid' });
+        }
+
+        if (loaded.kind === 'AdRequest' && loaded.doc.status !== 'Approved') {
+            return res.status(400).json({ success: false, message: 'Online payment is available only for an approved advertisement.' });
         }
 
         if (!loaded.amountDue || loaded.amountDue <= 0) {

@@ -56,8 +56,10 @@ const createCommissions = async (items: IOrderItem[]) => {
       await processCODOrderDelivery(orderId);
     } else {
       // For online/prepaid orders, distribute commissions immediately
-      const { distributeCommissions } = await import("./commissionService");
-      await distributeCommissions(orderId);
+      const { distributeCommissions, createPendingCommissions } = await import("./commissionService");
+      await createPendingCommissions(orderId);
+      const result = await distributeCommissions(orderId);
+      if (!result.success) throw new Error(result.message || "Settlement failed");
     }
   } catch (err) {
     console.error("Error creating commissions in orderService:", err);

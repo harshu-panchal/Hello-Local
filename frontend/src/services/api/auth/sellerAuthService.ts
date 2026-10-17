@@ -1,4 +1,4 @@
-import api, { setAuthToken, removeAuthToken } from '../config';
+import api, { removeAuthToken } from '../config';
 
 const handleApiError = (error: any) => {
   // Re-throw the ORIGINAL error so callers can still branch on `error.response`
@@ -33,6 +33,7 @@ export interface VerifyOTPResponse {
 }
 
 export interface RegisterData {
+  registrationToken: string;
   sellerName: string;
   mobile: string;
   email: string;
@@ -99,6 +100,15 @@ export const register = async (data: RegisterData): Promise<RegisterResponse> =>
   } catch (error) {
     return handleApiError(error);
   }
+};
+
+export const sendSignupOTP = async (mobile: string): Promise<{ success: boolean; sessionId: string; message?: string }> => {
+  const response = await api.post('/auth/seller/send-signup-otp', { mobile });
+  return response.data;
+};
+export const verifySignupOTP = async (mobile: string, otp: string, sessionId: string): Promise<{ success: boolean; data: { registrationToken: string } }> => {
+  const response = await api.post('/auth/seller/verify-signup-otp', { mobile, otp, sessionId });
+  return response.data;
 };
 
 /**

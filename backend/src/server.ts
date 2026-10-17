@@ -1,3 +1,4 @@
+import { processOrderEffects, recoverOrderEffects } from "./services/orderEffectService";
 import express, { Application, Request, Response } from "express";
 import { createServer } from "http";
 import dns from "dns";
@@ -122,6 +123,17 @@ const PORT = process.env.PORT || 5000;
 async function startServer() {
   // Connect DB then ensure default admin exists
   await connectDB();
+  let financeWorkerRunning = false;
+  const retryFinancialTasks = async () => {
+    if (financeWorkerRunning) return;
+    financeWorkerRunning = true;
+    try { await recoverOrderEffects(); await processOrderEffects(); }
+    catch (error) { console.error("Order financial worker:", error); }
+    finally { financeWorkerRunning = false; }
+  };
+  const financeInterval = setInterval(retryFinancialTasks, 60000);
+  financeInterval.unref();
+  void retryFinancialTasks();
   await ensureDefaultAdmin();
   await seedHeaderCategories();
 

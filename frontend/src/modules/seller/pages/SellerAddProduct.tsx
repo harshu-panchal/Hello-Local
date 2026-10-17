@@ -43,6 +43,7 @@ export default function SellerAddProduct() {
   const { showToast } = useToast();
 
   const isApproved = ((user as any)?.status ?? "Approved") === "Approved";
+  const [expectedVersion, setExpectedVersion] = useState<number | undefined>();
   const [formData, setFormData] = useState({
     productName: "",
     headerCategory: "",
@@ -212,6 +213,7 @@ export default function SellerAddProduct() {
           const response = await getProductById(id);
           if (response.success && response.data) {
             const product = response.data;
+            setExpectedVersion((product as any).__v);
             setFormData({
               productName: product.productName,
               headerCategory:
@@ -577,6 +579,7 @@ export default function SellerAddProduct() {
         : [];
 
       const productData: any = {
+        expectedVersion,
         productName: formData.productName,
         publish: formData.publish === "Yes",
         popular: formData.popular === "Yes",

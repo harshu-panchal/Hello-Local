@@ -166,15 +166,12 @@ test("H-07: reverseCommissions reverses the amount that was actually paid", () =
 });
 
 test("H-07: every cancellation path invokes reverseCommissions", () => {
-  const paths: Array<[string, string]> = [
-    ["customer cancel", "modules/customer/controllers/customerOrderController.ts"],
-    ["admin status update", "modules/admin/controllers/adminOrderController.ts"],
-    ["seller status update", "modules/seller/controllers/orderController.ts"],
-  ];
-  for (const [label, file] of paths) {
-    assert.match(code(file), /reverseCommissions\(/,
-      `${label} does not reverse commissions`);
+  for (const file of ["modules/customer/controllers/customerOrderController.ts", "modules/admin/controllers/adminOrderController.ts"]) {
+    assert.match(code(file), /cancelOrderLifecycle\(/);
   }
+  assert.match(code("modules/seller/controllers/orderController.ts"), /changeSellerStage\(/);
+  assert.match(code("services/orderLifecycleService.ts"), /queueOrderEffect\(order, "Reversal"/);
+  assert.match(code("services/orderEffectService.ts"), /reverseCommissions\(key\)/);
 });
 
 // ===========================================================================

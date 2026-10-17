@@ -39,6 +39,29 @@ export function portalForUserType(userType?: string): Portal {
 
 const tokenKey = (portal: Portal) => `hl.${portal}.token`;
 const userKey = (portal: Portal) => `hl.${portal}.user`;
+const SESSION_EVENT = 'hl:session-changed';
+const notify = () => window.dispatchEvent(new Event(SESSION_EVENT));
+
+export function subscribeSession(listener: () => void): () => void {
+  window.addEventListener('storage', listener);
+  window.addEventListener(SESSION_EVENT, listener);
+  return () => {
+    window.removeEventListener('storage', listener);
+    window.removeEventListener(SESSION_EVENT, listener);
+  };
+}
+
+// React's external-store snapshot must be a stable primitive between mutations.
+export function sessionSnapshot(portal: Portal): string {
+  return JSON.stringify({ token: getAuthToken(portal), user: getStoredUser(portal) });
+}
+
+export function setSession(token: string, user: unknown, portal: Portal): void {
+  migrateLegacySession();
+  localStorage.setItem(tokenKey(portal), token);
+  localStorage.setItem(userKey(portal), JSON.stringify(user));
+  notify();
+}
 
 /**
  * One-time migration of a pre-namespacing session so people who are already
@@ -84,6 +107,7 @@ export function getAuthToken(portal: Portal = currentPortal()): string | null {
 export function setAuthToken(token: string, portal: Portal = currentPortal()): void {
   migrateLegacySession();
   localStorage.setItem(tokenKey(portal), token);
+  notify();
 }
 
 export function getStoredUser<T = any>(portal: Portal = currentPortal()): T | null {
@@ -101,6 +125,7 @@ export function getStoredUser<T = any>(portal: Portal = currentPortal()): T | nu
 export function setStoredUser(user: unknown, portal: Portal = currentPortal()): void {
   migrateLegacySession();
   localStorage.setItem(userKey(portal), JSON.stringify(user));
+  notify();
 }
 
 /** Clear only the current portal's session; other portals stay signed in. */
@@ -110,4 +135,5 @@ export function clearSession(portal: Portal = currentPortal()): void {
   // Also clear any pre-namespacing leftovers.
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
+  notify();
 }

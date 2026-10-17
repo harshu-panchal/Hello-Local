@@ -58,7 +58,8 @@ test('SMS India Hub: all four OTP roles send and verify through existing flows',
   const keys = ['SMS_INDIA_HUB_API_KEY', 'USE_MOCK_OTP', 'TEST_PHONE'];
   const previous = keys.map(key => process.env[key]);
   const originals = { get: axios.get, create: Otp.create, deleteMany: Otp.deleteMany,
-    findOne: Otp.findOne, deleteOne: Otp.deleteOne };
+    findOne: Otp.findOne, deleteOne: Otp.deleteOne, findOneAndUpdate: Otp.findOneAndUpdate,
+    findOneAndDelete: Otp.findOneAndDelete };
   const requests: any[] = [];
   let record: any;
   try {
@@ -71,7 +72,13 @@ test('SMS India Hub: all four OTP roles send and verify through existing flows',
     };
     (Otp as any).deleteMany = async () => ({});
     (Otp as any).create = async (value: any) => { record = { ...value, _id: 'test-otp' }; return record; };
-    (Otp as any).findOne = async () => record;
+    (Otp as any).findOne = () => ({ sort: async () => record });
+    (Otp as any).findOneAndUpdate = async (filter: any, update: any) => {
+      if (update.$set) record = { ...update.$set, _id: filter._id };
+      else if (record) record.attempts += 1;
+      return record;
+    };
+    (Otp as any).findOneAndDelete = async () => { const value = record; record = null; return value; };
     (Otp as any).deleteOne = async () => { record = null; return {}; };
     for (const role of ['Customer', 'Delivery', 'Seller', 'Admin'] as const) {
       const mobile = '9876543210';
@@ -100,6 +107,8 @@ test('SMS India Hub: all four OTP roles send and verify through existing flows',
     Otp.deleteMany = originals.deleteMany;
     Otp.findOne = originals.findOne;
     Otp.deleteOne = originals.deleteOne;
+    Otp.findOneAndUpdate = originals.findOneAndUpdate;
+    Otp.findOneAndDelete = originals.findOneAndDelete;
     keys.forEach((key, index) => {
       if (previous[index] === undefined) delete process.env[key];
       else process.env[key] = previous[index];

@@ -12,6 +12,7 @@ import { AxiosLoadingInterceptor } from "./context/AxiosLoadingInterceptor";
 import IconLoader from "./components/loaders/IconLoader";
 import RouteLoaderTrigger from "./components/loaders/RouteLoaderTrigger";
 import AppLayout from "./components/AppLayout";
+import LegacyProductsRedirect from "./modules/user/LegacyProductsRedirect";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RequireCustomer from "./components/RequireCustomer";
 import PublicRoute from "./components/PublicRoute";
@@ -197,15 +198,11 @@ function App() {
     <ErrorBoundary>
       <LoadingProvider>
         <AxiosLoadingInterceptor>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
             <ThemeProvider>
               <IconLoader />
               <ToastProvider>
-                <BrowserRouter
-                  future={{
-                    v7_startTransition: true,
-                    v7_relativeSplatPath: true,
-                  }}>
                   <RouteLoaderTrigger />
                   <Routes>
                     {/* Public Routes */}
@@ -419,6 +416,7 @@ function App() {
                                 <Route path="/" element={<Home />} />
                                 <Route path="home" element={<Home />} />
                                 <Route path="search" element={<Search />} />
+                                <Route path="products" element={<LegacyProductsRedirect />} />
                                 {/* Pages that are meaningless without a session.
                                     These were reachable while signed out and
                                     simply rendered empty shells that 401'd. (#M-08) */}
@@ -455,6 +453,7 @@ function App() {
                                 {/* Legacy /user redirect - preserves subpath */}
                                 <Route path="user" element={<Navigate to="/" replace />} />
                                 <Route path="user/*" element={<NavigateToNewPath />} />
+                                <Route path="*" element={<Navigate to="/" replace />} />
                               </Routes>
                             </Suspense>
                           </AppLayout>
@@ -466,10 +465,10 @@ function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
 
                   </Routes>
-                </BrowserRouter>
               </ToastProvider>
             </ThemeProvider>
           </AuthProvider>
+          </BrowserRouter>
         </AxiosLoadingInterceptor>
       </LoadingProvider>
     </ErrorBoundary>

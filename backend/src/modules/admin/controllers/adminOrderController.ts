@@ -1,3 +1,6 @@
+import { acceptDeliveryOrder, cancelOrderLifecycle, payableForDelivery } from "../../../services/orderLifecycleService";
+import { withOrderTransaction, orderError } from "../../../services/orderTransactionService";
+import { queueOrderEffect, runOrderEffects } from "../../../services/orderEffectService";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
@@ -9,7 +12,6 @@ import {
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Delivery from "../../../models/Delivery";
-import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import Return from "../../../models/Return";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { Server as SocketIOServer } from "socket.io";
@@ -137,49 +139,55 @@ export const updateOrderStatus = asyncHandler(
     const { id } = req.params;
     const { status, adminNotes } = req.body;
 
-    const current = await Order.findById(id).select("status paymentStatus paymentMethod items couponCode");
-    if (!current) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-
-    // Admins may drive any stage, but only along legal edges — no reviving a
-    // terminal order and re-triggering its money side-effects. (#H-05 / #H-09)
-    const check = validateTransition(current.status, status, "admin");
-    if (!check.valid) {
-      return res.status(400).json({ success: false, message: check.message });
-    }
-    const nextStatus = check.status!;
-
-    const updateData: any = { status: nextStatus };
-    if (adminNotes) updateData.adminNotes = adminNotes;
-
-    if (nextStatus === "Delivered") {
-      updateData.deliveredAt = new Date();
-      if (current.paymentMethod === "COD" && current.paymentStatus !== "Paid") {
-        updateData.paymentStatus = "Paid";
-      }
-    }
-
-    if (nextStatus === "Cancelled") {
-      updateData.cancelledAt = new Date();
-      updateData.cancelledBy = req.user?.userId;
-    }
-
-    const order = await Order.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    })
-      .populate("customer", "name email phone")
-      .populate("deliveryBoy", "name mobile")
-      .populate("items");
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
+    let order: any;
+    let nextStatus = status;
+    if (["Cancelled", "Rejected"].includes(status)) {
+      ({ order } = await cancelOrderLifecycle(id, "admin", {
+        userId: req.user?.userId, status, reason: adminNotes || "Order closed by admin",
+      }));
+    } else {
+      order = await withOrderTransaction(id, async session => {
+        const current = await Order.findById(id).session(session);
+        if (!current) orderError("Order not found", 404);
+        const check = validateTransition(current!.status, status, "admin");
+        if (!check.valid) orderError(check.message!);
+        nextStatus = check.status;
+        if (!["Pending", "Received", "Returned"].includes(nextStatus) && !payableForDelivery(current)) {
+          orderError("Order payment is not confirmed");
+        }
+        current!.status = nextStatus;
+        if (adminNotes) current!.adminNotes = adminNotes;
+        const sellerStages = ["Received", "Accepted", "Processed", "Shipped"];
+        if (sellerStages.includes(nextStatus)) {
+          await OrderItem.updateMany({ order: id, status: { $ne: "Cancelled" }, $or: [
+            { fulfillmentStatus: { $exists: false } }, { fulfillmentStatus: { $in: sellerStages.slice(0, sellerStages.indexOf(nextStatus) + 1) } },
+          ] }, { $set: { fulfillmentStatus: nextStatus, ...(nextStatus === "Shipped" ? { status: "Shipped" } : {}) } }, { session });
+        }
+        if (nextStatus === "Delivered") {
+          if (!current!.deliveryBoy) orderError("Assign a delivery partner before completing delivery");
+          current!.deliveredAt = new Date();
+          if (current!.paymentMethod === "COD") current!.paymentStatus = "Paid";
+          current!.settlementStatus = "Pending";
+          await OrderItem.updateMany({ order: id, status: { $ne: "Cancelled" } }, { $set: { status: "Delivered" } }, { session });
+          await queueOrderEffect(current, "Settlement", `${id}:settlement`, session);
+        }
+        if (nextStatus === "Returned") {
+          const items = await OrderItem.find({ order: id, status: { $ne: "Cancelled" } }).session(session);
+          await releaseMany(await reservationsFromOrderItems(items, session), session);
+          await OrderItem.updateMany({ order: id }, { $set: { status: "Cancelled", fulfillmentStatus: "Cancelled" } }, { session });
+          const { releaseCoupon } = await import("../../../services/orderPricingService");
+          await releaseCoupon(current!.couponCode, session);
+          await queueOrderEffect(current, "Reversal", `${id}:return:reversal`, session);
+          if (current!.paymentMethod !== "COD" && ["Paid", "PartiallyRefunded"].includes(current!.paymentStatus)) {
+            await queueOrderEffect(current, "Refund", `${id}:return:refund`, session, undefined, "Order returned");
+          }
+        }
+        await current!.save({ session });
+        return current;
       });
     }
-
+    await runOrderEffects(id);
+    await order.populate("items");
 
     // Real-time socket notification to customer and sellers
     const io: SocketIOServer = req.app.get("io");
@@ -195,63 +203,6 @@ export const updateOrderStatus = asyncHandler(
       // Trigger notification for sellers if status is "Processed" (Confirmed) or if paymentStatus changed to "Paid"
       if (nextStatus === "Processed" || order.paymentStatus === "Paid") {
         notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
-      }
-    }
-
-    // Cancelling/rejecting/returning returns the stock the order was holding.
-    // The admin path used to leave it permanently decremented. (#H-09)
-    if (["Cancelled", "Rejected", "Returned"].includes(nextStatus)) {
-      try {
-        const items = await OrderItem.find({ order: id });
-        const reservations = await reservationsFromOrderItems(
-          items.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
-        );
-        await releaseMany(reservations);
-        await OrderItem.updateMany({ order: id }, { $set: { status: "Cancelled" } });
-      } catch (stockErr) {
-        console.error(`Failed to restore stock for order ${id}:`, stockErr);
-      }
-
-      // Prepaid orders must be refunded, not merely closed. (#H-06)
-      if (["Paid", "PartiallyRefunded"].includes(current.paymentStatus) && current.paymentMethod !== "COD") {
-        try {
-          const { refundOrder } = await import("../../../services/refundService");
-          await refundOrder(id, `Order ${nextStatus.toLowerCase()} by admin`);
-        } catch (refundErr) {
-          console.error(`Refund failed for order ${id}:`, refundErr);
-        }
-      }
-
-      // Return the coupon use. (#H-29)
-      try {
-        const { releaseCoupon } = await import("../../../services/orderPricingService");
-        await releaseCoupon(current.couponCode);
-      } catch (couponErr) {
-        console.error(`Coupon release failed for order ${id}:`, couponErr);
-      }
-    }
-
-    // Distribute commissions if order is delivered
-    if (nextStatus === "Delivered") {
-      const { distributeCommissions } = await import("../../../services/commissionService");
-      try {
-        await distributeCommissions(id);
-      } catch (error) {
-        console.error("Error distributing commissions:", error);
-      }
-    }
-
-    // Cancelling, rejecting or returning an order must claw back anything
-    // already credited for it. (#H-07)
-    if (["Cancelled", "Rejected", "Returned"].includes(nextStatus)) {
-      const { reverseCommissions } = await import("../../../services/commissionService");
-      try {
-        const rev = await reverseCommissions(id);
-        if (!rev.success) {
-          console.error(`Commission reversal failed for order ${id}: ${rev.message}`);
-        }
-      } catch (error) {
-        console.error("Error reversing commissions:", error);
       }
     }
 
@@ -294,47 +245,7 @@ export const assignDeliveryBoy = asyncHandler(
       });
     }
 
-    const order = await Order.findById(id);
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    // A finished order cannot be reassigned. This used to be allowed, which
-    // silently orphaned the previous courier's assignment. (#H-30)
-    if (["Delivered", "Cancelled", "Rejected", "Returned"].includes(order.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Order is ${order.status} and cannot be assigned.`,
-      });
-    }
-
-    if (order.deliveryBoy && String(order.deliveryBoy) !== String(deliveryBoyId)) {
-      console.warn(
-        `Order ${order.orderNumber} reassigned from ${order.deliveryBoy} to ${deliveryBoyId}`,
-      );
-    }
-
-    // Update order
-    order.deliveryBoy = deliveryBoyId as any;
-    order.deliveryBoyStatus = "Assigned";
-    order.assignedAt = new Date();
-    await order.save();
-
-    // Create or update delivery assignment
-    await DeliveryAssignment.findOneAndUpdate(
-      { order: id },
-      {
-        order: id,
-        deliveryBoy: deliveryBoyId,
-        assignedAt: new Date(),
-        assignedBy: req.user?.userId,
-        status: "Assigned",
-      },
-      { upsert: true, new: true }
-    );
+    const order = await acceptDeliveryOrder(id, deliveryBoyId, { allowReassignment: true, assignedBy: req.user?.userId });
 
     const updatedOrder = await Order.findById(id)
       .populate("customer", "name email phone")

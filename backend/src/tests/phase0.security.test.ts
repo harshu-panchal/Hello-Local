@@ -356,12 +356,27 @@ test("C-06: socket handshake rejects missing, malformed and unsigned tokens", as
   const expiredRes = await run(expired);
   assert.ok(expiredRes.err, "expired token must be rejected");
 
-  // POSITIVE: a properly signed token is admitted and its identity attached.
-  const good = jwt.sign({ userId: "abc123", userType: "Delivery" }, process.env.JWT_SECRET!);
-  const goodRes = await run(good);
-  assert.equal(goodRes.err, undefined, "valid token must be admitted");
-  assert.equal(goodRes.user.userId, "abc123");
-  assert.equal(goodRes.user.userType, "Delivery");
+  // A signed token also needs an existing active, non-revoked account.
+  const Delivery = (await import('../models/Delivery')).default;
+  const RevokedToken = (await import('../models/RevokedToken')).default;
+  const originalFind = Delivery.findById, originalExists = RevokedToken.exists;
+  let status = 'Active', revoked = false;
+  (Delivery as any).findById = () => ({ select: () => ({ lean: async () => ({ status }) }) });
+  (RevokedToken as any).exists = async () => revoked;
+  try {
+    const id = '507f1f77bcf86cd799439011';
+    const good = jwt.sign({ userId: id, userType: 'Delivery' }, process.env.JWT_SECRET!);
+    const goodRes = await run(good);
+    assert.equal(goodRes.err, undefined, 'active account must be admitted');
+    assert.equal(goodRes.user.userId, id);
+    assert.equal(goodRes.user.userType, 'Delivery');
+    status = 'Inactive';
+    assert.ok((await run(good)).err, 'inactive account must be rejected');
+    status = 'Active'; revoked = true;
+    assert.ok((await run(good)).err, 'logged-out token must be rejected');
+  } finally {
+    Delivery.findById = originalFind; RevokedToken.exists = originalExists;
+  }
 
   io.close();
   server.close();
@@ -420,7 +435,7 @@ test("C-08: courier status endpoint excludes Delivered and blocks terminal reope
   assert.equal(validateTransition("Picked up", "Out for Delivery", "delivery").valid, true);
 
   // The endpoint delegates to that table and does not mark orders paid.
-  assert.match(src, /validateTransition\(order\.status, status, "delivery"\)/,
+  assert.match(src, /changeCourierStage\(/,
     "the courier endpoint does not use the shared transition table");
   assert.ok(!/order\.paymentStatus = "Paid"/.test(src),
     "status endpoint must not mark orders paid");

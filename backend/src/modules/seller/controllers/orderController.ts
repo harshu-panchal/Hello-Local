@@ -3,11 +3,8 @@ import mongoose from "mongoose";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import { validateTransition } from "../../../services/orderStatusService";
-import {
-  reservationsFromOrderItems,
-  releaseMany,
-} from "../../../services/stockService";
+import { changeSellerStage, sellerStage } from "../../../services/orderLifecycleService";
+import { runOrderEffects } from "../../../services/orderEffectService";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import { Server as SocketIOServer } from "socket.io";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
@@ -68,7 +65,10 @@ export const getOrders = asyncHandler(
         'Rejected': 'Rejected',
         'Cancelled': 'Cancelled',
       };
-      query.status = statusMapping[status as string] || status;
+      const requested = statusMapping[status as string] || String(status);
+      const ownItems = await OrderItem.find({ seller: sellerId }).select("order status fulfillmentStatus");
+      const candidates = await Order.find({ _id: { $in: orderItems } }).select("status");
+      query._id = { $in: candidates.filter(order => sellerStage(ownItems.filter(item => String(item.order) === String(order._id)), order) === requested).map(order => order._id) };
     }
 
     // Search filter — match Order ID, invoice, customer, or status.
@@ -124,6 +124,7 @@ export const getOrders = asyncHandler(
       sellerTotals.map((r: any) => [r._id.toString(), r.amount])
     );
 
+    const pageItems = await OrderItem.find({ order: { $in: pageOrderIds }, seller: sellerId }).select("order status fulfillmentStatus");
     // Format response for frontend
     const formattedOrders = orders.map(order => ({
       id: order._id,
@@ -132,7 +133,8 @@ export const getOrders = asyncHandler(
         ? order.estimatedDeliveryDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
         : order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
       orderDate: order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-      status: order.status === 'Out for Delivery' ? 'On the way' : order.status,
+      status: sellerStage(pageItems.filter(item => String(item.order) === String(order._id)), order),
+      orderStatus: order.status,
       amount: sellerAmountByOrder.get((order._id as any).toString()) ?? order.total,
       customerName: (order.customer as any)?.name || order.customerName || '',
       customerPhone: (order.customer as any)?.phone || order.customerPhone || '',
@@ -238,8 +240,8 @@ export const getOrderById = asyncHandler(
         soldBy: (item.seller as any)?.storeName || 'N/A',
         unit: unit,
         price: item.unitPrice || 0,
-        tax: 0,
-        taxPercent: 0,
+        tax: item.taxAmount || 0,
+        taxPercent: item.taxRate || 0,
         qty: item.quantity || 0,
         subtotal: item.total || 0,
       };
@@ -249,7 +251,7 @@ export const getOrderById = asyncHandler(
     // header matches the line items and the order list amount. (#22/286)
     const sellerSubtotal = formattedItems.reduce((sum, i) => sum + (i.subtotal || 0), 0);
     const sellerTax = formattedItems.reduce((sum, i) => sum + (i.tax || 0), 0);
-    const sellerGrandTotal = sellerSubtotal + sellerTax;
+    const sellerGrandTotal = sellerSubtotal; // Selling prices include tax.
 
     // Format order data for frontend
     const orderDetail = {
@@ -259,7 +261,8 @@ export const getOrderById = asyncHandler(
       orderDate: order.orderDate ? order.orderDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       deliveryDate: order.estimatedDeliveryDate ? order.estimatedDeliveryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       timeSlot: order.timeSlot || 'N/A',
-      status: order.status === 'Out for Delivery' ? 'On the way' : order.status,
+      status: sellerStage(sellerItems, order),
+      orderStatus: order.status,
       customerName: (order.customer as any)?.name || order.customerName || '',
       customerEmail: (order.customer as any)?.email || order.customerEmail || '',
       customerPhone: (order.customer as any)?.phone || order.customerPhone || '',
@@ -285,288 +288,27 @@ export const getOrderById = asyncHandler(
 /**
  * Update order status (seller can update: Accepted, On the way, Delivered, Cancelled)
  */
-export const updateOrderStatus = asyncHandler(
-  async (req: Request, res: Response) => {
-    const sellerId = (req as any).user.userId;
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Order ID format",
-      });
+export const updateOrderStatus = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const sellerId = req.user!.userId;
+  const requested = String(req.body.status || "");
+  if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+  const result = await changeSellerStage(id, sellerId, requested);
+  const io = req.app.get("io") as SocketIOServer;
+  if (io) {
+    io.to(`order-${id}`).emit("order-status-update", { orderId: id, status: result.order.status });
+    io.to(`order-${id}`).emit("order-items-updated", { orderId: id, sellerId, status: requested });
+    if ("notifyCouriers" in result && result.notifyCouriers) {
+      const full = await Order.findById(id).populate({ path: "items", populate: { path: "seller" } }).lean();
+      if (full) await notifyDeliveryBoysOfNewOrder(io, full);
     }
-
-    // Check if this seller has items in this order
-    const sellerItems = await OrderItem.findOne({ order: id, seller: sellerId });
-
-    if (!sellerItems) {
-      console.log(`[Order Update] Seller ${sellerId} not authorized for order ${id}`);
-      return res.status(404).json({
-        success: false,
-        message: "Order not found or you are not authorized to manage this order",
-      });
-    }
-
-    const order = await Order.findById(id);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    // One shared transition table, applied to the actual current state. The
-    // seller path used to accept any of six statuses from ANY state, so an
-    // unpaid order could be jumped straight to Delivered. (#H-05 / #H-37)
-    const check = validateTransition(order.status, status, "seller");
-    if (!check.valid) {
-      return res.status(400).json({ success: false, message: check.message });
-    }
-    const nextStatus = check.status!;
-
-    // In a multi-vendor order one seller must not cancel or reject the whole
-    // order on another seller's behalf. Their own line items are updated, and
-    // the order-level status only follows when they are the only seller. (#H-08)
-    const sellerCountAgg = await OrderItem.distinct("seller", { order: id });
-    const isSoleSeller = sellerCountAgg.length <= 1;
-
-    if (!isSoleSeller && (nextStatus === "Cancelled" || nextStatus === "Rejected")) {
-      const myItems = await OrderItem.find({ order: id, seller: sellerId });
-
-      // Calculate cancelled amount for customer refund
-      const cancelledSubtotal = myItems.reduce((sum, oi) => {
-        const lineTotal = oi.total || ((oi.unitPrice || 0) * (oi.quantity || 1));
-        const lineDiscount = (oi as any).discountAmount || 0;
-        return sum + Math.max(0, lineTotal - lineDiscount);
-      }, 0);
-
-      await OrderItem.updateMany(
-        { order: id, seller: sellerId },
-        { $set: { status: "Cancelled" } },
-      );
-
-      // Return only this seller's stock to the shelf. (#H-08)
-      const myReservations = await reservationsFromOrderItems(
-        myItems.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
-      );
-      await releaseMany(myReservations);
-
-      // Cancel any pending commissions for this seller on this order
-      try {
-        const Commission = (await import("../../../models/Commission")).default;
-        await Commission.updateMany(
-          { order: id, seller: sellerId, status: "Pending" },
-          { $set: { status: "Cancelled" } },
-        );
-      } catch (commErr) {
-        console.error(`Failed to cancel pending commissions for seller ${sellerId} on order ${id}:`, commErr);
-      }
-
-      // Check if all items in the order across all sellers are now cancelled
-      const activeCount = await OrderItem.countDocuments({
-        order: id,
-        status: { $ne: "Cancelled" },
-      });
-
-      if (activeCount === 0) {
-        order.status = "Cancelled";
-        order.cancelledAt = new Date();
-        await order.save();
-
-        try {
-          const { releaseCoupon } = await import("../../../services/orderPricingService");
-          await releaseCoupon(order.couponCode);
-        } catch (couponErr) {
-          console.error(`Failed to release coupon on full cancellation of order ${id}:`, couponErr);
-        }
-      }
-
-      // If prepaid, issue partial refund for the cancelled seller's items
-      if (
-        ["Paid", "PartiallyRefunded"].includes(order.paymentStatus) &&
-        order.paymentMethod !== "COD" &&
-        cancelledSubtotal > 0
-      ) {
-        try {
-          const { refundOrder } = await import("../../../services/refundService");
-          await refundOrder(
-            id,
-            `Seller cancelled items (${myItems.length} items)`,
-            Math.round(cancelledSubtotal * 100) / 100,
-          );
-        } catch (refundErr) {
-          console.error(`Refund failed for multi-seller cancellation on order ${id}:`, refundErr);
-        }
-      }
-
-      // Notify socket rooms (customer and couriers)
-      try {
-        const io = (req.app as any).get("io");
-        if (io) {
-          io.to(`order-${id}`).emit("order-items-updated", {
-            orderId: id,
-            sellerId,
-            status: "Cancelled",
-            allCancelled: activeCount === 0,
-          });
-        }
-      } catch (ioErr) {
-        console.warn("Socket notification failed:", ioErr);
-      }
-
-      return res.status(200).json({
-        success: true,
-        message:
-          activeCount === 0
-            ? "All items in this order have been cancelled. The order is now cancelled."
-            : "Your items were cancelled and refunded. Other sellers' items in this order are unaffected.",
-        data: { id: order._id, status: order.status, sellerItemsStatus: "Cancelled" },
-      });
-    }
-
-    const previousStatus = order.status;
-    order.status = nextStatus;
-    
-    // Update seller's items status in this order if applicable
-    const itemStatusMap: Record<string, string> = {
-      'Accepted': 'Pending',
-      'Processed': 'Pending',
-      'On the way': 'Shipped',
-      'Delivered': 'Delivered',
-      'Cancelled': 'Cancelled',
-      'Rejected': 'Cancelled'
-    };
-
-    if (itemStatusMap[status]) {
-      await OrderItem.updateMany(
-        { order: id, seller: sellerId },
-        { status: itemStatusMap[status] }
-      );
-    }
-
-    await order.save();
-
-    // Notify customer about status change (socket + push)
-    try {
-      const io: SocketIOServer = (req.app.get("io") as SocketIOServer);
-      const customerStatusMessages: Record<string, { title: string; body: string }> = {
-        'Accepted':  { title: '✅ Order Confirmed!',        body: `Your order #${order.orderNumber} has been confirmed by the seller.` },
-        'Processed': { title: '📦 Order Being Prepared',    body: `Your order #${order.orderNumber} is being prepared for delivery.` },
-        'On the way':{ title: '🚚 Out for Delivery!',       body: `Your order #${order.orderNumber} is on the way to you!` },
-        'Delivered': { title: '🎉 Order Delivered!',        body: `Your order #${order.orderNumber} has been delivered. Enjoy!` },
-        'Cancelled': { title: '❌ Order Cancelled',         body: `Your order #${order.orderNumber} has been cancelled by the seller.` },
-        'Rejected':  { title: '❌ Order Rejected',          body: `Your order #${order.orderNumber} has been rejected. Please contact support.` },
-      };
-      const msgInfo = customerStatusMessages[status];
-      if (msgInfo && order.customer) {
-        const customerId = order.customer.toString();
-        // Real-time socket (for open app / tracking screen)
-        if (io) {
-          io.to(`order-${id}`).emit('order-status-update', {
-            orderId: id,
-            orderNumber: order.orderNumber,
-            status: order.status,
-            message: msgInfo.body,
-          });
-        }
-        // Push notification (for background / closed app)
-        sendNotificationToUser(customerId, 'Customer', {
-          title: msgInfo.title,
-          body: msgInfo.body,
-          data: {
-            type: 'ORDER_STATUS_UPDATE',
-            orderId: id,
-            orderNumber: order.orderNumber || '',
-            status: order.status,
-          }
-        }).catch(err => console.error(`❌ Customer push notification failed for order ${id}:`, err));
-      }
-    } catch (notifyErr) {
-      console.error('Error sending customer status notification:', notifyErr);
-    }
-
-    // Trigger delivery notification if seller accepts the order
-    if (status === 'Accepted' && previousStatus !== 'Accepted') {
-      try {
-        const io: SocketIOServer = (req.app.get("io") as SocketIOServer);
-        if (io) {
-          // Need to fetch full order with details for the notification service
-          // Using lean() to get a plain JS object which is what the service expects mostly,
-          // but checking the service implementation, it uses .items mainly for seller location.
-          // We should ensure the passed order object has populated items with sellers.
-          const fullOrder = await Order.findById(order._id)
-            .populate({
-              path: 'items',
-              populate: { path: 'seller' }
-            })
-            .lean();
-
-          if (fullOrder) {
-            await notifyDeliveryBoysOfNewOrder(io, fullOrder);
-            console.log(`Delivery notification triggered for Accepted order ${order.orderNumber}`);
-          }
-        }
-      } catch (notifyError) {
-        console.error('Error notifying delivery boys on seller acceptance:', notifyError);
-        // Don't fail the request, just log
-      }
-    }
-
-    // Cancelling or rejecting returns the committed stock. The seller path used
-    // to leave it permanently decremented. (#H-08)
-    if (nextStatus === 'Cancelled' || nextStatus === 'Rejected') {
-      try {
-        const allItems = await OrderItem.find({ order: id });
-        const allReservations = await reservationsFromOrderItems(
-          allItems.map((oi) => ({ product: oi.product, quantity: oi.quantity, variation: oi.variation })),
-        );
-        await releaseMany(allReservations);
-        await OrderItem.updateMany({ order: id }, { $set: { status: 'Cancelled' } });
-      } catch (stockErr) {
-        console.error(`Failed to restore stock for order ${id}:`, stockErr);
-      }
-    }
-
-    // Cancelling or rejecting must claw back anything already credited. (#H-07)
-    if ((nextStatus === 'Cancelled' || nextStatus === 'Rejected') && previousStatus !== nextStatus) {
-      try {
-        const { reverseCommissions } = await import("../../../services/commissionService");
-        const rev = await reverseCommissions(id);
-        if (!rev.success) {
-          console.error(`Commission reversal failed for order ${id}: ${rev.message}`);
-        }
-      } catch (revErr) {
-        console.error("Error reversing commissions:", revErr);
-      }
-    }
-
-    // If order is delivered, trigger the commission flow via processOrderStatusTransition
-    if (status === 'Delivered' && previousStatus !== 'Delivered') {
-      try {
-        const { processOrderStatusTransition } = await import("../../../services/orderService");
-        await processOrderStatusTransition(id, 'Delivered', previousStatus);
-
-        // A duplicate "Pending Settlement" WalletTransaction used to be written
-        // here in addition to the Pending Commission that
-        // processCODOrderDelivery already records, so the same COD earnings
-        // appeared twice in the seller's ledger and the pending row was never
-        // resolved. processPendingCODPayouts writes the single real credit when
-        // the courier settles. (#H-40)
-      } catch (transitionError: any) {
-        console.error("Error processing order status transition for seller:", transitionError);
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Order status updated successfully",
-      data: {
-        id: order._id,
-        status: order.status,
-      },
-    });
   }
-);
+  await runOrderEffects(id);
+  if (result.order.customer) void sendNotificationToUser(String(result.order.customer), "Customer", {
+    title: "Order updated", body: `Order #${result.order.orderNumber}: ${result.order.status}`,
+    data: { type: "ORDER_STATUS_UPDATE", orderId: id, status: result.order.status },
+  }).catch(error => console.error("Order notification failed", error));
+  return res.json({ success: true, message: ["Cancelled", "Rejected"].includes(requested)
+    ? "Your items are cancelled. Any prepaid refund is being processed." : "Your fulfilment stage was updated.",
+    data: { id, status: requested, sellerStatus: requested, orderStatus: result.order.status } });
+});

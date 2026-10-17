@@ -1,3 +1,4 @@
+import { acceptDeliveryOrder, courierOfferStatuses, payableForDelivery } from './orderLifecycleService';
 import { Server as SocketIOServer } from 'socket.io';
 import Delivery from '../models/Delivery';
 import Order from '../models/Order';
@@ -5,7 +6,6 @@ import Seller from '../models/Seller';
 import DeliveryTracking from '../models/DeliveryTracking';
 import AppSettings from '../models/AppSettings';
 import mongoose from 'mongoose';
-import { notifySellersOfOrderUpdate } from './sellerNotificationService';
 import { sendNotificationToUser } from './firebaseAdmin';
 
 /**
@@ -365,6 +365,8 @@ export async function notifyDeliveryBoysOfNewOrder(
     order: any
 ): Promise<void> {
     try {
+        const current = await Order.findById(order._id);
+        if (!current || current.deliveryBoy || !courierOfferStatuses.includes(current.status) || !payableForDelivery(current)) return;
         // Find delivery boys near seller locations (within service radius)
         let nearbyDeliveryBoyIds = await findDeliveryBoysNearSellerLocations(order);
 
@@ -533,7 +535,7 @@ export async function handleOrderAcceptance(
             }
 
             // Mark as accepted in memory
-            state.acceptedBy = normalizedDeliveryBoyId;
+            // Database assignment is authoritative.
         } else {
             console.log(`⚠️ Notification state missing for order ${orderId}. Checking database for fallback...`);
             // 2. Database Fallback (For server restarts/stale notifications)
@@ -541,24 +543,8 @@ export async function handleOrderAcceptance(
             // We assume if they have the ID, they were notified effectively.
         }
 
-        // Update order in database
-        const order = await Order.findById(orderId);
-        if (!order) {
-            return { success: false, message: 'Order not found' };
-        }
-
-        // Check if order already has a delivery boy assigned
-        if (order.deliveryBoy) {
-            return { success: false, message: 'Order already assigned to another delivery boy' };
-        }
-
-        // Assign order to delivery boy
-        order.deliveryBoy = new mongoose.Types.ObjectId(normalizedDeliveryBoyId);
-        order.deliveryBoyStatus = 'Assigned';
-        order.assignedAt = new Date();
-        order.status = 'Processed'; // Mark as processed when assigned
-
-        await order.save();
+        const order = await acceptDeliveryOrder(orderId, normalizedDeliveryBoyId);
+        if (state) state.acceptedBy = normalizedDeliveryBoyId;
 
         // Mark all pending DB notifications for this order as read
         // so delivery boys who were offline don't see a stale "available" notification
@@ -640,32 +626,7 @@ export async function handleOrderRejection(
         const state = notificationStates.get(orderId);
 
         if (!state) {
-            // State is missing — happens after a server restart or when the delivery boy
-            // received a re-notification on reconnect (the socket handler replays pending
-            // orders but does not recreate the in-memory state). Rather than silently
-            // ignoring the rejection, cancel the order immediately if it is still unassigned.
-            console.warn(`⚠️ No notification state for order ${orderId}. Processing stateless rejection from delivery boy ${deliveryBoyId}.`);
-            try {
-                const order = await Order.findById(orderId);
-                if (order && !order.deliveryBoy && (order.status === 'Accepted' || order.status === 'Pending')) {
-                    order.status = 'Rejected';
-                    order.deliveryBoyStatus = 'Failed';
-                    order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
-                        `[${new Date().toISOString()}] Auto-rejected: no in-memory notification state found. Delivery boy ${deliveryBoyId} rejected.`;
-                    await order.save();
-
-                    io.to(`order-${orderId}`).emit('order-rejected', {
-                        orderId,
-                        message: 'Unfortunately, no delivery partner is available at the moment. Your order has been rejected.',
-                    });
-
-                    notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
-                    console.log(`✅ Stateless rejection: order ${orderId} cancelled.`);
-                }
-            } catch (dbError) {
-                console.error(`❌ Error processing stateless rejection for order ${orderId}:`, dbError);
-            }
-            return { success: true, message: 'Order rejected', allRejected: true };
+            return { success: true, message: 'Delivery offer declined', allRejected: false };
         }
 
         // Check if already accepted
@@ -697,33 +658,7 @@ export async function handleOrderRejection(
                 orderId,
             });
 
-            try {
-                // Update order in database to "Rejected"
-                const order = await Order.findById(orderId);
-                if (order) {
-                    order.status = 'Rejected';
-                    order.deliveryBoyStatus = 'Failed';
-                    order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
-                        `[${new Date().toISOString()}] Rejected: All notified delivery boys (${state.notifiedDeliveryBoys.size}) rejected the order.`;
-                    await order.save();
-
-                    // Notify customer via socket
-                    io.to(`order-${orderId}`).emit('order-rejected', {
-                        orderId,
-                        message: 'Unfortunately, no delivery partner is available at the moment. Your order has been rejected.',
-                    });
-
-                    // Notify sellers/restaurants
-                    notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
-
-                    console.log(`✅ All delivery boys rejected order ${orderId}. Order status updated to Rejected.`);
-                } else {
-                    console.error(`❌ Order ${orderId} not found when trying to update rejection status`);
-                }
-            } catch (dbError) {
-                console.error(`❌ Error updating order ${orderId} to Rejected status:`, dbError);
-                // We still proceed with cleanup to avoid memory leaks/stuck state
-            }
+            io.to('admin-notifications').emit('delivery-unavailable', { orderId });
 
             // Clean up notification state
             notificationStates.delete(orderId);

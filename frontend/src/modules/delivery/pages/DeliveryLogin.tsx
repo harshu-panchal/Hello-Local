@@ -5,6 +5,7 @@ import OTPInput from '../../../components/OTPInput';
 import { useAuth } from '../../../context/AuthContext';
 import { normalizeMobile } from '../../../utils/phone';
 import { useToast } from '../../../context/ToastContext';
+import { useOtpResend } from '../../../hooks/useOtpResend';
 
 export default function DeliveryLogin() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function DeliveryLogin() {
   const [error, setError] = useState('');
   const [mobileError, setMobileError] = useState('');
   const [isNotRegistered, setIsNotRegistered] = useState(false);
+  const resend = useOtpResend();
 
   const validateMobile = (value: string): string => {
     if (!value) return 'Mobile number is required';
@@ -48,8 +50,9 @@ export default function DeliveryLogin() {
       const response = await sendOTP(mobileNumber);
       if (response.success && response.sessionId) {
         setSessionId(response.sessionId);
+        resend.start();
         setShowOTP(true);
-        showToast('4-digit OTP sent to your mobile', 'success');
+        showToast(response.message || 'If an account exists, an OTP has been sent.', 'success');
       } else {
         const msg = response.message || 'Failed to initiate OTP';
         setError(msg);
@@ -57,7 +60,7 @@ export default function DeliveryLogin() {
       }
     } catch (err: any) {
       const status = err.response?.status;
-      const message = err.response?.data?.message || 'Failed to send OTP. Please try again.';
+      const message = err.response?.data?.message || err.friendlyMessage || err.message || 'Failed to send OTP. Please try again.';
 
       setError(message);
       showToast(message, 'error');
@@ -85,7 +88,7 @@ export default function DeliveryLogin() {
         navigate('/delivery');
       }
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Invalid OTP. Please try again.';
+      const message = err.response?.data?.message || err.friendlyMessage || err.message || 'Invalid OTP. Please try again.';
       setError(message);
       showToast(message, 'error');
     } finally {
@@ -196,10 +199,10 @@ export default function DeliveryLogin() {
                 </button>
                 <button
                   onClick={handleMobileLogin}
-                  disabled={loading}
+                  disabled={loading || resend.remaining > 0}
                   className="flex-1 py-3 rounded-2xl font-black text-xs bg-rose-600 text-white hover:bg-rose-700 transition-all min-h-[44px]"
                 >
-                  {loading ? 'Verifying...' : 'Resend OTP'}
+                  {resend.remaining ? `Resend in ${resend.remaining}s` : 'Resend OTP'}
                 </button>
               </div>
             </div>

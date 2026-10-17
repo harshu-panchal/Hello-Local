@@ -29,11 +29,9 @@ export const calculateProductPrice = (product: any, variationSelector?: number |
     variation = product.variations[0];
   }
 
-  const displayPrice = (variation?.discPrice && variation.discPrice > 0)
-    ? variation.discPrice
-    : (product.discPrice && product.discPrice > 0)
-    ? product.discPrice
-    : (variation?.price || product.price || 0);
+  const displayPrice = variation
+    ? (Number(variation.discPrice) > 0 ? Number(variation.discPrice) : Number(variation.price ?? product.price ?? 0))
+    : (Number(product.discPrice) > 0 ? Number(product.discPrice) : Number(product.price) || 0);
 
   const mrp = variation?.price || product.mrp || product.compareAtPrice || product.price || 0;
 

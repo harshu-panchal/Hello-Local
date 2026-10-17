@@ -1,8 +1,12 @@
 import { Router } from "express";
 import * as deliveryAuthController from "../modules/delivery/controllers/deliveryAuthController";
 import { otpRateLimiter, loginRateLimiter } from "../middleware/rateLimiter";
+import { signupOtpHandlers } from '../modules/auth/controllers/onboardingController';
 
 const router = Router();
+const signup = signupOtpHandlers('Delivery');
+router.post('/send-signup-otp', otpRateLimiter, signup.send);
+router.post('/verify-signup-otp', loginRateLimiter, signup.verify);
 
 
 // Send SMS OTP route
@@ -12,7 +16,7 @@ router.post("/send-sms-otp", otpRateLimiter, deliveryAuthController.sendSmsOtp);
 router.post("/verify-sms-otp", loginRateLimiter, deliveryAuthController.verifySmsOtp);
 
 // Register route
-router.post("/register", deliveryAuthController.register);
+router.post("/register", loginRateLimiter, deliveryAuthController.register);
 
 // Check existence route (Support both correct spelling and common misspelling)
 router.get("/check-existence", loginRateLimiter, deliveryAuthController.checkExistence);

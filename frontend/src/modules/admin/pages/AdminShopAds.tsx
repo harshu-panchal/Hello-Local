@@ -18,6 +18,8 @@ import {
 } from "../../../services/api/sellerAdRequestService";
 import { useToast } from "../../../context/ToastContext";
 
+import { adCalendarDate, isShopAdLive, shopAdStatus } from "../../../utils/shopAds";
+
 type FormData = Partial<ShopAd>;
 
 const initialForm: FormData = {
@@ -69,6 +71,7 @@ export default function AdminShopAds() {
   const [approveModal, setApproveModal] = useState<any | null>(null);
   const [rejectModal, setRejectModal] = useState<any | null>(null);
   const [detailsModal, setDetailsModal] = useState<any | null>(null);
+  const [activating, setActivating] = useState(false);
   const [approvePrice, setApprovePrice] = useState("");
   const [approveNote, setApproveNote] = useState("");
   const [rejectNote, setRejectNote] = useState("");
@@ -119,6 +122,8 @@ export default function AdminShopAds() {
   useEffect(() => {
     fetchAds();
     fetchAdRequests();
+    const timer = window.setInterval(fetchAdRequests, 30000);
+    return () => clearInterval(timer);
   }, [fetchAds, fetchAdRequests]);
 
   // Handle deep linking for specific requests from notifications
@@ -154,8 +159,8 @@ export default function AdminShopAds() {
       isActive: ad.isActive,
       contactInfo: ad.contactInfo || { name: "", phone: "", email: "" },
       requestedBy: ad.requestedBy || "",
-      startDate: ad.startDate ? new Date(ad.startDate).toISOString().split("T")[0] : "",
-      expiresAt: ad.expiresAt ? new Date(ad.expiresAt).toISOString().split("T")[0] : "",
+      startDate: ad.startDate ? adCalendarDate(ad.startDate) : "",
+      expiresAt: ad.expiresAt ? adCalendarDate(ad.expiresAt) : "",
     });
     setShowModal(true);
   };
@@ -289,13 +294,13 @@ export default function AdminShopAds() {
     showToast("Shop ads exported successfully", "success");
   };
 
-  const activeAdsCount = useMemo(() => ads.filter((a) => a.isActive).length, [ads]);
-  const inactiveAdsCount = useMemo(() => ads.filter((a) => !a.isActive).length, [ads]);
+  const activeAdsCount = useMemo(() => ads.filter((a) => isShopAdLive(a)).length, [ads]);
+  const inactiveAdsCount = useMemo(() => ads.filter((a) => !isShopAdLive(a)).length, [ads]);
   const expiringSoonCount = useMemo(
     () =>
       ads.filter(
         (a) =>
-          a.expiresAt &&
+          isShopAdLive(a) && a.expiresAt &&
           new Date(a.expiresAt) < new Date(Date.now() + 7 * 86400000)
       ).length,
     [ads]
@@ -596,7 +601,7 @@ export default function AdminShopAds() {
                         {togglingId === ad._id ? (
                           <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         ) : null}
-                        <span>{ad.isActive ? "● Active" : "○ Inactive"}</span>
+                        <span>{shopAdStatus(ad)}</span>
                       </button>
 
                       <div className="flex items-center gap-1.5">
@@ -641,6 +646,8 @@ export default function AdminShopAds() {
                   { label: "Pending", value: requestStats.pending, color: "text-amber-600 bg-amber-50" },
                   { label: "Approved", value: requestStats.approved, color: "text-blue-600 bg-blue-50" },
                   { label: "Payment Pending", value: requestStats.paymentPending, color: "text-purple-600 bg-purple-50" },
+                  { label: "Paid / Ready", value: requestStats.paymentVerified, color: "text-teal-600 bg-teal-50" },
+                  { label: "Scheduled", value: requestStats.scheduled, color: "text-blue-600 bg-blue-50" },
                   { label: "Live", value: requestStats.live, color: "text-emerald-600 bg-emerald-50" },
                   { label: "Rejected", value: requestStats.rejected, color: "text-red-600 bg-red-50" },
                   {
@@ -701,7 +708,7 @@ export default function AdminShopAds() {
 
           {/* Filter Pills */}
           <div className="flex flex-wrap gap-2 pt-1">
-            {["Pending", "Approved", "PaymentPending", "Live", "Rejected", "All"].map((f) => (
+            {["Pending", "Approved", "PaymentPending", "PaymentVerified", "Scheduled", "Live", "Paused", "Expired", "Removed", "Rejected", "All"].map((f) => (
               <button
                 key={f}
                 onClick={() => setRequestFilter(f)}
@@ -785,7 +792,7 @@ export default function AdminShopAds() {
                         </span>
                       </div>
 
-                      {req.status === "PaymentPending" && (
+                      {["PaymentPending", "PaymentVerified"].includes(req.status) && (
                         <div className="mt-2 p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs space-y-1">
                           <strong className="text-purple-900">💳 Payment Submitted</strong>
                           <div className="text-neutral-600">
@@ -841,9 +848,9 @@ export default function AdminShopAds() {
                       </>
                     )}
 
-                    {req.status === "PaymentPending" && (
+                    {["PaymentPending", "PaymentVerified"].includes(req.status) && (
                       <>
-                        <button
+                        {req.paymentStatus !== "Paid" && !req.razorpayOrderId && (<button
                           onClick={() => {
                             setRejectModal(req);
                             setRejectNote("");
@@ -851,7 +858,7 @@ export default function AdminShopAds() {
                           className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-colors min-h-[38px]"
                         >
                           ❌ Reject Payment
-                        </button>
+                        </button>)}
                         <button
                           onClick={() => setDetailsModal(req)}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors min-h-[38px] shadow-sm"
@@ -1095,7 +1102,7 @@ export default function AdminShopAds() {
                     className="w-4 h-4 rounded text-rose-700 focus:ring-rose-600 border-neutral-300"
                   />
                   <span className="text-xs font-bold text-neutral-800">
-                    Active (Live on consumer storefront carousel)
+                    Enabled (shown during its scheduled dates)
                   </span>
                 </label>
               </div>
@@ -1381,7 +1388,7 @@ export default function AdminShopAds() {
             </div>
 
             {/* Payment Proof */}
-            {detailsModal.status === "PaymentPending" && (
+            {["PaymentPending", "PaymentVerified"].includes(detailsModal.status) && (
               <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs space-y-2">
                 <div className="font-bold text-purple-900">💳 Payment Proof</div>
                 <div className="text-neutral-700">
@@ -1411,23 +1418,26 @@ export default function AdminShopAds() {
                 Close
               </button>
 
-              {detailsModal.status === "PaymentPending" && (
+              {["PaymentPending", "PaymentVerified"].includes(detailsModal.status) && (
                 <button
                   type="button"
+                  disabled={activating}
                   onClick={async () => {
+                    if (activating) return;
+                    setActivating(true);
                     try {
-                      await adminVerifyPaymentAndActivate(detailsModal._id);
-                      showToast("✅ Payment verified! Ad is now LIVE 🎉", "success");
+                      const result = await adminVerifyPaymentAndActivate(detailsModal._id);
+                      showToast(result.message || "Advertisement activated.", "success");
                       setDetailsModal(null);
                       fetchAdRequests();
                       fetchAds();
                     } catch (e: any) {
                       showToast(e?.response?.data?.message || "Failed to activate", "error");
-                    }
+                    } finally { setActivating(false); }
                   }}
                   className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl min-h-[44px] shadow-sm"
                 >
-                  🟢 Confirm & Make LIVE
+                  🟢 Confirm Payment and Activate / Schedule
                 </button>
               )}
             </div>

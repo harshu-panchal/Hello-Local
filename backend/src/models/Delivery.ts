@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { applySessionVersioning } from '../utils/sessionVersioning';
 import bcrypt from "bcrypt";
 
 export interface IDelivery extends Document {
@@ -252,6 +253,7 @@ DeliverySchema.methods.comparePassword = async function (
   return bcrypt.compare(candidatePassword, this.password);
 };
 
+applySessionVersioning(DeliverySchema, ['Inactive']);
 const Delivery =
   (mongoose.models.Delivery as mongoose.Model<IDelivery>) ||
   mongoose.model<IDelivery>("Delivery", DeliverySchema);

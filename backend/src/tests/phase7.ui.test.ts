@@ -65,7 +65,7 @@ test("UI: courier ID documents are actually submitted with registration", () => 
 
   const be = beCode("modules/delivery/controllers/deliveryAuthController.ts");
   assert.match(be, /drivingLicense,/, "the server does not read the documents");
-  const create = be.slice(be.indexOf("await Delivery.create"));
+  const create = be.slice(be.indexOf("const newDelivery"));
   assert.match(create, /drivingLicense/, "the server does not persist the documents");
 });
 

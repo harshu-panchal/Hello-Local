@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createRazorpayOrder, verifyPayment } from '../services/api/paymentService';
 
 interface RazorpayCheckoutProps {
@@ -22,16 +22,26 @@ declare global {
 
 const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
     orderId,
-    amount,
+    amount: _amount,
     onSuccess,
     onFailure,
     customerDetails,
     type = 'Order',
 }) => {
+    const callbacks = useRef({ onSuccess, onFailure, customerDetails });
+    callbacks.current = { onSuccess, onFailure, customerDetails };
     useEffect(() => {
+        let active = true;
+        let processing = false;
+        let completed = false;
+        let checkout: any;
+        const onFailure = (message: string) => { if (active && !completed) { completed = true; callbacks.current.onFailure(message); } };
+        const onSuccess = (paymentId: string) => { if (active && !completed) { completed = true; callbacks.current.onSuccess(paymentId); } };
+        const customerDetails = callbacks.current.customerDetails;
         // Load Razorpay script if not already loaded
         const loadRazorpayScript = () => {
             return new Promise((resolve) => {
+                if (window.Razorpay) { resolve(true); return; }
                 const script = document.createElement('script');
                 script.src = 'https://checkout.razorpay.com/v1/checkout.js';
                 script.onload = () => resolve(true);
@@ -49,6 +59,7 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                     return;
                 }
 
+                if (!active) return;
                 // Create Razorpay order
                 const orderResponse = await createRazorpayOrder(orderId, type);
 
@@ -57,12 +68,13 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                     return;
                 }
 
+                if (!active) return;
                 const { razorpayOrderId, razorpayKey } = orderResponse.data;
 
                 // Razorpay options
                 const options = {
                     key: razorpayKey, // Get key from backend response
-                    amount: amount * 100, // Amount in paise
+                    amount: orderResponse.data.amount, // Amount in paise
                     currency: 'INR',
                     name: 'Hello Local',
                     description: `${type === 'AdRequest' ? 'Ad Request' : 'Order'} #${orderId}`,
@@ -76,6 +88,8 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                         color: type === 'AdRequest' ? '#FF4B6E' : '#3B82F6', // Pick pink for ads, blue for orders
                     },
                     handler: async function (response: any) {
+                        if (processing || completed || !active) return;
+                        processing = true;
                         try {
                             // Verify payment with backend
                             const verificationResponse = await verifyPayment({
@@ -89,21 +103,22 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                             if (verificationResponse.success) {
                                 onSuccess(response.razorpay_payment_id);
                             } else {
-                                onFailure(verificationResponse.message || 'Payment verification failed');
+                                onFailure('Payment confirmation pending. Check this order before paying again.');
                             }
                         } catch (error: any) {
                             console.error('Payment verification error:', error);
-                            onFailure(error.response?.data?.message || 'Payment verification failed');
+                            onFailure('Payment confirmation pending. Check this order before paying again.');
                         }
                     },
                     modal: {
                         ondismiss: function () {
-                            onFailure('Payment cancelled by user');
+                            if (!processing) onFailure('Payment cancelled by user');
                         },
                     },
                 };
 
                 const razorpay = new window.Razorpay(options);
+                checkout = razorpay;
                 razorpay.open();
             } catch (error: any) {
                 console.error('Payment initiation error:', error);
@@ -111,8 +126,9 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
             }
         };
 
-        initiatePayment();
-    }, [orderId, amount, customerDetails, onSuccess, onFailure, type]);
+        void initiatePayment();
+        return () => { active = false; checkout?.close?.(); };
+    }, [orderId, type]);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

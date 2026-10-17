@@ -1,224 +1,87 @@
-import mongoose, { FilterQuery } from "mongoose";
+import mongoose, { ClientSession, FilterQuery } from "mongoose";
 import ShopAd, { IShopAd } from "../models/ShopAd";
-import SellerAdRequest, { ISellerAdRequest } from "../models/SellerAdRequest";
+import SellerAdRequest from "../models/SellerAdRequest";
+import { validAdDuration } from "./adValidation";
 
 export const MAX_ACTIVE_SHOP_ADS = 10;
-const DEFAULT_LEGACY_DURATION_DAYS = 30;
-const MAX_SCHEDULER_SEARCH_DAYS = 3650; // 10 years safety bound
+const DAY_MS = 86400000;
+const INDIA_OFFSET_MS = 330 * 60000;
 
+// Advertising calendar dates are always in India, independent of server timezone.
 export function toDayStart(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const shifted = new Date(date.getTime() + INDIA_OFFSET_MS);
+  return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()) - INDIA_OFFSET_MS);
 }
+export function addDays(date: Date, days: number): Date { return new Date(date.getTime() + days * DAY_MS); }
 
-export function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+function endAfter(at: Date) {
+  return { $or: [{ endDate: { $gt: at } }, { endDate: null, $or: [
+    { expiresAt: { $gt: at } }, { expiresAt: null },
+  ] }] };
 }
-
-function getEffectiveEndForQuery(endDate?: Date, expiresAt?: Date) {
-  // If endDate exists use it; otherwise fall back to expiresAt.
-  // This is stored in DB, so we handle missing fields in query logic too.
-  return endDate ?? expiresAt;
-}
-
 export function shopAdActiveAtQuery(at: Date): FilterQuery<IShopAd> {
-  return {
-    isActive: true,
-    $or: [
-      {
-        startDate: { $lte: at },
-        $or: [{ endDate: { $gte: at } }, { expiresAt: { $gte: at } }],
-      },
-      {
-        startDate: { $exists: false },
-        $or: [
-          { expiresAt: { $exists: false } },
-          { expiresAt: null },
-          { expiresAt: { $gt: at } },
-        ],
-      },
-    ],
-  };
+  return { isActive: true, $and: [
+    { $or: [{ startDate: { $lte: at } }, { startDate: null }] }, endAfter(at),
+  ] };
+}
+export function shopAdOverlapsQuery(start: Date, end: Date, opts?: { excludeShopAdId?: string | mongoose.Types.ObjectId }): FilterQuery<IShopAd> {
+  return { ...(opts?.excludeShopAdId ? { _id: { $ne: opts.excludeShopAdId } } : {}), isActive: true, $and: [
+    { $or: [{ startDate: { $lt: end } }, { startDate: null }] }, endAfter(start),
+  ] };
+}
+export function getDurationDaysFromRange(start?: Date, end?: Date, expires?: Date): number {
+  const finish = end ?? expires;
+  if (!start || !finish) return 1;
+  return validAdDuration(Math.max(1, Math.ceil((finish.getTime() - start.getTime()) / DAY_MS)));
 }
 
-export function shopAdOverlapsQuery(
-  rangeStart: Date,
-  rangeEnd: Date,
-  opts?: { excludeShopAdId?: string | mongoose.Types.ObjectId }
-): FilterQuery<IShopAd> {
-  const excludeShopAdId = opts?.excludeShopAdId;
-
-  return {
-    ...(excludeShopAdId ? { _id: { $ne: excludeShopAdId } } : {}),
-    isActive: true,
-    $or: [
-      {
-        startDate: { $lt: rangeEnd },
-        $or: [{ endDate: { $gt: rangeStart } }, { expiresAt: { $gt: rangeStart } }],
-      },
-      {
-        startDate: { $exists: false },
-        $or: [
-          { expiresAt: { $exists: false } },
-          { expiresAt: null },
-          { expiresAt: { $gt: rangeStart } },
-        ],
-      },
-    ],
-  };
-}
-
-export function getDurationDaysFromRange(startDate?: Date, endDate?: Date, expiresAt?: Date): number {
-  const start = startDate ? toDayStart(startDate) : undefined;
-  const end = getEffectiveEndForQuery(endDate, expiresAt);
-
-  if (!start || !end) return 1;
-
-  const deltaMs = end.getTime() - start.getTime();
-  const days = Math.ceil(deltaMs / (1000 * 60 * 60 * 24));
-  return Math.max(1, days);
-}
-
-async function countBookedForDay(params: {
-  dayStart: Date;
-  dayEnd: Date;
+export async function countBookedForDay(start: Date, end: Date, options: {
   excludeShopAdId?: string | mongoose.Types.ObjectId;
   excludeRequestId?: string | mongoose.Types.ObjectId;
-}): Promise<number> {
-  const { dayStart, dayEnd, excludeShopAdId, excludeRequestId } = params;
-
-  const [liveAdsCount, reservedSlotsCount] = await Promise.all([
-    ShopAd.countDocuments(shopAdOverlapsQuery(dayStart, dayEnd, { excludeShopAdId })),
-    SellerAdRequest.countDocuments({
-      ...(excludeRequestId ? { _id: { $ne: excludeRequestId } } : {}),
-      status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
-      startDate: { $lt: dayEnd },
-      endDate: { $gt: dayStart },
-    } as FilterQuery<ISellerAdRequest>),
-  ]);
-
-  return liveAdsCount + reservedSlotsCount;
+  session?: ClientSession;
+} = {}): Promise<number> {
+  const live = await ShopAd.countDocuments(shopAdOverlapsQuery(start, end, options)).session(options.session ?? null);
+  const reserved = await SellerAdRequest.countDocuments({
+    ...(options.excludeRequestId ? { _id: { $ne: options.excludeRequestId } } : {}),
+    status: { $in: ["Approved", "PaymentPending", "PaymentVerified"] },
+    startDate: { $lt: end }, endDate: { $gt: start },
+  }).session(options.session ?? null);
+  return live + reserved;
 }
 
 export async function findNextAvailableWindow(params: {
-  desiredStart: Date;
-  durationDays: number;
+  desiredStart: Date; durationDays: number;
   excludeShopAdId?: string | mongoose.Types.ObjectId;
   excludeRequestId?: string | mongoose.Types.ObjectId;
+  session?: ClientSession;
 }): Promise<{ startDate: Date; endDate: Date }> {
-  const durationDays = Math.max(1, Math.floor(params.durationDays || 1));
-  const desiredStart = toDayStart(params.desiredStart);
-
-  // Ensure legacy "always active" ads are converted into explicit windows so queuing can progress.
-  await normalizeLegacyActiveAds(new Date());
-
-  for (let offset = 0; offset <= MAX_SCHEDULER_SEARCH_DAYS; offset++) {
-    const candidateStart = addDays(desiredStart, offset);
-    const candidateEnd = addDays(candidateStart, durationDays);
-
-    let ok = true;
-    for (let i = 0; i < durationDays; i++) {
-      const dayStart = addDays(candidateStart, i);
-      const dayEnd = addDays(dayStart, 1);
-      const booked = await countBookedForDay({
-        dayStart,
-        dayEnd,
-        excludeShopAdId: params.excludeShopAdId,
-        excludeRequestId: params.excludeRequestId,
-      });
-
-      if (booked >= MAX_ACTIVE_SHOP_ADS) {
-        ok = false;
-        break;
+  const duration = validAdDuration(params.durationDays);
+  const today = toDayStart(new Date());
+  const requested = toDayStart(params.desiredStart);
+  const start = requested < today ? today : requested;
+  if (!Number.isFinite(start.getTime())) throw Object.assign(new Error("Invalid start date"), { statusCode: 400 });
+  if (params.session) await normalizeLegacyActiveAds(new Date(), params.session);
+  for (let offset = 0; offset <= 3650; offset++) {
+    const candidate = addDays(start, offset);
+    let available = true;
+    for (let day = 0; day < duration; day++) {
+      const dayStart = addDays(candidate, day);
+      if (await countBookedForDay(dayStart, addDays(dayStart, 1), params) >= MAX_ACTIVE_SHOP_ADS) {
+        available = false; break;
       }
     }
-
-    if (ok) {
-      return { startDate: candidateStart, endDate: candidateEnd };
-    }
+    if (available) return { startDate: candidate, endDate: addDays(candidate, duration) };
   }
-
-  throw new Error("No available ad slots found in scheduling horizon.");
+  throw Object.assign(new Error("No advertising slots available in the scheduling horizon."), { statusCode: 409 });
 }
 
-export async function normalizeLegacyActiveAds(now: Date): Promise<void> {
-  // Legacy ads (no startDate) are treated as "always active". To make queuing/capacity deterministic,
-  // we normalize them into an explicit time window starting today.
-  const legacyAds = await ShopAd.find({
-    isActive: true,
-    startDate: { $exists: false },
-  }).select("_id startDate endDate expiresAt createdAt");
-
-  if (legacyAds.length === 0) return;
-
-  const today = toDayStart(now);
-
-  await Promise.all(
-    legacyAds.map(async (ad) => {
-      const effectiveEnd =
-        ad.expiresAt ??
-        addDays(today, DEFAULT_LEGACY_DURATION_DAYS);
-
-      // Ensure end is after start.
-      const normalizedEnd = effectiveEnd > today ? effectiveEnd : addDays(today, 1);
-
-      await ShopAd.updateOne(
-        { _id: ad._id },
-        {
-          $set: {
-            startDate: today,
-            endDate: normalizedEnd,
-            expiresAt: normalizedEnd,
-          },
-        }
-      );
-    })
-  );
-}
-
-export async function enforceMaxActiveAdsNow(now: Date): Promise<void> {
-  await normalizeLegacyActiveAds(now);
-
-  const activeNow = await ShopAd.find(shopAdActiveAtQuery(now))
-    .sort({ order: 1, createdAt: -1 })
-    .select("_id startDate endDate expiresAt createdAt order")
-    .lean();
-
-  if (activeNow.length <= MAX_ACTIVE_SHOP_ADS) return;
-
-  const overflow = activeNow.slice(MAX_ACTIVE_SHOP_ADS);
-
-  // Overflow ads get queued starting tomorrow (or later) to avoid >MAX active at the same time.
-  const schedulingBase = addDays(toDayStart(now), 1);
-
-  for (const ad of overflow) {
-    const durationDays = getDurationDaysFromRange(
-      ad.startDate ? new Date(ad.startDate) : undefined,
-      ad.endDate ? new Date(ad.endDate) : undefined,
-      ad.expiresAt ? new Date(ad.expiresAt) : undefined
-    );
-
-    const { startDate, endDate } = await findNextAvailableWindow({
-      desiredStart: schedulingBase,
-      durationDays,
-      excludeShopAdId: ad._id,
-    });
-
-    await ShopAd.updateOne(
-      { _id: ad._id },
-      { $set: { startDate, endDate, expiresAt: endDate } }
-    );
-
-    // Keep SellerAdRequest in sync if this ad is linked to one.
-    await SellerAdRequest.updateOne(
-      { shopAdId: ad._id, status: "Live" },
-      { $set: { startDate, endDate, expiresAt: endDate } }
-    );
+// Management writes may normalize old ads; expiry is never extended if already set.
+export async function normalizeLegacyActiveAds(now: Date, session?: ClientSession): Promise<void> {
+  const ads = await ShopAd.find({ isActive: true, startDate: null }).session(session ?? null);
+  for (const ad of ads) {
+    const end = ad.endDate ?? ad.expiresAt ?? addDays(toDayStart(now), 30);
+    await ShopAd.updateOne({ _id: ad._id }, { $set: {
+      startDate: toDayStart(now), endDate: end, expiresAt: end, isActive: end > now,
+    } }, { session });
   }
-
-  // Safety: after scheduling, we should not still have >MAX active.
-  // If legacy/indefinite ads exist elsewhere, the scheduler would have thrown.
 }

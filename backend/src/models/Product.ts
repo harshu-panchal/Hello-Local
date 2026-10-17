@@ -205,9 +205,9 @@ const ProductSchema = new Schema<IProduct>(
         {
           name: String,
           value: String,
-          price: Number,
-          discPrice: { type: Number, default: 0 },
-          stock: Number,
+          price: { type: Number, min: 0 },
+          discPrice: { type: Number, default: 0, min: 0 },
+          stock: { type: Number, min: 0, validate: Number.isInteger },
           status: {
             type: String,
             enum: ["Available", "Sold out", "In stock"],
@@ -363,6 +363,7 @@ const ProductSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
+    optimisticConcurrency: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }

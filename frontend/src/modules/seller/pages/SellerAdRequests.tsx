@@ -8,6 +8,8 @@ import {
   cancelAdRequest,
   getAdAvailability,
 } from '../../../services/api/sellerAdRequestService';
+import RazorpayCheckout from '../../../components/RazorpayCheckout';
+import { adCalendarDate } from '../../../utils/shopAds';
 import { exportToCsv } from '../../../utils/exportCsv';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerCard } from '../components/common/SellerCard';
@@ -20,6 +22,10 @@ import { SellerFormField } from '../components/common/SellerFormField';
 type AdRequest = {
   _id: string;
   shopName: string;
+  sellerName?: string;
+  sellerEmail?: string;
+  sellerPhone?: string;
+  endDate?: string;
   tagline: string;
   description?: string;
   imageUrl: string;
@@ -30,7 +36,7 @@ type AdRequest = {
   durationDays: number;
   adPrice: number;
   requestedPrice?: number;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'PaymentPending' | 'PaymentVerified' | 'Live' | 'Expired';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'PaymentPending' | 'PaymentVerified' | 'Live' | 'Expired' | 'Scheduled' | 'Paused' | 'Removed';
   paymentStatus: 'Unpaid' | 'Paid' | 'Refunded';
   paymentMethod?: string;
   paymentReference?: string;
@@ -67,6 +73,7 @@ export default function SellerAdRequests() {
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [onlineAd, setOnlineAd] = useState<AdRequest | null>(null);
   const [adRequests, setAdRequests] = useState<AdRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -116,7 +123,7 @@ export default function SellerAdRequests() {
     paymentMethod: 'UPI',
     paymentReference: '',
     paymentScreenshotUrl: '',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: adCalendarDate(),
   });
 
   const [proofForm, setProofForm] = useState<{
@@ -133,17 +140,17 @@ export default function SellerAdRequests() {
     paymentNote: '',
   });
 
-  const fetchData = useCallback(async (isManualRefresh = false) => {
+  const fetchData = useCallback(async (isManualRefresh = false, quiet = false) => {
     try {
       if (isManualRefresh) setRefreshing(true);
-      else setLoading(true);
+      else if (!quiet) setLoading(true);
 
       const [adsRes, availRes] = await Promise.all([
         getMyAdRequests(),
         getAdAvailability(form.startDate, form.durationDays),
       ]);
       if (adsRes.success) setAdRequests(adsRes.data);
-      if (availRes.success) setAvailability(availRes.data);
+      if (availRes.success) setAvailability({ ...availRes.data, activeAds: availRes.data.slotsBookedInRange, slotsAvailable: availRes.data.slotsAvailableInRange });
 
       if (isManualRefresh) {
         showToast('Advertisements & slot capacity refreshed', 'success');
@@ -158,7 +165,22 @@ export default function SellerAdRequests() {
 
   useEffect(() => {
     fetchData();
+    const timer = window.setInterval(() => { void fetchData(false, true); }, 30000);
+    return () => clearInterval(timer);
   }, [fetchData]);
+
+  const paymentDetails = useMemo(() => ({ name: onlineAd?.sellerName || onlineAd?.shopName || "",
+    email: onlineAd?.sellerEmail || "", phone: onlineAd?.sellerPhone || "" }), [onlineAd]);
+  const onOnlineSuccess = useCallback(() => {
+    setOnlineAd(null);
+    showToast('Payment received. Your ad is awaiting admin activation.', 'success');
+    void fetchData(false, true);
+  }, [fetchData, showToast]);
+  const onOnlineFailure = useCallback((message: string) => {
+    setOnlineAd(null);
+    showToast(message, 'error');
+    void fetchData(false, true);
+  }, [fetchData, showToast]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isPaymentProof = false) => {
     const file = e.target.files?.[0];
@@ -249,6 +271,10 @@ export default function SellerAdRequests() {
 
   const handleProofSubmit = async () => {
     if (!proofForm.adId) return;
+    if (!proofForm.paymentReference.trim() && !proofForm.paymentScreenshotUrl) {
+      showToast('Enter a reference number or upload payment proof.', 'error'); return;
+    }
+    setPaymentUploading(true);
     try {
       const res = await submitPaymentProof(proofForm.adId, {
         paymentMethod: proofForm.paymentMethod,
@@ -269,7 +295,7 @@ export default function SellerAdRequests() {
       }
     } catch {
       showToast('Failed to submit payment proof', 'error');
-    }
+    } finally { setPaymentUploading(false); }
   };
 
   // Filtered Ad Campaigns
@@ -441,6 +467,23 @@ export default function SellerAdRequests() {
                 </SellerFormField>
               </div>
 
+              <SellerFormField label="Button Text">
+                <input value={form.ctaText} maxLength={80} onChange={(e) => setForm({ ...form, ctaText: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm min-h-[44px]" />
+              </SellerFormField>
+              <SellerFormField label="Advertisement Destination">
+                <input value={form.ctaLink} maxLength={2048} onChange={(e) => setForm({ ...form, ctaLink: e.target.value })}
+                  placeholder="Leave empty to open your store"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm min-h-[44px]" />
+                <p className="text-xs text-slate-500 mt-1">Use a site path such as /category/bakery-cakes or a full https:// URL.</p>
+              </SellerFormField>
+              <div className="md:col-span-2">
+                <SellerFormField label="Description">
+                  <textarea value={form.description} maxLength={2000} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm" rows={3} />
+                </SellerFormField>
+              </div>
+
               <div>
                 <SellerFormField label="Duration (Days)">
                   <div className="flex flex-wrap gap-2">
@@ -473,7 +516,7 @@ export default function SellerAdRequests() {
                   <input
                     type="date"
                     value={form.startDate}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={adCalendarDate()}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
                     className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[44px]"
                   />
@@ -518,6 +561,10 @@ export default function SellerAdRequests() {
               >
                 <option value="All">All Statuses</option>
                 <option value="Live">Live</option>
+                <option value="Scheduled">Scheduled</option>
+                <option value="PaymentVerified">Paid / Awaiting Activation</option>
+                <option value="Paused">Paused</option>
+                <option value="Removed">Removed</option>
                 <option value="Pending">Pending Review</option>
                 <option value="Approved">Approved / Ready to Pay</option>
                 <option value="PaymentPending">Payment Under Verification</option>
@@ -591,10 +638,20 @@ export default function SellerAdRequests() {
                         <span>Cost: <strong className="text-purple-700">₹{ad.adPrice || ad.requestedPrice}</strong></span>
                       </div>
                     </div>
+                    {ad.startDate && ad.endDate && <p className="text-xs text-slate-600">
+                      {adCalendarDate(ad.startDate)} to {adCalendarDate(ad.endDate)} (India time)
+                    </p>}
+                    {ad.adminNote && <p className="text-xs text-slate-600 whitespace-pre-wrap">Admin: {ad.adminNote}</p>}
+                    {ad.status === 'PaymentVerified' && <p className="text-xs text-emerald-700">Payment received. Awaiting admin activation.</p>}
                   </div>
 
                   {/* Actions Footer */}
                   <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+                    {ad.status === 'Approved' && ad.paymentStatus !== 'Paid' && (
+                      <SellerButton variant="primary" size="sm" onClick={() => setOnlineAd(ad)} className="min-h-[40px]">
+                        Pay Online
+                      </SellerButton>
+                    )}
                     {ad.status === 'Approved' && (
                       <SellerButton
                         variant="primary"
@@ -622,6 +679,9 @@ export default function SellerAdRequests() {
           )}
         </div>
       )}
+
+      {onlineAd && <RazorpayCheckout orderId={onlineAd._id} amount={onlineAd.adPrice || onlineAd.requestedPrice || 0}
+        type="AdRequest" customerDetails={paymentDetails} onSuccess={onOnlineSuccess} onFailure={onOnlineFailure} />}
 
       {/* Cancel Ad Modal */}
       <SellerModal
@@ -678,7 +738,6 @@ export default function SellerAdRequests() {
             >
               <option value="UPI">UPI Transfer</option>
               <option value="Bank Transfer">NEFT / RTGS</option>
-              <option value="Razorpay">Online Gateway</option>
             </select>
           </SellerFormField>
 

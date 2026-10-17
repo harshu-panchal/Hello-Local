@@ -6,6 +6,7 @@ import {
 } from "../../../services/otpService";
 import { generateToken } from "../../../services/jwtService";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import { createVerifiedSignup } from '../../../services/signupService';
 
 /**
  * Send OTP to seller mobile number
@@ -113,7 +114,7 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Generate JWT token
-  const token = generateToken(seller._id.toString(), "Seller");
+  const token = generateToken(seller._id.toString(), "Seller", undefined, (seller as any).authVersion || 0);
 
   return res.status(200).json({
     success: true,
@@ -242,7 +243,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       : undefined;
 
   // Create new seller with GeoJSON location (password not required during signup)
-  const seller = await Seller.create({
+  const seller = await createVerifiedSignup(mobile, 'Seller', req.body.registrationToken, () => Seller.create({
     sellerName,
     mobile,
     email,
@@ -274,10 +275,10 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     ...(req.body.accountNumber && { accountNumber: req.body.accountNumber }),
     ...(req.body.ifsc && { ifsc: req.body.ifsc }),
     ...(req.body.branch && { branch: req.body.branch }),
-  });
+  }));
 
   // Generate token
-  const token = generateToken(seller._id.toString(), "Seller");
+  const token = generateToken(seller._id.toString(), "Seller", undefined, (seller as any).authVersion || 0);
 
   return res.status(201).json({
     success: true,

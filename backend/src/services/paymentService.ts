@@ -1,9 +1,11 @@
+import { queueOrderEffect, runOrderEffects } from "./orderEffectService";
 import Payment from '../models/Payment';
 import Order from '../models/Order';
 import Refund from '../models/Refund';
 import Settlement from '../models/Settlement';
 import mongoose from 'mongoose';
 import SellerAdRequest from '../models/SellerAdRequest';
+import { notifyAd, withAdTransaction } from './adLifecycleService';
 import { sendNotificationToUser } from './firebaseAdmin';
 import {
     assertGatewayPayment,
@@ -570,7 +572,7 @@ async function captureOrderPayment(
             razorpayOrderId,
             razorpayPaymentId,
             razorpaySignature,
-            expectedAmount: order.total,
+            expectedAmount: order.originalTotal ?? order.total,
             expectedRazorpayOrderId: order.razorpayOrderId,
             paymentFetcher: options?.paymentFetcher,
         });
@@ -609,7 +611,7 @@ async function captureOrderPayment(
         razorpayOrderId,
         razorpayPaymentId,
         razorpaySignature,
-        expectedAmount: order.total,
+        expectedAmount: order.originalTotal ?? order.total,
         expectedRazorpayOrderId: order.razorpayOrderId,
         paymentFetcher: options?.paymentFetcher,
     });
@@ -710,6 +712,9 @@ async function captureOrderPayment(
             };
         }
 
+        if (["Cancelled", "Rejected", "Returned"].includes(updated.status)) {
+            await queueOrderEffect(updated, "Refund", `${id}:cancel:remaining`, session, undefined, "Payment captured after cancellation");
+        }
         await session.commitTransaction();
         console.log(`capturePayment: Order ${id} marked Paid (${assertion.amount} ${assertion.currency}).`);
     } catch (err) {
@@ -775,11 +780,14 @@ async function captureAdRequestPayment(
     razorpayOrderId: string,
     razorpayPaymentId: string,
     razorpaySignature: string,
-    options?: { paymentFetcher?: PaymentFetcher; refundProcessor?: RefundProcessor }
+    options?: { paymentFetcher?: PaymentFetcher; refundProcessor?: RefundProcessor; webhookVerified?: boolean }
 ) {
     const adReq = await SellerAdRequest.findById(id);
     if (!adReq) throw new PaymentVerificationError('Ad Request not found', 404);
 
+    const assertAdPayment = (params: any) => options?.webhookVerified
+        ? assertGatewayWebhookPayment(params)
+        : assertGatewayPayment(params);
     const due = adReq.adPrice || adReq.requestedPrice || 0;
     if (!due || due <= 0) {
         throw new PaymentVerificationError('This ad request has no price set yet.');
@@ -800,7 +808,7 @@ async function captureAdRequestPayment(
         }
 
         // Distinct captured payment for already-paid ad request!
-        const assertion = await assertGatewayPayment({
+        const assertion = await assertAdPayment({
             razorpayOrderId,
             razorpayPaymentId,
             razorpaySignature,
@@ -838,7 +846,7 @@ async function captureAdRequestPayment(
         };
     }
 
-    const assertion = await assertGatewayPayment({
+    const assertion = await assertAdPayment({
         razorpayOrderId,
         razorpayPaymentId,
         razorpaySignature,
@@ -850,12 +858,19 @@ async function captureAdRequestPayment(
     const feeFields = computeGatewayFeeFields(assertion.amount, assertion.fee, assertion.tax);
     const sellerId = adReq.sellerId.toString();
 
-    let session: mongoose.ClientSession | null = null;
-    try {
-        session = await mongoose.startSession();
-        session.startTransaction();
-
-        await Payment.create(
+    const outcome = await withAdTransaction(async session => {
+        const fresh = await SellerAdRequest.findById(id, null, { session });
+        if (!fresh) throw new PaymentVerificationError('Ad Request not found', 404);
+        if (fresh.paymentStatus === 'Paid') return { alreadyPaid: true };
+        if ((fresh.adPrice || fresh.requestedPrice || 0) !== due || fresh.razorpayOrderId !== razorpayOrderId) {
+            throw new PaymentVerificationError('Advertisement payment intent changed. Please refresh and try again.');
+        }
+        const pendingPayment = await Payment.findOne({ adRequest: id, razorpayOrderId, status: 'Pending', isDuplicate: { $ne: true } }, null, { session });
+        if (pendingPayment) {
+            Object.assign(pendingPayment, { razorpayPaymentId: assertion.razorpayPaymentId, razorpaySignature,
+                amount: assertion.amount, currency: assertion.currency, ...feeFields, status: 'Completed', paidAt: new Date() });
+            await pendingPayment.save({ session });
+        } else await Payment.create(
             [
                 {
                     adRequest: id,
@@ -876,23 +891,24 @@ async function captureAdRequestPayment(
             { session }
         );
 
-        adReq.paymentStatus = 'Paid';
-        adReq.paymentReference = assertion.razorpayPaymentId;
-        adReq.paidAt = new Date();
-        if (adReq.status === 'Approved' || adReq.status === 'Pending') {
-            adReq.status = 'PaymentVerified';
+        fresh.paymentStatus = 'Paid';
+        fresh.paymentReference = assertion.razorpayPaymentId;
+        fresh.paidAt = new Date();
+        fresh.paymentMethod = 'Razorpay';
+        if (!fresh.shopAdId) {
+            fresh.status = 'PaymentVerified';
         }
-        await adReq.save({ session });
+        await fresh.save({ session });
 
-        await session.commitTransaction();
-    } catch (err) {
-        if (session?.inTransaction()) {
-            try { await session.abortTransaction(); } catch { /* ignore */ }
-        }
-        throw err;
-    } finally {
-        session?.endSession();
-    }
+        return { alreadyPaid: false };
+    });
+    // Another browser callback or webhook captured the payment while this one waited.
+    if (outcome.alreadyPaid) return captureAdRequestPayment(id, razorpayOrderId, razorpayPaymentId, razorpaySignature, options);
+
+    await notifyAd({ recipientType: 'Admin', title: 'Advertisement Paid Online',
+        message: `Payment captured for advertisement "${adReq.shopName}". Review and activate it.`,
+        type: 'Payment', link: `/admin/shop-ads?tab=requests&requestId=${id}`,
+        actionLabel: 'Review Advertisement', priority: 'High', isRead: false });
 
     return {
         success: true,
@@ -909,7 +925,7 @@ export const processRefund = async (
     paymentId: string,
     amount?: number,
     reason?: string,
-    options?: { returnId?: string; idempotencyKey?: string }
+    options?: { returnId?: string; idempotencyKey?: string; gatewayClient?: ReturnType<typeof getRazorpayInstance> }
 ) => {
     try {
         const payment = await Payment.findById(paymentId);
@@ -918,6 +934,36 @@ export const processRefund = async (
 
         const alreadyRefunded = Math.round((payment.totalRefunded || payment.refundAmount || 0) * 100) / 100;
         const remaining = Math.max(0, Math.round((payment.amount - alreadyRefunded + Number.EPSILON) * 100) / 100);
+
+        const razorpay = options?.gatewayClient || getRazorpayInstance();
+        // Recover a gateway success whose local acknowledgement was interrupted.
+        // The SDK paginates refunds; scan all pages before issuing a retry.
+        let recoveredRefund: any;
+        let gatewayRefunded = 0;
+        if (options?.idempotencyKey) {
+            for (let skip = 0; ; skip += 100) {
+                const page = await razorpay.payments.fetchMultipleRefund(payment.razorpayPaymentId, { count: 100, skip });
+                for (const entry of page.items) {
+                    if (entry.status !== 'failed') gatewayRefunded += Number(entry.amount) / 100;
+                    if ((entry.notes as any)?.idempotencyKey === options.idempotencyKey && entry.status !== 'failed') recoveredRefund = entry;
+                }
+                if (page.items.length < 100) break;
+            }
+        }
+        if (recoveredRefund) {
+            const newTotal = Math.min(payment.amount, Math.round(Math.max(alreadyRefunded, gatewayRefunded) * 100) / 100);
+            const isFully = newTotal >= payment.amount - 0.01;
+            payment.refundAmount = newTotal;
+            payment.totalRefunded = newTotal;
+            payment.refundedAt = new Date();
+            payment.refundReason = reason;
+            payment.status = isFully ? 'Refunded' : 'PartiallyRefunded';
+            await payment.save();
+            return { success: true, message: 'Existing gateway refund recovered', data: {
+                refundId: recoveredRefund.id, amount: Number(recoveredRefund.amount) / 100,
+                totalRefunded: newTotal, remainingRefundable: Math.max(0, payment.amount - newTotal), isFullyRefunded: isFully,
+            } };
+        }
 
         if (payment.status === 'Refunded' || remaining <= 0.009) {
             return {
@@ -942,8 +988,7 @@ export const processRefund = async (
 
         const toRefund = Math.min(refundAmount, remaining);
 
-        const razorpay = getRazorpayInstance();
-        const refund = await razorpay.payments.refund(payment.razorpayPaymentId, {
+        const refund = recoveredRefund || await razorpay.payments.refund(payment.razorpayPaymentId, {
             amount: Math.round(toRefund * 100),
             notes: {
                 reason: reason || 'Order cancelled',
@@ -954,7 +999,7 @@ export const processRefund = async (
 
         const newTotal = Math.min(
             payment.amount,
-            Math.round((alreadyRefunded + toRefund + Number.EPSILON) * 100) / 100
+            Math.round((recoveredRefund ? Math.max(alreadyRefunded, gatewayRefunded) : Math.max(alreadyRefunded, gatewayRefunded) + toRefund) * 100) / 100
         );
         const isFully = newTotal >= payment.amount - 0.01;
 
@@ -1083,6 +1128,11 @@ export const handlePaymentCaptured = async (
         // ── 2. Check if primary Payment record already exists for this intent ────────
         const payment = await Payment.findOne({ razorpayOrderId, isDuplicate: { $ne: true } });
         if (payment) {
+            if (payment.adRequest && payment.status !== 'Completed') {
+                await captureAdRequestPayment(payment.adRequest.toString(), razorpayOrderId, razorpayPaymentId,
+                    'WEBHOOK_VERIFIED', { ...options, webhookVerified: true });
+                return;
+            }
             if (payment.status === 'Completed') {
                 if (payment.razorpayPaymentId && payment.razorpayPaymentId !== razorpayPaymentId) {
                     console.log(
@@ -1094,7 +1144,7 @@ export const handlePaymentCaptured = async (
                             const assertion = await assertGatewayWebhookPayment({
                                 razorpayOrderId,
                                 razorpayPaymentId,
-                                expectedAmount: order.total,
+                                expectedAmount: order.originalTotal ?? order.total,
                                 expectedRazorpayOrderId: order.razorpayOrderId,
                                 expectedCurrency: 'INR',
                                 paymentFetcher: options?.paymentFetcher,
@@ -1189,6 +1239,11 @@ export const handlePaymentCaptured = async (
                 { new: true }
             );
 
+            if (order && ["Cancelled", "Rejected", "Returned"].includes(order.status)) {
+                await queueOrderEffect(order, "Refund", `${order._id}:cancel:remaining`, undefined, undefined, "Payment captured after cancellation");
+                await runOrderEffects(String(order._id));
+                return;
+            }
             if (order) {
                 try {
                     const { createPendingCommissions } = await import('./commissionService');
@@ -1222,38 +1277,9 @@ export const handlePaymentCaptured = async (
         if (!order) {
             const adReq = await SellerAdRequest.findOne({ razorpayOrderId });
             if (adReq) {
-                if (adReq.paymentStatus === 'Paid') {
-                    const primaryAdPayment = await Payment.findOne({
-                        adRequest: adReq._id,
-                        isDuplicate: { $ne: true },
-                    });
-                    if (!primaryAdPayment || primaryAdPayment.razorpayPaymentId !== razorpayPaymentId) {
-                        console.log(`[Webhook payment.captured] AdRequest ${adReq._id} already Paid. Handling ${razorpayPaymentId} as duplicate.`);
-                        const due = adReq.adPrice || adReq.requestedPrice || 0;
-                        const assertion = await assertGatewayWebhookPayment({
-                            razorpayOrderId,
-                            razorpayPaymentId,
-                            expectedAmount: due,
-                            expectedRazorpayOrderId: adReq.razorpayOrderId,
-                            expectedCurrency: 'INR',
-                            paymentFetcher: options?.paymentFetcher,
-                        });
-                        await handleDuplicatePayment({
-                            payableType: 'SellerAdRequest',
-                            adRequestId: adReq._id.toString(),
-                            sellerId: adReq.sellerId.toString(),
-                            razorpayOrderId,
-                            razorpayPaymentId,
-                            razorpaySignature: 'WEBHOOK_VERIFIED',
-                            amount: assertion.amount,
-                            currency: assertion.currency,
-                            fee: assertion.fee,
-                            tax: assertion.tax,
-                            refundProcessor: options?.refundProcessor,
-                        });
-                        return;
-                    }
-                }
+                await captureAdRequestPayment(adReq._id.toString(), razorpayOrderId, razorpayPaymentId,
+                    'WEBHOOK_VERIFIED', { ...options, webhookVerified: true });
+                return;
             }
             console.warn(
                 `[Webhook payment.captured] No Order found matching razorpayOrderId: ${razorpayOrderId}, paymentId: ${razorpayPaymentId}`
@@ -1267,7 +1293,7 @@ export const handlePaymentCaptured = async (
                 const assertion = await assertGatewayWebhookPayment({
                     razorpayOrderId,
                     razorpayPaymentId,
-                    expectedAmount: order.total,
+                    expectedAmount: order.originalTotal ?? order.total,
                     expectedRazorpayOrderId: order.razorpayOrderId,
                     expectedCurrency: 'INR',
                     paymentFetcher: options?.paymentFetcher,
@@ -1295,7 +1321,7 @@ export const handlePaymentCaptured = async (
         const assertion = await assertGatewayWebhookPayment({
             razorpayOrderId,
             razorpayPaymentId,
-            expectedAmount: order.total,
+            expectedAmount: order.originalTotal ?? order.total,
             expectedRazorpayOrderId: order.razorpayOrderId,
             expectedCurrency: 'INR',
             paymentFetcher: options?.paymentFetcher,
@@ -1399,6 +1425,9 @@ export const handlePaymentCaptured = async (
                 return;
             }
 
+            if (["Cancelled", "Rejected", "Returned"].includes(updated.status)) {
+                await queueOrderEffect(updated, "Refund", `${orderId}:cancel:remaining`, session, undefined, "Payment captured after cancellation");
+            }
             await session.commitTransaction();
             captureSuccess = true;
             console.log(`[Webhook payment.captured] Order ${orderId} successfully recovered and marked Paid (${assertion.amount} ${assertion.currency}).`);
@@ -1411,6 +1440,10 @@ export const handlePaymentCaptured = async (
             session?.endSession();
         }
 
+        if (captureSuccess && ["Cancelled", "Rejected", "Returned"].includes((await Order.findById(orderId))?.status || "")) {
+            await runOrderEffects(orderId);
+            return;
+        }
         if (captureSuccess) {
             sendNotificationToUser(customerId, 'Customer', {
                 title: 'Order Placed Successfully',

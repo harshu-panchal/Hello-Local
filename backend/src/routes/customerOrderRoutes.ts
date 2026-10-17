@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createOrder,
+  quoteOrder,
   getMyOrders,
   getOrderById,
   cancelOrder,
@@ -14,6 +15,7 @@ const router = Router();
 // All customer order routes require authentication
 router.use(authenticate);
 
+router.post("/quote", requireUserType("Customer", "Admin"), quoteOrder);
 router.post("/", requireUserType("Customer", "Admin"), createOrder);
 router.get("/", requireUserType("Customer", "Admin"), getMyOrders);
 router.get("/:id", requireUserType("Customer", "Admin"), getOrderById);

@@ -117,10 +117,11 @@ test("H-16: login OTP has an attempt cap and does not log secrets", () => {
 
 test("H-16: delivery OTP is attempt-capped and rotated after use", () => {
   const c = code("services/deliveryOtpService.ts");
-  assert.match(c, /MAX_DELIVERY_OTP_ATTEMPTS/, "no delivery OTP attempt cap");
-  assert.match(c, /deliveryOtpAttempts/, "attempts are not tracked");
-  assert.match(c, /Customer\.updateOne/, "customer OTP is not rotated after delivery");
-  assert.match(c, /crypto\.randomInt/, "rotation does not use a secure generator");
+  assert.match(c, /deliveryOtpAttempts.*>= 5/);
+  assert.match(c, /options.refresh.*deliveryOtpAttempts = 0/);
+  assert.match(c, /order!\.deliveryOtp = crypto.randomInt/);
+  assert.match(c, /status !== "Out for Delivery"/);
+  assert.match(c, /timingSafeEqual/);
 });
 
 // ===========================================================================

@@ -280,24 +280,24 @@ export const getSellerLocationsForOrder = asyncHandler(
     }
 
     // Get all unique seller IDs from order items
-    const orderItems = await OrderItem.find({ order: orderId });
+    const orderItems = await OrderItem.find({ order: orderId, status: { $ne: "Cancelled" } });
     const sellerIds = [...new Set(orderItems.map((item) => item.seller.toString()))];
 
     // Get seller details including locations
     const sellers = await Seller.find({ _id: { $in: sellerIds } }).select(
-      "storeName address city latitude longitude"
+      "storeName address city latitude longitude location"
     );
 
     // Format seller locations
     const sellerLocations = sellers
-      .filter((seller) => seller.latitude && seller.longitude) // Only include sellers with location data
+      .filter((seller) => seller.location?.coordinates?.length === 2 || (seller.latitude && seller.longitude))
       .map((seller) => ({
         sellerId: seller._id.toString(),
         storeName: seller.storeName,
         address: seller.address,
         city: seller.city,
-        latitude: parseFloat(seller.latitude || "0"),
-        longitude: parseFloat(seller.longitude || "0"),
+        latitude: Number(seller.location?.coordinates?.[1] ?? seller.latitude),
+        longitude: Number(seller.location?.coordinates?.[0] ?? seller.longitude),
       }));
 
     return res.status(200).json({

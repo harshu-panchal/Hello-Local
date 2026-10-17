@@ -19,6 +19,7 @@ export interface IOrderItem extends Document {
   variation?: string;
   variantTitle?: string;
 
+  fulfillmentStatus?: "Received" | "Accepted" | "Processed" | "Shipped" | "Cancelled";
   // Status
   status: "Pending" | "Shipped" | "Delivered" | "Cancelled" | "Returned";
   subtotal: number;
@@ -94,6 +95,7 @@ const OrderItemSchema = new Schema<IOrderItem>(
       trim: true,
     },
 
+    fulfillmentStatus: { type: String, enum: ["Received", "Accepted", "Processed", "Shipped", "Cancelled"] },
     // Status
     status: {
       type: String,

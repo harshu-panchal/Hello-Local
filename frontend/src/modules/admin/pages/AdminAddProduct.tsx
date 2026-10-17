@@ -1,3 +1,4 @@
+import { getAllSellers } from "../../../services/api/sellerService";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import SearchableSelect from "../../../components/ui/SearchableSelect";
@@ -38,6 +39,10 @@ export default function AdminAddProduct() {
   const mainFileInputRef = useRef<HTMLInputElement>(null);
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
 
+  const [sellers, setSellers] = useState<any[]>([]);
+  const [sellerId, setSellerId] = useState("");
+  const [expectedVersion, setExpectedVersion] = useState<number | undefined>();
+  useEffect(() => { void getAllSellers({ status: "Approved" }).then(result => { if (result.success) setSellers(result.data || []); }).catch(() => showToast("Unable to load sellers. Please reload.", "error")); }, []);
   const [formData, setFormData] = useState({
     productName: "",
     headerCategory: "",
@@ -154,6 +159,8 @@ export default function AdminAddProduct() {
           const response = await getProductById(id);
           if (response.success && response.data) {
             const product = response.data;
+            setSellerId(String((product as any).seller?._id || (product as any).seller || ""));
+            setExpectedVersion((product as any).__v);
             setFormData({
               productName: product.productName,
               headerCategory:
@@ -469,6 +476,8 @@ export default function AdminAddProduct() {
         : [];
 
       const productData = {
+        seller: sellerId,
+        expectedVersion,
         productName: formData.productName,
         headerCategoryId: formData.headerCategory || undefined,
         category: formData.category,
@@ -712,6 +721,14 @@ export default function AdminAddProduct() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-white rounded-xl p-5 border border-neutral-200">
+          <label htmlFor="product-seller" className="block text-sm font-semibold mb-2">Seller / pickup store</label>
+          <select id="product-seller" required disabled={Boolean(id)} value={sellerId} onChange={event => setSellerId(event.target.value)} className="w-full border rounded-lg p-3">
+            <option value="">Choose the seller fulfilling this product</option>
+            {sellers.map(seller => <option key={seller._id} value={seller._id}>{seller.storeName || seller.sellerName} - {seller.city || seller.address}</option>)}
+          </select>
+          <p className="text-xs text-neutral-500 mt-2">Delivery availability and pickup use this store's saved location.</p>
+        </div>
         {/* Section 1: Product General Details */}
         <div className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden">
           <div className="bg-rose-700 text-white px-5 py-3.5 flex items-center justify-between">

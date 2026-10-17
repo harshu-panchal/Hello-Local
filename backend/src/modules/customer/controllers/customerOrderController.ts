@@ -1,375 +1,85 @@
 import { Request, Response } from "express";
 import Order from "../../../models/Order";
-import Product from "../../../models/Product";
 import OrderItem from "../../../models/OrderItem";
 import Customer from "../../../models/Customer";
-import Seller from "../../../models/Seller";
 import mongoose from "mongoose";
-import { calculateDistance } from "../../../utils/locationHelper";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { generateDeliveryOtp } from "../../../services/deliveryOtpService";
 import { Server as SocketIOServer } from "socket.io";
 import { getOrderItemCommissionRate } from "../../../services/commissionService";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
-import {
-    findVariation,
-    normalizeSelector,
-    variationLabel,
-    effectiveUnitPrice,
-} from "../../../utils/productVariation";
-import {
-    priceOrder,
-    consumeCoupon,
-    releaseCoupon,
-    PricingError,
-} from "../../../services/orderPricingService";
-import {
-    reserveMany,
-    releaseMany,
-    reservationsFromOrderItems,
-    StockError,
-    type StockReservation,
-} from "../../../services/stockService";
-import { validateTransition } from "../../../services/orderStatusService";
+import crypto from "crypto";
+import { variationLabel } from "../../../utils/productVariation";
+import { consumeCoupon } from "../../../services/orderPricingService";
+import { reserveMany } from "../../../services/stockService";
+import { checkoutIdentity, prepareCheckout } from "../../../services/checkoutService";
+import { orderError, withOrderTransaction } from "../../../services/orderTransactionService";
+import { cancelOrderLifecycle } from "../../../services/orderLifecycleService";
+import { runOrderEffects } from "../../../services/orderEffectService";
 
 // Create a new order
-export const createOrder = async (req: Request, res: Response) => {
-    const reservations: StockReservation[] = [];
-    let orderCreated = false;
-
-    try {
-        const { items, address, paymentMethod, couponCode, tipAmount, gstin } = req.body;
-        const userId = req.user?.userId;
-
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Authentication required" });
-        }
-        if (!Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ success: false, message: "Your cart is empty" });
-        }
-        if (!address || typeof address !== "object") {
-            return res.status(400).json({ success: false, message: "A delivery address is required" });
-        }
-
-        // ── Customer ────────────────────────────────────────────────────────
-        const customer = await Customer.findById(userId);
-        if (!customer) {
-            return res.status(404).json({ success: false, message: "Customer not found" });
-        }
-        if (customer.status !== "Active") {
-            return res.status(403).json({
-                success: false,
-                message: "This account is not active and cannot place orders.",
-            });
-        }
-
-        // ── Delivery coordinates ────────────────────────────────────────────
-        const toNum = (v: unknown) =>
-            v === null || v === undefined ? NaN : typeof v === "number" ? v : parseFloat(String(v));
-        const deliveryLat = toNum(address.latitude);
-        const deliveryLng = toNum(address.longitude);
-
-        if (!Number.isFinite(deliveryLat) || !Number.isFinite(deliveryLng)) {
-            return res.status(400).json({
-                success: false,
-                message: "Delivery address location (latitude/longitude) is required",
-            });
-        }
-        if (deliveryLat < -90 || deliveryLat > 90 || deliveryLng < -180 || deliveryLng > 180) {
-            return res.status(400).json({ success: false, message: "Invalid delivery address coordinates" });
-        }
-
-        // ── Business GSTIN validation (optional) ───────────────────────────
-        let validatedGstin: string | undefined = undefined;
-        if (gstin && typeof gstin === "string") {
-            const cleanGstin = gstin.trim().toUpperCase();
-            if (cleanGstin.length > 0) {
-                const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-                if (!gstRegex.test(cleanGstin)) {
-                    return res.status(400).json({ success: false, message: "Invalid GSTIN format. Expected 15-character GST number." });
-                }
-                validatedGstin = cleanGstin;
-            }
-        }
-
-        // ── Resolve products and validate every line BEFORE touching stock ──
-        // Validation must complete first: the old flow decremented stock inside
-        // the loop and then ran the serviceability check, leaking stock and
-        // orphaning OrderItems whenever that check failed. (#H-01)
-        interface ResolvedLine {
-            product: any;
-            quantity: number;
-            selector: string | null;
-            variation: any | null;
-            unitPrice: number;
-        }
-        const resolved: ResolvedLine[] = [];
-        const sellerIds = new Set<string>();
-
-        for (const item of items) {
-            const productId = item?.product?.id || item?.product?._id || item?.productId;
-            if (!productId || !mongoose.Types.ObjectId.isValid(String(productId))) {
-                return res.status(400).json({ success: false, message: "Invalid product in cart" });
-            }
-
-            const quantity = Number(item?.quantity);
-            if (!Number.isInteger(quantity) || quantity <= 0) {
-                return res.status(400).json({ success: false, message: "Invalid item quantity" });
-            }
-
-            const product = await Product.findById(productId);
-            if (!product) {
-                return res.status(400).json({ success: false, message: `Product not found: ${productId}` });
-            }
-            if (product.status !== "Active" || !product.publish) {
-                return res.status(400).json({
-                    success: false,
-                    message: `"${product.productName}" is no longer available`,
-                });
-            }
-            if (product.totalAllowedQuantity && quantity > product.totalAllowedQuantity) {
-                return res.status(400).json({
-                    success: false,
-                    message: `You can order at most ${product.totalAllowedQuantity} of "${product.productName}"`,
-                });
-            }
-
-            const selector = normalizeSelector(item.variant ?? item.variation ?? null);
-            const hasVariations = Array.isArray(product.variations) && product.variations.length > 0;
-            const variation = hasVariations ? findVariation(product.variations as any, selector) : null;
-
-            if (hasVariations && !variation) {
-                return res.status(400).json({
-                    success: false,
-                    message: selector
-                        ? `"${selector}" is not a valid option for "${product.productName}"`
-                        : `Please choose an option for "${product.productName}"`,
-                });
-            }
-
-            // Price is resolved from the database, never from the request. (#H-03)
-            const unitPrice = effectiveUnitPrice(product as any, variation);
-            if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: `"${product.productName}" is not priced correctly. Please contact support.`,
-                });
-            }
-
-            resolved.push({ product, quantity, selector, variation, unitPrice });
-            if (product.seller) sellerIds.add(product.seller.toString());
-        }
-
-        // ── Every seller must be approved AND able to reach this address ────
-        // The old check silently skipped sellers the query did not return, so a
-        // Pending or Rejected seller passed straight through. (#H-14)
-        const sellers = await Seller.find({ _id: { $in: [...sellerIds].map((s) => new mongoose.Types.ObjectId(s)) } });
-        const sellerById = new Map(sellers.map((s) => [String(s._id), s]));
-
-        for (const sellerId of sellerIds) {
-            const seller = sellerById.get(sellerId);
-            if (!seller) {
-                return res.status(400).json({ success: false, message: "A seller in your cart no longer exists" });
-            }
-            if (seller.status !== "Approved") {
-                return res.status(403).json({
-                    success: false,
-                    message: `${seller.storeName} is not currently accepting orders.`,
-                });
-            }
-
-            let sLat: number | undefined;
-            let sLng: number | undefined;
-            if (seller.location?.coordinates?.length === 2) {
-                sLng = seller.location.coordinates[0];
-                sLat = seller.location.coordinates[1];
-            } else if (seller.latitude && seller.longitude) {
-                sLat = parseFloat(seller.latitude);
-                sLng = parseFloat(seller.longitude);
-            }
-
-            if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) {
-                return res.status(403).json({
-                    success: false,
-                    message: `${seller.storeName} has not set a shop location, so it cannot deliver yet.`,
-                });
-            }
-
-            const distance = calculateDistance(deliveryLat, deliveryLng, sLat as number, sLng as number);
-            const radius = seller.serviceRadiusKm || 10;
-            if (distance > radius) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        `Your address is ${distance.toFixed(2)} km from ${seller.storeName}, ` +
-                        `which delivers within ${radius} km.`,
-                });
-            }
-        }
-
-        // ── Server-authoritative money ──────────────────────────────────────
-        const { pricing, lines } = await priceOrder({
-            lines: resolved.map((r) => ({
-                productId: String(r.product._id),
-                sellerId: String(r.product.seller),
-                unitPrice: r.unitPrice,
-                quantity: r.quantity,
-                taxRefId: r.product.tax,
-            })),
-            customerId: userId,
-            deliveryLat,
-            deliveryLng,
-            couponCode,
-            tipAmount,
-        });
-
-        // ── Reserve stock (all-or-nothing) ──────────────────────────────────
-        const taken = await reserveMany(
-            resolved.map((r) => ({
-                productId: String(r.product._id),
-                quantity: r.quantity,
-                variation: r.selector,
-            })),
-        );
-        reservations.push(...taken);
-
-        // ── Persist ─────────────────────────────────────────────────────────
-        const resolvedPaymentMethod = paymentMethod || "COD";
-        const isOnlinePayment = resolvedPaymentMethod !== "COD";
-
-        const newOrder = new Order({
-            customer: new mongoose.Types.ObjectId(userId),
-            customerName: customer.name,
-            customerEmail: customer.email,
-            customerPhone: customer.phone,
-            gstin: validatedGstin,
-            deliveryAddress: {
-                address: address.address || address.street || "N/A",
-                city: address.city || "N/A",
-                state: address.state || "",
-                pincode: address.pincode || "000000",
-                landmark: address.landmark || "",
-                latitude: deliveryLat,
-                longitude: deliveryLng,
-            },
-            paymentMethod: resolvedPaymentMethod,
-            paymentStatus: "Pending",
-            status: isOnlinePayment ? "Pending" : "Received",
-            subtotal: pricing.subtotal,
-            tax: pricing.tax,
-            shipping: pricing.shipping,
-            platformFee: pricing.platformFee,
-            discount: pricing.discount,
-            couponCode: pricing.couponCode,
-            couponFunding: pricing.couponFunding || "PLATFORM",
-            tipAmount: pricing.tip,
-            total: pricing.total,
-            deliveryDistanceKm: pricing.deliveryDistanceKm,
-            isFreeDelivery: pricing.isFreeDelivery || false,
-            freeDeliverySubsidy: pricing.freeDeliverySubsidy || 0,
-            items: [],
-        });
-
-        const orderItemIds: mongoose.Types.ObjectId[] = [];
-        for (let i = 0; i < resolved.length; i++) {
-            const r = resolved[i];
-            const line = lines[i];
-            const commRate = await getOrderItemCommissionRate(
-                String(r.product._id),
-                String(r.product.seller),
-            );
-
-            const isSellerFunded = pricing.couponFunding === "SELLER";
-            const commBase = isSellerFunded
-                ? Math.max(0, Math.round((line.lineTotal - (line.discountAmount || 0)) * 100) / 100)
-                : line.lineTotal;
-
-            const orderItem = await OrderItem.create({
-                order: newOrder._id,
-                product: r.product._id,
-                seller: r.product.seller,
-                productName: r.product.productName,
-                productImage: r.product.mainImage,
-                sku: r.product.sku,
-                unitPrice: line.unitPrice,
-                quantity: line.quantity,
-                total: line.lineTotal,
-                subtotal: line.lineTotal,
-                discountAmount: line.discountAmount || 0,
-                taxRate: line.taxRate,
-                taxAmount: line.taxAmount,
-                commissionRate: commRate,
-                commissionAmount: Math.round(((commBase * commRate) / 100) * 100) / 100,
-                variation: r.selector || undefined,
-                variantTitle: variationLabel(r.variation),
-                status: "Pending",
-            });
-            orderItemIds.push(orderItem._id as mongoose.Types.ObjectId);
-        }
-
-        newOrder.items = orderItemIds;
-        await newOrder.save();
-        orderCreated = true;
-
-        // Count the coupon use only once the order exists. (#H-29)
-        await consumeCoupon(pricing.couponCode);
-
-        // ── Notifications (never block the response) ────────────────────────
-        if (!isOnlinePayment) {
-            try {
-                const io: SocketIOServer = req.app.get("io") as SocketIOServer;
-                if (io) {
-                    Order.findById(newOrder._id)
-                        .lean()
-                        .then((saved) => (saved ? notifySellersOfOrderUpdate(io, saved, "NEW_ORDER") : undefined))
-                        .catch((err) => console.error("Error notifying sellers (COD):", err));
-                }
-            } catch (err) {
-                console.error("Error setting up seller notification:", err);
-            }
-
-            sendNotificationToUser(userId, "Customer", {
-                title: "Order Placed Successfully",
-                body: `Your COD order #${newOrder.orderNumber} has been placed. The seller will confirm shortly.`,
-                data: {
-                    type: "ORDER_PLACED",
-                    orderId: String(newOrder._id),
-                    orderNumber: newOrder.orderNumber || "",
-                },
-            }).catch((err) => console.error("COD order push notification failed:", err));
-        }
-
-        return res.status(201).json({
-            success: true,
-            message: "Order placed successfully",
-            data: newOrder,
-            // Surface a rejected coupon so the UI can explain the difference
-            // rather than silently charging more than it displayed. (#C-11)
-            ...(pricing.couponRejectionReason
-                ? { warning: `Coupon not applied: ${pricing.couponRejectionReason}` }
-                : {}),
-        });
-    } catch (error: any) {
-        // Anything reserved before the failure goes back on the shelf. (#H-01)
-        if (!orderCreated && reservations.length > 0) {
-            await releaseMany(reservations);
-        }
-
-        console.error("Order creation error:", error?.message || error);
-
-        const statusCode =
-            error instanceof StockError || error instanceof PricingError
-                ? error.statusCode
-                : error?.statusCode || 500;
-
-        return res.status(statusCode).json({
-            success: false,
-            message:
-                statusCode === 500
-                    ? "We could not place your order. Please try again."
-                    : error.message,
-        });
+export const quoteOrder = async (req: Request, res: Response) => {
+  try {
+    if (typeof req.body.idempotencyKey === "string") {
+      const existing = await Order.findOne({ customer: req.user!.userId, checkoutKey: req.body.idempotencyKey });
+      if (existing && existing.checkoutHash === checkoutIdentity(req.body)) {
+        return res.json({ success: true, data: { total: existing.total, pricing: existing, replayed: true } });
+      }
     }
+    const quote = await prepareCheckout(req.user!.userId, req.body);
+    return res.json({ success: true, data: { total: quote.pricing.total, pricing: quote.pricing, warning: quote.pricing.couponRejectionReason } });
+  } catch (error: any) { return res.status(error.statusCode || 400).json({ success: false, message: error.message }); }
+};
+
+export const createOrder = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: "Authentication required" });
+    const checkoutKey = req.body.idempotencyKey || crypto.randomUUID();
+    if (typeof checkoutKey !== "string" || checkoutKey.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(checkoutKey)) return res.status(400).json({ success: false, message: "Invalid checkout key" });
+    const hash = checkoutIdentity(req.body);
+    const result = await withOrderTransaction(`checkout:${userId}`, async session => {
+      const existing = await Order.findOne({ customer: userId, checkoutKey }).session(session);
+      if (existing) {
+        if (existing.checkoutHash !== hash) orderError("Checkout changed. Start a new checkout attempt.", 409);
+        return { order: existing, replayed: true, warning: undefined };
+      }
+      const { customer, resolved, latitude, longitude, paymentMethod, gstin, pricing, lines } = await prepareCheckout(userId, req.body, session);
+      if (req.body.expectedTotal !== undefined && (!Number.isFinite(Number(req.body.expectedTotal)) || Math.abs(Number(req.body.expectedTotal) - pricing.total) > 0.009)) orderError("Checkout total changed. Please review the updated quote before placing your order.", 409);
+      await reserveMany(resolved.map(line => ({ productId: String(line.product._id), quantity: line.quantity, variation: line.selector })), session);
+      const order = new Order({ customer: userId, customerName: customer.name, customerEmail: customer.email, customerPhone: customer.phone,
+        deliveryAddress: { address: req.body.address.address || req.body.address.street || "N/A", city: req.body.address.city || "N/A",
+          state: req.body.address.state, pincode: req.body.address.pincode || "000000", landmark: req.body.address.landmark, latitude, longitude },
+        gstin: gstin || undefined, checkoutKey, checkoutHash: hash, originalTotal: pricing.total,
+        paymentMethod, paymentStatus: "Pending", status: paymentMethod === "COD" ? "Received" : "Pending",
+        subtotal: pricing.subtotal, tax: pricing.tax, shipping: pricing.shipping, platformFee: pricing.platformFee, discount: pricing.discount,
+        couponCode: pricing.couponCode, couponFunding: pricing.couponFunding, tipAmount: pricing.tip, total: pricing.total,
+        deliveryDistanceKm: pricing.deliveryDistanceKm, isFreeDelivery: pricing.isFreeDelivery, freeDeliverySubsidy: pricing.freeDeliverySubsidy,
+        deliveryOtp: crypto.randomInt(1000, 10000).toString(), deliveryOtpExpiresAt: new Date(Date.now() + 86400000), items: [] });
+      for (let i = 0; i < resolved.length; i++) {
+        const line = lines[i]; const selected = resolved[i];
+        const commissionRate = await getOrderItemCommissionRate(String(selected.product._id), String(selected.product.seller));
+        const base = pricing.couponFunding === "SELLER" ? Math.max(0, line.lineTotal - (line.discountAmount || 0)) : line.lineTotal;
+        const [item] = await OrderItem.create([{ order: order._id, product: selected.product._id, seller: selected.product.seller,
+          productName: selected.product.productName, productImage: selected.product.mainImage, sku: selected.product.sku,
+          unitPrice: line.unitPrice, quantity: line.quantity, total: line.lineTotal, subtotal: line.lineTotal, discountAmount: line.discountAmount,
+          taxRate: line.taxRate, taxAmount: line.taxAmount, commissionRate, commissionAmount: Math.round(base * commissionRate) / 100,
+          variation: selected.selector || undefined, variantTitle: variationLabel(selected.variation), status: "Pending", fulfillmentStatus: "Received" }], { session });
+        order.items.push(item._id as mongoose.Types.ObjectId);
+      }
+      await order.save({ session });
+      await consumeCoupon(pricing.couponCode, session);
+      return { order, replayed: false, warning: pricing.couponRejectionReason };
+    });
+    if (!result.replayed && result.order.paymentMethod === "COD") {
+      const io = req.app.get("io") as SocketIOServer;
+      if (io) void notifySellersOfOrderUpdate(io, result.order, "NEW_ORDER").catch(console.error);
+      void sendNotificationToUser(userId, "Customer", { title: "Order placed", body: `Your COD order #${result.order.orderNumber} has been placed.`, data: { type: "ORDER_PLACED", orderId: String(result.order._id) } }).catch(console.error);
+    }
+    return res.status(result.replayed ? 200 : 201).json({ success: true, data: result.order, message: "Order placed successfully", warning: result.warning });
+  } catch (error: any) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message || "Failed to place order" });
+  }
 };
 
 /**
@@ -377,65 +87,18 @@ export const createOrder = async (req: Request, res: Response) => {
  * returning reserved stock to the shelf and releasing unused coupons.
  */
 export async function cleanupExpiredPendingOrders(customerFilter?: string): Promise<number> {
+  const expired = await Order.find({ ...(customerFilter ? { customer: customerFilter } : {}), status: "Pending", paymentStatus: "Pending", createdAt: { $lt: new Date(Date.now() - 1800000) } }).select("_id");
+  let cancelled = 0;
+  for (const order of expired) {
     try {
-        const threshold = new Date(Date.now() - 30 * 60 * 1000);
-        const query: any = {
-            status: "Pending",
-            paymentStatus: "Pending",
-            createdAt: { $lt: threshold },
-        };
-        if (customerFilter) {
-            query.customer = customerFilter;
-        }
-
-        const expiredOrders = await Order.find(query);
-        if (expiredOrders.length === 0) return 0;
-
-        for (const order of expiredOrders) {
-            try {
-                const claimed = await Order.findOneAndUpdate(
-                    { _id: order._id, status: "Pending" },
-                    {
-                        $set: {
-                            status: "Cancelled",
-                            cancellationReason: "Online payment timed out / abandoned",
-                            cancelledAt: new Date(),
-                        },
-                    },
-                    { new: true }
-                );
-
-                if (!claimed) continue;
-
-                const orderItems = await OrderItem.find({ _id: { $in: claimed.items } });
-                const reservations = await reservationsFromOrderItems(
-                    orderItems.map((oi) => ({
-                        product: oi.product,
-                        quantity: oi.quantity,
-                        variation: oi.variation,
-                    }))
-                );
-                await releaseMany(reservations);
-                await OrderItem.updateMany(
-                    { _id: { $in: claimed.items } },
-                    { $set: { status: "Cancelled" } }
-                );
-
-                if (claimed.couponCode) {
-                    await releaseCoupon(claimed.couponCode);
-                }
-            } catch (singleErr) {
-                console.error(`Failed to cleanup expired pending order ${order._id}:`, singleErr);
-            }
-        }
-        return expiredOrders.length;
-    } catch (err) {
-        console.error("Error in cleanupExpiredPendingOrders:", err);
-        return 0;
-    }
+      const result = await cancelOrderLifecycle(String(order._id), "system", { expiredOnly: true, reason: "Online payment timed out / abandoned" });
+      if (!result.unchanged) cancelled++;
+      await runOrderEffects(String(order._id));
+    } catch (error) { console.error("Pending order cleanup will retry", error); }
+  }
+  return cancelled;
 }
 
-// Get authenticated customer's orders
 export const getMyOrders = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.userId;
@@ -535,7 +198,7 @@ export const getOrderById = async (req: Request, res: Response) => {
                     { path: 'seller', select: 'storeName city phone fssaiLicNo' }
                 ]
             })
-            .populate('deliveryBoy', 'name phone profileImage vehicleNumber');
+            .populate('deliveryBoy', 'name phone mobile profileImage vehicleNumber');
 
         if (!order) {
             return res.status(404).json({
@@ -546,7 +209,7 @@ export const getOrderById = async (req: Request, res: Response) => {
 
         // Get customer's permanent delivery OTP
         const customer = await Customer.findById(userId).select('deliveryOtp');
-        const deliveryOtp = customer?.deliveryOtp;
+        const deliveryOtp = order.deliveryOtp || customer?.deliveryOtp;
 
         // Transform order to match frontend Order type
         const orderObj = order.toObject();
@@ -567,7 +230,7 @@ export const getOrderById = async (req: Request, res: Response) => {
             // Include customer's permanent delivery OTP
             deliveryOtp,
             // Map deliveryBoy to deliveryPartner for frontend
-            deliveryPartner: orderObj.deliveryBoy
+            deliveryPartner: orderObj.deliveryBoy ? { ...(orderObj.deliveryBoy as any), phone: (orderObj.deliveryBoy as any).mobile || (orderObj.deliveryBoy as any).phone } : null
         };
 
         return res.status(200).json({
@@ -614,22 +277,22 @@ export const refreshDeliveryOtp = async (req: Request, res: Response) => {
         }
 
         // Generate and send new OTP
-        const result = await generateDeliveryOtp(id);
+        const result = await generateDeliveryOtp(id, { refresh: true });
 
         // Emit socket event if needed (customer room)
         const io = (req.app as any).get("io");
         if (io) {
             io.to(`order-${id}`).emit('delivery-otp-refreshed', {
                 orderId: id,
-                deliveryOtp: order.deliveryOtp, // The service saves it to the order
-                expiresAt: order.deliveryOtpExpiresAt
+                // The shared tracking room includes the courier; never broadcast the code here.
+                expiresAt: (await Order.findById(id).select("deliveryOtpExpiresAt"))?.deliveryOtpExpiresAt
             });
         }
 
         return res.status(200).json(result);
     } catch (error: any) {
         console.error('Error refreshing delivery OTP:', error);
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message: "Failed to refresh delivery OTP",
             error: error.message
@@ -639,134 +302,17 @@ export const refreshDeliveryOtp = async (req: Request, res: Response) => {
 
 // Cancel Order
 export const cancelOrder = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { reason } = req.body;
-        const userId = req.user?.userId;
-
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Authentication required" });
-        }
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ success: false, message: "Invalid Order ID format" });
-        }
-        if (!reason || !String(reason).trim()) {
-            return res.status(400).json({ success: false, message: "Cancellation reason is required" });
-        }
-
-        const order = await Order.findOne({ _id: id, customer: userId });
-        if (!order) {
-            return res.status(404).json({ success: false, message: "Order not found" });
-        }
-
-        // One shared transition table decides this, rather than an ad-hoc list
-        // that disagreed with the seller and admin paths. (#H-05)
-        const check = validateTransition(order.status, "Cancelled", "customer");
-        if (!check.valid) {
-            return res.status(400).json({ success: false, message: check.message });
-        }
-
-        // Claim the cancellation atomically so two concurrent requests cannot
-        // both restore the stock.
-        const claimed = await Order.findOneAndUpdate(
-            { _id: id, customer: userId, status: order.status },
-            {
-                $set: {
-                    status: "Cancelled",
-                    cancellationReason: String(reason).trim(),
-                    cancelledAt: new Date(),
-                    cancelledBy: new mongoose.Types.ObjectId(userId),
-                },
-            },
-            { new: true },
-        );
-
-        if (!claimed) {
-            return res.status(409).json({
-                success: false,
-                message: "This order was updated by someone else. Please refresh and try again.",
-            });
-        }
-
-        // ── Restore stock to the exact variation that was taken ─────────────
-        const orderItems = await OrderItem.find({ _id: { $in: claimed.items } });
-        const reservations = await reservationsFromOrderItems(
-            orderItems.map((oi) => ({
-                product: oi.product,
-                quantity: oi.quantity,
-                variation: oi.variation,
-            })),
-        );
-        await releaseMany(reservations);
-
-        await OrderItem.updateMany({ _id: { $in: claimed.items } }, { $set: { status: "Cancelled" } });
-
-        // Give the coupon use back. (#H-29)
-        await releaseCoupon(claimed.couponCode);
-
-        // Reverse anything already credited for this order. (#H-07)
-        try {
-            const { reverseCommissions } = await import("../../../services/commissionService");
-            const rev = await reverseCommissions(id);
-            if (!rev.success) {
-                console.error(`Commission reversal failed for cancelled order ${id}: ${rev.message}`);
-            }
-        } catch (revErr) {
-            console.error(`Commission reversal threw for cancelled order ${id}:`, revErr);
-        }
-
-        // A prepaid order that is cancelled must be refunded, not just closed.
-        // (#H-06)
-        if (["Paid", "PartiallyRefunded"].includes(claimed.paymentStatus) && claimed.paymentMethod !== "COD") {
-            try {
-                const { refundOrder } = await import("../../../services/refundService");
-                await refundOrder(id, `Order cancelled by customer: ${String(reason).trim()}`);
-            } catch (refundErr) {
-                console.error(`Refund failed for cancelled order ${id}:`, refundErr);
-            }
-        }
-
-        // ── Notify ──────────────────────────────────────────────────────────
-        try {
-            const io = (req.app as any).get("io");
-            if (io) {
-                await notifySellersOfOrderUpdate(io, claimed, "ORDER_CANCELLED");
-
-                if (claimed.deliveryBoy) {
-                    await Order.updateOne({ _id: claimed._id }, { $set: { deliveryBoyStatus: "Failed" } });
-                    io.to(`delivery-${claimed.deliveryBoy.toString()}`).emit("order-cancelled", {
-                        orderId: claimed._id,
-                        orderNumber: claimed.orderNumber,
-                        message: "Order has been cancelled by the customer",
-                    });
-                }
-
-                io.to(`order-${claimed._id}`).emit("order-cancelled", {
-                    orderId: claimed._id,
-                    status: "Cancelled",
-                    message: "Order has been cancelled",
-                });
-            }
-        } catch (err) {
-            console.error("Notification error:", err);
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Order cancelled successfully",
-            data: {
-                id: claimed._id,
-                status: claimed.status,
-                cancelledAt: claimed.cancelledAt,
-            },
-        });
-    } catch (error: any) {
-        console.error("Error cancelling order:", error?.message || error);
-        return res.status(500).json({ success: false, message: "Failed to cancel order" });
-    }
+  try {
+    if (!String(req.body.reason || "").trim()) return res.status(400).json({ success: false, message: "Cancellation reason is required" });
+    const result = await cancelOrderLifecycle(req.params.id, "customer", { userId: req.user!.userId, reason: String(req.body.reason) });
+    await runOrderEffects(req.params.id);
+    const io = req.app.get("io");
+    io?.to(`order-${req.params.id}`).emit("order-cancelled", { orderId: req.params.id, status: result.order.status });
+    if (io && !result.unchanged) await notifySellersOfOrderUpdate(io, result.order, "ORDER_CANCELLED");
+    return res.json({ success: true, message: "Order cancelled. Any prepaid refund is being processed.", data: { id: result.order._id, status: result.order.status } });
+  } catch (error: any) { return res.status(error.statusCode || 500).json({ success: false, message: error.message }); }
 };
 
-// Update Order Notes (Instructions/Special Requests)
 export const updateOrderNotes = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;

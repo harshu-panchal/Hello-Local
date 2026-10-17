@@ -1,5 +1,5 @@
-import api, { setAuthToken, removeAuthToken } from '../config';
-import { setStoredUser } from '../session';
+import api, { removeAuthToken } from '../config';
+import { setSession } from '../session';
 
 export interface SendOTPResponse {
   success: boolean;
@@ -41,13 +41,12 @@ export const verifyOTP = async (mobile: string, otp: string, sessionId?: string)
   const response = await api.post<VerifyOTPResponse>('/auth/customer/verify-sms-otp', { mobile, otp, sessionId });
 
   if (response.data.success && response.data.data.token) {
-    setAuthToken(response.data.data.token);
     // Add userType to user data for proper identification
     const userData = {
       ...response.data.data.user,
       userType: 'Customer'
     };
-    setStoredUser(userData, 'customer');
+    setSession(response.data.data.token, userData, 'customer');
   }
 
   return response.data;

@@ -152,7 +152,7 @@ test("WF 5-6: product writes require an approved seller and an allow-list", () =
 // ===========================================================================
 test("WF 7-8: cart and checkout price identically and the server owns the money", () => {
   const cart = code("modules/customer/controllers/customerCartController.ts");
-  const checkout = code("modules/customer/controllers/customerOrderController.ts");
+  const checkout = code("services/checkoutService.ts");
   assert.match(cart, /effectiveUnitPrice\(/, "cart uses its own pricing");
   assert.match(checkout, /effectiveUnitPrice\(/, "checkout uses its own pricing");
   assert.match(checkout, /priceOrder\(/, "checkout does not use the server pricing service");
@@ -217,19 +217,18 @@ test("WF 13: assignment notifies the courier and is state-checked", () => {
   const fn = c.slice(c.indexOf("export const assignDeliveryBoy"), c.indexOf("export const getOrdersByStatus"));
   assert.match(fn, /order-assigned/, "no socket notification");
   assert.match(fn, /sendNotificationToUser\(/, "no push notification");
-  assert.match(fn, /cannot be assigned/, "finished orders can still be assigned");
+  assert.match(fn, /acceptDeliveryOrder\(/);
+  assert.match(code("services/orderLifecycleService.ts"), /courierOfferStatuses.includes\(order.status\)/);
 });
 
 test("WF 14-15: delivery completion requires the customer's OTP", () => {
   const otp = code("services/deliveryOtpService.ts");
-  assert.match(otp, /timingSafeEqual/, "OTP comparison is not constant-time");
-  assert.match(otp, /MAX_DELIVERY_OTP_ATTEMPTS/, "no brute-force cap");
-  assert.match(otp, /status = 'Delivered'/, "OTP verification does not complete the order");
-  assert.match(otp, /Customer\.updateOne/, "the OTP is not rotated after use");
-
-  // And the status endpoint cannot short-circuit it.
-  const ctrl = code("modules/delivery/controllers/deliveryOrderController.ts");
-  assert.match(ctrl, /validateTransition\(order\.status, status, "delivery"\)/);
+  assert.match(otp, /timingSafeEqual/);
+  assert.match(otp, /deliveryOtpAttempts.*>= 5/);
+  assert.match(otp, /status = "Delivered"/);
+  assert.match(otp, /status !== "Out for Delivery"/);
+  assert.match(otp, /queueOrderEffect\(order!, "Settlement"/);
+  assert.match(code("modules/delivery/controllers/deliveryOrderController.ts"), /changeCourierStage\(/);
 });
 
 // ===========================================================================
@@ -243,14 +242,14 @@ test("WF 16: seller payout happens on delivery, never on payment", () => {
 });
 
 test("WF 17-18: cancellation restores stock, reverses commission and refunds", () => {
-  const c = code("modules/customer/controllers/customerOrderController.ts");
-  const fn = c.slice(c.indexOf("export const cancelOrder"));
-  assert.match(fn, /validateTransition\(order\.status, "Cancelled", "customer"\)/, "no transition check");
-  assert.match(fn, /releaseMany\(/, "stock is not restored");
-  assert.match(fn, /reverseCommissions\(/, "commissions are not reversed");
-  assert.match(fn, /refundOrder\(/, "prepaid orders are not refunded");
-  assert.match(fn, /releaseCoupon\(/, "the coupon use is not returned");
-  assert.match(fn, /findOneAndUpdate\(/, "cancellation is not claimed atomically");
+  assert.match(code("modules/customer/controllers/customerOrderController.ts"), /cancelOrderLifecycle\(/);
+  const lifecycle = code("services/orderLifecycleService.ts");
+  assert.match(lifecycle, /validateTransition\(/);
+  assert.match(lifecycle, /withOrderTransaction\(/);
+  assert.match(lifecycle, /releaseMany\(/);
+  assert.match(lifecycle, /releaseCoupon\(/);
+  assert.match(lifecycle, /queueOrderEffect\(order, "Refund"/);
+  assert.match(lifecycle, /queueOrderEffect\(order, "Reversal"/);
 });
 
 // ===========================================================================

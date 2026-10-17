@@ -37,6 +37,7 @@ export interface OrderFees {
 }
 
 export interface Order {
+  idempotencyKey?: string;
   id: string;
   items: CartItem[];
   totalItems: number;
@@ -46,6 +47,7 @@ export interface Order {
   address: OrderAddress;
   status: OrderStatus;
   paymentMethod?: string;
+  paymentStatus?: string;
   createdAt: string;
   tipAmount?: number;
   donationAmount?: number;

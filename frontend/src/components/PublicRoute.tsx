@@ -24,8 +24,10 @@ export default function PublicRoute({ children, userType: allowedUserType }: Pub
         // we should still allow seeing other login pages if the user is curious,
         // but generally we redirect them to their dashboard.
         // However, to fix the "not opening" issue, let's be more lenient.
-        const isLoginPath = window.location.pathname.includes('/login');
-        if (isLoginPath && !window.location.pathname.includes(currentUserType.toLowerCase())) {
+        const target = window.location.pathname.startsWith('/seller/') ? 'Seller'
+            : window.location.pathname.startsWith('/delivery/') ? 'Delivery'
+            : window.location.pathname.startsWith('/admin/') ? 'Admin' : 'Customer';
+        if (!currentUserType || (target !== currentUserType && !(target === 'Admin' && currentUserType === 'Super Admin'))) {
             return children ? <>{children}</> : <Outlet />;
         }
 

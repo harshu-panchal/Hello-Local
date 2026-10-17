@@ -95,8 +95,7 @@ export async function initializePushNotifications(): Promise<void> {
 }
 
 /** Capture authentication synchronously, before the caller clears its session. */
-export function removeFCMToken(): Promise<void> {
-    const portal = currentPortal();
+export function removeFCMToken(portal = currentPortal()): Promise<void> {
     const authToken = getAuthToken(portal);
     return enqueue(async () => {
         try {

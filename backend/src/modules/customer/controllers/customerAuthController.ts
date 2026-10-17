@@ -104,7 +104,7 @@ export const verifySmsOtp = asyncHandler(
     }
 
     // Generate JWT token
-    const token = generateToken(customer._id.toString(), "Customer");
+    const token = generateToken(customer._id.toString(), "Customer", undefined, (customer as any).authVersion || 0);
 
     return res.status(200).json({
       success: true,

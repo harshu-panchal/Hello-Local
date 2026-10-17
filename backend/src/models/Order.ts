@@ -59,6 +59,11 @@ export interface IOrder extends Document {
   total: number;
   grandTotal?: number; // Alias or computed total used in some controllers
 
+  originalTotal?: number;
+  checkoutKey?: string;
+  checkoutHash?: string;
+  settlementStatus?: "Pending" | "Complete" | "Failed";
+  settlementError?: string;
   // Payment
   paymentMethod: string;
   paymentStatus: "Pending" | "Paid" | "PartiallyRefunded" | "Failed" | "Refunded";
@@ -359,6 +364,11 @@ const OrderSchema = new Schema<IOrder>(
       type: Number,
     },
 
+    originalTotal: Number,
+    checkoutKey: String,
+    checkoutHash: String,
+    settlementStatus: { type: String, enum: ["Pending", "Complete", "Failed"] },
+    settlementError: String,
     // Payment
     paymentMethod: {
       type: String,
@@ -534,6 +544,8 @@ OrderSchema.pre("validate", async function (this: IOrder, next) {
   }
   next();
 });
+
+OrderSchema.index({ customer: 1, checkoutKey: 1 }, { unique: true, partialFilterExpression: { checkoutKey: { $type: "string" } } });
 
 // Indexes for faster queries
 OrderSchema.index({ customer: 1, orderDate: -1 });

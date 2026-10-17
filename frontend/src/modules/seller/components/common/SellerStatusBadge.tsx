@@ -27,6 +27,7 @@ export const SellerStatusBadge: React.FC<SellerStatusBadgeProps> = ({
   const getInferredVariant = (st: string): StatusVariant => {
     const s = st.toLowerCase().trim();
     if (
+      s === 'live' ||
       s === 'delivered' ||
       s === 'completed' ||
       s === 'published' ||
@@ -39,6 +40,8 @@ export const SellerStatusBadge: React.FC<SellerStatusBadgeProps> = ({
       return 'success';
     }
     if (
+      s === 'paymentpending' ||
+      s === 'paused' ||
       s === 'pending' ||
       s === 'processing' ||
       s === 'processed' ||
@@ -49,6 +52,7 @@ export const SellerStatusBadge: React.FC<SellerStatusBadgeProps> = ({
       return 'warning';
     }
     if (
+      s === 'removed' ||
       s === 'cancelled' ||
       s === 'canceled' ||
       s === 'rejected' ||
@@ -61,6 +65,8 @@ export const SellerStatusBadge: React.FC<SellerStatusBadgeProps> = ({
       return 'danger';
     }
     if (
+      s === 'scheduled' ||
+      s === 'paymentverified' ||
       s === 'shipped' ||
       s === 'out for delivery' ||
       s === 'on the way' ||

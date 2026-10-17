@@ -12,6 +12,8 @@ export interface OrderItem {
 }
 
 export interface CreateOrderData {
+    idempotencyKey?: string;
+    expectedTotal?: number;
     items: {
         product: {
             id: string;
@@ -103,5 +105,10 @@ export const cancelOrder = async (id: string, reason: string): Promise<OrderResp
  */
 export const updateOrderNotes = async (id: string, data: { deliveryInstructions?: string; specialRequests?: string }): Promise<OrderResponse> => {
     const response = await api.patch<OrderResponse>(`/customer/orders/${id}/notes`, data);
+    return response.data;
+};
+
+export const quoteOrder = async (data: CreateOrderData): Promise<OrderResponse> => {
+    const response = await api.post<OrderResponse>('/customer/orders/quote', data);
     return response.data;
 };

@@ -1,49 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getActiveShopAds, ShopAd } from "../../../services/api/admin/adminShopAdService";
-
-type PopupAd = ShopAd & {
-  status?: string;
-  startDateTime?: string;
-  endDateTime?: string;
-  startDate?: string;
-  endDate?: string;
-};
+import { useActiveShopAds } from "../../../hooks/useActiveShopAds";
+import { openAd } from "../../../utils/shopAds";
 
 const POPUP_INTERVAL_MS = 50000;
 const POPUP_VISIBLE_MS = 9000;
 
-function parseDate(input?: string): number | null {
-  if (!input) return null;
-  const ts = new Date(input).getTime();
-  return Number.isNaN(ts) ? null : ts;
-}
-
-function isApprovedLive(ad: PopupAd, nowMs: number): boolean {
-  if (ad.isActive === false) return false;
-
-  if (typeof ad.status === "string") {
-    const normalizedStatus = ad.status.trim().toLowerCase();
-    if (normalizedStatus !== "approved" && normalizedStatus !== "live") {
-      return false;
-    }
-  }
-
-  const startMs = parseDate(ad.startDateTime) ?? parseDate(ad.startDate) ?? parseDate(ad.approvedAt);
-  const endMs = parseDate(ad.endDateTime) ?? parseDate(ad.endDate) ?? parseDate(ad.expiresAt);
-
-  if (startMs !== null && nowMs < startMs) return false;
-  if (endMs !== null && nowMs > endMs) return false;
-
-  return true;
-}
-
-export default function AdPopupAutoWidget() {
-  const [ads, setAds] = useState<PopupAd[]>([]);
+export default function AdPopupAutoWidget({ suppressed = false }: { suppressed?: boolean }) {
+  const { ads, loading: isLoading } = useActiveShopAds();
+  const shownAdRef = useRef<string | null>(null);
   const [index, setIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [remainingVisibleMs, setRemainingVisibleMs] = useState(POPUP_VISIBLE_MS);
 
@@ -55,7 +23,7 @@ export default function AdPopupAutoWidget() {
   const visibleDeadlineRef = useRef<number | null>(null);
 
   const blockedRoutes = useMemo(() => ["/user/checkout", "/user/checkout/address", "/user/cart", "/checkout", "/checkout/address", "/cart", "/orders", "/user/orders"], []);
-  const isBlockedRoute = blockedRoutes.some((path) => location.pathname.startsWith(path));
+  const isBlockedRoute = suppressed || blockedRoutes.some((path) => location.pathname.startsWith(path));
 
   const clearShowTimer = useCallback(() => {
     if (showTimerRef.current) {
@@ -73,12 +41,8 @@ export default function AdPopupAutoWidget() {
 
   const scheduleNextShow = useCallback((delayMs = POPUP_INTERVAL_MS) => {
     clearShowTimer();
+    if (isBlockedRoute || ads.length === 0) return;
     showTimerRef.current = setTimeout(() => {
-      if (isBlockedRoute || ads.length === 0) {
-        scheduleNextShow(5000);
-        return;
-      }
-
       setIsVisible(true);
       setRemainingVisibleMs(POPUP_VISIBLE_MS);
       visibleDeadlineRef.current = Date.now() + POPUP_VISIBLE_MS;
@@ -93,32 +57,6 @@ export default function AdPopupAutoWidget() {
     setIndex((prev) => (ads.length > 0 ? (prev + 1) % ads.length : 0));
     scheduleNextShow(scheduleDelayMs);
   }, [ads.length, scheduleNextShow]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchAds = async () => {
-      try {
-        const response = await getActiveShopAds();
-        const now = Date.now();
-        const liveAds = (response?.data || []).filter((ad) => isApprovedLive(ad as PopupAd, now));
-        if (mounted) {
-          setAds(liveAds);
-          setIndex(0);
-        }
-      } catch (err) {
-        if (mounted) setAds([]);
-        console.error("Ad popup auto widget: failed to fetch ads", err);
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    };
-
-    fetchAds();
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -179,25 +117,26 @@ export default function AdPopupAutoWidget() {
     };
   }, [clearHideTimer, clearShowTimer]);
 
-  const currentAd = !isLoading && ads.length > 0 ? ads[index] : null;
+  const currentAd = !isLoading && ads.length > 0 ? ads[index % ads.length] : null;
 
   const handleClose = () => {
     clearHideTimer();
     hidePopupAndRotate(POPUP_INTERVAL_MS);
   };
 
+  useEffect(() => {
+    if (isVisible && shownAdRef.current && shownAdRef.current !== currentAd?._id) hidePopupAndRotate();
+    shownAdRef.current = isVisible ? currentAd?._id ?? null : null;
+  }, [currentAd?._id, hidePopupAndRotate, isVisible]);
+
   const handleCtaClick = () => {
-    if (!currentAd?.ctaLink) return;
-    const isExternal = /^https?:\/\//i.test(currentAd.ctaLink);
-    if (isExternal) {
-      window.open(currentAd.ctaLink, "_blank", "noopener,noreferrer");
-      return;
-    }
-    navigate(currentAd.ctaLink);
+    if (!currentAd) return;
+    openAd(currentAd.ctaLink, navigate);
+    handleClose();
   };
 
   return (
-    <div className="pointer-events-none fixed z-40 right-3 left-3 bottom-20 md:left-auto md:right-5 md:bottom-5">
+    <div className="pointer-events-none fixed z-40 right-3 left-3 bottom-40 md:left-auto md:right-5 md:bottom-24 max-h-[calc(100dvh-11rem)] overflow-y-auto">
       <AnimatePresence>
         {isVisible && currentAd && (
           <motion.aside

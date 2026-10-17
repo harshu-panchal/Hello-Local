@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import AppSettings from "../models/AppSettings";
 import Coupon from "../models/Coupon";
+import Order from "../models/Order";
 import Seller from "../models/Seller";
 import Tax from "../models/Tax";
 import { getRoadDistances } from "./mapService";
@@ -169,6 +170,8 @@ export async function computeCouponDiscount(params: {
   code?: string | null;
   customerId: string;
   eligibleAmount: number;
+  lines?: Array<{ productId: string; sellerId: string; categoryIds?: string[]; lineTotal: number }>;
+  session?: mongoose.ClientSession;
 }): Promise<{
   discount: number;
   code?: string;
@@ -177,10 +180,12 @@ export async function computeCouponDiscount(params: {
   applicableTo?: string;
   applicableIds?: string[];
 }> {
-  const { code, eligibleAmount } = params;
+  const { code } = params;
+  let eligibleAmount = params.eligibleAmount;
   if (!code) return { discount: 0 };
 
-  const coupon = await Coupon.findOne({ code: String(code).toUpperCase().trim() });
+  const couponQuery = Coupon.findOne({ code: String(code).toUpperCase().trim() });
+  const coupon = params.session ? await couponQuery.session(params.session) : await couponQuery;
   if (!coupon) return { discount: 0, reason: "Coupon not found" };
   if (!coupon.isActive) return { discount: 0, reason: "Coupon is not active" };
 
@@ -190,6 +195,19 @@ export async function computeCouponDiscount(params: {
   }
   if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
     return { discount: 0, reason: "Coupon usage limit reached" };
+  }
+  if (coupon.usageLimitPerUser) {
+    const uses = Order.countDocuments({ customer: params.customerId, couponCode: coupon.code, status: { $nin: ["Cancelled", "Rejected"] } });
+    const count = params.session ? await uses.session(params.session) : await uses;
+    if (count >= coupon.usageLimitPerUser) return { discount: 0, reason: "Your coupon usage limit has been reached" };
+  }
+  if (coupon.applicableTo && coupon.applicableTo !== "All") {
+    const ids = new Set((coupon.applicableIds || []).map(id => String(id)));
+    const matches = (params.lines || []).filter(line => coupon.applicableTo === "Seller" ? ids.has(line.sellerId)
+      : coupon.applicableTo === "Product" ? ids.has(line.productId)
+      : (line.categoryIds || []).some(id => ids.has(id)));
+    if (!matches.length) return { discount: 0, reason: "This coupon does not apply to the items in your basket" };
+    eligibleAmount = round2(matches.reduce((sum, line) => sum + line.lineTotal, 0));
   }
   if (coupon.minimumPurchase && eligibleAmount < coupon.minimumPurchase) {
     return {
@@ -229,12 +247,14 @@ export async function priceOrder(params: {
     unitPrice: number;
     quantity: number;
     taxRefId?: mongoose.Types.ObjectId | string | null;
+    categoryIds?: string[];
   }>;
   customerId: string;
   deliveryLat: number;
   deliveryLng: number;
   couponCode?: string | null;
   tipAmount?: number | null;
+  session?: mongoose.ClientSession;
 }): Promise<{ pricing: OrderPricing; lines: PricedLine[] }> {
   const settings = await AppSettings.getSettings();
   const defaultTaxRate = Number((settings as any)?.taxSettings?.defaultRate) || 0;
@@ -279,6 +299,8 @@ export async function priceOrder(params: {
     code: params.couponCode,
     customerId: params.customerId,
     eligibleAmount,
+    lines: params.lines.map((line, index) => ({ ...line, lineTotal: priced[index].lineTotal })),
+    session: params.session,
   });
 
   const couponFunding: "PLATFORM" | "SELLER" =
@@ -290,13 +312,17 @@ export async function priceOrder(params: {
     if (applicableTo === "Seller" && applicableIds && applicableIds.length > 0) {
       const sellerSet = new Set(applicableIds);
       const matched = priced.filter((l) => sellerSet.has(l.sellerId));
-      if (matched.length > 0) eligibleLines = matched;
+      eligibleLines = matched;
     } else if (applicableTo === "Product" && applicableIds && applicableIds.length > 0) {
       const prodSet = new Set(applicableIds);
       const matched = priced.filter((l) => prodSet.has(l.productId));
-      if (matched.length > 0) eligibleLines = matched;
+      eligibleLines = matched;
     }
 
+    if (applicableTo === "Category") {
+      const ids = new Set(applicableIds || []);
+      eligibleLines = priced.filter((_line, index) => (params.lines[index].categoryIds || []).some(id => ids.has(id)));
+    }
     const eligibleSubtotal = round2(eligibleLines.reduce((sum, l) => sum + l.lineTotal, 0));
     const merchandiseDiscount = Math.min(discount, eligibleSubtotal);
     let allocatedSum = 0;
@@ -369,11 +395,14 @@ export async function consumeCoupon(
 ): Promise<void> {
   if (!code) return;
   // Usage was never counted, so limits were unenforceable. (#H-29)
-  await Coupon.updateOne(
-    { code: code.toUpperCase().trim() },
+  const result = await Coupon.updateOne(
+    { code: code.toUpperCase().trim(), isActive: true, $or: [
+      { usageLimit: null }, { usageLimit: 0 }, { $expr: { $lt: ["$usageCount", "$usageLimit"] } },
+    ] },
     { $inc: { usageCount: 1 } },
     session ? { session } : {},
   );
+  if (result && result.modifiedCount === 0) throw new PricingError("Coupon is no longer available. Please refresh checkout.");
 }
 
 /** Give a coupon use back when the order it belonged to is cancelled. */

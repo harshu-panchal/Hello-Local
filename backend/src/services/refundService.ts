@@ -68,7 +68,7 @@ export async function refundOrder(
 
   const payment = await Payment.findOne({
     order: orderId,
-    status: { $in: ["Completed", "PartiallyRefunded"] },
+    status: { $in: ["Completed", "PartiallyRefunded", "Refunded"] },
     isDuplicate: { $ne: true },
   });
   if (!payment) {
@@ -106,24 +106,8 @@ export async function refundOrder(
   );
 
   if (remainingRefundable <= 0.009) {
-    return { refunded: false, amount: 0, reason: "Payment is already fully refunded" };
-  }
-
-  let requested = amount === undefined ? remainingRefundable : Number(amount);
-  requested = Math.round(requested * 100) / 100;
-
-  if (!Number.isFinite(requested) || requested <= 0) {
-    throw new RefundError("Refund amount must be greater than zero");
-  }
-
-  if (requested > payment.amount || requested > remainingRefundable + 0.01) {
-    throw new RefundError(
-      `Requested refund (${requested}) exceeds remaining refundable amount (${remainingRefundable})`
-    );
-  }
-
-  if (requested > payment.amount || requested > remainingRefundable) {
-    requested = remainingRefundable;
+    await Order.updateOne({ _id: orderId }, { $set: { paymentStatus: "Refunded" } });
+    return { refunded: true, amount: 0, reason: "Payment is already fully refunded" };
   }
 
   // 2. Idempotency guard for this specific refund / return
@@ -150,6 +134,23 @@ export async function refundOrder(
     };
   }
 
+  let requested = existing ? Number(existing.amount) : amount === undefined ? remainingRefundable : Number(amount);
+  requested = Math.round(requested * 100) / 100;
+
+  if (!Number.isFinite(requested) || requested <= 0) {
+    throw new RefundError("Refund amount must be greater than zero");
+  }
+
+  if (!existing && (requested > payment.amount || requested > remainingRefundable + 0.01)) {
+    throw new RefundError(
+      `Requested refund (${requested}) exceeds remaining refundable amount (${remainingRefundable})`
+    );
+  }
+
+  if (!existing && (requested > payment.amount || requested > remainingRefundable)) {
+    requested = remainingRefundable;
+  }
+
   const refundDoc =
     existing ||
     (await Refund.create({
@@ -170,7 +171,7 @@ export async function refundOrder(
     // Recover without calling Razorpay again!
     const newTotal = Math.min(
       payment.amount,
-      Math.round((alreadyRefunded + requested + Number.EPSILON) * 100) / 100
+      Math.round(Math.max(alreadyRefunded, totalCompletedRefunds + requested) * 100) / 100
     );
     const isFully = newTotal >= payment.amount - 0.01;
     payment.refundAmount = newTotal;

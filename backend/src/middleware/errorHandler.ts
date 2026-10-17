@@ -35,6 +35,11 @@ export const errorHandler = (
     message = 'Resource not found';
   }
 
+  if (err.name === 'VersionError') {
+    statusCode = 409;
+    message = 'This record changed while you were editing. Reload it before saving.';
+  }
+
   // Mongoose validation error
   if (err.name === 'ValidationError') {
     statusCode = 400;

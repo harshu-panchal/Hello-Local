@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../../context/CartContext";
@@ -19,7 +19,6 @@ import {
 import WishlistButton from "../../components/WishlistButton";
 import {
   getCoupons,
-  validateCoupon,
   Coupon as ApiCoupon,
 } from "../../services/api/customerCouponService";
 import { appConfig } from "../../services/configService";
@@ -33,7 +32,7 @@ import { addToWishlist } from "../../services/api/customerWishlistService";
 import { updateProfile } from "../../services/api/customerService";
 import { calculateProductPrice } from "../../utils/priceUtils";
 import RazorpayCheckout from "../../components/RazorpayCheckout";
-import { cancelOrder } from "../../services/api/customerOrderService";
+import { cancelOrder, quoteOrder } from "../../services/api/customerOrderService";
 import { UserImage, UserEmptyState } from "./components/common";
 import { ArrowLeftIcon, LocationPinIcon, ClockIcon, TagIcon, CreditCardIcon, ChevronRightIcon, PlusIcon, MinusIcon } from "./components/common/UserIcons";
 
@@ -48,6 +47,10 @@ export default function Checkout() {
     loading: cartLoading,
   } = useCart();
   const { addOrder } = useOrders();
+  const placingOrder = useRef(false);
+  const checkoutAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [paymentTotal, setPaymentTotal] = useState(0);
   const { location: userLocation } = useLocationContext();
   const { showToast: showGlobalToast } = useToast();
   const { user, updateUser } = useAuth();
@@ -336,21 +339,30 @@ export default function Checkout() {
     setIsValidatingCoupon(true);
     setCouponError(null);
     try {
-      const result = await validateCoupon(coupon.code, subtotalBeforeCoupon);
-      if (result.success && result.data?.isValid) {
+      if (!selectedAddress) throw new Error("Choose a delivery address before applying a coupon");
+      const latitude = selectedAddress.latitude ?? userLocation?.latitude;
+      const longitude = selectedAddress.longitude ?? userLocation?.longitude;
+      if (latitude == null || longitude == null) throw new Error("Add delivery location before applying a coupon");
+      const result = await quoteOrder({
+        items: cart.items.map(item => ({ product: { id: item.product.id || (item.product as any)._id }, quantity: item.quantity,
+          variant: item.variant || (item.product as any).variantId || (item.product as any).variantTitle || (item.product as any).selectedVariant?.title || (item.product as any).selectedVariant?.value || ((item.product as any).variations?.length === 1 ? (item.product as any).variations[0].title || (item.product as any).variations[0].value : undefined) })),
+        address: { city: selectedAddress.city, pincode: selectedAddress.pincode, latitude, longitude },
+        paymentMethod, couponCode: coupon.code, tipAmount: finalTipAmount,
+      });
+      if (result.success && result.data?.pricing?.couponCode) {
         const isFirstTime = !hasAppliedCouponBefore;
         setSelectedCoupon(coupon);
-        setValidatedDiscount(result.data.discountAmount);
+        setValidatedDiscount(result.data.pricing.discount);
         setShowCouponSheet(false);
         if (isFirstTime) {
           setHasAppliedCouponBefore(true);
           setShowPartyPopper(true);
         }
       } else {
-        setCouponError(result.message || "Invalid coupon");
+        setCouponError(result.data?.warning || result.message || "Invalid coupon");
       }
     } catch (err: any) {
-      setCouponError(err.response?.data?.message || "Failed to apply coupon");
+      setCouponError(err.response?.data?.message || err.message || "Failed to apply coupon");
     } finally {
       setIsValidatingCoupon(false);
     }
@@ -391,6 +403,7 @@ export default function Checkout() {
   };
 
   const handlePlaceOrder = async (arg?: any) => {
+    if (placingOrder.current) return;
     const bypassProfileCheck = arg === true;
 
     if (!selectedAddress || cart.items.length === 0) {
@@ -451,10 +464,30 @@ export default function Checkout() {
       couponCode: selectedCoupon?.code || undefined,
     };
 
+    const fingerprint = JSON.stringify({ items: order.items.map(item => ({ id: item.product.id || (item.product as any)._id, variant: item.variant || (item.product as any).variantId || (item.product as any).variantTitle || (item.product as any).selectedVariant?.title || (item.product as any).selectedVariant?.value, quantity: item.quantity })), address: order.address, paymentMethod, couponCode: order.couponCode, tipAmount: order.tipAmount, gstin: order.gstin });
+    if (!checkoutAttempt.current) {
+      try { checkoutAttempt.current = JSON.parse(sessionStorage.getItem("hellolocal:checkout-attempt") || "null"); } catch { /* Storage is optional. */ }
+    }
+    if (checkoutAttempt.current?.fingerprint !== fingerprint) {
+      checkoutAttempt.current = { fingerprint, key: crypto.randomUUID() };
+      try { sessionStorage.setItem("hellolocal:checkout-attempt", JSON.stringify(checkoutAttempt.current)); } catch { /* Storage is optional. */ }
+    }
+    order.idempotencyKey = checkoutAttempt.current.key;
+    placingOrder.current = true;
+    setIsPlacingOrder(true);
     try {
       const placedId = await addOrder(order);
+      setPaymentTotal(order.totalAmount);
       if (placedId) {
-        if (paymentMethod === "COD") {
+        if (["Cancelled", "Rejected", "Returned"].includes(order.status)) {
+          checkoutAttempt.current = null;
+          try { sessionStorage.removeItem("hellolocal:checkout-attempt"); } catch { /* Storage is optional. */ }
+          showGlobalToast("Your previous checkout was closed. You can place a new order.", "error");
+          return;
+        }
+        if (paymentMethod === "COD" || ["Paid", "PartiallyRefunded"].includes(order.paymentStatus || "")) {
+          checkoutAttempt.current = null;
+          try { sessionStorage.removeItem("hellolocal:checkout-attempt"); } catch { /* Storage is optional. */ }
           setPlacedOrderId(placedId);
           clearCart();
           setShowOrderSuccess(true);
@@ -471,6 +504,9 @@ export default function Checkout() {
         error.response?.data?.message ||
         "Failed to place order. Please try again.";
       showGlobalToast(errorMessage, "error");
+    } finally {
+      placingOrder.current = false;
+      setIsPlacingOrder(false);
     }
   };
 
@@ -1059,7 +1095,7 @@ export default function Checkout() {
                 <button
                   type="button"
                   onClick={() => handlePlaceOrder()}
-                  disabled={cart.items.length === 0}
+                  disabled={cart.items.length === 0 || isPlacingOrder || showRazorpayCheckout}
                   className={`w-full py-2.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95 touch-target-min flex items-center justify-center gap-1.5 ${
                     cart.items.length > 0
                       ? "bg-[#FF2E7A] text-white hover:bg-[#E02269]"
@@ -1097,7 +1133,7 @@ export default function Checkout() {
           <button
             type="button"
             onClick={() => handlePlaceOrder()}
-            disabled={cart.items.length === 0}
+            disabled={cart.items.length === 0 || isPlacingOrder || showRazorpayCheckout}
             className="px-6 py-2 bg-[#FF2E7A] text-white rounded-full text-xs font-bold uppercase tracking-wider shadow-xs hover:bg-[#E02269] active:scale-95 transition-all touch-target-min flex items-center gap-1"
           >
             <span>{paymentMethod === "COD" ? "Place Order" : "Pay Now"}</span>
@@ -1438,7 +1474,7 @@ export default function Checkout() {
       {showRazorpayCheckout && pendingOrderId && user && (
         <RazorpayCheckout
           orderId={pendingOrderId}
-          amount={grandTotal}
+          amount={paymentTotal}
           customerDetails={{
             name: user.name || "Customer",
             email: user.email || "",
@@ -1446,6 +1482,8 @@ export default function Checkout() {
           }}
           onSuccess={(paymentId) => {
             setShowRazorpayCheckout(false);
+            checkoutAttempt.current = null;
+            try { sessionStorage.removeItem("hellolocal:checkout-attempt"); } catch { /* Storage is optional. */ }
             setPlacedOrderId(pendingOrderId);
             setPendingOrderId(null);
             clearCart();
@@ -1455,6 +1493,13 @@ export default function Checkout() {
           onFailure={async (error) => {
             setShowRazorpayCheckout(false);
             const failedId = pendingOrderId;
+            if (error.startsWith("Payment confirmation pending")) {
+              showGlobalToast(error, "error");
+              navigate(`/orders/${failedId}`);
+              return;
+            }
+            checkoutAttempt.current = null;
+            try { sessionStorage.removeItem("hellolocal:checkout-attempt"); } catch { /* Storage is optional. */ }
             setPendingOrderId(null);
             if (failedId) {
               try {

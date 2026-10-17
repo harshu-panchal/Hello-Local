@@ -23,10 +23,10 @@ test("H-14: the storefront seller lookup filters on Approved", () => {
 });
 
 test("H-14: checkout independently refuses non-approved sellers", () => {
-  const c = code("modules/customer/controllers/customerOrderController.ts");
+  const c = code("services/checkoutService.ts");
   assert.match(c, /seller\.status !== "Approved"/,
     "checkout does not verify seller approval");
-  assert.match(c, /is not currently accepting orders/,
+  assert.match(c, /not currently accepting orders/,
     "no rejection message for unapproved sellers");
   // The old silent-skip shape is gone.
   assert.ok(!/status: "Approved",\s*\n\s*location: \{ \$exists: true, \$ne: null \}/.test(c),
@@ -159,7 +159,8 @@ test("H-30: assignment notifies the courier and refuses finished orders", () => 
   const fn = c.slice(c.indexOf("export const assignDeliveryBoy"), c.indexOf("export const getOrdersByStatus"));
   assert.match(fn, /order-assigned/, "no socket event on assignment");
   assert.match(fn, /sendNotificationToUser\(/, "no push notification on assignment");
-  assert.match(fn, /cannot be assigned/, "a finished order can still be assigned");
+  assert.match(fn, /acceptDeliveryOrder\(/);
+  assert.match(code("services/orderLifecycleService.ts"), /courierOfferStatuses.includes\(order.status\)/);
   assert.match(fn, /deliveryBoy\.status !== "Active"/, "an inactive courier can still be assigned");
 });
 

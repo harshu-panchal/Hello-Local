@@ -3,7 +3,17 @@ import {
   getAuthToken as readToken,
   setAuthToken as writeToken,
   clearSession,
+  currentPortal,
+  Portal,
 } from "./session";
+import { endSession } from '../authSession';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    sessionPortal?: Portal;
+    sessionToken?: string;
+  }
+}
 
 // Base API URL - adjust based on your backend URL
 const API_BASE_URL =
@@ -46,7 +56,9 @@ const api: AxiosInstance = axios.create({
 // Request interceptor - Add token and apply per-method timeout
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = readToken();
+    config.sessionPortal ??= currentPortal();
+    const token = readToken(config.sessionPortal);
+    config.sessionToken = token || undefined;
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -85,7 +97,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Check if this is an authentication endpoint (OTP verification, etc.)
       // Don't redirect for auth endpoints - let the component handle the error
-      const isAuthEndpoint = error.config?.url?.includes("/auth/");
+      const isAuthEndpoint = /^\/auth\/(customer|seller|delivery|admin)\/(send-|verify-|register|check-)/.test(error.config?.url || '');
 
       // Check if there was a token in the request (meaning user was logged in)
       const hadToken = error.config?.headers?.Authorization;
@@ -122,8 +134,15 @@ api.interceptors.response.use(
           redirectPath = "/delivery/login";
         }
 
-        clearSession();
-        window.location.href = redirectPath;
+        const requestPortal = error.config.sessionPortal || currentPortal();
+        // A late 401 from an old token must not sign out a newly logged-in user.
+        if (readToken(requestPortal) === error.config.sessionToken) {
+          clearSession(requestPortal);
+          if (requestPortal === currentPortal()) {
+            redirectPath = requestPortal === 'customer' ? '/login' : `/${requestPortal}/login`;
+            window.location.href = redirectPath;
+          }
+        }
       }
       // If no token was present, user is just browsing as guest - don't redirect
       // Just reject the promise so the component can handle it gracefully
@@ -138,7 +157,7 @@ export const setAuthToken = (token: string) => writeToken(token);
 
 export const getAuthToken = (): string | null => readToken();
 
-export const removeAuthToken = () => clearSession();
+export const removeAuthToken = () => endSession();
 
 export { currentPortal, getStoredUser, setStoredUser } from "./session";
 

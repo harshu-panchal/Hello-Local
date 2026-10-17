@@ -21,6 +21,7 @@ export interface ShopAd {
     requestedBy?: string;
     approvedAt?: string;
     expiresAt?: string;
+    endDate?: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -28,7 +29,9 @@ export interface ShopAd {
 let activeShopAdsCache: { success: boolean; data: ShopAd[] } | null = null;
 let activeShopAdsCacheTime = 0;
 let activeShopAdsInFlight: Promise<{ success: boolean; data: ShopAd[] }> | null = null;
-const ACTIVE_SHOP_ADS_CACHE_TTL_MS = 30 * 1000;
+const ACTIVE_SHOP_ADS_CACHE_TTL_MS = 10 * 1000;
+
+export function invalidateActiveShopAds() { activeShopAdsCache = null; activeShopAdsCacheTime = 0; }
 
 /**
  * Get all shop ads (admin)
@@ -56,6 +59,7 @@ export const getShopAdById = async (id: string) => {
  */
 export const createShopAd = async (data: Partial<ShopAd>) => {
     const response = await api.post("/admin/shop-ads", data);
+    invalidateActiveShopAds();
     return response.data;
 };
 
@@ -64,6 +68,7 @@ export const createShopAd = async (data: Partial<ShopAd>) => {
  */
 export const updateShopAd = async (id: string, data: Partial<ShopAd>) => {
     const response = await api.put(`/admin/shop-ads/${id}`, data);
+    invalidateActiveShopAds();
     return response.data;
 };
 
@@ -72,6 +77,7 @@ export const updateShopAd = async (id: string, data: Partial<ShopAd>) => {
  */
 export const deleteShopAd = async (id: string) => {
     const response = await api.delete(`/admin/shop-ads/${id}`);
+    invalidateActiveShopAds();
     return response.data;
 };
 
@@ -80,6 +86,7 @@ export const deleteShopAd = async (id: string) => {
  */
 export const toggleShopAdStatus = async (id: string) => {
     const response = await api.patch(`/admin/shop-ads/${id}/toggle`);
+    invalidateActiveShopAds();
     return response.data;
 };
 

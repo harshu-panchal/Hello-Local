@@ -6,7 +6,7 @@ export interface IDeliveryAssignment extends Document {
 
   // Assignment Info
   assignedAt: Date;
-  assignedBy: mongoose.Types.ObjectId;
+  assignedBy?: mongoose.Types.ObjectId;
 
   // Status
   status:
@@ -54,7 +54,7 @@ const DeliveryAssignmentSchema = new Schema<IDeliveryAssignment>(
     assignedBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
-      required: [true, "Assigned by is required"],
+      // Self-accepted delivery offers have no assigning administrator.
     },
 
     // Status

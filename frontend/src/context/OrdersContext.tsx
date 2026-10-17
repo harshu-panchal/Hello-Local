@@ -5,7 +5,7 @@ import {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { Order } from "../types/order";
-import { createOrder, getMyOrders } from "../services/api/customerOrderService";
+import { createOrder, getMyOrders, quoteOrder } from "../services/api/customerOrderService";
 import { OrdersContext } from "./ordersContext.types";
 
 // Type for API response order (with _id from MongoDB)
@@ -131,12 +131,24 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         gstin: order.gstin || undefined,
       };
 
-      const response = await createOrder(payload);
+      const quote = await quoteOrder({ ...payload, idempotencyKey: order.idempotencyKey });
+      if (!quote.success) throw new Error(quote.message || "Unable to confirm order total");
+      const total = Number(quote.data.total);
+      if (!Number.isFinite(total)) throw new Error("Invalid order quote");
+      const warning = quote.data.warning;
+      if (Math.abs(total - order.totalAmount) > 0.009 || warning) {
+        if (!window.confirm(`${warning ? warning + "\n" : ""}Final order total: Rs. ${total.toFixed(2)}. Continue?`)) return undefined;
+      }
+      order.totalAmount = total;
+      const response = await createOrder({ ...payload, expectedTotal: total, idempotencyKey: order.idempotencyKey });
       await fetchOrders();
 
       // Return the created order ID from response
       if (response && response.data) {
-        const orderData = response.data as { _id?: string; id?: string };
+        const orderData = response.data as { _id?: string; id?: string; status: Order['status']; paymentStatus?: string; total?: number };
+        order.status = orderData.status;
+        order.paymentStatus = orderData.paymentStatus;
+        order.totalAmount = Number(orderData.total ?? total);
         return orderData._id || orderData.id;
       }
       return undefined;

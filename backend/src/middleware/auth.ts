@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, TokenPayload } from '../services/jwtService';
+import { TokenPayload } from '../services/jwtService';
+import { validateSession, SessionError } from '../services/authSessionService';
 
 export type AuthUserType = 'Admin' | 'Seller' | 'Customer' | 'Delivery';
 
@@ -16,7 +17,7 @@ declare global {
  * Authenticate user by verifying JWT token.
  * Uses standard HTTP 401 for all unauthenticated responses.
  */
-export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -31,10 +32,21 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     try {
-      const decoded = verifyToken(token);
+      const decoded = await validateSession(token);
+      // Pending sellers retain access to onboarding/profile and logout only.
+      const route = (req.originalUrl || req.url || '').split('?')[0].replace(/^\/api\/v1/, '');
+      if (decoded.userType === 'Seller' && decoded.accountStatus === 'Pending' &&
+          !/^\/(?:auth\/(?:seller\/profile|session|logout)|fcm-tokens\/(?:save|remove))$/.test(route)) {
+        res.status(403).json({ success: false, message: 'Your seller account is awaiting admin approval.' });
+        return;
+      }
       req.user = decoded;
       next();
     } catch (error: any) {
+      if (!(error instanceof SessionError)) {
+        next(error);
+        return;
+      }
       // Use 401 for expired/invalid tokens so the frontend interceptor handles auto-logout
       res.status(401).json({
         success: false,

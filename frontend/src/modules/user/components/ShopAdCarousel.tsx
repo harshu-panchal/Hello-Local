@@ -1,40 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getActiveShopAds, ShopAd } from "../../../services/api/admin/adminShopAdService";
+import { useActiveShopAds } from "../../../hooks/useActiveShopAds";
+import { openAd } from "../../../utils/shopAds";
 import { useNavigate } from "react-router-dom";
-
-const FALLBACK_ADS: ShopAd[] = [
-    {
-        _id: "grocery-1",
-        shopName: "Farm Fresh Market",
-        tagline: "100% Organic & Chemical-Free",
-        description: "Fresh vegetables and fruits sourced directly from local farmers.",
-        imageUrl: "",
-        badge: "FARM FRESH",
-        badgeColor: "#16A34A",
-        ctaText: "Shop Fresh",
-        ctaLink: "/categories",
-        order: 1,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    },
-    {
-        _id: "grocery-2",
-        shopName: "Daily Dairy & Bakery",
-        tagline: "Morning Milk, Bread & Eggs",
-        description: "Delivered to your doorstep within 15 minutes every morning.",
-        imageUrl: "",
-        badge: "DAILY ESSENTIAL",
-        badgeColor: "#FF2E7A",
-        ctaText: "Order Now",
-        ctaLink: "/shop-by-stores",
-        order: 2,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    }
-];
 
 const swipeConfidenceThreshold = 10000;
 const swipePower = (offset: number, velocity: number) => {
@@ -43,31 +11,11 @@ const swipePower = (offset: number, velocity: number) => {
 
 export default function ShopAdCarousel() {
     const navigate = useNavigate();
-    const [ads, setAds] = useState<ShopAd[]>([]);
+    const { ads, loading } = useActiveShopAds();
+    const dragged = useRef(false);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [loading, setLoading] = useState(true);
     const [direction, setDirection] = useState(0);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-    const fetchAds = useCallback(async () => {
-        try {
-            const response = await getActiveShopAds();
-            if (response.success && response.data.length > 0) {
-                setAds(response.data);
-            } else {
-                setAds(FALLBACK_ADS);
-            }
-        } catch (err) {
-            console.error("Failed to fetch shop ads:", err);
-            setAds(FALLBACK_ADS);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchAds();
-    }, [fetchAds]);
 
     const paginate = useCallback((newDirection: number) => {
         setDirection(newDirection);
@@ -85,15 +33,9 @@ export default function ShopAdCarousel() {
         };
     }, [ads.length, paginate]);
 
-    const handleNext = () => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        paginate(1);
-    };
+    const handleNext = () => paginate(1);
 
-    const handlePrev = () => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        paginate(-1);
-    };
+    const handlePrev = () => paginate(-1);
 
     if (loading && ads.length === 0) {
         return (
@@ -105,14 +47,14 @@ export default function ShopAdCarousel() {
 
     if (ads.length === 0) return null;
 
-    const currentAd = ads[currentIndex];
+    const currentAd = ads[currentIndex % ads.length];
 
     return (
         <div className="relative group w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2 select-none">
             <div className="relative h-[125px] sm:h-[150px] md:h-[170px] w-full overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl shadow-xs border border-slate-200/40">
                 <AnimatePresence initial={false} custom={direction}>
                     <motion.div
-                        key={currentIndex}
+                        key={currentAd._id}
                         custom={direction}
                         initial={{ opacity: 0, x: direction > 0 ? 300 : -300 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -120,7 +62,9 @@ export default function ShopAdCarousel() {
                         drag="x"
                         dragConstraints={{ left: 0, right: 0 }}
                         dragElastic={1}
+                        onDragStart={() => { dragged.current = true; }}
                         onDragEnd={(_, { offset, velocity }) => {
+                            setTimeout(() => { dragged.current = false; }, 0);
                             const swipe = swipePower(offset.x, velocity.x);
                             if (swipe < -swipeConfidenceThreshold) {
                                 handleNext();
@@ -133,11 +77,11 @@ export default function ShopAdCarousel() {
                             opacity: { duration: 0.2 }
                         }}
                         className="absolute inset-0 w-full h-full flex items-center justify-between p-4 sm:p-6 md:p-8 cursor-pointer"
-                        onClick={() => {
-                            if (currentAd.ctaLink) {
-                                navigate(currentAd.ctaLink);
-                            }
-                        }}
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`${currentAd.shopName}: ${currentAd.ctaText || "Explore"}`}
+                        onKeyDown={(event) => { if (event.key === "Enter") openAd(currentAd.ctaLink, navigate); }}
+                        onClick={() => { if (!dragged.current) openAd(currentAd.ctaLink, navigate); }}
                     >
                         {/* Background Image if available */}
                         {currentAd.imageUrl && (

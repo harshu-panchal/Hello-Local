@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { register, sendOTP, verifyOTP } from '../../../services/api/auth/sellerAuthService';
+import { register, sendSignupOTP, verifySignupOTP } from '../../../services/api/auth/sellerAuthService';
+import { useOtpResend } from '../../../hooks/useOtpResend';
 import OTPInput from '../../../components/OTPInput';
 import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 import { useAuth } from '../../../context/AuthContext';
@@ -40,6 +41,9 @@ export default function SellerSignUp() {
     ifsc: '',
   });
   const [showOTP, setShowOTP] = useState(false);
+  const [sessionId, setSessionId] = useState('');
+  const [registrationToken, setRegistrationToken] = useState('');
+  const resend = useOtpResend();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -170,8 +174,11 @@ export default function SellerSignUp() {
     setError('');
 
     try {
-      const response = await sendOTP(formData.mobile);
+      const response = await sendSignupOTP(formData.mobile);
       if (response.success) {
+        setSessionId(response.sessionId);
+        setRegistrationToken('');
+        resend.start();
         setShowOTP(true);
         showToast('Verification OTP sent successfully!', 'success');
       } else {
@@ -193,9 +200,11 @@ export default function SellerSignUp() {
     setError('');
 
     try {
-      const verifyRes = await verifyOTP(formData.mobile, otp);
-      if (verifyRes.success) {
+      const proof = registrationToken || (await verifySignupOTP(formData.mobile, otp, sessionId)).data.registrationToken;
+      setRegistrationToken(proof);
+      if (proof) {
         const registerPayload = {
+          registrationToken: proof,
           ...formData,
           category: formData.category || (formData.categories && formData.categories[0]) || '',
           categories: formData.categories || [],
@@ -222,11 +231,12 @@ export default function SellerSignUp() {
           showToast(msg, 'error');
         }
       } else {
-        const msg = verifyRes.message || 'Invalid OTP code';
+        const msg = 'Invalid OTP code';
         setError(msg);
         showToast(msg, 'error');
       }
     } catch (err: any) {
+      if (err.response?.status === 401) setRegistrationToken('');
       const msg = err.response?.data?.message || 'Registration verification failed';
       setError(msg);
       showToast(msg, 'error');
@@ -443,16 +453,34 @@ export default function SellerSignUp() {
             </div>
 
             <div className="flex justify-center py-2">
-              <OTPInput length={4} onComplete={handleOTPComplete} disabled={loading} />
+              {registrationToken ? (
+                <SellerButton onClick={() => handleOTPComplete('')} disabled={loading}>
+                  Retry Registration
+                </SellerButton>
+              ) : <OTPInput length={4} onComplete={handleOTPComplete} disabled={loading} />}
             </div>
 
             <div className="flex justify-center">
               <button
                 type="button"
-                onClick={() => setShowOTP(false)}
+                onClick={() => { setShowOTP(false); setRegistrationToken(''); }}
+                disabled={loading}
                 className="text-xs font-bold text-slate-600 hover:underline min-h-[44px] flex items-center"
               >
                 ← Back to Edit Details
+              </button>
+              <button type="button" disabled={loading || resend.remaining > 0}
+                onClick={async () => {
+                  setLoading(true); setError('');
+                  try {
+                    const result = await sendSignupOTP(formData.mobile);
+                    setSessionId(result.sessionId); setRegistrationToken(''); resend.start();
+                    showToast('New verification code sent', 'success');
+                  } catch (err: any) {
+                    setError(err.response?.data?.message || err.friendlyMessage || 'Failed to resend OTP');
+                  } finally { setLoading(false); }
+                }} className="text-xs font-bold text-purple-600 disabled:text-slate-400 min-h-[44px] ml-4">
+                {resend.remaining ? `Resend in ${resend.remaining}s` : 'Resend OTP'}
               </button>
             </div>
           </div>

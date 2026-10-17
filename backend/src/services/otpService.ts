@@ -235,17 +235,28 @@ async function sendSmsViaApi(mobile: string, message: string): Promise<void> {
 /**
  * Save OTP to database
  */
-async function saveOtpToDb(mobile: string, otp: string, userType: UserType): Promise<void> {
+async function saveOtpToDb(mobile: string, otp: string, userType: UserType, purpose: 'login' | 'signup'): Promise<string> {
   // Normalize mobile number (remove any non-digits, ensure consistent format)
   const normalizedMobile = mobile.replace(/\D/g, '');
 
-  await Otp.deleteMany({ mobile: normalizedMobile, userType });
-  await Otp.create({
+  // The primary key serializes concurrent upserts without requiring a unique
+  // index migration over legacy OTP records.
+  const id = crypto.createHash('sha256').update(`${userType}:${purpose}:${normalizedMobile}`).digest('hex').slice(0, 24);
+  const challengeId = crypto.randomUUID();
+  await Otp.findOneAndUpdate({ _id: id }, { $set: {
     mobile: normalizedMobile,
     otp: otp.trim(),
     userType,
+    purpose,
+    challengeId,
+    attempts: 0,
+    isVerified: false,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiry (matches DLT template)
-  });
+  } }, { upsert: true, new: true, runValidators: true });
+  // Remove only legacy records. Concurrent sends share the same primary key.
+  await Otp.deleteMany({ mobile: normalizedMobile, userType, _id: { $ne: id },
+    ...(purpose === 'signup' ? { purpose } : { purpose: { $ne: 'signup' } }) });
+  return challengeId;
 }
 
 /**
@@ -254,7 +265,7 @@ async function saveOtpToDb(mobile: string, otp: string, userType: UserType): Pro
 /** A 4-digit OTP has only 10,000 values, so unlimited guesses are fatal. */
 const MAX_OTP_ATTEMPTS = 5;
 
-async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType): Promise<boolean> {
+async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType, purpose: 'login' | 'signup' = 'login', sessionId?: string): Promise<boolean> {
   const normalizedMobile = mobile.replace(/\D/g, '').slice(-10);
   const submitted = otp.trim();
 
@@ -268,7 +279,13 @@ async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType):
   // Look the record up by identity only — never by the submitted OTP — so a
   // wrong guess can be counted. Matching on the OTP meant failures were
   // indistinguishable from "no record" and were never counted. (#H-16)
-  const record = await Otp.findOne({ mobile: normalizedMobile, userType });
+  // Legacy DB_VERIFIED_/MOCK_SESSION_ ids remain valid only for their phone.
+  const legacySession = sessionId?.match(/^(?:DB_VERIFIED_|MOCK_SESSION_)(\d{10})$/);
+  if (legacySession && legacySession[1] !== normalizedMobile) return false;
+  const record = await Otp.findOne({ mobile: normalizedMobile, userType,
+    ...(purpose === 'signup' ? { purpose } : { purpose: { $ne: 'signup' } }),
+    ...(sessionId && !legacySession ? { challengeId: sessionId } : {}),
+  }).sort({ createdAt: -1 });
 
   if (!record) {
     // Never log the OTP or dump the outstanding records. (#M-20)
@@ -277,7 +294,7 @@ async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType):
   }
 
   if (record.expiresAt < new Date()) {
-    await Otp.deleteOne({ _id: record._id });
+    await Otp.deleteOne({ _id: record._id, expiresAt: { $lte: new Date() } });
     console.warn(`OTP verification failed: expired for ${userType}`);
     return false;
   }
@@ -287,21 +304,31 @@ async function verifyOtpFromDb(mobile: string, otp: string, userType: UserType):
   const matches =
     expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 
+  // Bind every mutation to the version read above so a concurrent resend cannot
+  // consume the new code or inherit the old code's attempt count.
+  const version = { _id: record._id, otp: record.otp,
+    challengeId: record.challengeId ?? { $exists: false } };
+  const attemptBudget = { $or: [
+    { attempts: { $lt: MAX_OTP_ATTEMPTS } }, { attempts: { $exists: false } },
+  ] };
+
   if (!matches) {
-    const attempts = (record.attempts || 0) + 1;
-    if (attempts >= MAX_OTP_ATTEMPTS) {
+    const updated = await Otp.findOneAndUpdate({ ...version, ...attemptBudget,
+      expiresAt: { $gt: new Date() },
+    }, { $inc: { attempts: 1 } }, { new: true });
+    if (updated && updated.attempts >= MAX_OTP_ATTEMPTS) {
       // Burn the OTP. The user must request a new one, which the per-mobile
       // OTP rate limiter then throttles.
-      await Otp.deleteOne({ _id: record._id });
-      console.warn(`OTP invalidated after ${attempts} failed attempts for ${userType}`);
-    } else {
-      await Otp.updateOne({ _id: record._id }, { $inc: { attempts: 1 } });
+      await Otp.deleteOne({ ...version, attempts: { $gte: MAX_OTP_ATTEMPTS } });
+      console.warn(`OTP invalidated after ${MAX_OTP_ATTEMPTS} failed attempts for ${userType}`);
     }
     return false;
   }
 
-  await Otp.deleteOne({ _id: record._id });
-  return true;
+  const consumed = await Otp.findOneAndDelete({ ...version, ...attemptBudget,
+    expiresAt: { $gt: new Date() },
+  });
+  return Boolean(consumed);
 }
 
 /**
@@ -334,7 +361,8 @@ async function isMockMode(): Promise<boolean> {
 
 export async function sendSmsOtp(
   mobile: string,
-  userType: 'Customer' | 'Delivery' = 'Delivery'
+  userType: 'Customer' | 'Delivery' = 'Delivery',
+  purpose: 'login' | 'signup' = 'login'
 ): Promise<OtpResponse> {
   try {
     const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
@@ -343,24 +371,24 @@ export async function sendSmsOtp(
 
     // Mock mode
     if (await isMockMode() || normalized === TEST_PHONE) {
-      await saveOtpToDb(mobile, otp, userType);
+      const sessionId = await saveOtpToDb(mobile, otp, userType, purpose);
       console.log(`[MOCK OTP] Generated OTP for mobile ${normalized} (${userType}): ${otp}`);
       return {
         success: true,
-        sessionId: 'MOCK_SESSION_' + mobile,
+        sessionId,
         message: 'OTP sent successfully',
       };
     }
 
     // Real mode - Send via SMS India HUB
-    await saveOtpToDb(mobile, otp, userType);
+    const sessionId = await saveOtpToDb(mobile, otp, userType, purpose);
     const creds = await resolveSmsCredentials();
     const message = buildOtpMessage(otp, creds.template);
     await sendSmsViaApi(mobile, message);
 
     return {
       success: true,
-      sessionId: 'DB_VERIFIED_' + mobile,
+      sessionId,
       message: 'OTP sent successfully',
     };
   } catch (error: any) {
@@ -409,7 +437,7 @@ export async function verifySmsOtp(
   // Normalize mobile number
   const normalizedMobile = targetMobile.replace(/\D/g, '');
 
-  return verifyOtpFromDb(normalizedMobile, normalizedOtp, userType);
+  return verifyOtpFromDb(normalizedMobile, normalizedOtp, userType, 'login', sessionId);
 }
 
 // ==========================================
@@ -419,7 +447,8 @@ export async function verifySmsOtp(
 export async function sendOTP(
   mobile: string,
   userType: 'Seller' | 'Admin' | 'Customer' | 'Delivery',
-  _isLogin: boolean = true
+  _isLogin: boolean = true,
+  purpose: 'login' | 'signup' = 'login'
 ): Promise<OtpResponse> {
   try {
     const TEST_PHONE = process.env.TEST_PHONE || Buffer.from('OTExMTk2NjczMg==', 'base64').toString('utf8');
@@ -428,15 +457,16 @@ export async function sendOTP(
 
     // Mock mode or fixed test number
     if (await isMockMode() || normalized === TEST_PHONE) {
-      await saveOtpToDb(mobile, otp, userType);
+      const sessionId = await saveOtpToDb(mobile, otp, userType, purpose);
       return {
         success: true,
         message: 'OTP sent successfully',
+        sessionId,
       };
     }
 
     // Real mode - Send via SMS India HUB
-    await saveOtpToDb(mobile, otp, userType);
+    const sessionId = await saveOtpToDb(mobile, otp, userType, purpose);
     const creds = await resolveSmsCredentials();
     const message = buildOtpMessage(otp, creds.template);
     await sendSmsViaApi(mobile, message);
@@ -444,6 +474,7 @@ export async function sendOTP(
     return {
       success: true,
       message: 'OTP sent successfully',
+      sessionId,
     };
   } catch (error: any) {
     const errorMessage = error.message || 'Failed to send OTP. Please try again.';
@@ -454,6 +485,14 @@ export async function sendOTP(
     });
     throw new Error(errorMessage);
   }
+}
+
+export async function sendSignupOtp(mobile: string, userType: 'Seller' | 'Delivery'): Promise<OtpResponse> {
+  return userType === 'Seller' ? sendOTP(mobile, userType, false, 'signup') : sendSmsOtp(mobile, userType, 'signup');
+}
+
+export async function verifySignupOtp(mobile: string, otp: string, userType: 'Seller' | 'Delivery', sessionId: string): Promise<boolean> {
+  return verifyOtpFromDb(mobile, otp, userType, 'signup', sessionId);
 }
 
 export async function verifyOTP(

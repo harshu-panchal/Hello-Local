@@ -6,6 +6,8 @@ export interface IOtp extends Document {
   mobile: string;
   otp: string;
   userType: UserType;
+  purpose: 'login' | 'signup';
+  challengeId?: string;
   expiresAt: Date;
   isVerified: boolean;
   /** Failed verification attempts. The record is destroyed past the cap. (#H-16) */
@@ -36,6 +38,8 @@ const OtpSchema = new Schema<IOtp>(
       required: [true, 'User type is required'],
       enum: ['Admin', 'Seller', 'Customer', 'Delivery'],
     },
+    purpose: { type: String, enum: ['login', 'signup'], default: 'login' },
+    challengeId: String,
     expiresAt: {
       type: Date,
       required: [true, 'Expiry date is required'],

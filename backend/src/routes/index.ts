@@ -1,6 +1,7 @@
 import { Router } from "express";
 import adminAuthRoutes from "./adminAuthRoutes";
 import sellerAuthRoutes from "./sellerAuthRoutes";
+import authSessionRoutes from './authSessionRoutes';
 import dashboardRoutes from "./dashboardRoutes";
 import customerAuthRoutes from "./customerAuthRoutes";
 import deliveryRoutes from "./deliveryRoutes";
@@ -79,6 +80,7 @@ router.use("/auth/seller", sellerAuthRoutes);
 router.use("/auth/customer", customerAuthRoutes);
 console.log("🔥 REGISTERING DELIVERY AUTH ROUTES");
 router.use("/auth/delivery", deliveryAuthRoutes);
+router.use('/auth', authSessionRoutes);
 
 
 // FCM Token routes (protected - requires authentication)

@@ -1,10 +1,8 @@
 import api, { removeAuthToken } from '../config';
-import { setAuthToken, setStoredUser } from '../session';
+import { setSession } from '../session';
 const handleApiError = (error: any) => {
-  if (error.response && error.response.data && error.response.data.message) {
-    throw new Error(error.response.data.message);
-  }
-  throw new Error(error.message || 'An unexpected error occurred');
+  // Preserve HTTP status, response and friendly network messages for the UI.
+  throw error;
 };
 
 export interface SendOTPResponse {
@@ -30,6 +28,7 @@ export interface VerifyOTPResponse {
 }
 
 export interface RegisterData {
+  registrationToken: string;
   name: string;
   mobile: string;
   email: string;
@@ -87,8 +86,7 @@ export const verifyOTP = async (
     });
 
     if (response.data.success && response.data.data?.token) {
-      setAuthToken(response.data.data.token, 'delivery');
-      setStoredUser(response.data.data.user, 'delivery');
+      setSession(response.data.data.token, { ...response.data.data.user, userType: 'Delivery' }, 'delivery');
     }
 
     return response.data;
@@ -107,6 +105,15 @@ export const register = async (data: RegisterData): Promise<RegisterResponse> =>
   } catch (error) {
     return handleApiError(error);
   }
+};
+
+export const sendSignupOTP = async (mobile: string): Promise<{ success: boolean; sessionId: string; message?: string }> => {
+  const response = await api.post('/auth/delivery/send-signup-otp', { mobile });
+  return response.data;
+};
+export const verifySignupOTP = async (mobile: string, otp: string, sessionId: string): Promise<{ success: boolean; data: { registrationToken: string } }> => {
+  const response = await api.post('/auth/delivery/verify-signup-otp', { mobile, otp, sessionId });
+  return response.data;
 };
 
 /**

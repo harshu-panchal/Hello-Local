@@ -86,6 +86,7 @@ export async function reserveOne(
     }
 
     const chosen: any = (product.variations as any)[index];
+    if (chosen.status === "Sold out") throw new StockError(`"${product.productName}" is sold out`);
     const available = Number(chosen.stock) || 0;
     if (available < qty) {
       throw new StockError(
@@ -97,12 +98,12 @@ export async function reserveOne(
     // SAME element, so the positional operator cannot drift. (#H-02)
     const updated = await Product.findOneAndUpdate(
       {
-        _id: product._id,
+        _id: product._id, status: "Active", publish: true,
         variations: {
-          $elemMatch: { _id: chosen._id, stock: { $gte: qty } },
+          $elemMatch: { _id: chosen._id, stock: { $gte: qty }, status: { $ne: "Sold out" } },
         },
       },
-      { $inc: { "variations.$.stock": -qty, stock: -qty } },
+      { $inc: { "variations.$.stock": -qty, stock: -qty, __v: 1 } },
       { new: true, ...(session ? { session } : {}) },
     );
 
@@ -127,8 +128,8 @@ export async function reserveOne(
   }
 
   const updated = await Product.findOneAndUpdate(
-    { _id: product._id, stock: { $gte: qty } },
-    { $inc: { stock: -qty } },
+    { _id: product._id, stock: { $gte: qty }, status: "Active", publish: true },
+    { $inc: { stock: -qty, __v: 1 } },
     { new: true, ...(session ? { session } : {}) },
   );
 
@@ -168,6 +169,7 @@ export async function releaseOne(
         $inc: {
           [`variations.${variationIndex}.stock`]: quantity,
           stock: quantity,
+          __v: 1,
         },
       },
       session ? { session } : {},
@@ -177,7 +179,7 @@ export async function releaseOne(
 
   await Product.updateOne(
     { _id: productId },
-    { $inc: { stock: quantity } },
+    { $inc: { stock: quantity, __v: 1 } },
     session ? { session } : {},
   );
 }
@@ -199,6 +201,7 @@ export async function reserveMany(
     }
     return taken;
   } catch (error) {
+    if (session) throw error; // The enclosing transaction rolls back the complete batch.
     // Compensate in reverse order. Failures here are logged, never masked.
     for (const r of taken.reverse()) {
       try {
@@ -224,6 +227,7 @@ export async function releaseMany(
     try {
       await releaseOne(r, session);
     } catch (err) {
+      if (session) throw err;
       console.error(`Failed to restore stock for product ${r.productId}:`, err);
     }
   }
@@ -235,10 +239,12 @@ export async function releaseMany(
  */
 export async function reservationsFromOrderItems(
   items: Array<{ product: unknown; quantity: number; variation?: string }>,
+  session?: mongoose.ClientSession,
 ): Promise<StockReservation[]> {
   const out: StockReservation[] = [];
   for (const item of items) {
-    const product = await Product.findById(item.product).select("variations");
+    const query = Product.findById(item.product).select("variations");
+    const product = await (session ? query.session(session) : query);
     const index = product
       ? findVariationIndex(product.variations as any, item.variation ?? null)
       : -1;

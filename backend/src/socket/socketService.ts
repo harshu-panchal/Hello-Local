@@ -1,6 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
-import jwt from 'jsonwebtoken';
+import { validateSession, sessionRoom } from '../services/authSessionService';
 import { handleOrderAcceptance, handleOrderRejection, calculateEstimatedDeliveryBoyEarning, notificationStates } from '../services/orderNotificationService';
 import Order from '../models/Order';
 import DeliveryTracking from '../models/DeliveryTracking';
@@ -118,7 +118,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
     // A token is REQUIRED. Anonymous sockets used to be admitted and could then
     // join the admin / seller / delivery notification rooms and receive customer
     // names, phone numbers and addresses. (#C-06)
-    io.use((socket, next) => {
+    io.use(async (socket, next) => {
         const token = socket.handshake.auth?.token;
 
         if (!token) {
@@ -126,13 +126,12 @@ export const initializeSocket = (httpServer: HttpServer) => {
         }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
-                userId: string;
-                userType: 'Admin' | 'Seller' | 'Customer' | 'Delivery';
-                role?: string;
-            };
+            const decoded = await validateSession(token);
             if (!decoded?.userId || !decoded?.userType) {
                 return next(new Error('Invalid token payload'));
+            }
+            if (decoded.userType === 'Seller' && decoded.accountStatus !== 'Approved') {
+                return next(new Error('Account is awaiting approval'));
             }
             (socket as any).user = decoded;
             next();
@@ -142,6 +141,40 @@ export const initializeSocket = (httpServer: HttpServer) => {
     });
 
     io.on('connection', (socket) => {
+        const sessionToken = socket.handshake.auth.token as string;
+        socket.join(sessionRoom(sessionToken));
+        const revalidate = async () => {
+            const user = await validateSession(sessionToken);
+            if (user.userType === 'Seller' && user.accountStatus !== 'Approved') throw new Error('Account is awaiting approval');
+            (socket as any).user = user;
+        };
+        socket.use((_packet, next) => {
+            revalidate().then(() => next(), () => {
+                next(new Error('Session is no longer active'));
+                socket.disconnect(true);
+            });
+        });
+        // Recheck idle connections too, since they may still receive broadcasts.
+        const sessionCheck = setInterval(() => {
+            void revalidate().catch(() => socket.disconnect(true));
+        }, 30000);
+        sessionCheck.unref();
+        let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+        const checkExpiry = () => {
+            const exp = (socket as any).user?.exp;
+            if (typeof exp !== 'number') return;
+            const remaining = exp * 1000 - Date.now();
+            if (remaining <= 0) socket.disconnect(true);
+            else {
+                expiryTimer = setTimeout(checkExpiry, Math.min(remaining, 2147483647));
+                expiryTimer.unref();
+            }
+        };
+        checkExpiry();
+        socket.on('disconnect', () => {
+            clearInterval(sessionCheck);
+            if (expiryTimer) clearTimeout(expiryTimer);
+        });
         console.log('✅ Socket connected:', socket.id, 'User:', (socket as any).user?.userId || 'Unauthenticated');
 
         // Customer subscribes to order tracking
@@ -270,7 +303,8 @@ export const initializeSocket = (httpServer: HttpServer) => {
             try {
                 const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours (was 24h)
                 const pendingOrders = await Order.find({
-                    status: 'Accepted',
+                    status: { $in: ['Accepted', 'Processed', 'Shipped'] },
+                    $or: [{ paymentMethod: 'COD' }, { paymentStatus: { $in: ['Paid', 'PartiallyRefunded'] } }],
                     deliveryBoy: null,
                     createdAt: { $gte: cutoff },
                 }).lean();

@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { applySessionVersioning } from '../utils/sessionVersioning';
 import crypto from 'crypto';
 
 export interface ICustomer extends Document {
@@ -190,6 +191,7 @@ CustomerSchema.pre('save', async function (next) {
   next();
 });
 
+applySessionVersioning(CustomerSchema, ['Inactive', 'Suspended']);
 const Customer = (mongoose.models.Customer as mongoose.Model<ICustomer>) || mongoose.model<ICustomer>('Customer', CustomerSchema);
 
 export default Customer;

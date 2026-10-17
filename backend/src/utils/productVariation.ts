@@ -102,14 +102,12 @@ export function effectiveUnitPrice(
   product: { price?: number; discPrice?: number },
   variation?: VariationLike | null,
 ): number {
-  const varDisc = Number(variation?.discPrice) || 0;
-  if (variation && varDisc > 0) return varDisc;
-
-  const prodDisc = Number(product?.discPrice) || 0;
-  if (prodDisc > 0) return prodDisc;
-
-  const varPrice = Number(variation?.price) || 0;
-  if (variation && varPrice > 0) return varPrice;
-
-  return Number(product?.price) || 0;
+  if (variation) {
+    const discounted = Number(variation.discPrice);
+    if (Number.isFinite(discounted) && discounted > 0) return discounted;
+    const price = Number(variation.price);
+    if (Number.isFinite(price) && price >= 0) return price;
+  }
+  const discounted = Number(product?.discPrice);
+  return discounted > 0 ? discounted : Number(product?.price) || 0;
 }

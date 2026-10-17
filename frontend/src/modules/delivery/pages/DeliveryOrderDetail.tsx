@@ -146,6 +146,9 @@ export default function DeliveryOrderDetail() {
             }
         };
         fetchSellerLocations();
+        if (!id || !order || ['Delivered', 'Cancelled', 'Rejected'].includes(order.status)) return;
+        const timer = setInterval(fetchSellerLocations, 15000);
+        return () => clearInterval(timer);
     }, [id, order?.status]);
 
     // Clean up when component unmounts
@@ -646,6 +649,9 @@ export default function DeliveryOrderDetail() {
             )}
 
             {/* Seller Locations Card with Pickup Buttons (before all sellers picked up) */}
+            {order.status === 'Delivered' && order.settlementStatus && order.settlementStatus !== 'Complete' && (
+                <p className="m-4 p-3 rounded-lg bg-amber-50 text-amber-900 text-sm">Delivery is complete. Earnings settlement is processing and will update automatically.</p>
+            )}
             {showSellerLocations && sellerLocations.length > 0 && (
                 <div className="p-4">
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
@@ -690,13 +696,13 @@ export default function DeliveryOrderDetail() {
                                         {!isPickedUp && (
                                             <button
                                                 onClick={() => handleSellerPickup(seller.sellerId)}
-                                                disabled={!withinRange || isLoading}
-                                                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${withinRange && !isLoading
+                                                disabled={!withinRange || isLoading || seller.readyForPickup === false}
+                                                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${withinRange && !isLoading && seller.readyForPickup !== false
                                                         ? 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]'
                                                         : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                                                     }`}
                                             >
-                                                {isLoading ? 'Confirming...' : withinRange ? 'Confirm Pickup' : 'Move within 500m to pickup'}
+                                                {isLoading ? 'Confirming...' : seller.readyForPickup === false ? 'Waiting for seller to prepare items' : withinRange ? 'Confirm Pickup' : 'Move within 500m to pickup'}
                                             </button>
                                         )}
                                     </div>

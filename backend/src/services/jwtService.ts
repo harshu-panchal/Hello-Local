@@ -1,10 +1,14 @@
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import { UserType } from '../models/Otp';
 
 export interface TokenPayload {
   userId: string;
   userType: UserType;
   role?: string;
+  exp?: number;
+  accountStatus?: string;
+  sessionVersion?: number;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -16,14 +20,16 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 /**
  * Generate JWT token for authenticated user
  */
-export function generateToken(userId: string, userType: UserType, role?: string): string {
+export function generateToken(userId: string, userType: UserType, role?: string, sessionVersion = 0): string {
   const payload: TokenPayload = {
     userId,
     userType,
+    sessionVersion,
     ...(role && { role }),
   };
 
   return jwt.sign(payload, JWT_SECRET, {
+    jwtid: randomUUID(),
     expiresIn: JWT_EXPIRES_IN,
   } as jwt.SignOptions);
 }

@@ -9,10 +9,10 @@ import {
   generateDeliveryOtp,
   verifyDeliveryOtp,
 } from "../../../services/deliveryOtpService";
-import { processOrderStatusTransition } from "../../../services/orderService";
+import { runOrderEffects } from "../../../services/orderEffectService";
+import { changeCourierStage, confirmOrderPickup, sellerStage } from "../../../services/orderLifecycleService";
 import {
   ACTIVE_COURIER_STATUSES,
-  validateTransition,
 } from "../../../services/orderStatusService";
 
 /**
@@ -20,7 +20,7 @@ import {
  */
 const mapOrderItems = (items: any[]) => {
   if (!items || !Array.isArray(items)) return [];
-  return items.map((item: any) => ({
+  return items.filter((item: any) => item.status !== "Cancelled").map((item: any) => ({
     name: item.productName || "Unknown Item",
     quantity: item.quantity || 0,
     price: item.total || 0, // Using total price for the line item
@@ -136,6 +136,10 @@ export const getTodayOrders = asyncHandler(
         : "N/A",
       createdAt: order.createdAt,
       // Distance calculation to be implemented. sending null/undefined for now to avoid fake data
+      sellerPickups: order.sellerPickups || [],
+      settlementStatus: order.settlementStatus,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
       distance: null,
     }));
 
@@ -239,6 +243,10 @@ export const getOrderDetails = asyncHandler(
       createdAt: order.createdAt,
       distance: null,
       deliveryEarning: commission ? commission.commissionAmount : 0,
+      sellerPickups: order.sellerPickups || [],
+      settlementStatus: order.settlementStatus,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
     };
 
     return res.status(200).json({
@@ -251,85 +259,12 @@ export const getOrderDetails = asyncHandler(
 /**
  * Update Order Status
  */
-export const updateOrderStatus = asyncHandler(
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { status } = req.body;
-    const deliveryId = req.user?.userId;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Order ID format",
-      });
-    }
-
-    // Statuses a courier may set from this endpoint.
-    //
-    // "Delivered" is deliberately EXCLUDED. Completing a delivery must go through
-    // verify-delivery-otp so the customer's OTP is actually checked. This endpoint
-    // used to accept ANY status with no validation, so an order could be closed —
-    // and COD money moved — without any OTP at all. (#C-08)
-    const order = await Order.findById(id);
-    if (!order) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
-    }
-
-    if (!order.deliveryBoy || order.deliveryBoy.toString() !== deliveryId) {
-      return res
-        .status(403)
-        .json({ success: false, message: "This order is not assigned to you" });
-    }
-
-    // The shared transition table also refuses "Delivered" for a courier, so
-    // completion can only happen through delivery-OTP verification. (#C-08 / #H-05)
-    const check = validateTransition(order.status, status, "delivery");
-    if (!check.valid) {
-      return res.status(400).json({ success: false, message: check.message });
-    }
-
-    const previousStatus = order.status;
-    order.status = check.status!;
-    order.deliveryBoyStatus = check.status === "Out for Delivery" ? "In Transit" : "Picked Up";
-
-    await order.save();
-
-    // Emit socket events for status changes
-    const io = (req.app as any).get("io");
-    if (io) {
-      // Real-time socket notification to customer room
-      io.to(`order-${id}`).emit("order-status-update", {
-        orderId: id,
-        orderNumber: order.orderNumber,
-        status: check.status,
-        deliveryBoyStatus: order.deliveryBoyStatus,
-        updatedAt: new Date(),
-      });
-
-      if (status === "Picked up" && previousStatus !== "Picked up") {
-        // Emit order-taken event
-        io.to(`order-${id}`).emit("order-taken", {
-          orderId: id,
-          message: "Order has been picked up from seller",
-        });
-      }
-
-      // Delivery completion (and its order-delivered broadcast) lives in
-      // verifyDeliveryOtpController, the only path that can set "Delivered". (#C-08)
-      if (previousStatus !== status) {
-        notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: `Order status updated to ${status}`,
-      data: order,
-    });
-  },
-);
+export const updateOrderStatus = asyncHandler(async (req: Request, res: Response) => {
+  const order = await changeCourierStage(req.params.id, req.user!.userId, String(req.body.status || ""));
+  const io = req.app.get("io");
+  io?.to(`order-${req.params.id}`).emit("order-status-update", { orderId: req.params.id, status: order.status });
+  return res.json({ success: true, message: "Delivery stage updated", data: order });
+});
 
 /**
  * Get Return Orders
@@ -423,6 +358,7 @@ export const getSellerLocationsForOrder = asyncHandler(
 
         return {
           sellerId: seller._id.toString(),
+          readyForPickup: ["Processed", "Shipped"].includes(sellerStage(orderItems.filter(item => String(item.seller) === String(seller._id)), order)),
           storeName: seller.storeName,
           address: seller.address,
           city: seller.city,
@@ -474,7 +410,7 @@ export const sendDeliveryOtp = asyncHandler(
         .json({ success: false, message: "Order is already delivered" });
     }
 
-    if (order.status !== "Picked up" && order.status !== "Out for Delivery") {
+    if (order.status !== "Out for Delivery") {
       return res
         .status(400)
         .json({
@@ -484,7 +420,7 @@ export const sendDeliveryOtp = asyncHandler(
     }
 
     try {
-      const result = await generateDeliveryOtp(id);
+      const result = await generateDeliveryOtp(id, { courierId: deliveryId });
 
       // Emit otp-sent event to delivery boy
       const io = (req.app as any).get("io");
@@ -546,28 +482,14 @@ export const verifyDeliveryOtpController = asyncHandler(
 
     try {
       const previousStatus = order.status;
-      const result = await verifyDeliveryOtp(id, otp);
+      const result = await verifyDeliveryOtp(id, otp, deliveryId);
       // Note: verifyDeliveryOtp is from service, not this controller
 
       // Reload order to get updated status
       const updatedOrder = await Order.findById(id);
 
-      // Process order status transition for financial transactions
-      if (
-        updatedOrder &&
-        updatedOrder.status === "Delivered" &&
-        previousStatus !== "Delivered"
-      ) {
-        try {
-          await processOrderStatusTransition(id, "Delivered", previousStatus);
-        } catch (transitionError: any) {
-          console.error(
-            "Error processing order status transition:",
-            transitionError,
-          );
-          // Continue even if transition fails - order is already marked as delivered
-        }
-      }
+      // Durable settlement tasks retry independently of delivery completion.
+      await runOrderEffects(id);
 
       // Emit socket events for real-time status update
       if (updatedOrder && updatedOrder.status === "Delivered") {
@@ -700,181 +622,14 @@ export const checkSellerProximity = asyncHandler(
  * Confirm Seller Pickup
  * Confirms pickup from a specific seller and updates order status
  */
-export const confirmSellerPickup = asyncHandler(
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { sellerId, latitude, longitude } = req.body;
-    const deliveryId = req.user?.userId;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Order ID format",
-      });
-    }
-
-    if (!sellerId || latitude === undefined || longitude === undefined) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Seller ID, latitude, and longitude are required",
-        });
-    }
-
-    const order = await Order.findById(id).populate("items");
-    if (!order) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
-    }
-
-    if (order.deliveryBoy?.toString() !== deliveryId) {
-      return res
-        .status(403)
-        .json({ success: false, message: "This order is not assigned to you" });
-    }
-
-    // Verify proximity to seller
-    const seller = await Seller.findById(sellerId).select(
-      "latitude longitude storeName location",
-    );
-    if (!seller) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Seller not found" });
-    }
-
-    let sellerLat: number | undefined;
-    let sellerLng: number | undefined;
-    if (seller.location?.coordinates?.length === 2) {
-      sellerLng = seller.location.coordinates[0];
-      sellerLat = seller.location.coordinates[1];
-    } else if (seller.latitude && seller.longitude) {
-      sellerLat = parseFloat(seller.latitude);
-      sellerLng = parseFloat(seller.longitude);
-    }
-
-    if (!Number.isFinite(sellerLat) || !Number.isFinite(sellerLng)) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Seller location not set" });
-    }
-
-    const { calculateDistance } = await import("../../../utils/locationHelper");
-    const distance = calculateDistance(
-      latitude,
-      longitude,
-      sellerLat as number,
-      sellerLng as number,
-    );
-
-    if (distance > 0.5) {
-      // 500m = 0.5km
-      return res.status(400).json({
-        success: false,
-        message: `You must be within 500 meters of the seller to confirm pickup. Current distance: ${Math.round(distance * 1000)}m`,
-      });
-    }
-
-    // Check if this seller is already picked up
-    const existingPickup = order.sellerPickups?.find(
-      (pickup: any) => pickup.seller.toString() === sellerId,
-    );
-
-    if (existingPickup && existingPickup.pickedUpAt) {
-      return res.status(400).json({
-        success: false,
-        message: "This seller has already been picked up",
-      });
-    }
-
-    // Get all unique seller IDs from active (non-cancelled) order items
-    const orderItems = await OrderItem.find({ order: id, status: { $ne: "Cancelled" } });
-    const allSellerIds = [
-      ...new Set(orderItems.map((item) => item.seller.toString())),
-    ];
-
-    // Initialize sellerPickups array if it doesn't exist
-    if (!order.sellerPickups) {
-      order.sellerPickups = [];
-    }
-
-    // Add or update pickup confirmation for this seller
-    const pickupIndex = order.sellerPickups.findIndex(
-      (pickup: any) => pickup.seller.toString() === sellerId,
-    );
-
-    const pickupData = {
-      seller: sellerId,
-      pickedUpAt: new Date(),
-      pickedUpBy: deliveryId,
-      latitude,
-      longitude,
-    };
-
-    if (pickupIndex >= 0) {
-      order.sellerPickups[pickupIndex] = pickupData as any;
-    } else {
-      order.sellerPickups.push(pickupData as any);
-    }
-
-    // Check if all sellers have been picked up
-    const pickedUpSellerIds = order.sellerPickups
-      .filter((pickup: any) => pickup.pickedUpAt)
-      .map((pickup: any) => pickup.seller.toString());
-
-    const allPickedUp = allSellerIds.every((sellerId) =>
-      pickedUpSellerIds.includes(sellerId),
-    );
-
-    // If all sellers picked up, automatically change status to "Out for Delivery"
-    if (
-      allPickedUp &&
-      order.status !== "Out for Delivery" &&
-      order.status !== "Delivered"
-    ) {
-      order.status = "Out for Delivery";
-      order.deliveryBoyStatus = "In Transit";
-    }
-
-    await order.save();
-
-    // Emit socket event
-    const io = (req.app as any).get("io");
-    if (io) {
-      io.to(`order-${id}`).emit("seller-pickup-confirmed", {
-        orderId: id,
-        orderNumber: order.orderNumber,
-        sellerId,
-        sellerName: seller.storeName,
-        allPickedUp,
-        newStatus: order.status,
-      });
-
-      if (allPickedUp) {
-        io.to(`delivery-${deliveryId}`).emit("all-sellers-picked-up", {
-          orderId: id,
-          orderNumber: order.orderNumber,
-          message: "All items picked up. Order is now Out for Delivery.",
-        });
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: allPickedUp
-        ? "All sellers picked up! Order status changed to Out for Delivery."
-        : `Pickup confirmed from ${seller.storeName}`,
-      data: {
-        order,
-        allPickedUp,
-        pickedUpSellers: pickedUpSellerIds.length,
-        totalSellers: allSellerIds.length,
-      },
-    });
-  },
-);
+export const confirmSellerPickup = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const result = await confirmOrderPickup(id, req.user!.userId, String(req.body.sellerId || ""), Number(req.body.latitude), Number(req.body.longitude));
+  const io = req.app.get("io");
+  io?.to(`order-${id}`).emit("seller-pickup-confirmed", { orderId: id, sellerId: req.body.sellerId, allPickedUp: result.allPickedUp, newStatus: result.order.status });
+  io?.to(`order-${id}`).emit("order-status-update", { orderId: id, status: result.order.status });
+  return res.json({ success: true, message: result.allPickedUp ? "All pickups confirmed. Order is Out for Delivery." : "Seller pickup confirmed.", data: result });
+});
 
 /**
  * Check Proximity to Customer

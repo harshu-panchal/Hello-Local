@@ -1,21 +1,19 @@
+import { useOtpResend } from '../../../hooks/useOtpResend';
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   register,
-  sendOTP,
-  verifyOTP,
+  sendSignupOTP,
+  verifySignupOTP,
 } from "../../../services/api/auth/deliveryAuthService";
 import { uploadDocument } from "../../../services/api/uploadService";
 import api from "../../../services/api/config";
 import OTPInput from "../../../components/OTPInput";
-import { useAuth } from "../../../context/AuthContext";
 import { normalizeMobile } from "../../../utils/phone";
-import { clearSession } from '../../../services/api/session';
 import { useToast } from '../../../context/ToastContext';
 
 export default function DeliverySignUp() {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
@@ -34,6 +32,9 @@ export default function DeliverySignUp() {
   });
 
   const [showOTP, setShowOTP] = useState(false);
+  const [applicationSubmitted, setApplicationSubmitted] = useState(false);
+  const [registrationToken, setRegistrationToken] = useState('');
+  const resend = useOtpResend();
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -205,20 +206,21 @@ export default function DeliverySignUp() {
       return;
     }
 
-    setLoading(true);
-    setError("");
-
+    setLoading(true); setError('');
     try {
-      // 1. Check if user already exists
-      const checkRes = await api.get(`/auth/delivery/check-existence?mobile=${formData.mobile}&email=${formData.email}`);
-      if (checkRes.data.success && checkRes.data.exists) {
-        const msg = checkRes.data.message || "Account already exists with this mobile or email";
-        setError(msg);
-        showToast(msg, "error");
-        setLoading(false);
-        return;
-      }
+      const checkRes = await api.get('/auth/delivery/check-existence', { params: { mobile: formData.mobile, email: formData.email } });
+      if (checkRes.data.exists) throw new Error('Account already exists with this mobile or email. Please log in.');
+      const result = await sendSignupOTP(formData.mobile);
+      setSessionId(result.sessionId); setRegistrationToken('');
+      setShowOTP(true); resend.start();
+      showToast('4-digit verification code sent to your mobile', 'success');
+    } catch (err: any) {
+      const message = err.response?.data?.message || err.friendlyMessage || err.message || 'Failed to send verification code';
+      setError(message); showToast(message, 'error');
+    } finally { setLoading(false); }
+  };
 
+  const completeRegistration = async (proof: string) => {
       // 2. Upload documents if provided
       let drivingLicenseUrl = "";
       let nationalIdentityCardUrl = "";
@@ -257,6 +259,7 @@ export default function DeliverySignUp() {
 
       // 3. Register the user
       const response = await register({
+        registrationToken: proof,
         name: formData.name,
         mobile: formData.mobile,
         email: formData.email,
@@ -275,56 +278,33 @@ export default function DeliverySignUp() {
       });
 
       if (response.success) {
-        clearSession('delivery');
-        showToast("Registration initiated! Sending OTP...", "success");
-
-        try {
-          const otpRes = await sendOTP(formData.mobile);
-          if (otpRes.sessionId) setSessionId(otpRes.sessionId);
-          setShowOTP(true);
-          showToast("4-digit OTP sent to your mobile", "success");
-        } catch (otpErr: any) {
-          const otpErrMsg = otpErr.message || "Registration successful but failed to send OTP.";
-          setError(otpErrMsg);
-          showToast(otpErrMsg, "error");
-        }
+        setApplicationSubmitted(true); setShowOTP(false);
+        showToast('Application submitted. Please wait for admin approval.', 'success');
       }
-    } catch (err: any) {
-      console.error("Registration error:", err);
-      const errorMessage = err.response?.data?.message || err.message || "Registration failed. Please try again.";
-      setError(errorMessage);
-      showToast(errorMessage, "error");
-    } finally {
-      setLoading(false);
-      setUploadingDocs(false);
-    }
   };
 
   const handleOTPComplete = async (otp: string) => {
-    setLoading(true);
-    setError("");
-
+    setLoading(true); setError('');
     try {
-      const response = await verifyOTP(formData.mobile, otp, sessionId);
-      if (response.success && response.data) {
-        login(response.data.token, {
-          ...response.data.user,
-          userType: "Delivery",
-        });
-        showToast("Welcome to Hello Local Delivery!", "success");
-        navigate("/delivery");
-      } else if (response.success) {
-        showToast("Verification successful! Please log in", "success");
-        navigate("/delivery/login");
-      }
+      const proof = registrationToken || (await verifySignupOTP(formData.mobile, otp, sessionId)).data.registrationToken;
+      setRegistrationToken(proof);
+      await completeRegistration(proof);
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "Invalid OTP. Please try again.";
-      setError(msg);
-      showToast(msg, "error");
-    } finally {
-      setLoading(false);
-    }
+      if (err.response?.status === 401) setRegistrationToken('');
+      const message = err.response?.data?.message || err.friendlyMessage || err.message || 'Registration failed. Please try again.';
+      setError(message); showToast(message, 'error');
+    } finally { setLoading(false); setUploadingDocs(false); }
   };
+
+  if (applicationSubmitted) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="max-w-md bg-white rounded-3xl p-8 text-center shadow-lg">
+        <h1 className="text-xl font-bold">Application submitted</h1>
+        <p className="mt-4 text-slate-600">Your mobile number is verified. Your delivery partner account is awaiting admin approval. You can log in once your account is activated.</p>
+        <button onClick={() => navigate('/delivery/login')} className="mt-6 rounded-xl bg-rose-600 text-white px-6 py-3 font-bold">Go to Login</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-pink-50 flex flex-col items-center px-4 py-8">
@@ -718,7 +698,12 @@ export default function DeliverySignUp() {
                 </p>
               </div>
 
-              <OTPInput onComplete={handleOTPComplete} disabled={loading} />
+              {registrationToken ? (
+                <button onClick={() => handleOTPComplete('')} disabled={loading}
+                  className="w-full py-3 rounded-2xl bg-rose-600 text-white font-bold disabled:opacity-50">
+                  Retry Registration
+                </button>
+              ) : <OTPInput onComplete={handleOTPComplete} disabled={loading} />}
 
               {error && (
                 <div className="text-xs text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-200 font-semibold text-center">
@@ -729,7 +714,7 @@ export default function DeliverySignUp() {
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => {
-                    setShowOTP(false);
+                    setShowOTP(false); setRegistrationToken('');
                     setError("");
                   }}
                   disabled={loading}
@@ -741,20 +726,21 @@ export default function DeliverySignUp() {
                     setLoading(true);
                     setError("");
                     try {
-                      const res = await sendOTP(formData.mobile);
+                      const res = await sendSignupOTP(formData.mobile);
+                      setRegistrationToken(''); resend.start();
                       if (res.sessionId) setSessionId(res.sessionId);
                       showToast("New OTP sent to your mobile", "success");
                     } catch (err: any) {
-                      const resendErr = err.message || "Failed to resend OTP.";
+                      const resendErr = err.response?.data?.message || err.friendlyMessage || err.message || "Failed to resend OTP.";
                       setError(resendErr);
                       showToast(resendErr, "error");
                     } finally {
                       setLoading(false);
                     }
                   }}
-                  disabled={loading}
+                  disabled={loading || resend.remaining > 0}
                   className="flex-1 py-3 rounded-2xl font-black text-xs bg-rose-600 text-white hover:bg-rose-700 transition-all min-h-[44px]">
-                  {loading ? "Sending..." : "Resend OTP"}
+                  {resend.remaining ? `Resend in ${resend.remaining}s` : "Resend OTP"}
                 </button>
               </div>
             </div>

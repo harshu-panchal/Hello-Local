@@ -632,13 +632,20 @@ test("P1 #7 - Test 8: SellerAdRequest payment capture stores gatewayFee, gateway
 
   let createdPaymentDoc: any = null;
 
+  const Notification = (await import("../models/Notification")).default;
+  const Lock = mongoose.models.AdScheduleLock;
+  const origLockUpdate = Lock.updateOne;
+  const origNotificationCreate = Notification.create;
   const origAdFindById = SellerAdRequest.findById;
   const origPaymentFindOne = Payment.findOne;
   const origPaymentCreate = Payment.create;
   const origStartSession = mongoose.startSession;
 
   try {
+    Lock.updateOne = async () => ({});
+    (Notification as any).create = async () => ({});
     (mongoose as any).startSession = async () => ({
+      withTransaction: async (work: any) => work(),
       startTransaction: () => {},
       commitTransaction: async () => {},
       abortTransaction: async () => {},
@@ -683,6 +690,8 @@ test("P1 #7 - Test 8: SellerAdRequest payment capture stores gatewayFee, gateway
     assert.equal(createdPaymentDoc.gatewayTax, 5.4);
     assert.equal(createdPaymentDoc.netAmount, 1464.6);
   } finally {
+    Lock.updateOne = origLockUpdate;
+    Notification.create = origNotificationCreate;
     SellerAdRequest.findById = origAdFindById;
     Payment.findOne = origPaymentFindOne;
     Payment.create = origPaymentCreate;

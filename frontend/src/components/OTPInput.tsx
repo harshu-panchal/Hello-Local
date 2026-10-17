@@ -11,12 +11,14 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Focus first input on mount
+    // Clear stale codes after verification or resend finishes, including errors.
+    if (disabled) return;
+    setOtp(Array(length).fill(''));
     const timer = setTimeout(() => {
       inputRefs.current[0]?.focus();
     }, 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [disabled, length]);
 
   const handleChange = (index: number, value: string) => {
     if (disabled) return;
@@ -40,6 +42,7 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (disabled) return;
     if (e.key === 'Backspace') {
       if (!otp[index] && index > 0) {
         // Move to previous input on backspace if current is empty
@@ -54,6 +57,7 @@ export default function OTPInput({ length = 4, onComplete, disabled = false }: O
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
+    if (disabled) return;
     const pastedData = e.clipboardData.getData('text').slice(0, length);
 
     if (/^\d+$/.test(pastedData)) {

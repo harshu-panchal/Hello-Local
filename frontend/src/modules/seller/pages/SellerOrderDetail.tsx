@@ -225,7 +225,7 @@ export default function SellerOrderDetail() {
     doc.text(`Rs.${orderDetail.subtotal.toFixed(2)}`, rightX, yPos, { align: 'right' });
     yPos += 6;
 
-    doc.text('Tax (GST):', totalsX, yPos);
+    doc.text('Tax (GST, included):', totalsX, yPos);
     doc.text(`Rs.${orderDetail.tax.toFixed(2)}`, rightX, yPos, { align: 'right' });
     yPos += 6;
 
@@ -409,7 +409,7 @@ export default function SellerOrderDetail() {
                 <th className="px-4 py-3.5">Unit / Variant</th>
                 <th className="px-4 py-3.5 text-center">Qty</th>
                 <th className="px-4 py-3.5 text-right">Unit Price</th>
-                <th className="px-4 py-3.5 text-right">Tax (GST)</th>
+                <th className="px-4 py-3.5 text-right">Tax (GST, included)</th>
                 <th className="px-4 py-3.5 text-right">Subtotal</th>
               </tr>
             </thead>
@@ -440,7 +440,7 @@ export default function SellerOrderDetail() {
             </div>
             {orderDetail.tax > 0 && (
               <div className="flex justify-between text-slate-600">
-                <span>Tax (GST):</span>
+                <span>Tax (GST, included):</span>
                 <span className="font-bold text-slate-900">₹{orderDetail.tax.toFixed(2)}</span>
               </div>
             )}

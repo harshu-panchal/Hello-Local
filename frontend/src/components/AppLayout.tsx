@@ -378,7 +378,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* 4. Global Floating Cart Pill */}
         <FloatingCartPill />
-        <AdPopupAutoWidget />
+        <AdPopupAutoWidget suppressed={isChatOpen} />
 
         {/* 5. Location Permission Request Modals */}
         {showLocationRequest && !isLocationModalOpen && (

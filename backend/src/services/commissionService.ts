@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import Commission from "../models/Commission";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
@@ -280,14 +281,10 @@ export const createPendingCommissions = async (orderId: string) => {
       ? await (orderQuery as any).populate("items")
       : await orderQuery;
     if (!order) throw new Error("Order not found");
+    if (["Cancelled", "Rejected", "Returned"].includes(order.status)) return;
 
     // Check if commissions already exist
     const existingCommissions = await Commission.find({ order: orderId });
-    if (existingCommissions.length > 0) {
-      console.log(`Commissions already exist for order ${orderId}`);
-      return;
-    }
-
     const items = (order.items || []) as any[];
     const sellerCache = new Map<string, any>();
 
@@ -296,7 +293,8 @@ export const createPendingCommissions = async (orderId: string) => {
       if (!item || !item.product || !item.seller) {
         item = await OrderItem.findById(itemRef);
       }
-      if (!item) continue;
+      if (!item || item.status === "Cancelled") continue;
+      if (existingCommissions.some((entry: any) => entry.type === "SELLER" && String(entry.orderItem) === String(item._id))) continue;
 
       const sId = item.seller?.toString();
       if (!sId) continue;
@@ -312,7 +310,7 @@ export const createPendingCommissions = async (orderId: string) => {
       const itemDiscount = (isSellerFunded && (item as any).discountAmount) ? Number((item as any).discountAmount) : 0;
       const effectiveItemAmount = Math.max(0, Math.round((item.total - itemDiscount) * 100) / 100);
 
-      const commissionRate = await getOrderItemCommissionRate(
+      const commissionRate = item.commissionRate ?? await getOrderItemCommissionRate(
         item.product.toString(),
         item.seller.toString()
       );
@@ -331,6 +329,7 @@ export const createPendingCommissions = async (orderId: string) => {
       // could not claw it back. Sellers are credited on delivery, by
       // distributeCommissions / processPendingCODPayouts. (#H-39)
       await Commission.create({
+        _id: new mongoose.Types.ObjectId(crypto.createHash("sha256").update(`seller-commission:${item._id}`).digest("hex").slice(0, 24)),
         order: item.order,
         orderItem: item._id,
         seller: item.seller,
@@ -1315,12 +1314,9 @@ export const calculateCODOrderBreakdown = async (
     // 1. Calculate Product Commissions (Admin vs Seller)
     for (const itemId of order.items) {
       const item = await OrderItem.findById(itemId);
-      if (!item) continue;
+      if (!item || item.status === "Cancelled") continue;
 
-      const product = await Product.findById(item.product);
-      if (!product) continue;
-
-      const commissionRate = item.commissionRate || await getOrderItemCommissionRate(
+      const commissionRate = item.commissionRate ?? await getOrderItemCommissionRate(
         item.product.toString(),
         item.seller.toString()
       );
@@ -1557,19 +1553,22 @@ export const processCODOrderDelivery = async (
         // Find order items for this seller to get commission details
         const orderItems = await OrderItem.find({
           order: orderId,
-          seller: sellerId
+          seller: sellerId,
+          status: { $ne: "Cancelled" }
         }).session(session);
 
         for (const item of orderItems) {
-          const commRate = item.commissionRate || await getOrderItemCommissionRate(item.product.toString(), item.seller.toString());
-          const itemCommission = (item.total * commRate) / 100;
+          const commRate = item.commissionRate ?? await getOrderItemCommissionRate(item.product.toString(), item.seller.toString());
+          const itemDiscount = (order as any).couponFunding === "SELLER" ? Number(item.discountAmount || 0) : 0;
+          const effectiveItemAmount = Math.max(0, Math.round((item.total - itemDiscount) * 100) / 100);
+          const itemCommission = Math.round(effectiveItemAmount * commRate) / 100;
 
           const sellerCommission = new Commission({
             order: orderId,
             orderItem: item._id,
             seller: sellerId,
             type: "SELLER",
-            orderAmount: item.total,
+            orderAmount: effectiveItemAmount,
             commissionRate: commRate,
             commissionAmount: itemCommission,
             status: "Pending", // Seller will be paid when delivery boy pays admin

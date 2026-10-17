@@ -101,14 +101,11 @@ test("DEFECT-003: authoritative variation pricing and label resolution", () => {
 
 test("DEFECT-003: Backend customerOrderController rejects missing and invalid variants", () => {
   const controllerCode = readCode(be("modules/customer/controllers/customerOrderController.ts"));
-
-  // Must verify selector normalization
-  assert.match(controllerCode, /normalizeSelector\(/, "Controller must normalize variation selector");
-
-  // Must check if variations exist and reject missing variant
-  assert.match(controllerCode, /hasVariations\s*&&\s*!variation/, "Controller must reject missing variation");
-  assert.match(controllerCode, /Please choose an option for/, "Controller must return 'Please choose an option' message");
-  assert.match(controllerCode, /is not a valid option for/, "Controller must reject invalid option");
+  const preparation = readCode(be("services/checkoutService.ts"));
+  assert.match(controllerCode, /prepareCheckout\(/);
+  assert.match(preparation, /normalizeSelector\(/);
+  assert.match(preparation, /hasVariations && !variation/);
+  assert.match(preparation, /Please choose a valid option for/);
 });
 
 test("DEFECT-003: Frontend ProductCard enforces explicit variant selection for multi-variant products", () => {

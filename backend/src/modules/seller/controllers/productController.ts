@@ -164,7 +164,7 @@ export const createProduct = asyncHandler(
     }
 
     // 6. Set product status - All products are published automatically without approval
-    newProductData.publish = true;
+    newProductData.publish = productData.publish === undefined ? true : productData.publish === true || productData.publish === "true";
     newProductData.status = "Active";
     newProductData.requiresApproval = false;
 
@@ -339,7 +339,6 @@ export const updateProduct = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
-    const updateData = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -353,6 +352,9 @@ export const updateProduct = asyncHandler(
     if (approvalError) {
       return res.status(403).json({ success: false, message: approvalError });
     }
+
+    const allowed = new Set(["productName", "smallDescription", "description", "mainImage", "mainImageUrl", "galleryImages", "galleryImageUrls", "price", "discPrice", "compareAtPrice", "stock", "sku", "barcode", "variationType", "variations", "publish", "popular", "dealOfDay", "manufacturer", "madeIn", "fssaiLicNo", "foodType", "totalAllowedQuantity", "isReturnable", "maxReturnDays", "returnPolicyText", "seoTitle", "seoKeywords", "seoDescription", "seoImageAlt", "pack", "shelfLife", "marketer", "tags", "isShopByStoreOnly", "shopId", "tax", "taxId", "isHomemade", "homemadeCategory", "homemadeSubcategory", "headerCategoryId", "category", "categoryId", "subcategory", "subcategoryId", "subSubCategory", "subSubCategoryId", "brand", "brandId"]);
+    const updateData: any = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.has(key)));
 
     // Remove sellerId from update data if present (cannot change owner)
     delete updateData.sellerId;
@@ -477,6 +479,9 @@ export const updateProduct = asyncHandler(
       });
     }
 
+    if (req.body.expectedVersion !== undefined && Number(req.body.expectedVersion) !== product.__v) {
+      return res.status(409).json({ success: false, message: "Product stock or details changed. Refresh before saving." });
+    }
     // Apply updates
     Object.assign(product, updateData);
 

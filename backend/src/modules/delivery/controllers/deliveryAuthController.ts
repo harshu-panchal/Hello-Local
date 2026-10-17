@@ -9,6 +9,7 @@ import {
 import { generateToken } from "../../../services/jwtService";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
+import { createVerifiedSignup } from '../../../services/signupService';
 
 /**
  * Send SMS OTP to delivery mobile number
@@ -113,7 +114,7 @@ export const verifySmsOtp = asyncHandler(
     }
 
     // Generate JWT token
-    const token = generateToken(delivery._id.toString(), "Delivery");
+    const token = generateToken(delivery._id.toString(), "Delivery", undefined, (delivery as any).authVersion || 0);
 
     return res.status(200).json({
       success: true,
@@ -191,7 +192,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Create new delivery partner
-  const newDelivery = await Delivery.create({
+  const newDelivery = await createVerifiedSignup(mobile, 'Delivery', req.body.registrationToken, () => Delivery.create({
     name,
     mobile,
     email,
@@ -210,7 +211,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     status: "Inactive", // New delivery partners start as Inactive
     balance: 0,
     cashCollected: 0,
-  } as any);
+  } as any));
 
   // Notify Admin of new driver registration
   try {

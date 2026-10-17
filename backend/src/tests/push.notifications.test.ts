@@ -173,15 +173,23 @@ test('auth provider: restored sessions refresh silently and logout captures auth
     require: (name: string) => {
       if (name === 'react') return {
         createContext: () => ({ Provider: 'Provider' }),
-        useState: (initial: any) => [typeof initial === 'function' ? initial() : initial, () => {}],
+        useMemo: (fn: any) => fn(),
+        useSyncExternalStore: (_subscribe: any, snapshot: any) => snapshot(),
         useEffect: (effect: () => void) => effects.push(effect),
       };
+      if (name === 'react-router-dom') return { useLocation() {} };
       if (name === 'react/jsx-runtime') return { jsx: (_type: any, props: any) => ({ props }) };
+      if (name.includes('authSession')) return { endSession: () => { captured = auth; auth = null; } };
+      if (name.endsWith('/config')) return { __esModule: true, default: { get: async () => ({ data: {} }) } };
       if (name.includes('pushNotificationService')) return {
         registerFCMToken: (_force: boolean, value: any) => { options = value; return Promise.resolve(null); },
         removeFCMToken: () => { captured = auth; return Promise.resolve(); },
       };
       return {
+        currentPortal: () => 'customer', subscribeSession() {},
+        sessionSnapshot: () => JSON.stringify({ token: auth, user: { id: 'user-a', userType: 'Customer' } }),
+        portalForUserType: () => 'customer',
+        setSession: (token: string) => { auth = token; },
         getAuthToken: () => auth, removeAuthToken: () => { auth = null; },
         setAuthToken: (value: string) => { auth = value; },
         getStoredUser: () => ({ id: 'user-a' }), setStoredUser() {},

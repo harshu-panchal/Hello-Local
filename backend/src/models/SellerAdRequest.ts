@@ -7,7 +7,10 @@ export type AdRequestStatus =
     | "PaymentPending"
     | "PaymentVerified"
     | "Live"
-    | "Expired";
+    | "Expired"
+    | "Scheduled"
+    | "Paused"
+    | "Removed";
 
 export interface ISellerAdRequest extends Document {
     // Seller reference
@@ -81,7 +84,7 @@ const SellerAdRequestSchema = new Schema<ISellerAdRequest>(
         ctaLink: { type: String },
 
         // Duration
-        durationDays: { type: Number, required: true, min: 1, default: 30 },
+        durationDays: { type: Number, required: true, min: 1, max: 365, default: 30 },
         adPrice: { type: Number, default: 0 },
         requestedPrice: { type: Number },
 
@@ -104,7 +107,7 @@ const SellerAdRequestSchema = new Schema<ISellerAdRequest>(
         // Status
         status: {
             type: String,
-            enum: ["Pending", "Approved", "Rejected", "PaymentPending", "PaymentVerified", "Live", "Expired"],
+            enum: ["Pending", "Approved", "Rejected", "PaymentPending", "PaymentVerified", "Live", "Expired", "Scheduled", "Paused", "Removed"],
             default: "Pending",
         },
         adminNote: { type: String },

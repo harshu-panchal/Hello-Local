@@ -1205,46 +1205,12 @@ export const deleteBrand = asyncHandler(async (req: Request, res: Response) => {
 export const createProduct = asyncHandler(
   async (req: Request, res: Response) => {
     try {
-      const productData = req.body;
+      const productData = { ...req.body };
+      productData.isShopByStoreOnly = productData.isShopByStoreOnly === true || productData.isShopByStoreOnly === "true" || productData.isShopByStoreOnly === "Yes";
+      if (productData.isShopByStoreOnly && !productData.category) delete productData.category;
 
-      // If seller is not provided, use/create default Admin Store
       if (!productData.seller) {
-        try {
-          // Check for existing admin seller by email OR mobile to avoid duplicate key errors
-          let adminSeller = await Seller.findOne({
-            $or: [
-              { email: "admin-store@hellolocal.com" },
-              { mobile: "9999999999" },
-            ],
-          });
-
-          if (!adminSeller) {
-            // Create default admin seller
-            adminSeller = await Seller.create({
-              sellerName: "Hello Local Admin",
-              storeName: "Hello Local Admin Store",
-              email: "admin-store@hellolocal.com",
-              mobile: "9999999999",
-              password: "AdminStore@123", // Should be hashed by pre-save hook
-              address: "Admin Store Headquarters",
-              city: "Navi Mumbai",
-              category: "Admin",
-              commission: 0,
-              status: "Approved",
-              requireProductApproval: false,
-              location: {
-                type: "Point",
-                coordinates: [72.8777, 19.076],
-              },
-            });
-          }
-          productData.seller = adminSeller._id;
-        } catch (sellerError: any) {
-          console.error("Error handling default admin seller:", sellerError);
-          throw new Error(
-            "Failed to assign default store: " + (sellerError.message || "Store initialization error")
-          );
-        }
+        return res.status(400).json({ success: false, message: "Select the seller/store responsible for this product and pickup location" });
       }
 
       // Map variations: Ensure 'title' from frontend is mapped to 'value' expected by Schema
@@ -1301,7 +1267,7 @@ export const createProduct = asyncHandler(
 
       if (
         !productData.productName ||
-        !productData.category ||
+        (!productData.isShopByStoreOnly && !productData.category) ||
         productData.price === undefined ||
         productData.price === null
       ) {
@@ -1330,7 +1296,7 @@ export const createProduct = asyncHandler(
 
       // All products are published automatically without approval
       productData.status = "Active";
-      productData.publish = true;
+      productData.publish = productData.publish === undefined ? true : productData.publish === true || productData.publish === "true";
       productData.requiresApproval = false;
 
       const product = await Product.create(productData);
@@ -1491,7 +1457,11 @@ export const getProductById = asyncHandler(
 export const updateProduct = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
+    if (updateData.isShopByStoreOnly !== undefined) {
+      updateData.isShopByStoreOnly = updateData.isShopByStoreOnly === true || updateData.isShopByStoreOnly === "true" || updateData.isShopByStoreOnly === "Yes";
+    }
+    if (updateData.category === "") updateData.category = null;
 
     // Clean up empty optional ID strings so Mongoose doesn't try to cast "" to ObjectId
     if (updateData.headerCategoryId === "") updateData.headerCategoryId = null;
@@ -1537,21 +1507,18 @@ export const updateProduct = asyncHandler(
       }
     }
 
-    const product = await Product.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    })
-      .populate("category", "name")
-      .populate("subcategory", "name")
-      .populate("brand", "name")
-      .populate("seller", "sellerName storeName");
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+    const product = await Product.findById(id);
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    if (updateData.expectedVersion !== undefined && Number(updateData.expectedVersion) !== product.__v) {
+      return res.status(409).json({ success: false, message: "Product stock or details changed. Reload before saving." });
     }
+    delete updateData.expectedVersion;
+    delete updateData._id;
+    delete updateData.__v;
+    delete updateData.createdAt;
+    Object.assign(product, updateData);
+    await product.save();
+    await product.populate("category subcategory brand seller");
 
     // Update inventory if stock changed
     if (updateData.stock !== undefined) {
@@ -1675,7 +1642,7 @@ export const bulkImportProducts = asyncHandler(
         // Validate required fields
         if (
           !productData.productName ||
-          !productData.category ||
+          (!productData.isShopByStoreOnly && !productData.category) ||
           !productData.seller ||
           !productData.price
         ) {
@@ -1700,7 +1667,7 @@ export const bulkImportProducts = asyncHandler(
 
         // All products are published automatically without approval
         productData.status = "Active";
-        productData.publish = true;
+        productData.publish = productData.publish === undefined ? true : productData.publish === true || productData.publish === "true";
         productData.requiresApproval = false;
 
         const product = await Product.create(productData);
