@@ -242,21 +242,23 @@ export default function ProductDetail() {
     <div className="min-h-screen bg-[#F8FAFC] pb-28 md:pb-16">
       {/* Top Header */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs">
-        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-full transition-colors touch-target-min"
+            className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-full transition-colors touch-target-min"
             aria-label="Go back"
           >
             <ArrowLeftIcon size={18} />
           </button>
 
-          <span className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[200px] sm:max-w-md">
-            {product.name}
-          </span>
+          <div className="flex-1 min-w-0 px-2 text-center">
+            <span className="text-xs sm:text-sm font-bold text-slate-800 truncate block">
+              {product.name}
+            </span>
+          </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex-shrink-0 flex items-center gap-2">
             {product?.id && (
               <WishlistButton
                 productId={product.id}
@@ -269,17 +271,17 @@ export default function ProductDetail() {
       </div>
 
       {/* Main Product Layout */}
-      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-3.5 md:pt-6">
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-3 sm:pt-4 md:pt-6">
         {/* Location Availability Alert */}
         {!isAvailableAtLocation && (
-          <div className="bg-[#FFF9EE] border border-[#FCE9C8] rounded-2xl p-3 mb-4 shadow-2xs">
-            <div className="flex items-start gap-2.5">
-              <span className="text-lg">⚠️</span>
-              <div className="flex-1">
-                <p className="text-xs font-bold text-amber-900">
+          <div className="bg-[#FFF9EE] border border-[#FCE9C8] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 mb-3 sm:mb-4 shadow-2xs">
+            <div className="flex items-start gap-2 sm:gap-2.5">
+              <span className="text-base sm:text-lg flex-shrink-0">⚠️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] sm:text-xs font-bold text-amber-900 leading-tight">
                   Not available at your location
                 </p>
-                <p className="text-[11px] text-amber-800 mt-0.5">
+                <p className="text-[10px] sm:text-[11px] text-amber-800 mt-0.5 leading-snug">
                   This product cannot be delivered to your current location. You can browse but cannot add to cart.
                 </p>
               </div>
@@ -287,13 +289,13 @@ export default function ProductDetail() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-8 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 sm:gap-5 lg:gap-8 items-start">
           {/* Left Column: Image Gallery */}
           <div className="md:col-span-6 lg:col-span-5">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-2xs overflow-hidden md:sticky md:top-20">
               {/* Main Image Preview */}
               <div
-                className="w-full aspect-square relative bg-[#FAFBFD] flex items-center justify-center overflow-hidden cursor-grab"
+                className="w-full h-64 sm:h-80 md:h-auto md:aspect-square relative bg-[#FAFBFD] flex items-center justify-center overflow-hidden cursor-grab"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
@@ -308,7 +310,7 @@ export default function ProductDetail() {
                   {allImages.map((image: string, index: number) => (
                     <div
                       key={index}
-                      className="w-full h-full flex-shrink-0 flex items-center justify-center p-4"
+                      className="w-full h-full flex-shrink-0 flex items-center justify-center p-3 sm:p-4"
                       style={{ minWidth: "100%" }}
                     >
                       <UserImage
@@ -340,7 +342,7 @@ export default function ProductDetail() {
 
                 {/* Gallery Pagination Dots */}
                 {allImages.length > 1 && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1 z-10 bg-black/25 backdrop-blur-xs px-2 py-0.5 rounded-full">
+                  <div className="absolute bottom-2.5 sm:bottom-3 left-1/2 -translate-x-1/2 flex gap-1 z-10 bg-black/25 backdrop-blur-xs px-2 py-0.5 rounded-full">
                     {allImages.map((_: string, index: number) => (
                       <button
                         key={index}
@@ -360,13 +362,13 @@ export default function ProductDetail() {
 
               {/* Thumbnails Row */}
               {allImages.length > 1 && (
-                <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex gap-2 overflow-x-auto scrollbar-hide">
+                <div className="p-2 sm:p-2.5 bg-slate-50 border-t border-slate-100 flex gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide">
                   {allImages.map((image: string, index: number) => (
                     <button
                       key={index}
                       type="button"
                       onClick={() => setSelectedImageIndex(index)}
-                      className={`flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden border-2 transition-all p-0.5 bg-white ${
+                      className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 transition-all p-0.5 bg-white ${
                         index === selectedImageIndex
                           ? "border-[#FF2E7A]"
                           : "border-slate-200 hover:border-slate-300"
@@ -386,9 +388,9 @@ export default function ProductDetail() {
           </div>
 
           {/* Right Column: Product Info & Purchase Controls */}
-          <div className="md:col-span-6 lg:col-span-7 space-y-4">
+          <div className="md:col-span-6 lg:col-span-7 space-y-3 sm:space-y-4">
             {/* Header Card */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-5 shadow-2xs">
               {/* Delivery Speed & Rating */}
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-1 bg-[#FFF1F4] border border-[#FFE4EA] text-[#FF2E7A] px-2 py-0.5 rounded-md text-[10px] font-bold">
@@ -407,24 +409,24 @@ export default function ProductDetail() {
               {/* Brand Tag (if present) */}
               {brandName && (
                 <div className="mb-1.5">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FFF1F4] text-[#FF2E7A] border border-[#FFE4EA] uppercase tracking-wider">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-[#FFF1F4] text-[#FF2E7A] border border-[#FFE4EA] uppercase tracking-wider">
                     {brandName}
                   </span>
                 </div>
               )}
 
               {/* Title */}
-              <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight leading-snug mb-1">
+              <h1 className="text-sm sm:text-xl font-bold text-slate-900 tracking-tight leading-snug mb-1">
                 {product.name}
               </h1>
 
               {/* Pack Subtitle */}
-              <p className="text-xs font-medium text-slate-500 mb-3">
+              <p className="text-xs font-medium text-slate-500 mb-2.5 sm:mb-3">
                 {variantTitle}
               </p>
 
               {/* Price Row */}
-              <div className="flex items-baseline gap-2 pb-3 border-b border-slate-100">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 pb-2.5 sm:pb-3 border-b border-slate-100">
                 <span className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                   ₹{variantPrice.toLocaleString("en-IN")}
                 </span>
@@ -440,7 +442,7 @@ export default function ProductDetail() {
                     )}
                   </>
                 )}
-                <span className="text-[10px] text-slate-400 font-medium ml-auto">
+                <span className="text-[10px] text-slate-400 font-medium sm:ml-auto w-full sm:w-auto mt-0.5 sm:mt-0">
                   Inclusive of all taxes
                 </span>
               </div>
@@ -451,7 +453,7 @@ export default function ProductDetail() {
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
                     Select {product.variationType || "Option"}:
                   </label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {product.variations.map((variant: any, index: number) => {
                       const vTitle =
                         variant.title || variant.value || `Option ${index + 1}`;
@@ -468,7 +470,7 @@ export default function ProductDetail() {
                           type="button"
                           onClick={() => setSelectedVariantIndex(index)}
                           disabled={isOutOfStock}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border touch-target-min ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border whitespace-nowrap touch-target-min ${
                             isSelected
                               ? "border-[#FF2E7A] bg-[#FFF1F4] text-[#FF2E7A] shadow-2xs"
                               : isOutOfStock
@@ -489,7 +491,7 @@ export default function ProductDetail() {
 
               {/* Stock status */}
               {variantStock !== 0 && variantStock !== undefined && variantStock !== null && (
-                <p className="text-[11px] text-slate-500 font-medium mt-2.5">
+                <p className="text-[11px] text-slate-500 font-medium mt-2 sm:mt-2.5">
                   {variantStock > 0 ? `🟢 In Stock (${variantStock} units)` : "🔴 Out of stock"}
                 </p>
               )}
@@ -631,14 +633,14 @@ export default function ProductDetail() {
 
       {/* Sticky Bottom Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-100 shadow-lg user-safe-bottom">
-        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
-          <div className="flex-1">
+        <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0 pr-2">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-base sm:text-lg font-bold text-slate-900">
+              <span className="text-base sm:text-lg font-bold text-slate-900 whitespace-nowrap">
                 ₹{variantPrice.toLocaleString("en-IN")}
               </span>
               {hasDiscount && (
-                <span className="text-xs text-slate-400 line-through font-medium">
+                <span className="text-xs text-slate-400 line-through font-medium whitespace-nowrap">
                   ₹{variantMrp.toLocaleString("en-IN")}
                 </span>
               )}
@@ -648,7 +650,7 @@ export default function ProductDetail() {
             </p>
           </div>
 
-          <div>
+          <div className="shrink-0">
             <AnimatePresence mode="wait">
               {inCartQty === 0 ? (
                 <button
@@ -656,22 +658,27 @@ export default function ProductDetail() {
                   type="button"
                   onClick={handleAddToCart}
                   disabled={Boolean(location?.latitude && location?.longitude && !isAvailableAtLocation) || !isVariantAvailable}
-                  className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all active:scale-95 touch-target-min ${
+                  className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all active:scale-95 touch-target-min flex items-center justify-center ${
                     Boolean(location?.latitude && location?.longitude && !isAvailableAtLocation) || !isVariantAvailable
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                       : "bg-[#FF2E7A] text-white hover:bg-[#E02269] shadow-xs"
                   }`}
                 >
-                  {!location?.latitude || !location?.longitude
-                    ? "Set Location to Add"
-                    : !isAvailableAtLocation
-                    ? "Unavailable"
-                    : !isVariantAvailable
-                    ? "Out of Stock"
-                    : "Add to Cart"}
+                  {!location?.latitude || !location?.longitude ? (
+                    <>
+                      <span className="hidden sm:inline">Set Location to Add</span>
+                      <span className="sm:hidden">Set Location</span>
+                    </>
+                  ) : !isAvailableAtLocation ? (
+                    "Unavailable"
+                  ) : !isVariantAvailable ? (
+                    "Out of Stock"
+                  ) : (
+                    "Add to Cart"
+                  )}
                 </button>
               ) : (
-                <div className="flex items-center gap-2 bg-[#FFF1F4] border border-[#FFE4EA] rounded-full px-2.5 py-1 text-[#FF2E7A] font-bold">
+                <div className="flex items-center gap-1.5 sm:gap-2 bg-[#FFF1F4] border border-[#FFE4EA] rounded-full px-2 sm:px-2.5 py-1 text-[#FF2E7A] font-bold shrink-0">
                   <button
                     type="button"
                     onClick={() => {
