@@ -496,7 +496,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* 7. Chatbot Floating Assistant Drawer */}
-        <div className="fixed bottom-20 right-3.5 z-40 md:bottom-6 md:right-6 flex flex-col items-end gap-2.5">
+        <div className={`fixed z-40 md:bottom-6 md:right-6 flex flex-col items-end gap-2.5 ${
+          isProductDetailPage ? 'hidden md:flex' : 'bottom-20 right-3.5 flex'
+        }`}>
           <AnimatePresence>
             {isChatOpen && (
               <motion.div
