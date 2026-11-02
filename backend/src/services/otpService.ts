@@ -217,6 +217,13 @@ async function sendSmsViaApi(mobile: string, message: string): Promise<void> {
 
   if (creds.dltTemplateId) {
     params.DLT_TE_ID = creds.dltTemplateId;
+    params.templateid = creds.dltTemplateId;
+  }
+
+  const peId = process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409';
+  if (peId) {
+    params.peid = peId;
+    params.entityid = peId;
   }
 
   const response = await axios.get<SmsIndiaHubResponse>(SMS_INDIA_HUB_API_URL, {
