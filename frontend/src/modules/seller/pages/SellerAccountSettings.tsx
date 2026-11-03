@@ -13,7 +13,7 @@ import { SellerFormField } from '../components/common/SellerFormField';
 import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
 
 export default function SellerAccountSettings() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
