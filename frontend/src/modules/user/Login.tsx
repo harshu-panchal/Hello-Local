@@ -222,7 +222,7 @@ export default function Login() {
               &{' '}
               <button
                 type="button"
-                onClick={() => navigate('/about-us')}
+                onClick={() => navigate('/privacy')}
                 className="text-[#FF2E7A] font-bold hover:underline"
               >
                 Privacy Policy

@@ -229,7 +229,7 @@ export default function DeliveryLogin() {
           By continuing, you agree to Hello Local's{' '}
           <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline font-semibold">Terms of Service</button>
           {' '}and{' '}
-          <button type="button" onClick={() => navigate('/delivery/about')} className="text-rose-600 hover:underline font-semibold">Privacy Policy</button>
+          <button type="button" onClick={() => navigate('/delivery/privacy')} className="text-rose-600 hover:underline font-semibold">Privacy Policy</button> &middot; <button type="button" onClick={() => navigate('/delivery/support')} className="text-rose-600 hover:underline font-semibold">Support Helpline</button>
         </p>
       )}
     </div>

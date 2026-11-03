@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSellerProfile, updateSellerProfile } from '../../../services/api/auth/sellerAuthService';
+import { getSellerProfile, updateSellerProfile, deleteSellerAccount } from '../../../services/api/auth/sellerAuthService';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { getCategories, Category } from '../../../services/api/categoryService';
@@ -22,6 +22,9 @@ export default function SellerAccountSettings() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const [sellerData, setSellerData] = useState({
     sellerName: '',
@@ -148,6 +151,23 @@ export default function SellerAccountSettings() {
     setFieldErrors((prev) => ({ ...prev, [name]: err }));
   };
 
+
+  const handleDeleteSeller = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
+    try {
+      setDeleting(true);
+      const res = await deleteSellerAccount();
+      if (res.success) {
+        showToast('Store account deleted successfully', 'success');
+        if (logout) logout();
+        window.location.href = '/seller/login';
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to delete seller account. Ensure you have no active orders.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -583,6 +603,77 @@ export default function SellerAccountSettings() {
           )}
         </form>
       )}
+      {/* Danger Zone: Store Deletion */}
+      <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 sm:p-6 space-y-3 mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm sm:text-base font-bold text-red-400">Danger Zone: Delete Store Account</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Permanently close this store, unpublish all catalog items, and deactivate seller credentials.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteConfirmText('');
+              setShowDeleteModal(true);
+            }}
+            className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm self-start sm:self-center min-h-[40px]"
+          >
+            Delete Store Account
+          </button>
+        </div>
+      </div>
+
+      {/* Delete Seller Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-slate-100">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center text-xl mx-auto shadow-inner">
+              ⚠️
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-black text-white">Delete Seller Store?</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-normal">
+                This action will permanently close your store, unpublish your catalog items, and revoke login credentials. You cannot delete your store if you have pending customer orders or active returns.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700">
+              <label className="text-[11px] font-bold text-slate-300 block">
+                Type <span className="text-red-400 font-black">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-red-500/30 uppercase"
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 py-2.5 text-xs font-bold text-slate-300 bg-slate-800 rounded-xl hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting}
+                onClick={handleDeleteSeller}
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 disabled:opacity-40 rounded-xl shadow-sm transition-colors"
+              >
+                {deleting ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

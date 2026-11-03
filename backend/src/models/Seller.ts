@@ -74,6 +74,8 @@ export interface ISeller extends Document {
   // FCM Push Notification Tokens
   fcmTokens?: string[];        // Web push notification tokens
   fcmTokenMobile?: string[];   // Mobile push notification tokens
+  isDeleted?: boolean;
+  deletedAt?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -111,6 +113,7 @@ const SellerSchema = new Schema<ISeller>(
       trim: true,
       validate: {
         validator: function (v: string) {
+          if ((this as any)?.isDeleted) return true;
           return /^[0-9]{10}$/.test(v);
         },
         message: 'Mobile number must be 10 digits',
@@ -290,6 +293,13 @@ const SellerSchema = new Schema<ISeller>(
     isShopOpen: {
       type: Boolean,
       default: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
     },
     // FCM Push Notification Tokens
     fcmTokens: {

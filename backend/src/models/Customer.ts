@@ -40,6 +40,8 @@ export interface ICustomer extends Document {
   // FCM Push Notification Tokens
   fcmTokens?: string[];        // Web push notification tokens
   fcmTokenMobile?: string[];   // Mobile push notification tokens
+  isDeleted?: boolean;
+  deletedAt?: Date;
 }
 
 
@@ -73,6 +75,7 @@ const CustomerSchema = new Schema<ICustomer>(
       trim: true,
       validate: {
         validator: function (v: string) {
+          if ((this as any)?.isDeleted) return true;
           return /^[0-9]{10}$/.test(v);
         },
         message: 'Phone number must be 10 digits',
@@ -155,6 +158,13 @@ const CustomerSchema = new Schema<ICustomer>(
     },
     accountPrivacy: {
       hideSensitiveItems: { type: Boolean, default: false },
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
     },
     // FCM Push Notification Tokens
     fcmTokens: {

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { getProfile, CustomerProfile } from '../../services/api/customerService';
+import { getProfile, deleteAccount, CustomerProfile } from '../../services/api/customerService';
 import { useAuth } from '../../context/AuthContext';
 import { useThemeContext } from '../../context/ThemeContext';
 import { UserEmptyState } from './components/common';
@@ -25,6 +25,9 @@ export default function Account() {
   const [showGstModal, setShowGstModal] = useState(false);
   const [gstNumber, setGstNumber] = useState('');
   const [gstError, setGstError] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const { currentTheme } = useThemeContext();
 
   useEffect(() => {
@@ -70,6 +73,22 @@ export default function Account() {
     authLogout();
     navigate('/login');
   };
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
+    try {
+      setDeleting(true);
+      const res = await deleteAccount();
+      if (res.success) {
+        authLogout();
+        navigate('/login');
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete account. Please ensure all orders are completed.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
 
   const handleGstSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,7 +233,7 @@ export default function Account() {
 
               <button
                 type="button"
-                onClick={() => navigate('/faq')}
+                onClick={() => navigate('/support')}
                 className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-2xs hover:bg-slate-50 text-left transition-colors flex items-center gap-2.5 touch-target-min"
               >
                 <div className="w-9 h-9 rounded-xl bg-[#FFF1F4] border border-[#FFE4EA] flex items-center justify-center text-[#FF2E7A] flex-shrink-0">
@@ -301,6 +320,23 @@ export default function Account() {
 
               <button
                 type="button"
+                onClick={() => navigate('/privacy')}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-[#FF2E7A]">
+                    <ShieldCheckIcon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-slate-900">Privacy Policy</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Data protection & user privacy rights</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-slate-400" />
+              </button>
+
+              <button
+                type="button"
                 onClick={handleLogout}
                 className="w-full flex items-center justify-between p-3.5 hover:bg-[#FFF1F4] transition-colors text-left touch-target-min"
               >
@@ -314,6 +350,30 @@ export default function Account() {
                   </div>
                 </div>
                 <ChevronRightIcon size={14} className="text-[#FF2E7A]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmText('');
+                  setShowDeleteModal(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 hover:bg-rose-50 transition-colors text-left touch-target-min"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-rose-600">Delete Account</p>
+                    <p className="text-[10px] text-rose-400 font-medium">Permanently close and anonymize profile</p>
+                  </div>
+                </div>
+                <ChevronRightIcon size={14} className="text-rose-400" />
               </button>
             </div>
           </div>
@@ -362,6 +422,55 @@ export default function Account() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl border border-slate-100 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center text-xl mx-auto shadow-2xs">
+              ⚠️
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-black text-slate-900">Delete Customer Account?</h3>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                This action will deactivate your profile, erase your saved addresses, and release your phone number. You cannot delete your account if you have active orders in progress.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              <label className="text-[11px] font-bold text-slate-600 block">
+                Type <span className="text-rose-600 font-black">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-rose-500/20 uppercase"
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting}
+                onClick={handleDeleteAccount}
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 rounded-full shadow-xs transition-colors"
+              >
+                {deleting ? 'Deleting...' : 'Confirm Deletion'}
+              </button>
+            </div>
           </div>
         </div>
       )}

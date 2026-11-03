@@ -230,6 +230,15 @@ export default function SellerLogin() {
             Privacy Policy
           </button>
         </p>
+        <p>
+          <button type="button" onClick={() => navigate('/seller/privacy')} className="text-slate-500 hover:text-slate-700 hover:underline">
+            Dedicated Privacy Page
+          </button>
+          {' · '}
+          <button type="button" onClick={() => navigate('/seller/support')} className="text-purple-600 font-bold hover:underline">
+            Seller Support Desk
+          </button>
+        </p>
       </div>
 
       {/* Legal Policy Modal */}

@@ -54,6 +54,8 @@ export interface IDelivery extends Document {
     location: boolean;
     sound: boolean;
   };
+  isDeleted?: boolean;
+  deletedAt?: Date;
 
   createdAt: Date;
   updatedAt: Date;
@@ -78,6 +80,7 @@ const DeliverySchema = new Schema<IDelivery>(
       trim: true,
       validate: {
         validator: function (v: string) {
+          if ((this as any)?.isDeleted) return true;
           return /^[0-9]{10}$/.test(v);
         },
         message: "Mobile number must be 10 digits",
@@ -215,6 +218,13 @@ const DeliverySchema = new Schema<IDelivery>(
       notifications: { type: Boolean, default: true },
       location: { type: Boolean, default: true },
       sound: { type: Boolean, default: true },
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
     },
     // FCM Push Notification Tokens
     fcmTokens: {

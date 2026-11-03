@@ -48,3 +48,11 @@ export const updateProfile = async (data: UpdateProfileData): Promise<UpdateProf
   return response.data;
 };
 
+
+/**
+ * Delete customer account
+ */
+export const deleteAccount = async (): Promise<{ success: boolean; message: string }> => {
+  const response = await api.delete<{ success: boolean; message: string }>('/customer/account');
+  return response.data;
+};

@@ -44,6 +44,8 @@ const Login = lazy(() => import("./modules/user/Login"));
 
 const AboutUs = lazy(() => import("./modules/user/AboutUs"));
 const FAQ = lazy(() => import("./modules/user/FAQ"));
+const UserSupport = lazy(() => import("./modules/user/UserSupport"));
+const UserPrivacy = lazy(() => import("./modules/user/UserPrivacy"));
 const Wishlist = lazy(() => import("./modules/user/Wishlist"));
 const Addresses = lazy(() => import("./modules/user/Addresses"));
 const AddressBook = lazy(() => import("./modules/user/AddressBook"));
@@ -76,6 +78,8 @@ const DeliveryWallet = lazy(() => import("./modules/delivery/pages/DeliveryWalle
 const DeliverySettings = lazy(() => import("./modules/delivery/pages/DeliverySettings"));
 const DeliveryHelp = lazy(() => import("./modules/delivery/pages/DeliveryHelp"));
 const DeliveryAbout = lazy(() => import("./modules/delivery/pages/DeliveryAbout"));
+const DeliverySupport = lazy(() => import("./modules/delivery/pages/DeliverySupport"));
+const DeliveryPrivacy = lazy(() => import("./modules/delivery/pages/DeliveryPrivacy"));
 const DeliverySellersInRange = lazy(() => import("./modules/delivery/pages/DeliverySellersInRange"));
 const DeliveryLogin = lazy(() => import("./modules/delivery/pages/DeliveryLogin"));
 const DeliverySignUp = lazy(() => import("./modules/delivery/pages/DeliverySignUp"));
@@ -105,6 +109,8 @@ const SellerWhatsApp = lazy(() => import("./modules/seller/pages/SellerWhatsApp"
 const SellerStorePreview = lazy(() => import("./modules/seller/pages/SellerStorePreview"));
 const SellerLogin = lazy(() => import("./modules/seller/pages/SellerLogin"));
 const SellerSignUp = lazy(() => import("./modules/seller/pages/SellerSignUp"));
+const SellerSupport = lazy(() => import("./modules/seller/pages/SellerSupport"));
+const SellerPrivacy = lazy(() => import("./modules/seller/pages/SellerPrivacy"));
 
 // Lazy load admin routes
 const AdminLayout = lazy(() => import("./modules/admin/components/AdminLayout"));
@@ -206,6 +212,39 @@ function App() {
                   <RouteLoaderTrigger />
                   <Routes>
                     {/* Public Routes */}
+                    {/* Dedicated Unrestricted Static Pages for Seller & Delivery */}
+                    <Route
+                      path="/seller/support"
+                      element={
+                        <Suspense fallback={<IconLoader forceShow />}>
+                          <SellerSupport />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/seller/privacy"
+                      element={
+                        <Suspense fallback={<IconLoader forceShow />}>
+                          <SellerPrivacy />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/delivery/support"
+                      element={
+                        <Suspense fallback={<IconLoader forceShow />}>
+                          <DeliverySupport />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/delivery/privacy"
+                      element={
+                        <Suspense fallback={<IconLoader forceShow />}>
+                          <DeliveryPrivacy />
+                        </Suspense>
+                      }
+                    />
                     <Route
                       path="/login"
                       element={
@@ -290,6 +329,8 @@ function App() {
                                 <Route path="settings" element={<DeliverySettings />} />
                                 <Route path="help" element={<DeliveryHelp />} />
                                 <Route path="about" element={<DeliveryAbout />} />
+                                <Route path="support" element={<DeliverySupport />} />
+                                <Route path="privacy" element={<DeliveryPrivacy />} />
                                 <Route path="sellers-in-range" element={<DeliverySellersInRange />} />
                               </Routes>
                             </DeliveryLayout>
@@ -329,6 +370,8 @@ function App() {
                                 <Route path="customers" element={<SellerCustomers />} />
                                 <Route path="suppliers" element={<SellerSuppliers />} />
                                 <Route path="whatsapp" element={<SellerWhatsApp />} />
+                                <Route path="support" element={<SellerSupport />} />
+                                <Route path="privacy" element={<SellerPrivacy />} />
                                 <Route path="ad-requests" element={<SellerAdRequests />} />
                                 </Routes>
                               </SellerLayout>
@@ -426,6 +469,8 @@ function App() {
                                 <Route path="account" element={<RequireCustomer><Account /></RequireCustomer>} />
                                 <Route path="about-us" element={<AboutUs />} />
                                 <Route path="faq" element={<FAQ />} />
+                                <Route path="support" element={<UserSupport />} />
+                                <Route path="privacy" element={<UserPrivacy />} />
                                 <Route path="wishlist" element={<RequireCustomer><Wishlist /></RequireCustomer>} />
                                 <Route path="categories" element={<Categories />} />
                                 <Route path="category/:id" element={<Category />} />

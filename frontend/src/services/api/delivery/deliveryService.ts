@@ -326,3 +326,12 @@ export const getDeliveryAppPolicy = async () => {
   }
 };
 
+
+export const deleteDeliveryAccount = async () => {
+  try {
+    const response = await api.delete(`${BASE_URL}/account`);
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};

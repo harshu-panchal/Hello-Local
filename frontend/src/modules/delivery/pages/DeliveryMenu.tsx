@@ -6,6 +6,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { useDeliveryUser } from "../context/DeliveryUserContext";
 import { useDeliveryStatus } from "../context/DeliveryStatusContext";
 import { useToast } from "../../../context/ToastContext";
+import { deleteDeliveryAccount } from "../../../services/api/delivery/deliveryService";
 
 export default function DeliveryMenu() {
   const navigate = useNavigate();
@@ -14,6 +15,9 @@ export default function DeliveryMenu() {
   const { isOnline, sellersInRangeCount } = useDeliveryStatus();
   const { showToast } = useToast();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const displayName = userName || (user as any)?.name || "Delivery Partner";
   const displayMobile = (user as any)?.mobile || "";
@@ -31,6 +35,7 @@ export default function DeliveryMenu() {
     { id: "menu-4", title: "Help & Support Desk", subtitle: "FAQs & emergency lines", route: "/delivery/help" },
     { id: "menu-5", title: "About Hello Local", subtitle: "App policies & legal terms", route: "/delivery/about" },
     { id: "menu-6", title: "Logout", subtitle: "Sign out of your account", route: "logout" },
+    { id: "menu-delete", title: "Delete Partner Account", subtitle: "Deactivate account & release phone", route: "delete" },
   ];
 
   const getMenuIcon = (menuId: string) => {
@@ -109,6 +114,16 @@ export default function DeliveryMenu() {
             </svg>
           </div>
         );
+      case "menu-delete":
+        return (
+          <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center border border-rose-200">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </div>
+        );
       case "menu-6":
         return (
           <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
@@ -124,9 +139,30 @@ export default function DeliveryMenu() {
     }
   };
 
+  const handleDeleteDelivery = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
+    try {
+      setDeleting(true);
+      const res = await deleteDeliveryAccount();
+      if (res?.success) {
+        showToast('Delivery partner account deleted', 'success');
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = '/delivery/login';
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || 'Failed to delete delivery account', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleMenuClick = (route: string) => {
     if (route === "logout") {
       setShowLogoutModal(true);
+    } else if (route === "delete") {
+      setDeleteConfirmText('');
+      setShowDeleteModal(true);
     } else {
       navigate(route);
     }
@@ -240,6 +276,54 @@ export default function DeliveryMenu() {
         </div>
       )}
 
+      {/* Delete Partner Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl border border-slate-200/80 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center text-xl mx-auto shadow-2xs">
+              ⚠️
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-black text-slate-900">Delete Delivery Account?</h3>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                This action will deactivate your driver fleet profile and release your registered mobile number. You cannot delete your account if you have pending cash collections or assigned orders.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60">
+              <label className="text-[11px] font-bold text-slate-600 block">
+                Type <span className="text-rose-600 font-black">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-rose-500/20 uppercase"
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting}
+                onClick={handleDeleteDelivery}
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 rounded-full shadow-xs transition-colors"
+              >
+                {deleting ? 'Deleting...' : 'Confirm Deletion'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <DeliveryBottomNav />
     </div>
   );

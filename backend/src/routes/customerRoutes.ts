@@ -19,4 +19,7 @@ router.post("/location", customerController.updateLocation);
 // Get customer location (protected route)
 router.get("/location", customerController.getLocation);
 
+// Delete customer account (protected route)
+router.delete("/account", customerController.deleteAccount);
+
 export default router;

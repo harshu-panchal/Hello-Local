@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import Seller from "../../../models/Seller";
+import Order from "../../../models/Order";
+import Return from "../../../models/Return";
+import Product from "../../../models/Product";
 import {
   sendOTP as sendOTPService,
   verifyOTP as verifyOTPService,
@@ -505,5 +508,81 @@ export const checkExistence = asyncHandler(async (req: Request, res: Response) =
     message: exists
       ? "An account is already registered with these details"
       : undefined,
+  });
+});
+
+/**
+ * Delete / Deactivate Seller Account
+ */
+export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
+  const sellerId = req.user?.userId;
+
+  if (!sellerId || (req as any).user?.userType !== "Seller") {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized or not a seller",
+    });
+  }
+
+  const seller = await Seller.findById(sellerId);
+  if (!seller) {
+    return res.status(404).json({
+      success: false,
+      message: "Seller not found",
+    });
+  }
+
+  // 1. Guardrail: Check for in-flight orders containing this seller's products
+  const activeOrders = await Order.countDocuments({
+    "items.seller": sellerId,
+    status: { $in: ["Pending", "Accepted", "Processing", "Out for Delivery"] },
+  });
+
+  if (activeOrders > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot delete store while you have ${activeOrders} in-flight customer order(s) in progress.`,
+    });
+  }
+
+  // 2. Guardrail: Check for pending return requests
+  const pendingReturns = await Return.countDocuments({
+    seller: sellerId,
+    status: { $in: ["Pending", "Approved", "Pickup Assigned"] },
+  });
+
+  if (pendingReturns > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot delete store while you have ${pendingReturns} return request(s) in progress.`,
+    });
+  }
+
+  // 3. Deactivate all catalog products
+  await Product.updateMany(
+    { seller: sellerId },
+    { status: "Inactive", isApproved: false }
+  );
+
+  // 4. Anonymize PII & Release mobile/email
+  const anonymizedMobile = `del_${Date.now()}_${seller.mobile}`;
+  const anonymizedEmail = seller.email ? `deleted_${seller._id}_${Date.now()}@hellolocal.deleted` : undefined;
+
+  seller.sellerName = "Deleted Seller";
+  seller.storeName = `Closed Store (${seller._id.toString().slice(-4)})`;
+  seller.mobile = anonymizedMobile;
+  if (anonymizedEmail) seller.email = anonymizedEmail;
+  seller.isShopOpen = false;
+  seller.status = "Rejected";
+  seller.isDeleted = true;
+  seller.deletedAt = new Date();
+  seller.fcmTokens = [];
+  seller.fcmTokenMobile = [];
+
+  await seller.save();
+
+  return res.status(200).json({
+    success: true,
+    message: "Seller store account has been deleted successfully.",
   });
 });

@@ -1,5 +1,10 @@
 import { Request, Response } from "express";
 import Customer from "../../../models/Customer";
+import Order from "../../../models/Order";
+import Return from "../../../models/Return";
+import Cart from "../../../models/Cart";
+import Wishlist from "../../../models/Wishlist";
+import Address from "../../../models/Address";
 import { asyncHandler } from "../../../utils/asyncHandler";
 
 /**
@@ -224,5 +229,81 @@ export const getLocation = asyncHandler(async (req: Request, res: Response) => {
       pincode: customer.pincode,
       locationUpdatedAt: customer.locationUpdatedAt,
     },
+  });
+});
+
+/**
+ * Delete / Deactivate Customer Account
+ */
+export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+
+  if (!userId || (req as any).user?.userType !== "Customer") {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized or not a customer",
+    });
+  }
+
+  const customer = await Customer.findById(userId);
+  if (!customer) {
+    return res.status(404).json({
+      success: false,
+      message: "Customer not found",
+    });
+  }
+
+  // 1. Guardrail: Check for active in-flight orders
+  const activeOrders = await Order.countDocuments({
+    customer: userId,
+    status: { $in: ["Pending", "Accepted", "Processing", "Shipped", "Out for Delivery"] },
+  });
+
+  if (activeOrders > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot delete account while you have ${activeOrders} active order(s) in progress.`,
+    });
+  }
+
+  // 2. Guardrail: Check for pending return requests
+  const pendingReturns = await Return.countDocuments({
+    customer: userId,
+    status: { $in: ["Pending", "Approved", "Pickup Assigned"] },
+  });
+
+  if (pendingReturns > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot delete account while you have ${pendingReturns} return request(s) in progress.`,
+    });
+  }
+
+  // 3. Anonymize PII & Release Phone / Email for future fresh registration
+  const anonymizedPhone = `del_${Date.now()}_${customer.phone}`;
+  const anonymizedEmail = customer.email ? `deleted_${customer._id}_${Date.now()}@hellolocal.deleted` : undefined;
+  const anonymizedRef = `DEL_${Date.now()}_${customer._id.toString().slice(-4)}`;
+
+  customer.name = "Deleted User";
+  customer.phone = anonymizedPhone;
+  if (anonymizedEmail) customer.email = anonymizedEmail;
+  else customer.email = undefined as any;
+  customer.refCode = anonymizedRef;
+  customer.status = "Inactive";
+  customer.isDeleted = true;
+  customer.deletedAt = new Date();
+  customer.fcmTokens = [];
+  customer.fcmTokenMobile = [];
+
+  await customer.save();
+
+  // 4. Remove ephemeral data
+  await Cart.deleteMany({ customer: userId });
+  await Wishlist.deleteMany({ customer: userId });
+  await Address.deleteMany({ customer: userId });
+
+  return res.status(200).json({
+    success: true,
+    message: "Your account has been deleted successfully.",
   });
 });

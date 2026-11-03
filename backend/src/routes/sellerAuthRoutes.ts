@@ -26,6 +26,7 @@ router.get("/check-existence", loginRateLimiter, sellerAuthController.checkExist
 router.get("/profile", authenticate, requireUserType('Seller'), sellerAuthController.getProfile);
 router.put("/profile", authenticate, requireUserType('Seller'), sellerAuthController.updateProfile);
 router.put("/toggle-shop-status", authenticate, requireUserType('Seller'), sellerAuthController.toggleShopStatus);
+router.delete("/account", authenticate, requireUserType('Seller'), sellerAuthController.deleteAccount);
 
 // Notification routes (protected)
 router.get("/notifications", authenticate, requireUserType('Seller'), sellerNotificationController.getNotifications);
