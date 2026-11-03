@@ -107,7 +107,7 @@ export default function SellerSupport() {
           </p>
 
           {/* Quick Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto mt-6">
             <a
               href={`tel:${contactInfo.phoneRaw}`}
               className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl text-xs sm:text-sm font-bold shadow-md active:scale-[0.98] transition-all"
@@ -121,15 +121,6 @@ export default function SellerSupport() {
             >
               <span>✉️</span>
               <span>Email Support</span>
-            </a>
-            <a
-              href="https://wa.me/919960700792?text=Hello%20Local%20Seller%20Support%2C%20I%20am%20a%20registered%20seller%20and%20need%20help"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs sm:text-sm font-bold shadow-md active:scale-[0.98] transition-all"
-            >
-              <span>💬</span>
-              <span>WhatsApp Merchant Desk</span>
             </a>
           </div>
         </div>
@@ -183,9 +174,9 @@ export default function SellerSupport() {
 
             {/* Phone Contact */}
             <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60 space-y-1 relative">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Direct Phone / WhatsApp</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Direct Phone & Helpline</span>
               <p className="text-xs sm:text-sm font-bold text-white">
-                <a href={`tel:${contactInfo.phoneRaw}`} className="text-emerald-400 hover:underline">
+                <a href={`tel:${contactInfo.phoneRaw}`} className="text-purple-400 hover:underline">
                   {contactInfo.mobile}
                 </a>
               </p>

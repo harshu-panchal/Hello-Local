@@ -105,7 +105,7 @@ export default function DeliverySupport() {
           </p>
 
           {/* Quick Action Channels */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto mt-6">
             <a
               href={`tel:${contactInfo.phoneRaw}`}
               className="flex items-center justify-center gap-2 px-4 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs sm:text-sm font-black shadow-md active:scale-[0.98] transition-all min-h-[48px]"
@@ -119,15 +119,6 @@ export default function DeliverySupport() {
             >
               <span>✉️</span>
               <span>Email Fleet Desk</span>
-            </a>
-            <a
-              href="https://wa.me/919960700792?text=Hello%20Local%20Delivery%20Helpline%2C%20I%20am%20on%20duty%20and%20need%20assistance"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 px-4 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs sm:text-sm font-bold shadow-md active:scale-[0.98] transition-all min-h-[48px]"
-            >
-              <span>💬</span>
-              <span>WhatsApp Live Help</span>
             </a>
           </div>
         </div>
@@ -181,9 +172,9 @@ export default function DeliverySupport() {
 
             {/* Phone Contact */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1 relative">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Urgent Phone / WhatsApp</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Urgent Phone & Helpline</span>
               <p className="text-xs sm:text-sm font-bold text-slate-900">
-                <a href={`tel:${contactInfo.phoneRaw}`} className="text-emerald-700 hover:underline font-black">
+                <a href={`tel:${contactInfo.phoneRaw}`} className="text-rose-600 hover:underline font-black">
                   {contactInfo.mobile}
                 </a>
               </p>

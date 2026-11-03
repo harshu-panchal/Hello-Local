@@ -104,7 +104,7 @@ export default function UserSupport() {
           </p>
 
           {/* Quick Support Channels */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto mt-6">
             <a
               href={`tel:${contactInfo.phoneRaw}`}
               className="flex items-center justify-center gap-2 px-4 py-3 bg-[#FF2E7A] hover:bg-[#E02269] text-white rounded-2xl text-xs sm:text-sm font-bold shadow-xs active:scale-[0.98] transition-all"
@@ -118,15 +118,6 @@ export default function UserSupport() {
             >
               <span>✉️</span>
               <span>Email Support</span>
-            </a>
-            <a
-              href={`https://wa.me/919960700792?text=Hi%20Hello%20Local%2C%20I%20need%20assistance%20with%20my%20order`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-[#16A34A] hover:bg-[#15803D] text-white rounded-2xl text-xs sm:text-sm font-bold shadow-xs active:scale-[0.98] transition-all"
-            >
-              <span>💬</span>
-              <span>WhatsApp Chat</span>
             </a>
           </div>
         </div>
@@ -180,9 +171,9 @@ export default function UserSupport() {
 
             {/* Phone Contact */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1 relative">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Helpline & WhatsApp</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Helpline & Phone</span>
               <p className="text-xs sm:text-sm font-bold text-slate-900">
-                <a href={`tel:${contactInfo.phoneRaw}`} className="text-[#16A34A] hover:underline">
+                <a href={`tel:${contactInfo.phoneRaw}`} className="text-[#FF2E7A] hover:underline">
                   {contactInfo.mobile}
                 </a>
               </p>
