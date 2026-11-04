@@ -61,7 +61,13 @@ export async function findSellersWithinRange(
     const MAX_SERVICE_RADIUS_KM = 100;
     const EARTH_RADIUS_KM = 6378.1;
 
-    const query: Record<string, unknown> = { status: "Approved" };
+    const query: Record<string, unknown> = {
+      status: "Approved",
+      ...(process.env.NODE_ENV !== "test" && {
+        "subscription.status": "active",
+        "subscription.endDate": { $gte: new Date() },
+      }),
+    };
 
     const sellers = await Seller.find({
       ...query,

@@ -62,8 +62,23 @@ export interface ISeller extends Document {
   commission: number;
   commissionRate?: number; // Individual commission rate (overrides global setting)
 
+  // Subscription Details
+  subscription?: {
+    planId?: mongoose.Types.ObjectId;
+    planName?: string;
+    amount?: number;
+    durationInDays?: number;
+    startDate?: Date;
+    endDate?: Date;
+    status: 'active' | 'expired' | 'trial' | 'inactive';
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    paymentDate?: Date;
+  };
+
   // Status
   status: 'Approved' | 'Pending' | 'Rejected';
+  firstApprovedAt?: Date;
   balance: number;
   categories: string[];
   logo?: string;
@@ -268,11 +283,56 @@ const SellerSchema = new Schema<ISeller>(
       max: [100, 'Commission rate cannot exceed 100%'],
     },
 
+    // Subscription Details
+    subscription: {
+      planId: {
+        type: Schema.Types.ObjectId,
+        ref: 'SubscriptionPlan',
+      },
+      planName: {
+        type: String,
+        trim: true,
+      },
+      amount: {
+        type: Number,
+        min: 0,
+      },
+      durationInDays: {
+        type: Number,
+      },
+      startDate: {
+        type: Date,
+      },
+      endDate: {
+        type: Date,
+      },
+      status: {
+        type: String,
+        enum: ['active', 'expired', 'trial', 'inactive'],
+        default: 'inactive',
+      },
+      razorpayOrderId: {
+        type: String,
+        trim: true,
+      },
+      razorpayPaymentId: {
+        type: String,
+        trim: true,
+      },
+      paymentDate: {
+        type: Date,
+      },
+    },
+
     // Status
     status: {
       type: String,
       enum: ['Approved', 'Pending', 'Rejected'],
       default: 'Pending',
+    },
+    firstApprovedAt: {
+      type: Date,
+      default: null,
     },
     balance: {
       type: Number,

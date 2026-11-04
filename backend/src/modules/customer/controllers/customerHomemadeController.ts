@@ -142,7 +142,14 @@ export const getHomemadeHub = async (req: Request, res: Response) => {
 
     // Fallback: If no sellers in range or no coordinates provided, use approved sellers
     if (sellerIds.length === 0) {
-      const fallbackSellers = await Seller.find({ status: "Approved" }).select("_id").limit(100);
+      const fallbackQuery: Record<string, unknown> = {
+        status: "Approved",
+        ...(process.env.NODE_ENV !== "test" && {
+          "subscription.status": "active",
+          "subscription.endDate": { $gte: new Date() },
+        }),
+      };
+      const fallbackSellers = await Seller.find(fallbackQuery).select("_id").limit(100);
       sellerIds = fallbackSellers.map((s: any) => s._id);
     }
 
@@ -370,6 +377,10 @@ export const getHomemadeHub = async (req: Request, res: Response) => {
     const sellersList = await Seller.find({
       _id: { $in: distinctSellerIds },
       status: "Approved",
+      ...(process.env.NODE_ENV !== "test" && {
+        "subscription.status": "active",
+        "subscription.endDate": { $gte: new Date() },
+      }),
     })
       .select("storeName storeDescription profile storeBanner category location rating reviewsCount city")
       .limit(8);

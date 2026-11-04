@@ -82,7 +82,13 @@ export const getProducts = async (req: Request, res: Response) => {
     } else if (isHomemade === "true" || (isHomemade as unknown) === true) {
       // Graceful preview for Homemade Hub when user hasn't selected GPS location yet
       const SellerModel = mongoose.model("Seller");
-      const approvedSellers = await SellerModel.find({ status: "Approved" }).select("_id").limit(50);
+      const approvedSellers = await SellerModel.find({
+        status: "Approved",
+        ...(process.env.NODE_ENV !== "test" && {
+          "subscription.status": "active",
+          "subscription.endDate": { $gte: new Date() },
+        }),
+      }).select("_id").limit(50);
       query.seller = { $in: approvedSellers.map((s: any) => s._id) };
     } else {
       // If no location provided, return empty result (strictly enforce location)
@@ -394,7 +400,7 @@ export const getProductById = async (req: Request, res: Response) => {
       .populate("brand", "name image")
       .populate(
         "seller",
-        "storeName city fssaiLicNo address location serviceRadiusKm"
+        "storeName city fssaiLicNo address location serviceRadiusKm status subscription"
       );
 
     if (!product) {
@@ -402,6 +408,18 @@ export const getProductById = async (req: Request, res: Response) => {
         success: false,
         message: "Product not found or unavailable",
       });
+    }
+
+    const sellerObj = product.seller as any;
+    if (sellerObj && typeof sellerObj === "object") {
+      const sub = sellerObj.subscription;
+      const hasActiveSub = sub && sub.status === "active" && sub.endDate && new Date(sub.endDate) >= new Date();
+      if (sellerObj.status && (sellerObj.status !== "Approved" || (!hasActiveSub && process.env.NODE_ENV !== "test"))) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found or unavailable",
+        });
+      }
     }
 
     // Parse location

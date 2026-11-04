@@ -111,6 +111,7 @@ const SellerLogin = lazy(() => import("./modules/seller/pages/SellerLogin"));
 const SellerSignUp = lazy(() => import("./modules/seller/pages/SellerSignUp"));
 const SellerSupport = lazy(() => import("./modules/seller/pages/SellerSupport"));
 const SellerPrivacy = lazy(() => import("./modules/seller/pages/SellerPrivacy"));
+const SellerSubscription = lazy(() => import("./modules/seller/pages/SellerSubscription"));
 
 // Lazy load admin routes
 const AdminLayout = lazy(() => import("./modules/admin/components/AdminLayout"));
@@ -122,6 +123,7 @@ const AdminSubCategory = lazy(() => import("./modules/admin/pages/AdminSubCatego
 const AdminBrand = lazy(() => import("./modules/admin/pages/AdminBrand"));
 const AdminTaxes = lazy(() => import("./modules/admin/pages/AdminTaxes"));
 const AdminSellerTransaction = lazy(() => import("./modules/admin/pages/AdminSellerTransaction"));
+const AdminSubscriptionPlans = lazy(() => import("./modules/admin/pages/AdminSubscriptionPlans"));
 const AdminStockManagement = lazy(() => import("./modules/admin/pages/AdminStockManagement"));
 const AdminAddProduct = lazy(() => import("./modules/admin/pages/AdminAddProduct"));
 const AdminSubcategoryOrder = lazy(() => import("./modules/admin/pages/AdminSubcategoryOrder"));
@@ -373,6 +375,7 @@ function App() {
                                 <Route path="support" element={<SellerSupport />} />
                                 <Route path="privacy" element={<SellerPrivacy />} />
                                 <Route path="ad-requests" element={<SellerAdRequests />} />
+                                <Route path="subscription" element={<SellerSubscription />} />
                                 </Routes>
                               </SellerLayout>
                             </SellerSocketProvider>
@@ -402,6 +405,7 @@ function App() {
                                 <Route path="product/edit/:id" element={<AdminAddProduct />} />
                                 <Route path="manage-seller/list" element={<AdminManageSellerList />} />
                                 <Route path="manage-seller/transaction" element={<AdminSellerTransaction />} />
+                                <Route path="manage-seller/subscriptions" element={<AdminSubscriptionPlans />} />
                                 <Route path="delivery-boy/manage" element={<AdminManageDeliveryBoy />} />
                                 <Route path="delivery-boy/fund-transfer" element={<AdminFundTransfer />} />
                                 <Route path="delivery-boy/cash-collection" element={<AdminCashCollection />} />

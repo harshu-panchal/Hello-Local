@@ -9,6 +9,7 @@ import {
 } from "../../../services/api/sellerService";
 import SellerServiceMap from "../components/SellerServiceMap";
 import { useToast } from "../../../context/ToastContext";
+import { grantSubscriptionAdmin } from "../../../services/api/subscriptionService";
 
 interface Seller {
   _id: string;
@@ -47,6 +48,16 @@ interface Seller {
   addressProof?: string;
   requireProductApproval?: boolean;
   viewCustomerDetails?: boolean;
+  subscription?: {
+    planId?: string;
+    planName?: string;
+    amount?: number;
+    durationInDays?: number;
+    startDate?: string;
+    endDate?: string;
+    status: 'active' | 'expired' | 'trial' | 'inactive';
+    paymentDate?: string;
+  };
 }
 
 const mapSellerToFrontend = (seller: SellerType): Seller => {
@@ -86,6 +97,7 @@ const mapSellerToFrontend = (seller: SellerType): Seller => {
     addressProof: seller.addressProof,
     requireProductApproval: seller.requireProductApproval,
     viewCustomerDetails: seller.viewCustomerDetails,
+    subscription: seller.subscription,
   };
 };
 
@@ -125,6 +137,44 @@ export default function AdminManageSellerList() {
   // Deletion Modal
   const [deleteTarget, setDeleteTarget] = useState<Seller | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Manual Subscription Grant Modal
+  const [subscriptionTarget, setSubscriptionTarget] = useState<Seller | null>(null);
+  const [grantDays, setGrantDays] = useState<number>(30);
+  const [grantPlanName, setGrantPlanName] = useState<string>("30-Day Support Extension");
+  const [grantNotes, setGrantNotes] = useState<string>("");
+  const [isGrantingSub, setIsGrantingSub] = useState(false);
+
+  const handleOpenSubscriptionModal = (seller: Seller) => {
+    setSubscriptionTarget(seller);
+    setGrantDays(30);
+    setGrantPlanName("30-Day Support Extension");
+    setGrantNotes("");
+  };
+
+  const handleConfirmGrantSubscription = async () => {
+    if (!subscriptionTarget) return;
+    try {
+      setIsGrantingSub(true);
+      const res = await grantSubscriptionAdmin({
+        sellerId: subscriptionTarget._id,
+        durationInDays: Number(grantDays),
+        planName: grantPlanName || "Admin Support Extension",
+        notes: grantNotes || `Admin granted ${grantDays} days extension`,
+      });
+      if (res?.success) {
+        showToast(`Subscription extended for ${subscriptionTarget.storeName} by ${grantDays} days!`, "success");
+        setSubscriptionTarget(null);
+        await fetchSellers();
+      } else {
+        showToast(res?.message || "Failed to grant subscription", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err?.message || "Failed to grant subscription", "error");
+    } finally {
+      setIsGrantingSub(false);
+    }
+  };
 
   // Debounce search query (300ms)
   useEffect(() => {
@@ -588,6 +638,7 @@ export default function AdminManageSellerList() {
                   </div>
                 </th>
                 <th className="py-3 px-3 w-28 text-center">Categories</th>
+                <th className="py-3 px-3 w-32 text-center">Subscription</th>
                 <th
                   className="py-3 px-3 cursor-pointer hover:bg-neutral-200/60 transition-colors w-28 text-center"
                   onClick={() => handleSort("status")}
@@ -611,13 +662,14 @@ export default function AdminManageSellerList() {
                     <td className="py-3.5 px-3"><div className="h-4 bg-neutral-200 rounded w-16 ml-auto" /></td>
                     <td className="py-3.5 px-3"><div className="h-4 bg-neutral-200 rounded w-10 mx-auto" /></td>
                     <td className="py-3.5 px-3"><div className="h-6 bg-neutral-200 rounded w-18 mx-auto" /></td>
+                    <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded w-20 mx-auto" /></td>
                     <td className="py-3.5 px-3"><div className="h-5 bg-neutral-200 rounded-full w-20 mx-auto" /></td>
                     <td className="py-3.5 px-4"><div className="h-8 bg-neutral-200 rounded w-16 ml-auto" /></td>
                   </tr>
                 ))
               ) : error ? (
                 <tr>
-                  <td colSpan={9} className="py-10 px-4 text-center">
+                  <td colSpan={10} className="py-10 px-4 text-center">
                     <p className="text-sm font-bold text-red-600 mb-2">{error}</p>
                     <button
                       type="button"
@@ -690,6 +742,39 @@ export default function AdminManageSellerList() {
                       </button>
                     </td>
                     <td className="py-3 px-3 text-center">
+                      {seller.subscription?.planName ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSubscriptionModal(seller)}
+                            title="Click to manage subscription"
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer hover:opacity-85 transition-opacity ${
+                              seller.subscription.status === "active" &&
+                              (!seller.subscription.endDate || new Date(seller.subscription.endDate) >= new Date())
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
+                            }`}
+                          >
+                            {seller.subscription.planName}
+                          </button>
+                          {seller.subscription.endDate && (
+                            <span className="text-[10px] text-neutral-400">
+                              Exp: {new Date(seller.subscription.endDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSubscriptionModal(seller)}
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors cursor-pointer"
+                          title="Grant subscription to this seller"
+                        >
+                          + Grant Plan
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-center">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                           seller.status === "Approved"
@@ -714,6 +799,18 @@ export default function AdminManageSellerList() {
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSubscriptionModal(seller)}
+                          className="p-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors touch-target-min"
+                          title="Manage / Extend Subscription"
+                          aria-label={`Manage subscription for ${seller.storeName}`}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="2" y="4" width="20" height="16" rx="2" />
+                            <line x1="2" y1="10" x2="22" y2="10" />
                           </svg>
                         </button>
                         <button
@@ -1186,6 +1283,168 @@ export default function AdminManageSellerList() {
                   </>
                 ) : (
                   "Yes, Delete"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grant / Extend Subscription Modal */}
+      {subscriptionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-white rounded-2xl shadow-xl border border-neutral-200 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                  💳
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900">Manage Seller Subscription</h3>
+                  <p className="text-xs text-neutral-500">{subscriptionTarget.storeName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSubscriptionTarget(null)}
+                className="text-neutral-400 hover:text-neutral-600 text-lg leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200/80 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Current Plan:</span>
+                <span className="font-semibold text-neutral-800">
+                  {subscriptionTarget.subscription?.planName || 'None'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Status:</span>
+                <span className={`font-bold ${
+                  subscriptionTarget.subscription?.status === 'active' &&
+                  (!subscriptionTarget.subscription.endDate || new Date(subscriptionTarget.subscription.endDate) >= new Date())
+                    ? 'text-emerald-700'
+                    : 'text-rose-700'
+                }`}>
+                  {subscriptionTarget.subscription?.status === 'active' &&
+                  (!subscriptionTarget.subscription.endDate || new Date(subscriptionTarget.subscription.endDate) >= new Date())
+                    ? 'Active'
+                    : 'Inactive / Expired'}
+                </span>
+              </div>
+              {subscriptionTarget.subscription?.endDate && (
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Current End Date:</span>
+                  <span className="font-semibold text-neutral-800">
+                    {new Date(subscriptionTarget.subscription.endDate).toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5">
+                  Select Extension Period:
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { label: '7 Days', days: 7 },
+                    { label: '30 Days', days: 30 },
+                    { label: '90 Days', days: 90 },
+                    { label: '365 Days', days: 365 },
+                  ].map((p) => (
+                    <button
+                      key={p.days}
+                      type="button"
+                      onClick={() => {
+                        setGrantDays(p.days);
+                        setGrantPlanName(`${p.days}-Day Support Extension`);
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        grantDays === p.days
+                          ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                          : 'bg-white text-neutral-700 border-neutral-200 hover:border-purple-300'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">
+                  Custom Days:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="3650"
+                  value={grantDays}
+                  onChange={(e) => setGrantDays(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">
+                  Plan / Badge Title:
+                </label>
+                <input
+                  type="text"
+                  value={grantPlanName}
+                  onChange={(e) => setGrantPlanName(e.target.value)}
+                  placeholder="e.g. Special Support Pass"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">
+                  Admin Internal Notes (Optional):
+                </label>
+                <input
+                  type="text"
+                  value={grantNotes}
+                  onChange={(e) => setGrantNotes(e.target.value)}
+                  placeholder="e.g. Extended per customer support request"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setSubscriptionTarget(null)}
+                disabled={isGrantingSub}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 transition-colors min-h-[44px] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmGrantSubscription}
+                disabled={isGrantingSub}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors min-h-[44px] flex items-center justify-center gap-1.5 shadow-sm shadow-purple-600/20 cursor-pointer"
+              >
+                {isGrantingSub ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  `Grant ${grantDays} Days`
                 )}
               </button>
             </div>
