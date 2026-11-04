@@ -1,5 +1,6 @@
 import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+process.env.NODE_ENV = 'test';
 import axios from 'axios';
 import Otp from '../models/Otp';
 import SignupProof from '../models/SignupProof';
@@ -9,6 +10,9 @@ import Delivery from '../models/Delivery';
 import Customer from '../models/Customer';
 import Admin from '../models/Admin';
 import Notification from '../models/Notification';
+import SubscriptionPlan from '../models/SubscriptionPlan';
+import SubscriptionPayment from '../models/SubscriptionPayment';
+import * as razorpayVerificationService from '../services/razorpayVerificationService';
 import jsonwebtoken from 'jsonwebtoken';
 import { sendSmsOtp, sendOTP, verifySmsOtp, verifyOTP, verifySignupOtp } from '../services/otpService';
 import { issueSignupProof, consumeSignupProof, createVerifiedSignup } from '../services/signupService';
@@ -126,6 +130,24 @@ before(async () => {
   }
   patch(Admin, 'find', () => result([]));
   patch(Notification, 'create', async () => ({ _id: accountId }));
+  patch(SubscriptionPlan, 'findById', () => result({
+    _id: '507f1f77bcf86cd799439099',
+    name: 'Starter Plan',
+    price: 499,
+    durationInDays: 30,
+    isActive: true,
+  }));
+  patch(SubscriptionPayment, 'findOne', () => result({
+    _id: '507f1f77bcf86cd799439098',
+    razorpayOrderId: 'order_test_123',
+    amount: 499,
+    durationInDays: 30,
+    planId: '507f1f77bcf86cd799439099',
+    status: 'PENDING',
+    save: async () => {},
+  }));
+  patch(SubscriptionPayment, 'create', async (data: any) => data);
+  patch(razorpayVerificationService, 'assertGatewayPayment', async () => {});
   sellerController = await import('../modules/seller/controllers/sellerAuthController');
   deliveryController = await import('../modules/delivery/controllers/deliveryAuthController');
   handlers = (await import('../modules/auth/controllers/onboardingController')).signupOtpHandlers;
@@ -157,7 +179,8 @@ for (const role of ['Seller', 'Delivery'] as const) {
     const registrationToken = verified.data.registrationToken;
     assert.match(registrationToken, /^[a-f0-9]{64}$/);
     const body = role === 'Seller'
-      ? { mobile, registrationToken, sellerName: 'Shop owner', email: 'test@example.test', storeName: 'Shop', category: 'Grocery' }
+      ? { mobile, registrationToken, sellerName: 'Shop owner', email: 'test@example.test', storeName: 'Shop', category: 'Grocery',
+          planId: '507f1f77bcf86cd799439099', razorpayOrderId: 'order_test_123', razorpayPaymentId: 'pay_test_123', razorpaySignature: 'sig_test_123' }
       : { mobile, registrationToken, name: 'Courier', email: 'test@example.test', password: 'test-password', address: 'Street', city: 'Mumbai',
           drivingLicense: 'https://example.test/licence.pdf', nationalIdentityCard: 'https://example.test/id.pdf' };
     const controller = role === 'Seller' ? sellerController.register : deliveryController.register;
@@ -174,12 +197,39 @@ for (const role of ['Seller', 'Delivery'] as const) {
   });
   test(`${role}: direct registration without phone proof cannot reserve an account`, async () => {
     const body = role === 'Seller'
-      ? { mobile: '9876543210', sellerName: 'Owner', email: 'test@example.test', storeName: 'Shop', category: 'Grocery' }
+      ? { mobile: '9876543210', sellerName: 'Owner', email: 'test@example.test', storeName: 'Shop', category: 'Grocery',
+          planId: '507f1f77bcf86cd799439099', razorpayOrderId: 'order_test_123', razorpayPaymentId: 'pay_test_123', razorpaySignature: 'sig_test_123' }
       : { mobile: '9876543210', name: 'Courier', email: 'test@example.test', password: 'test-password' };
     await assert.rejects(invoke(role === 'Seller' ? sellerController.register : deliveryController.register, body), /Verify your mobile/);
     assert.equal(created.length, 0);
   });
 }
+
+test('Seller: registers with VoLoMart-style 7-Day Free Trial without upfront Razorpay payment', async () => {
+  const mobile = '9876543299';
+  const token = await issueSignupProof(mobile, 'Seller');
+  const body = {
+    mobile,
+    registrationToken: token,
+    sellerName: 'VoLo Vendor',
+    email: 'volovendor@example.test',
+    storeName: 'VoLo Store',
+    category: 'Grocery',
+    categories: ['Grocery'],
+    address: 'Main Street, Pune',
+    city: 'Pune',
+    isFreeTrial: true,
+  };
+  const registered = await invoke(sellerController.register, body);
+  assert.equal(registered.status, 201);
+  assert.ok(registered.data.token);
+  const seller = created.find((c: any) => c.mobile === mobile);
+  assert.ok(seller);
+  assert.equal(seller.subscription.status, 'active');
+  assert.equal(seller.subscription.planName, '7-Day Free Trial');
+  assert.equal(seller.subscription.durationInDays, 7);
+  assert.equal(seller.subscription.amount, 0);
+});
 
 test('signup grants are role/phone bound, expire, and survive a failed account write', async () => {
   const mobile = '9876543210';

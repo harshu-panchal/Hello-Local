@@ -7,9 +7,6 @@ import Delivery from "../models/Delivery";
 import AppSettings from "../models/AppSettings";
 import { creditWallet } from "./walletManagementService";
 import mongoose from "mongoose";
-import Category from "../models/Category";
-import SubCategory from "../models/SubCategory";
-import Product from "../models/Product";
 import WalletTransaction from "../models/WalletTransaction";
 
 /**
@@ -20,93 +17,21 @@ import WalletTransaction from "../models/WalletTransaction";
  * 3. Global Default Rate (Fallback: configured platform-wide in Billing & Charges)
  */
 export const getOrderItemCommissionRate = async (
-  productId: string,
-  sellerId?: string
+  _productId: string,
+  _sellerId?: string
 ): Promise<number> => {
-  try {
-    const product = await Product.findById(productId);
-    if (!product) return 10; // Default fallback
-
-    // 1. Check Category rate (Level 3)
-    if (product.category) {
-      const cat = await Category.findById(product.category);
-      if (cat?.commissionRate && cat.commissionRate > 0) {
-        return cat.commissionRate;
-      }
-      // If child category doesn't have rate, check its parent category
-      if (cat?.parentId) {
-        const parentCat = await Category.findById(cat.parentId);
-        if (parentCat?.commissionRate && parentCat.commissionRate > 0) {
-          return parentCat.commissionRate;
-        }
-      }
-    }
-
-    // Also check subcategory / subSubCategory if present for backward compatibility
-    if (product.subcategory) {
-      const subCat = await SubCategory.findById(product.subcategory);
-      if (subCat?.commissionRate && subCat.commissionRate > 0) {
-        return subCat.commissionRate;
-      }
-    }
-    if (product.subSubCategory) {
-      const subSubCat = await Category.findById(product.subSubCategory);
-      if (subSubCat?.commissionRate && subSubCat.commissionRate > 0) {
-        return subSubCat.commissionRate;
-      }
-    }
-
-    // 2. Check Seller specific rate (Level 4)
-    const finalSellerId = sellerId || product.seller.toString();
-    const seller = await Seller.findById(finalSellerId);
-    if (seller) {
-      if (seller.commissionRate !== undefined && seller.commissionRate !== null && seller.commissionRate > 0) {
-        return seller.commissionRate;
-      }
-      if (seller.commission !== undefined && seller.commission !== null && seller.commission > 0) {
-        return seller.commission;
-      }
-    }
-
-    // 3. Global Default (Level 5) from Billing & Charges
-    const settings = await AppSettings.findOne();
-    // @ts-ignore
-    const globalRate = settings?.globalCommissionRate ?? settings?.defaultCommission;
-    return globalRate !== undefined && globalRate !== null ? globalRate : 10;
-  } catch (error) {
-    console.error("Error calculating commission rate:", error);
-    return 10;
-  }
+  // Pure Subscription Model: HelloLocal takes 0% platform commission on product sales
+  return 0;
 };
 
 /**
  * Get commission rate for a seller
  */
 export const getSellerCommissionRate = async (
-  sellerId: string,
+  _sellerId: string,
 ): Promise<number> => {
-  try {
-    const seller = await Seller.findById(sellerId);
-    if (!seller) {
-      throw new Error("Seller not found");
-    }
-
-    // Check individual rate (checking both commissionRate and commission)
-    if (seller.commissionRate !== undefined && seller.commissionRate !== null && seller.commissionRate > 0) {
-      return seller.commissionRate;
-    }
-    if (seller.commission !== undefined && seller.commission !== null && seller.commission > 0) {
-      return seller.commission;
-    }
-
-    const settings = await AppSettings.findOne();
-    // @ts-ignore
-    const globalRate = settings?.globalCommissionRate ?? settings?.defaultCommission;
-    return globalRate !== undefined && globalRate !== null ? globalRate : 10;
-  } catch (error) {
-    console.error("Error getting seller commission rate:", error);
-    return 10; // Default fallback
-  }
+  // Pure Subscription Model: HelloLocal takes 0% platform commission on product sales
+  return 0;
 };
 
 /**

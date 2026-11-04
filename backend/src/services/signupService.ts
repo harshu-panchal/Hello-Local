@@ -5,7 +5,7 @@ export async function issueSignupProof(mobile: string, role: 'Seller' | 'Deliver
   const token = crypto.randomBytes(32).toString('hex');
   await SignupProof.findOneAndUpdate({ _id: `${role}:${mobile}` }, { $set: {
     tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 60 minutes TTL
   } }, { upsert: true });
   return token;
 }

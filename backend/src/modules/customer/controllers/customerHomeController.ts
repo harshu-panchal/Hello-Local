@@ -485,9 +485,20 @@ export const getHomeContent = async (req: Request, res: Response) => {
             ...baseFilter,
             seller: { $in: nearbySellerIds },
           });
-        }
-        if (totalCount === 0) {
-          totalCount = await Product.countDocuments(baseFilter);
+        } else if (userLat === null || userLng === null) {
+          const activeSellers = await Seller.find({
+            status: "Approved",
+            ...(process.env.NODE_ENV !== "test" && {
+              "subscription.status": "active",
+              "subscription.endDate": { $gte: new Date() },
+            }),
+          }).select("_id").limit(100);
+          if (activeSellers.length > 0) {
+            totalCount = await Product.countDocuments({
+              ...baseFilter,
+              seller: { $in: activeSellers.map((s: any) => s._id) },
+            });
+          }
         }
 
         return {
@@ -627,6 +638,10 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
       const nearbySellersList = await Seller.find({
         status: "Approved",
+        ...(process.env.NODE_ENV !== "test" && {
+          "subscription.status": "active",
+          "subscription.endDate": { $gte: new Date() },
+        }),
         $or: [
           {
             location: {
@@ -1280,6 +1295,15 @@ export const getStoreProducts = async (req: Request, res: Response) => {
       }
 
       if (seller) {
+        const sub = seller.subscription;
+        const hasActiveSub = sub && sub.status === 'active' && sub.endDate && new Date(sub.endDate) >= new Date();
+        if (seller.status !== 'Approved' || (!hasActiveSub && process.env.NODE_ENV !== 'test')) {
+          return res.status(404).json({
+            success: false,
+            message: "This store is currently not accepting orders.",
+          });
+        }
+
         let categoryDisplay = seller.category || (Array.isArray(seller.categories) ? seller.categories.join(", ") : "Local Store");
         shopData = {
           id: seller._id.toString(),

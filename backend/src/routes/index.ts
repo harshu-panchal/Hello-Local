@@ -33,6 +33,7 @@ import customerTrackingRoutes from "../modules/customer/routes/trackingRoutes";
 import deliveryTrackingRoutes from "../modules/delivery/routes/trackingRoutes";
 import fcmTokenRoutes from "./fcmTokenRoutes";
 import paymentRoutes from "./paymentRoutes";
+import subscriptionPlanRoutes from "./subscriptionPlanRoutes";
 import sellerWalletRoutes from "./sellerWalletRoutes";
 import deliveryWalletRoutes from "./deliveryWalletRoutes";
 import adminWithdrawalRoutes from "./adminWithdrawalRoutes";
@@ -168,6 +169,9 @@ router.use("/seller/store-preview", authenticate, requireUserType("Seller"), sel
 
 // Payment routes (Razorpay integration)
 router.use("/payment", paymentRoutes);
+
+// Subscription routes (Plans & Verification)
+router.use("/subscription-plans", subscriptionPlanRoutes);
 
 // Delivery wallet routes (protected, delivery only)
 router.use("/delivery/wallet", authenticate, requireUserType("Delivery"), deliveryWalletRoutes);

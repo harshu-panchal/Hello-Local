@@ -39,6 +39,16 @@ export interface Seller {
   addressProof?: string;
   requireProductApproval?: boolean;
   viewCustomerDetails?: boolean;
+  subscription?: {
+    planId?: string;
+    planName?: string;
+    amount?: number;
+    durationInDays?: number;
+    startDate?: string;
+    endDate?: string;
+    status: 'active' | 'expired' | 'trial' | 'inactive';
+    paymentDate?: string;
+  };
   createdAt?: string;
   updatedAt?: string;
 }

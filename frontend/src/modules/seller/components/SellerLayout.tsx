@@ -6,6 +6,8 @@ import { useSellerSocketContext, SellerNotification } from '../../../context/Sel
 import SellerNotificationAlert from './SellerNotificationAlert';
 import { useAuth } from '../../../context/AuthContext';
 import { getSellerProfile } from '../../../services/api/auth/sellerAuthService';
+import { getMySubscriptionSeller, SellerSubscriptionStatus } from '../../../services/api/subscriptionService';
+import SellerResubscribeModal from './SellerResubscribeModal';
 import { SELLER_BOTTOM_NAV_ITEMS } from '../config/sellerNavigation';
 import '../styles/sellerTokens.css';
 
@@ -21,10 +23,31 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
     return false;
   });
   const [activeNotification, setActiveNotification] = useState<SellerNotification | null>(null);
+  const [subStatus, setSubStatus] = useState<SellerSubscriptionStatus | null>(null);
+  const [isResubscribeOpen, setIsResubscribeOpen] = useState(false);
   const location = useLocation();
 
   // Consume shared socket context (single connection for the whole seller panel)
   const { lastNotification, clearNotification } = useSellerSocketContext();
+
+  const checkSubscription = (forceOpenModal: boolean = false) => {
+    getMySubscriptionSeller()
+      .then((statusRes) => {
+        setSubStatus(statusRes);
+        const expiredOrInactive = Boolean(statusRes && (statusRes.isExpired || !statusRes.isActive));
+        const isDismissed = sessionStorage.getItem('resubscribe_modal_dismissed') === 'true';
+        if (expiredOrInactive && (!isDismissed || forceOpenModal)) {
+          setIsResubscribeOpen(true);
+        }
+      })
+      .catch((err) => {
+        console.error("Subscription check failed", err);
+      });
+  };
+
+  useEffect(() => {
+    checkSubscription(false);
+  }, [location.pathname]);
 
   // Refresh the seller's approval status on panel load so that a seller approved
   // by admin while logged in becomes unblocked (e.g. can add products) without a
@@ -115,7 +138,7 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
           <p className="text-sm text-neutral-600 mb-6">
             {rejected
               ? 'Your seller account application was not approved. Please contact support for assistance.'
-              : 'Your seller account is under review. All features will be enabled once an admin approves your account.'}
+              : 'Your seller account is under review. All features and your 7-Day Free Trial will be activated once an admin approves your account.'}
           </p>
           <div className="flex flex-col gap-2">
             <button
@@ -170,6 +193,25 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
           isSidebarOpen ? 'ml-64' : 'ml-0'
         }`}
       >
+        {subStatus && (subStatus.isExpired || !subStatus.isActive) && (
+          <div className="bg-rose-600 text-white px-4 py-2.5 text-xs md:text-sm font-semibold flex items-center justify-between shadow-xs sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <span>⚠️</span>
+              <span>
+                <strong>Subscription Expired:</strong> Your store subscription has ended. Customer ordering and product updates are paused.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('resubscribe_modal_dismissed');
+                setIsResubscribeOpen(true);
+              }}
+              className="ml-3 px-3 py-1 bg-white text-rose-700 hover:bg-rose-50 font-bold rounded-lg text-xs shadow-xs transition-colors shrink-0 cursor-pointer"
+            >
+              Resubscribe Now
+            </button>
+          </div>
+        )}
         <SellerHeader onMenuClick={toggleSidebar} isSidebarOpen={isSidebarOpen} />
         <main
           data-lenis-prevent="true"
@@ -180,6 +222,22 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Resubscribe Popup Modal */}
+      <SellerResubscribeModal
+        isOpen={isResubscribeOpen}
+        onClose={() => {
+          sessionStorage.setItem('resubscribe_modal_dismissed', 'true');
+          setIsResubscribeOpen(false);
+        }}
+        onSuccess={() => {
+          sessionStorage.removeItem('resubscribe_modal_dismissed');
+          setIsResubscribeOpen(false);
+          checkSubscription(false);
+        }}
+        isExpired={Boolean(subStatus?.isExpired || (subStatus && !subStatus.isActive))}
+        currentExpiryDate={subStatus?.subscription?.endDate}
+      />
 
       {/* Mobile Bottom Navigation — hidden on desktop (lg+) */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 flex items-stretch h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] shadow-lg">

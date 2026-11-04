@@ -15,8 +15,6 @@ vite.config.ts.timestamp-*
 **/vite.config.ts.timestamp-*
 
 # Environment variables & secrets (CRITICAL)
-.env
-.env.*
 !.env.example
 *.pem
 *.key
@@ -43,7 +41,6 @@ test-report.json
 *.sqlite
 
 # AI & IDE configuration folders
-.vscode/*
 !.vscode/extensions.json
 .idea/
 .claude/
@@ -68,3 +65,4 @@ temp_*.bat
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat

@@ -10,6 +10,9 @@ import {
 import { generateToken } from "../../../services/jwtService";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { createVerifiedSignup } from '../../../services/signupService';
+import SubscriptionPlan from '../../../models/SubscriptionPlan';
+import SubscriptionPayment from '../../../models/SubscriptionPayment';
+import { assertGatewayPayment } from '../../../services/razorpayVerificationService';
 
 /**
  * Send OTP to seller mobile number
@@ -134,6 +137,7 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
         logo: seller.logo,
         address: seller.address,
         city: seller.city,
+        subscription: seller.subscription,
       },
     },
   });
@@ -224,16 +228,118 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
+  const normalizedEmail = (email || "").toLowerCase().trim();
+
   // Check if seller already exists
   const existingSeller = await Seller.findOne({
-    $or: [{ mobile }, { email }],
+    $or: [{ mobile }, { email: normalizedEmail }],
   });
 
   if (existingSeller) {
+    const isEmailConflict =
+      existingSeller.email &&
+      existingSeller.email.toLowerCase() === normalizedEmail;
+    const isEmailOnly = isEmailConflict && existingSeller.mobile !== mobile;
     return res.status(409).json({
       success: false,
-      message: "Seller already exists with this mobile or email",
+      field: isEmailOnly ? "email" : "mobile",
+      message: isEmailOnly
+        ? "A store is already registered with this email address. Please use a different email."
+        : "Seller already exists with this mobile number. Please log in.",
     });
+  }
+
+  // Subscription Plan or Free Trial Selection (VoLoMart-style 7-Day Free Trial)
+  // If payment order details are provided, the paid gateway path takes authoritative precedence.
+  const isFreeTrial = !req.body.razorpayOrderId && (req.body.isFreeTrial === true || req.body.planType === 'TRIAL' || !req.body.planId);
+
+  let subscriptionData: any;
+  let pendingPayment: any = null;
+  const now = new Date();
+
+  if (isFreeTrial) {
+    const subscriptionEndDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    subscriptionData = {
+      planName: '7-Day Free Trial',
+      amount: 0,
+      durationInDays: 7,
+      startDate: now,
+      endDate: subscriptionEndDate,
+      status: 'active',
+      paymentDate: now,
+    };
+  } else {
+    const {
+      planId,
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+    } = req.body;
+
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({
+        success: false,
+        message: "Subscription plan selection and verified online payment are required to register your store.",
+      });
+    }
+
+    // 1. Anti-replay: verify this payment ID has not already been credited to another seller
+    const duplicatePayment = await SubscriptionPayment.findOne({
+      razorpayPaymentId,
+      status: 'SUCCESS',
+    });
+    if (duplicatePayment && duplicatePayment.sellerId) {
+      return res.status(409).json({
+        success: false,
+        message: "This payment has already been credited to an account. Please log in.",
+      });
+    }
+
+    // 2. Find the pending subscription intent created during checkout initiation
+    pendingPayment = duplicatePayment || await SubscriptionPayment.findOne({
+      razorpayOrderId,
+      status: 'PENDING',
+    });
+    if (!pendingPayment) {
+      return res.status(400).json({
+        success: false,
+        message: "No payment intent was issued for this record. Start the payment again.",
+      });
+    }
+
+    const selectedPlan = await SubscriptionPlan.findById(pendingPayment.planId || planId);
+    if (!selectedPlan || !selectedPlan.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected subscription plan is invalid or no longer active. Please select an active plan.",
+      });
+    }
+
+    // 3. Authoritatively assert Razorpay payment passing expectedRazorpayOrderId (#C-01) if not already verified
+    if (!duplicatePayment) {
+      await assertGatewayPayment({
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature,
+        expectedAmount: pendingPayment.amount,
+        expectedRazorpayOrderId: pendingPayment.razorpayOrderId,
+        expectedCurrency: 'INR',
+      });
+    }
+
+    const subscriptionEndDate = new Date(now.getTime() + selectedPlan.durationInDays * 24 * 60 * 60 * 1000);
+    subscriptionData = {
+      planId: selectedPlan._id,
+      planName: selectedPlan.name,
+      amount: selectedPlan.price,
+      durationInDays: selectedPlan.durationInDays,
+      startDate: now,
+      endDate: subscriptionEndDate,
+      status: 'active',
+      razorpayOrderId,
+      razorpayPaymentId,
+      paymentDate: now,
+    };
   }
 
   // Create GeoJSON location point [longitude, latitude] if provided
@@ -249,7 +355,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   const seller = await createVerifiedSignup(mobile, 'Seller', req.body.registrationToken, () => Seller.create({
     sellerName,
     mobile,
-    email,
+    email: normalizedEmail,
     // password field removed - sellers don't need password during signup
     storeName,
     category: resolvedCategory,
@@ -265,7 +371,9 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     requireProductApproval: false,
     viewCustomerDetails: false,
     commission: 0,
+    commissionRate: 0,
     balance: 0,
+    subscription: subscriptionData,
     categories: resolvedCategories,
     ...(req.body.panCard && { panCard: req.body.panCard }),
     ...(req.body.taxName && { taxName: req.body.taxName }),
@@ -279,6 +387,41 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     ...(req.body.ifsc && { ifsc: req.body.ifsc }),
     ...(req.body.branch && { branch: req.body.branch }),
   }));
+
+  if (isFreeTrial) {
+    const trialOrderId = `TRIAL_${seller._id.toString().slice(-6)}_${Date.now()}`;
+    await SubscriptionPayment.create({
+      sellerId: seller._id,
+      sellerName: seller.sellerName,
+      sellerMobile: seller.mobile,
+      planName: '7-Day Free Trial',
+      amount: 0,
+      durationInDays: 7,
+      razorpayOrderId: trialOrderId,
+      status: 'SUCCESS',
+      paymentMethod: 'FREE_TRIAL',
+      notes: 'VoLoMart-style 7-Day Free Trial activated during registration',
+      startDate: subscriptionData.startDate,
+      endDate: subscriptionData.endDate,
+      paymentDate: subscriptionData.paymentDate,
+    });
+  } else if (pendingPayment) {
+    // Update the pending payment intent to SUCCESS
+    pendingPayment.sellerId = seller._id;
+    pendingPayment.sellerName = seller.sellerName;
+    pendingPayment.sellerMobile = seller.mobile;
+    pendingPayment.planId = subscriptionData.planId;
+    pendingPayment.planName = subscriptionData.planName;
+    pendingPayment.amount = subscriptionData.amount;
+    pendingPayment.durationInDays = subscriptionData.durationInDays;
+    pendingPayment.razorpayPaymentId = subscriptionData.razorpayPaymentId;
+    pendingPayment.razorpaySignature = req.body.razorpaySignature;
+    pendingPayment.status = 'SUCCESS';
+    pendingPayment.startDate = subscriptionData.startDate;
+    pendingPayment.endDate = subscriptionData.endDate;
+    pendingPayment.paymentDate = subscriptionData.paymentDate;
+    await pendingPayment.save();
+  }
 
   // Generate token
   const token = generateToken(seller._id.toString(), "Seller", undefined, (seller as any).authVersion || 0);
@@ -297,6 +440,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
         status: seller.status,
         address: seller.address,
         city: seller.city,
+        subscription: seller.subscription,
       },
     },
   });
@@ -314,6 +458,16 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
       success: false,
       message: "Seller not found",
     });
+  }
+
+  // Auto-mark expired subscription if end date has passed
+  if (
+    seller.subscription?.endDate &&
+    new Date(seller.subscription.endDate) < new Date() &&
+    seller.subscription.status === 'active'
+  ) {
+    seller.subscription.status = 'expired';
+    await seller.save();
   }
 
   return res.status(200).json({

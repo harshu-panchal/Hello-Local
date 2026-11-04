@@ -47,6 +47,12 @@ export interface RegisterData {
   latitude?: string;
   longitude?: string;
   serviceRadiusKm?: string | number;
+  planId?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  isFreeTrial?: boolean;
+  planType?: string;
 }
 
 export interface RegisterResponse {
