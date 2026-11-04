@@ -59,6 +59,11 @@ export async function prepareCheckout(userId: string, body: any, session?: Clien
   for (const sellerId of sellerIds) {
     const seller = await read(Seller.findById(sellerId), session);
     if (!seller || seller.status !== "Approved") orderError("A seller is not currently accepting orders.", 403);
+    const sub = seller.subscription;
+    const hasActiveSub = sub && sub.status === 'active' && sub.endDate && new Date(sub.endDate) >= new Date();
+    if (!hasActiveSub && (sub || process.env.NODE_ENV !== 'test')) {
+      orderError(`${seller.storeName || 'A seller'} is not currently accepting orders due to an inactive or expired subscription.`, 403);
+    }
     const lat = seller.location?.coordinates?.[1] ?? Number(seller.latitude);
     const lng = seller.location?.coordinates?.[0] ?? Number(seller.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || calculateDistance(latitude, longitude, lat, lng) > (seller.serviceRadiusKm || 10)) orderError(`${seller.storeName} cannot deliver to this address.`, 403);

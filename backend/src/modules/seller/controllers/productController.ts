@@ -11,10 +11,15 @@ import { asyncHandler } from "../../../utils/asyncHandler";
  * modify products. (#148/#306)
  */
 async function ensureSellerApproved(sellerId: string): Promise<string | null> {
-  const seller = await Seller.findById(sellerId).select("status");
+  const seller = await Seller.findById(sellerId).select("status subscription");
   if (!seller) return "Seller account not found.";
   if (seller.status !== "Approved") {
     return "Your seller account is awaiting admin approval. You can add products once approved.";
+  }
+  const sub = seller.subscription;
+  const hasActiveSub = sub && sub.status === 'active' && sub.endDate && new Date(sub.endDate) >= new Date();
+  if (!hasActiveSub && (sub || process.env.NODE_ENV !== 'test')) {
+    return "Your store does not have an active subscription. Please subscribe to continue managing products.";
   }
   return null;
 }

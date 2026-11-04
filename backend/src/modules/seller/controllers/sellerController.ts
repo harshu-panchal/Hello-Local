@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Seller from "../../../models/Seller";
 import Product from "../../../models/Product";
 import Order from "../../../models/Order";
+import SubscriptionPayment from "../../../models/SubscriptionPayment";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { sendNotification } from "../../../services/notificationService";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
@@ -109,7 +110,7 @@ export const updateSellerStatus = asyncHandler(
     // Read the previous status first so we can decide whether to notify, then use
     // an atomic update (validates ONLY the status field) — using .save() would
     // re-validate the whole document and could reject sellers with legacy data.
-    const existing = await Seller.findById(id).select("status");
+    const existing = await Seller.findById(id).select("status subscription firstApprovedAt");
     if (!existing) {
       return res.status(404).json({
         success: false,
@@ -129,6 +130,87 @@ export const updateSellerStatus = asyncHandler(
         success: false,
         message: "Seller not found",
       });
+    }
+
+    // When transitioning to Approved, ensure merchant trial/subscription starts from approval time
+    // Only applies on the first approval so re-approving never hands out free time (#first-approval)
+    if (status === "Approved") {
+      const isFirstApproval = !existing.firstApprovedAt;
+      const sub = seller.subscription;
+      const now = new Date();
+
+      if (isFirstApproval) {
+        seller.firstApprovedAt = now;
+
+        if (sub && sub.planName === "7-Day Free Trial") {
+          const trialDays = sub.durationInDays || 7;
+          const startDate = now;
+          const endDate = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+          seller.subscription = {
+            ...(typeof (sub as any)?.toObject === "function" ? (sub as any).toObject() : sub),
+            status: "active",
+            startDate,
+            endDate,
+          };
+          await Seller.findByIdAndUpdate(seller._id, {
+            firstApprovedAt: now,
+            subscription: seller.subscription,
+          });
+
+          try {
+            await SubscriptionPayment.findOneAndUpdate(
+              { sellerId: seller._id, paymentMethod: "FREE_TRIAL" },
+              {
+                startDate,
+                endDate,
+                notes: "VoLoMart-style 7-Day Free Trial activated on admin approval",
+              }
+            );
+          } catch (auditErr) {
+            console.error("Failed to update free trial audit payment on approval:", auditErr);
+          }
+        } else if (previousStatus === "Pending" && sub?.durationInDays && sub?.status === "active") {
+          // Upfront paid plan at registration: start purchased duration from first approval
+          const startDate = now;
+          const endDate = new Date(now.getTime() + sub.durationInDays * 24 * 60 * 60 * 1000);
+          seller.subscription = {
+            ...(typeof (sub as any)?.toObject === "function" ? (sub as any).toObject() : sub),
+            status: "active",
+            startDate,
+            endDate,
+          };
+          await Seller.findByIdAndUpdate(seller._id, {
+            firstApprovedAt: now,
+            subscription: seller.subscription,
+          });
+        } else if (!sub || !sub.endDate) {
+          // Legacy merchant who never had a plan or end date
+          seller.subscription = {
+            status: "active",
+            planName: "New Merchant Trial Pass",
+            startDate: now,
+            endDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+          };
+          await Seller.findByIdAndUpdate(seller._id, {
+            firstApprovedAt: now,
+            subscription: seller.subscription,
+          });
+        } else {
+          await Seller.findByIdAndUpdate(seller._id, { firstApprovedAt: now });
+        }
+      } else {
+        // Re-approving an already once-approved seller: NEVER grant free time to expired accounts.
+        // Only give a starter pass if the seller genuinely has no subscription record at all.
+        if (!sub || !sub.endDate) {
+          seller.subscription = {
+            status: "active",
+            planName: "New Merchant Trial Pass",
+            startDate: now,
+            endDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+          };
+          await Seller.findByIdAndUpdate(seller._id, { subscription: seller.subscription });
+        }
+      }
     }
 
     // Notify the seller when their account is approved or rejected (#admin-approval).

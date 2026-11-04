@@ -101,8 +101,8 @@ export default function Checkout() {
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
   const [isMapSelected, setIsMapSelected] = useState(false);
 
-  // Payment Method State
-  const [paymentMethod, setPaymentMethod] = useState<"Online" | "COD">("Online");
+  // Payment Method State - defaulted to COD while Online Payment is temporarily hidden
+  const [paymentMethod, setPaymentMethod] = useState<"Online" | "COD">("COD");
 
   // Razorpay Payment State
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
@@ -1007,7 +1007,9 @@ export default function Checkout() {
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-2 gap-2">
+              {/* Temporarily hidden Online Payment option. To re-enable, change grid-cols-1 to grid-cols-2 and uncomment the Online Payment button below */}
+              <div className="grid grid-cols-1 gap-2">
+                {/*
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("Online")}
@@ -1020,6 +1022,7 @@ export default function Checkout() {
                   <span className="text-xs font-bold block">Online Payment</span>
                   <span className="text-[9px] text-slate-400 font-medium">UPI / Cards / NetBanking</span>
                 </button>
+                */}
 
                 <button
                   type="button"
