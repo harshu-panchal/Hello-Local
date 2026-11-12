@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getPOSProducts,
@@ -20,6 +20,9 @@ import {
   newClientSaleId,
   round2,
 } from "../../../utils/posBilling";
+
+// Loaded only when the cashier opens the camera.
+const BarcodeScannerModal = lazy(() => import("../components/BarcodeScannerModal"));
 
 const POS_PAGE_SIZE = 100;
 
@@ -58,6 +61,7 @@ export default function SellerPOSBilling() {
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState<boolean>(false);
   const [showClearCartModal, setShowClearCartModal] = useState<boolean>(false);
+  const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
   // Id of the current checkout attempt. Kept across a failed submit so a retry
   // can never bill the same cart twice; renewed whenever the sale changes.
   const [clientSaleId, setClientSaleId] = useState<string>(() => newClientSaleId());
@@ -132,11 +136,19 @@ export default function SellerPOSBilling() {
     setSearchQuery("");
   };
 
-  // Barcode / SKU quick-scan key handler
-  const handleSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Barcode / SKU quick-scan key handler (USB / Bluetooth scanners type + Enter)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    const code = searchQuery.trim();
+    processScannedCode(searchQuery);
+  };
+
+  /**
+   * Shared by hardware scanners, typed codes and the camera scanner:
+   * exact barcode/SKU → add to bill; otherwise fall back to a text search.
+   */
+  const processScannedCode = async (rawCode: string) => {
+    const code = rawCode.trim();
     if (!code) return;
 
     const local = findExactCode(products, code);
@@ -159,8 +171,18 @@ export default function SellerPOSBilling() {
     } catch {
       // Fall back to a text search below.
     }
+    setSearchQuery(code);
+    showToast(`No exact match for "${code}". Showing search results.`, "info");
     fetchProducts(code);
   };
+
+  // The camera scanner may stay open across renders ("scan multiple items"),
+  // so always route its results to the latest handler.
+  const processScannedCodeRef = useRef(processScannedCode);
+  processScannedCodeRef.current = processScannedCode;
+  const handleCameraDetected = useCallback((code: string) => {
+    processScannedCodeRef.current(code);
+  }, []);
 
   /** Latest known stock for a product / variant, from the catalog list. */
   const stockFor = (productId: string, variation?: string, fallback = 0) => {
@@ -472,6 +494,8 @@ export default function SellerPOSBilling() {
                   placeholder="Scan barcode, enter SKU or search products (Press Enter)..."
                   clearable
                   onClear={() => setSearchQuery("")}
+                  onPrefixClick={() => setIsScannerOpen(true)}
+                  prefixButtonLabel="Scan barcode with camera"
                   prefixIcon={
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
@@ -1010,6 +1034,23 @@ export default function SellerPOSBilling() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Camera Barcode Scanner */}
+      {isScannerOpen && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black text-xs font-semibold text-white">
+              Opening camera…
+            </div>
+          }
+        >
+          <BarcodeScannerModal
+            isOpen={isScannerOpen}
+            onClose={() => setIsScannerOpen(false)}
+            onDetected={handleCameraDetected}
+          />
+        </Suspense>
       )}
 
       {/* Instant Print Modal */}

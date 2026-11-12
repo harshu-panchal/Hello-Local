@@ -9,6 +9,10 @@ export interface SellerInputProps extends React.InputHTMLAttributes<HTMLInputEle
   clearable?: boolean;
   onClear?: () => void;
   containerClassName?: string;
+  /** Makes the prefix icon a clickable button (e.g. open camera scanner). */
+  onPrefixClick?: () => void;
+  /** Accessible label for the prefix button. */
+  prefixButtonLabel?: string;
 }
 
 export const SellerInput = forwardRef<HTMLInputElement, SellerInputProps>(
@@ -21,6 +25,8 @@ export const SellerInput = forwardRef<HTMLInputElement, SellerInputProps>(
       suffixIcon,
       clearable,
       onClear,
+      onPrefixClick,
+      prefixButtonLabel,
       className = '',
       containerClassName = '',
       id,
@@ -45,7 +51,19 @@ export const SellerInput = forwardRef<HTMLInputElement, SellerInputProps>(
         )}
 
         <div className="relative flex items-center">
-          {prefixIcon && (
+          {prefixIcon && onPrefixClick && (
+            <button
+              type="button"
+              onClick={onPrefixClick}
+              disabled={disabled}
+              aria-label={prefixButtonLabel}
+              title={prefixButtonLabel}
+              className="absolute left-1 z-10 flex h-9 w-9 items-center justify-center rounded-lg text-purple-600 hover:bg-purple-50 active:bg-purple-100 transition-colors disabled:opacity-50"
+            >
+              {prefixIcon}
+            </button>
+          )}
+          {prefixIcon && !onPrefixClick && (
             <div className="absolute left-3 text-slate-400 pointer-events-none flex items-center justify-center">
               {prefixIcon}
             </div>
