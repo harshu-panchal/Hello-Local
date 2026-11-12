@@ -3,6 +3,8 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IOrderItem extends Document {
   order: mongoose.Types.ObjectId;
   product: mongoose.Types.ObjectId;
+  /** True for POS Quick Bill lines that have no catalog product. */
+  isManualItem?: boolean;
   seller: mongoose.Types.ObjectId;
 
   // Product Details (snapshot at time of order)
@@ -45,7 +47,18 @@ const OrderItemSchema = new Schema<IOrderItem>(
     product: {
       type: Schema.Types.ObjectId,
       ref: "Product",
-      required: [true, "Product is required"],
+      // Only POS "Quick Bill" lines (typed in by the seller) may omit the product.
+      required: [
+        function (this: IOrderItem) {
+          return this.isManualItem !== true;
+        },
+        "Product is required",
+      ],
+    },
+    /** POS Quick Bill line entered manually: no catalog product, never touches stock. */
+    isManualItem: {
+      type: Boolean,
+      default: false,
     },
     seller: {
       type: Schema.Types.ObjectId,

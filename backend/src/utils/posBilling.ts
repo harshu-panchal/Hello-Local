@@ -104,6 +104,52 @@ export function allocateDiscountAndTax(lines: PricedLine[], discount: number): {
   return { lines: out, totalTax: round2(out.reduce((s, l) => s + l.taxAmount, 0)) };
 }
 
+export const MANUAL_ITEM_DEFAULT_NAME = "Miscellaneous Item";
+export const MANUAL_ITEM_MAX_PRICE = 1_000_000;
+export const MANUAL_ITEM_MAX_QTY = 10_000;
+
+export interface ManualLine {
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  taxRate: number;
+}
+
+/** True when a POS cart line is a Quick Bill (manually typed) item. */
+export function isManualLineInput(item: any): boolean {
+  return !!item && (item.manual === true || item.isManual === true || item.isManualItem === true);
+}
+
+/**
+ * Validate a Quick Bill line. The seller is the price authority for these
+ * (there is no catalog product), so we only enforce sane bounds.
+ */
+export function parseManualLine(item: any): { line?: ManualLine; error?: string } {
+  const name = String(item?.name ?? item?.productName ?? "").trim().replace(/\s+/g, " ").slice(0, 100)
+    || MANUAL_ITEM_DEFAULT_NAME;
+
+  const unitPrice = Number(item?.unitPrice ?? item?.price);
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    return { error: `Enter a valid price for "${name}"` };
+  }
+  if (unitPrice > MANUAL_ITEM_MAX_PRICE) {
+    return { error: `Price for "${name}" is too high` };
+  }
+
+  const quantity = Number(item?.quantity);
+  if (!Number.isInteger(quantity) || quantity <= 0 || quantity > MANUAL_ITEM_MAX_QTY) {
+    return { error: `Quantity for "${name}" must be a whole number between 1 and ${MANUAL_ITEM_MAX_QTY}` };
+  }
+
+  const rawTax = item?.taxRate;
+  const taxRate = rawTax === undefined || rawTax === null || rawTax === "" ? 0 : Number(rawTax);
+  if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) {
+    return { error: `GST rate for "${name}" must be between 0 and 100` };
+  }
+
+  return { line: { name, unitPrice: round2(unitPrice), quantity, taxRate: round2(taxRate) } };
+}
+
 /** Rate of a populated/looked-up Tax document, honouring its active status. */
 export function activeTaxRate(tax: any): number {
   if (!tax || typeof tax !== "object") return 0;

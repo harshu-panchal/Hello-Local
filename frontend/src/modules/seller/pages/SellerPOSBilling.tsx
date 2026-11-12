@@ -25,6 +25,17 @@ import {
 const BarcodeScannerModal = lazy(() => import("../components/BarcodeScannerModal"));
 
 const POS_PAGE_SIZE = 100;
+// Same bounds the server enforces for Quick Bill lines.
+const MANUAL_ITEM_MAX_PRICE = 1_000_000;
+const MANUAL_ITEM_MAX_QTY = 10_000;
+const GST_RATES = [0, 5, 12, 18, 28];
+
+type BillMode = "quick" | "product" | "scan";
+const BILL_MODES: Array<{ id: BillMode; label: string; hint: string }> = [
+  { id: "quick", label: "Quick Bill", hint: "Type item & price" },
+  { id: "product", label: "Product Bill", hint: "Pick from inventory" },
+  { id: "scan", label: "Scan & Bill", hint: "Barcode scanner" },
+];
 
 /** Line amounts for a given unit price & quantity (prices are tax-inclusive). */
 const lineAmounts = (unitPrice: number, quantity: number, taxRate: number) => {
@@ -62,6 +73,17 @@ export default function SellerPOSBilling() {
   const [isMobileCartOpen, setIsMobileCartOpen] = useState<boolean>(false);
   const [showClearCartModal, setShowClearCartModal] = useState<boolean>(false);
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
+  // Billing method tabs. "product" keeps the original screen as the default.
+  const [billMode, setBillMode] = useState<BillMode>("product");
+  const userPickedModeRef = useRef(false);
+  // Quick Bill form
+  const [quickName, setQuickName] = useState<string>("");
+  const [quickPrice, setQuickPrice] = useState<string>("");
+  const [quickQty, setQuickQty] = useState<string>("1");
+  const [quickTax, setQuickTax] = useState<string>("0");
+  const quickNameRef = useRef<HTMLInputElement>(null);
+  const quickPriceRef = useRef<HTMLInputElement>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
   // Id of the current checkout attempt. Kept across a failed submit so a retry
   // can never bill the same cart twice; renewed whenever the sale changes.
   const [clientSaleId, setClientSaleId] = useState<string>(() => newClientSaleId());
@@ -94,11 +116,17 @@ export default function SellerPOSBilling() {
         setTotalPages(res.pagination?.pages || 1);
         setServerQuery(trimmed);
         if (!append) setSelectedCategory("ALL");
+        // A store with no products uploaded can still bill: open Quick Bill.
+        if (!append && !trimmed && res.data.length === 0 && !userPickedModeRef.current) {
+          setBillMode("quick");
+        }
       }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || "Failed to load products for POS";
       setError(msg);
       showToast(msg, "error");
+      // Catalog unavailable: Quick Bill does not depend on it.
+      if (!append && !userPickedModeRef.current) setBillMode("quick");
     } finally {
       if (append) setLoadingMore(false);
       else setLoading(false);
@@ -128,6 +156,7 @@ export default function SellerPOSBilling() {
         return;
       }
       // Several variants: show the product so the cashier picks one.
+      setBillMode("product");
       setSearchQuery(product.productName);
       showToast(`Select a variant for "${product.productName}"`, "info");
       return;
@@ -171,6 +200,7 @@ export default function SellerPOSBilling() {
     } catch {
       // Fall back to a text search below.
     }
+    setBillMode("product");
     setSearchQuery(code);
     showToast(`No exact match for "${code}". Showing search results.`, "info");
     fetchProducts(code);
@@ -261,7 +291,10 @@ export default function SellerPOSBilling() {
       const item = updated[index];
       if (!item) return prev;
 
-      const maxStock = stockFor(item.productId, item.variation, item.availableStock);
+      // Quick Bill lines have no stock; only cap them at the server's limit.
+      const maxStock = item.isManual
+        ? MANUAL_ITEM_MAX_QTY
+        : stockFor(item.productId, item.variation, item.availableStock);
       const newQty = item.quantity + delta;
 
       if (newQty <= 0) {
@@ -281,6 +314,61 @@ export default function SellerPOSBilling() {
       };
       return updated;
     });
+  };
+
+  const selectBillMode = (mode: BillMode) => {
+    userPickedModeRef.current = true;
+    setBillMode(mode);
+    // Focus the main input of the chosen method (after it renders).
+    window.setTimeout(() => {
+      if (mode === "quick") quickNameRef.current?.focus();
+      else if (mode === "scan") scanInputRef.current?.focus();
+      else searchInputRef.current?.focus();
+    }, 0);
+  };
+
+  // Quick Bill: add a manually typed item (works with an empty catalog)
+  const addManualItem = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const name = quickName.trim().replace(/\s+/g, " ").slice(0, 100) || "Miscellaneous Item";
+    const unitPrice = round2(Number(quickPrice));
+    const quantity = Number(quickQty || "1");
+    const taxRate = Number(quickTax) || 0;
+
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      showToast("Enter a valid price for the item.", "error");
+      quickPriceRef.current?.focus();
+      return;
+    }
+    if (unitPrice > MANUAL_ITEM_MAX_PRICE) {
+      showToast("Price is too high for a single item.", "error");
+      return;
+    }
+    if (!Number.isInteger(quantity) || quantity <= 0 || quantity > MANUAL_ITEM_MAX_QTY) {
+      showToast(`Quantity must be a whole number between 1 and ${MANUAL_ITEM_MAX_QTY}.`, "error");
+      return;
+    }
+
+    const newItem: POSCartItem = {
+      lineId: `manual-${newClientSaleId()}`,
+      isManual: true,
+      productId: "",
+      productName: name,
+      unitPrice,
+      taxRate,
+      quantity,
+      ...lineAmounts(unitPrice, quantity, taxRate),
+      mainImage: "",
+      availableStock: MANUAL_ITEM_MAX_QTY,
+    };
+    setCart((prev) => [...prev, newItem]);
+    showToast(`Added ${name} to bill`, "success");
+
+    // Ready for the next item straight away; GST choice is kept.
+    setQuickName("");
+    setQuickPrice("");
+    setQuickQty("1");
+    quickNameRef.current?.focus();
   };
 
   // Remove specific line item
@@ -410,11 +498,21 @@ export default function SellerPOSBilling() {
     try {
       const payload: CreateOfflineSalePayload = {
         clientSaleId,
-        items: cart.map((item) => ({
-          productId: item.productId,
-          variation: item.variation,
-          quantity: item.quantity,
-        })),
+        items: cart.map((item) =>
+          item.isManual
+            ? {
+                manual: true as const,
+                name: item.productName,
+                unitPrice: item.unitPrice,
+                quantity: item.quantity,
+                taxRate: item.taxRate,
+              }
+            : {
+                productId: item.productId,
+                variation: item.variation,
+                quantity: item.quantity,
+              }
+        ),
         isWalkIn,
         customerName: isWalkIn ? undefined : customerName.trim() || undefined,
         customerPhone: isWalkIn ? undefined : phoneDigits || undefined,
@@ -481,6 +579,33 @@ export default function SellerPOSBilling() {
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* LEFT SECTION: CATALOG, SEARCH & CATEGORY CHIPS */}
         <div className="flex-1 w-full flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          {/* Billing method switcher: all three feed the same cart & bill */}
+          <div className="p-2 border-b border-slate-100 bg-white">
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Billing method">
+              {BILL_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={billMode === m.id}
+                  onClick={() => selectBillMode(m.id)}
+                  className={`rounded-lg px-2 py-2 text-center transition-all min-h-[44px] ${
+                    billMode === m.id
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "text-slate-600 hover:bg-white"
+                  }`}
+                >
+                  <span className="block text-xs font-bold">{m.label}</span>
+                  <span className={`hidden sm:block text-[10px] ${billMode === m.id ? "text-purple-100" : "text-slate-400"}`}>
+                    {m.hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {billMode === "product" && (
+          <>
           {/* Top Bar: Barcode / Text Search & Quick Refresh */}
           <div className="p-3.5 sm:p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
             <div className="flex items-center gap-2">
@@ -553,6 +678,20 @@ export default function SellerPOSBilling() {
                     <div className="h-3 bg-slate-200 rounded w-1/2" />
                   </div>
                 ))}
+              </div>
+            ) : products.length === 0 && !serverQuery ? (
+              <div className="flex h-64 flex-col items-center justify-center text-center p-6 text-slate-500">
+                <p className="text-base font-bold text-slate-800">No products uploaded yet</p>
+                <p className="text-xs text-slate-500 max-w-xs mt-1">
+                  You can still bill right away by typing the item name and price.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => selectBillMode("quick")}
+                  className="mt-4 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white hover:bg-purple-700 min-h-[44px]"
+                >
+                  Use Quick Bill
+                </button>
               </div>
             ) : displayedProducts.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center text-center p-6 text-slate-500">
@@ -686,6 +825,176 @@ export default function SellerPOSBilling() {
               </div>
             )}
           </div>
+          </>
+          )}
+
+          {/* QUICK BILL: manual entry, works with zero products uploaded */}
+          {billMode === "quick" && (
+            <form onSubmit={addManualItem} className="p-4 sm:p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Quick Bill</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Type the item and price, then press Enter or tap Add. No product setup needed.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="quick-name" className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Item name <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    id="quick-name"
+                    ref={quickNameRef}
+                    type="text"
+                    value={quickName}
+                    maxLength={100}
+                    onChange={(e) => setQuickName(e.target.value)}
+                    placeholder="e.g. Sugar 1kg"
+                    autoComplete="off"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-base sm:text-sm text-slate-900 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 min-h-[44px]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="quick-price" className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Price (₹) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      id="quick-price"
+                      ref={quickPriceRef}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={quickPrice}
+                      onChange={(e) => setQuickPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-base sm:text-sm font-bold text-slate-900 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="quick-qty" className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Quantity
+                    </label>
+                    <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden min-h-[44px]">
+                      <button
+                        type="button"
+                        onClick={() => setQuickQty((q) => String(Math.max(1, (parseInt(q, 10) || 1) - 1)))}
+                        className="px-3 py-2 text-slate-700 font-bold hover:bg-slate-100 min-h-[44px] min-w-[40px]"
+                        aria-label="Decrease quantity"
+                      >
+                        -
+                      </button>
+                      <input
+                        id="quick-qty"
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        step="1"
+                        value={quickQty}
+                        onChange={(e) => setQuickQty(e.target.value.replace(/[^\d]/g, ""))}
+                        className="w-full min-w-0 text-center text-base sm:text-sm font-bold text-slate-900 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickQty((q) => String(Math.min(MANUAL_ITEM_MAX_QTY, (parseInt(q, 10) || 0) + 1)))}
+                        className="px-3 py-2 text-slate-700 font-bold hover:bg-slate-100 min-h-[44px] min-w-[40px]"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-xs font-bold text-slate-700 mb-1.5">
+                    GST included in price
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {GST_RATES.map((rate) => (
+                      <button
+                        key={rate}
+                        type="button"
+                        onClick={() => setQuickTax(String(rate))}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-bold border min-h-[36px] transition-colors ${
+                          quickTax === String(rate)
+                            ? "bg-purple-600 text-white border-purple-600"
+                            : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        {rate === 0 ? "No GST" : `${rate}%`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5">
+                <span className="text-xs text-slate-600">Line total</span>
+                <span className="text-base font-black text-purple-700">
+                  ₹{(round2((Number(quickPrice) || 0) * (parseInt(quickQty, 10) || 0))).toFixed(2)}
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white hover:bg-purple-700 transition-colors min-h-[48px]"
+              >
+                + Add to Bill
+              </button>
+            </form>
+          )}
+
+          {/* SCAN & BILL: hardware scanner input + camera */}
+          {billMode === "scan" && (
+            <div className="p-4 sm:p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Scan & Bill</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Scan with a barcode scanner into the box below, or use your phone camera.
+                </p>
+              </div>
+
+              <input
+                ref={scanInputRef}
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder="Scan or type barcode / SKU, then Enter"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const code = target.value;
+                  target.value = "";
+                  processScannedCode(code);
+                }}
+                className="w-full rounded-xl border-2 border-purple-300 bg-white px-3.5 py-3 text-base font-bold tracking-wide text-slate-900 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 min-h-[52px]"
+              />
+
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 py-3 text-sm font-bold text-white hover:bg-purple-700 transition-colors min-h-[52px]"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                  <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                  <rect x="7" y="7" width="10" height="10" rx="1"></rect>
+                </svg>
+                Scan with Camera
+              </button>
+
+              <p className="text-[11px] text-slate-400">
+                Scanned items are added to the bill instantly. Products need a barcode or SKU set in your inventory.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* RIGHT SECTION: ACTIVE SALE CART & TENDER CONTROLS */}
@@ -742,18 +1051,23 @@ export default function SellerPOSBilling() {
                 </svg>
                 <p className="text-xs font-bold text-slate-600">Cart is empty</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Scan barcode or tap products from catalog to add
+                  Type an item in Quick Bill, pick a product, or scan a barcode
                 </p>
               </div>
             ) : (
               cart.map((item, idx) => (
                 <div
-                  key={`${item.productId}-${item.variation || "default"}`}
+                  key={item.lineId || `${item.productId}-${item.variation || "default"}`}
                   className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-slate-900 truncate">{item.productName}</div>
                     <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                      {item.isManual && (
+                        <span className="rounded-md bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800">
+                          Quick
+                        </span>
+                      )}
                       {item.variantTitle && (
                         <span className="rounded-md bg-slate-200 px-1.5 py-0.2 text-[10px] text-slate-700 font-semibold">
                           {item.variantTitle}

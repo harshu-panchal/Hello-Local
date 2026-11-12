@@ -144,14 +144,19 @@ export interface POSCartItem {
   subtotal: number;
   total: number;
   availableStock: number;
+  /** Quick Bill line typed in by the seller (no catalog product, no stock). */
+  isManual?: boolean;
+  /** Stable client-side id for the cart line. */
+  lineId?: string;
 }
 
+/** A POS sale line: a catalog product or a Quick Bill (manual) item. */
+export type OfflineSaleItemInput =
+  | { productId: string; variation?: string; quantity: number }
+  | { manual: true; name: string; unitPrice: number; quantity: number; taxRate: number };
+
 export interface CreateOfflineSalePayload {
-  items: Array<{
-    productId: string;
-    variation?: string;
-    quantity: number;
-  }>;
+  items: OfflineSaleItemInput[];
   /** Id of this checkout attempt; retries with the same id never bill twice. */
   clientSaleId?: string;
   isWalkIn?: boolean;
@@ -179,6 +184,8 @@ export interface CreateOfflineSalePayload {
 
 export interface BillItem {
   srNo: number;
+  /** Quick Bill line (no catalog product). */
+  isManual?: boolean;
   productId?: string;
   product?: string;
   productName?: string;

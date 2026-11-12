@@ -25,7 +25,9 @@ import {
   financialYearLabel,
   formatBillNumber,
   formatPosOrderNumber,
+  isManualLineInput,
   normalizeIndianMobile,
+  parseManualLine,
   round2,
 } from "../../../utils/posBilling";
 
@@ -97,6 +99,7 @@ function buildBillData(order: any, sellerItems: any[], sellerInfo: any, isDirect
     const unit = it.variantTitle || "";
     return {
       srNo: index + 1,
+      isManual: it.isManualItem === true,
       productId: it.product?._id ? String(it.product._id) : it.product ? String(it.product) : undefined,
       product: it.productName,
       productName: it.productName,
@@ -313,9 +316,11 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
     });
   }
 
-  // 1. Resolve every product and line item from the database
+  // 1. Resolve every line. Catalog lines are priced from the database; Quick
+  //    Bill (manual) lines carry the seller's own name/price/GST and no product.
   interface ResolvedPOSLine {
-    product: any;
+    product: any | null;
+    manualName?: string;
     quantity: number;
     selector: string | null;
     variation: any | null;
@@ -329,6 +334,26 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
   let subtotal = 0;
 
   for (const item of items) {
+    if (isManualLineInput(item)) {
+      const { line, error } = parseManualLine(item);
+      if (!line) {
+        return res.status(400).json({ success: false, message: error || "Invalid manual item" });
+      }
+      const lineSubtotal = round2(line.unitPrice * line.quantity);
+      subtotal = round2(subtotal + lineSubtotal);
+      resolved.push({
+        product: null,
+        manualName: line.name,
+        quantity: line.quantity,
+        selector: null,
+        variation: null,
+        unitPrice: line.unitPrice,
+        lineSubtotal,
+        taxRate: line.taxRate,
+      });
+      continue;
+    }
+
     const productId = item?.productId || item?.product?.id || item?.product?._id;
     if (!productId || !mongoose.Types.ObjectId.isValid(String(productId))) {
       return res.status(400).json({ success: false, message: "Invalid product in cart" });
@@ -458,14 +483,17 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      await reserveMany(
-        resolved.map((r) => ({
+      // Only catalog lines hold stock; Quick Bill lines never touch inventory.
+      const stockRequests = resolved
+        .filter((r) => r.product)
+        .map((r) => ({
           productId: String(r.product._id),
           quantity: r.quantity,
           variation: r.selector,
-        })),
-        session,
-      );
+        }));
+      if (stockRequests.length > 0) {
+        await reserveMany(stockRequests, session);
+      }
 
       const counter = await BillCounter.findOneAndUpdate(
         { _id: counterKey },
@@ -518,11 +546,18 @@ export const createOfflineSale = asyncHandler(async (req: Request, res: Response
       const orderItems = await OrderItem.insertMany(
         resolved.map((r, i) => ({
           order: newOrder._id,
-          product: r.product._id,
+          ...(r.product
+            ? {
+                product: r.product._id,
+                productName: r.product.productName,
+                productImage: r.product.mainImage,
+                sku: (r.variation as any)?.sku || r.product.sku,
+              }
+            : {
+                isManualItem: true,
+                productName: r.manualName,
+              }),
           seller: sellerObjId,
-          productName: r.product.productName,
-          productImage: r.product.mainImage,
-          sku: (r.variation as any)?.sku || r.product.sku,
           unitPrice: r.unitPrice,
           quantity: r.quantity,
           subtotal: r.lineSubtotal,
@@ -844,8 +879,13 @@ export const cancelOfflineSale = asyncHandler(async (req: Request, res: Response
       );
       if (!cancelled) throw new PosError("Sale is already cancelled", 400);
 
-      // Restore inventory
-      const orderItems = await OrderItem.find({ order: cancelled._id, status: { $ne: "Cancelled" } }).session(session);
+      // Restore inventory (Quick Bill lines have no product and took no stock)
+      const orderItems = await OrderItem.find({
+        order: cancelled._id,
+        status: { $ne: "Cancelled" },
+        isManualItem: { $ne: true },
+        product: { $ne: null },
+      }).session(session);
       const reservations = await reservationsFromOrderItems(orderItems as any[], session);
       await releaseMany(reservations, session);
 

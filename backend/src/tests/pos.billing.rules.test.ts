@@ -131,3 +131,61 @@ test("Seller order status endpoint refuses POS (offline) sales", () => {
   const ctrl = code("modules/seller/controllers/orderController.ts");
   assert.match(ctrl, /orderChannel === "OFFLINE"/);
 });
+
+// ───────────────────────── Quick Bill (manual items) ─────────────────────────
+import mongoose from "mongoose";
+import OrderItem from "../models/OrderItem";
+import { isManualLineInput, parseManualLine, MANUAL_ITEM_DEFAULT_NAME } from "../utils/posBilling";
+
+test("Quick Bill: manual line detection only triggers on an explicit flag", () => {
+  assert.equal(isManualLineInput({ manual: true, name: "Tea", unitPrice: 10, quantity: 1 }), true);
+  assert.equal(isManualLineInput({ productId: "665f1c2ab4e5d6f7a8b9c0d1", quantity: 1 }), false);
+  assert.equal(isManualLineInput({ manual: "true" }), false, "string flags are not accepted");
+  assert.equal(isManualLineInput(null), false);
+});
+
+test("Quick Bill: manual line validation", () => {
+  assert.deepEqual(parseManualLine({ name: "  Sugar   1kg ", unitPrice: 45.555, quantity: 2, taxRate: 5 }).line, {
+    name: "Sugar 1kg", unitPrice: 45.56, quantity: 2, taxRate: 5,
+  });
+  assert.equal(parseManualLine({ name: "", unitPrice: 10, quantity: 1 }).line?.name, MANUAL_ITEM_DEFAULT_NAME);
+  assert.equal(parseManualLine({ name: "x", unitPrice: 10, quantity: 1 }).line?.taxRate, 0, "GST defaults to 0");
+  assert.ok(parseManualLine({ name: "x", unitPrice: 0, quantity: 1 }).error, "zero price rejected");
+  assert.ok(parseManualLine({ name: "x", unitPrice: -5, quantity: 1 }).error, "negative price rejected");
+  assert.ok(parseManualLine({ name: "x", unitPrice: "abc", quantity: 1 }).error);
+  assert.ok(parseManualLine({ name: "x", unitPrice: 2_000_000, quantity: 1 }).error, "absurd price rejected");
+  assert.ok(parseManualLine({ name: "x", unitPrice: 10, quantity: 1.5 }).error, "fractional qty rejected");
+  assert.ok(parseManualLine({ name: "x", unitPrice: 10, quantity: 0 }).error);
+  assert.ok(parseManualLine({ name: "x", unitPrice: 10, quantity: 1, taxRate: 150 }).error);
+  assert.equal(parseManualLine({ name: "a".repeat(300), unitPrice: 10, quantity: 1 }).line?.name.length, 100);
+});
+
+test("Quick Bill: OrderItem allows a missing product ONLY for manual lines", () => {
+  const base = {
+    order: new mongoose.Types.ObjectId(),
+    seller: new mongoose.Types.ObjectId(),
+    productName: "Loose Rice",
+    unitPrice: 50,
+    quantity: 2,
+    total: 100,
+  };
+  const manual = new OrderItem({ ...base, isManualItem: true });
+  assert.equal(manual.validateSync(), undefined, "manual line without product must validate");
+
+  const normal = new OrderItem({ ...base });
+  const err = normal.validateSync();
+  assert.ok(err?.errors?.product, "a normal (online/catalog) line still requires a product");
+
+  const withProduct = new OrderItem({ ...base, product: new mongoose.Types.ObjectId() });
+  assert.equal(withProduct.validateSync(), undefined);
+  assert.equal(withProduct.isManualItem, false, "existing lines default to non-manual");
+});
+
+test("Quick Bill: controller never reserves or restores stock for manual lines", () => {
+  const pos = code("modules/seller/controllers/posController.ts");
+  assert.match(pos, /isManualLineInput\(item\)/);
+  assert.match(pos, /\.filter\(\(r\) => r\.product\)/, "only catalog lines are reserved");
+  assert.match(pos, /isManualItem: true/, "manual lines are flagged when saved");
+  const cancel = pos.slice(pos.indexOf("export const cancelOfflineSale"));
+  assert.match(cancel, /isManualItem: \{ \$ne: true \}/, "cancel skips manual lines");
+});
