@@ -42,6 +42,8 @@ export interface IOrder extends Document {
   // Bill Generation Tracking
   billNumber?: string;
   billGeneratedAt?: Date;
+  /** Client-generated id of a POS sale attempt; makes retries idempotent. */
+  posClientRef?: string;
 
   // Order Items
   items: mongoose.Types.ObjectId[]; // References to OrderItem
@@ -366,6 +368,7 @@ const OrderSchema = new Schema<IOrder>(
 
     originalTotal: Number,
     checkoutKey: String,
+    posClientRef: { type: String, trim: true },
     checkoutHash: String,
     settlementStatus: { type: String, enum: ["Pending", "Complete", "Failed"] },
     settlementError: String,
@@ -546,6 +549,7 @@ OrderSchema.pre("validate", async function (this: IOrder, next) {
 });
 
 OrderSchema.index({ customer: 1, checkoutKey: 1 }, { unique: true, partialFilterExpression: { checkoutKey: { $type: "string" } } });
+OrderSchema.index({ seller: 1, posClientRef: 1 }, { unique: true, partialFilterExpression: { posClientRef: { $type: "string" } } });
 
 // Indexes for faster queries
 OrderSchema.index({ customer: 1, orderDate: -1 });

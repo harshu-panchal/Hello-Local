@@ -6,12 +6,29 @@ import {
   POSProduct,
   POSCartItem,
   BillData,
+  CreateOfflineSalePayload,
 } from "../../../services/api/orderService";
 import { PrintableBillModal } from "../components/PrintableBillModal";
 import { SellerPageHeader } from "../components/common/SellerPageHeader";
 import { SellerInput } from "../components/common/SellerInput";
 import { SellerButton } from "../components/common/SellerButton";
 import { useToast } from "../../../context/ToastContext";
+import { normalizeMobile } from "../../../utils/phone";
+import {
+  allocateDiscountAndTax,
+  isValidIndianMobile,
+  newClientSaleId,
+  round2,
+} from "../../../utils/posBilling";
+
+const POS_PAGE_SIZE = 100;
+
+/** Line amounts for a given unit price & quantity (prices are tax-inclusive). */
+const lineAmounts = (unitPrice: number, quantity: number, taxRate: number) => {
+  const subtotal = round2(unitPrice * quantity);
+  const taxAmount = taxRate > 0 ? round2((subtotal * taxRate) / (100 + taxRate)) : 0;
+  return { subtotal, taxAmount, total: subtotal };
+};
 
 export default function SellerPOSBilling() {
   const navigate = useNavigate();
@@ -19,6 +36,11 @@ export default function SellerPOSBilling() {
 
   const [products, setProducts] = useState<POSProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  // The search text the current product list was fetched with from the server.
+  const [serverQuery, setServerQuery] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [cart, setCart] = useState<POSCartItem[]>([]);
@@ -36,6 +58,9 @@ export default function SellerPOSBilling() {
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState<boolean>(false);
   const [showClearCartModal, setShowClearCartModal] = useState<boolean>(false);
+  // Id of the current checkout attempt. Kept across a failed submit so a retry
+  // can never bill the same cart twice; renewed whenever the sale changes.
+  const [clientSaleId, setClientSaleId] = useState<string>(() => newClientSaleId());
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,44 +70,107 @@ export default function SellerPOSBilling() {
     if (searchInputRef.current) {
       searchInputRef.current.focus();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchProducts = async (query = "") => {
-    setLoading(true);
+  const fetchProducts = async (query = "", page = 1, append = false) => {
+    const trimmed = query.trim();
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError("");
     try {
-      const res = await getPOSProducts({ query, limit: 100 });
+      const res = await getPOSProducts({ query: trimmed || undefined, page, limit: POS_PAGE_SIZE });
       if (res.success && res.data) {
-        setProducts(res.data);
+        setProducts((prev) => {
+          if (!append) return res.data;
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...res.data.filter((p) => !seen.has(p.id))];
+        });
+        setCurrentPage(res.pagination?.page || page);
+        setTotalPages(res.pagination?.pages || 1);
+        setServerQuery(trimmed);
+        if (!append) setSelectedCategory("ALL");
       }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || "Failed to load products for POS";
       setError(msg);
       showToast(msg, "error");
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
-  // Barcode / SKU quick-scan key handler
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && searchQuery.trim()) {
-      const trimmed = searchQuery.trim().toLowerCase();
-      // Look for exact match by barcode, SKU, or exact title
-      const matched = products.find(
-        (p) =>
-          p.barcode?.toLowerCase() === trimmed ||
-          p.sku?.toLowerCase() === trimmed ||
-          p.productName.toLowerCase() === trimmed
-      );
-
-      if (matched) {
-        addToCart(matched);
-        setSearchQuery("");
-      } else {
-        fetchProducts(searchQuery);
+  /** Find a product (and variant) whose barcode/SKU exactly equals `code`. */
+  const findExactCode = (list: POSProduct[], code: string) => {
+    const c = code.toLowerCase();
+    for (const p of list) {
+      const variant = p.hasVariations ? p.variations.find((v) => v.sku && v.sku.toLowerCase() === c) : undefined;
+      if (variant) return { product: p, variantId: variant.id || variant.value };
+      if (p.barcode?.toLowerCase() === c || p.sku?.toLowerCase() === c || p.productName.toLowerCase() === c) {
+        return { product: p, variantId: undefined as string | undefined };
       }
     }
+    return null;
+  };
+
+  /** Add an exact match to the bill, or ask for a variant when it has several. */
+  const addExactMatch = (match: { product: POSProduct; variantId?: string }) => {
+    const { product, variantId } = match;
+    if (product.hasVariations && !variantId) {
+      if (product.variations.length === 1) {
+        addToCart(product, product.variations[0].id || product.variations[0].value);
+        setSearchQuery("");
+        return;
+      }
+      // Several variants: show the product so the cashier picks one.
+      setSearchQuery(product.productName);
+      showToast(`Select a variant for "${product.productName}"`, "info");
+      return;
+    }
+    addToCart(product, variantId);
+    setSearchQuery("");
+  };
+
+  // Barcode / SKU quick-scan key handler
+  const handleSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const code = searchQuery.trim();
+    if (!code) return;
+
+    const local = findExactCode(products, code);
+    if (local) {
+      addExactMatch(local);
+      return;
+    }
+
+    // Not in the loaded catalog page: ask the server for an exact barcode/SKU hit.
+    try {
+      const res = await getPOSProducts({ barcode: code, limit: 5 });
+      const hits = res.success && Array.isArray(res.data) ? res.data : [];
+      if (hits.length === 1) {
+        const hit = hits[0];
+        setProducts((prev) => (prev.some((p) => p.id === hit.id) ? prev : [hit, ...prev]));
+        const match = findExactCode([hit], code) || { product: hit, variantId: undefined };
+        addExactMatch(match);
+        return;
+      }
+    } catch {
+      // Fall back to a text search below.
+    }
+    fetchProducts(code);
+  };
+
+  /** Latest known stock for a product / variant, from the catalog list. */
+  const stockFor = (productId: string, variation?: string, fallback = 0) => {
+    const prod = products.find((p) => p.id === productId);
+    if (!prod) return fallback;
+    if (prod.hasVariations) {
+      const v = prod.variations.find((x) => x.id === variation || x.value === variation);
+      return v ? v.stock : fallback;
+    }
+    return prod.stock;
   };
 
   // Add product to POS Cart
@@ -96,7 +184,7 @@ export default function SellerPOSBilling() {
     const variationKey = selectedVar ? (selectedVar.id || selectedVar.value) : undefined;
     const variantTitle = selectedVar ? (selectedVar.value || selectedVar.name) : undefined;
 
-    if (availableStock <= 0) {
+    if (availableStock <= 0 || (selectedVar && selectedVar.status === "Sold out")) {
       showToast(`"${product.productName}" is out of stock!`, "info");
       return;
     }
@@ -116,27 +204,15 @@ export default function SellerPOSBilling() {
         }
         const updated = [...prev];
         const newQty = existing.quantity + 1;
-        const subtotal = Math.round(unitPrice * newQty * 100) / 100;
-        // Prices are tax-inclusive (MRP): tax is embedded within line subtotal
-        const taxAmount = product.taxRate > 0 ? Math.round(((subtotal * product.taxRate) / (100 + product.taxRate)) * 100) / 100 : 0;
-        const total = subtotal;
-
         updated[existingIndex] = {
           ...existing,
           quantity: newQty,
-          subtotal,
-          taxAmount,
-          total,
+          availableStock,
+          ...lineAmounts(existing.unitPrice, newQty, existing.taxRate),
         };
         showToast(`Updated ${product.productName} (${newQty})`, "info");
         return updated;
       }
-
-      // Add new item
-      const subtotal = Math.round(unitPrice * 1 * 100) / 100;
-      // Prices are tax-inclusive (MRP): tax is embedded within line subtotal
-      const taxAmount = product.taxRate > 0 ? Math.round(((subtotal * product.taxRate) / (100 + product.taxRate)) * 100) / 100 : 0;
-      const total = subtotal;
 
       const newItem: POSCartItem = {
         productId: product.id,
@@ -146,11 +222,9 @@ export default function SellerPOSBilling() {
         unitPrice,
         taxRate: product.taxRate,
         quantity: 1,
-        subtotal,
-        taxAmount,
-        total,
-        mainImage: (product as any).mainImage || (product as any).image || "",
-        availableStock: (product as any).stockQuantity || (product as any).stock || 0,
+        ...lineAmounts(unitPrice, 1, product.taxRate),
+        mainImage: product.mainImage || "",
+        availableStock,
       };
 
       showToast(`Added ${product.productName} to bill`, "success");
@@ -165,12 +239,7 @@ export default function SellerPOSBilling() {
       const item = updated[index];
       if (!item) return prev;
 
-      // Find original product to check max stock
-      const originalProd = products.find((p) => p.id === item.productId);
-      const varStock = originalProd?.hasVariations
-        ? originalProd.variations.find((v) => (v.id === item.variation || v.value === item.variation))?.stock || 0
-        : originalProd?.stock || 999;
-
+      const maxStock = stockFor(item.productId, item.variation, item.availableStock);
       const newQty = item.quantity + delta;
 
       if (newQty <= 0) {
@@ -178,22 +247,15 @@ export default function SellerPOSBilling() {
         return updated.filter((_, i) => i !== index);
       }
 
-      if (newQty > varStock) {
-        showToast(`Cannot add more. Max stock available is ${varStock}`, "info");
+      if (delta > 0 && newQty > maxStock) {
+        showToast(`Cannot add more. Max stock available is ${maxStock}`, "info");
         return prev;
       }
-
-      const subtotal = Math.round(item.unitPrice * newQty * 100) / 100;
-      // Prices are tax-inclusive (MRP): tax is embedded within line subtotal
-      const taxAmount = item.taxRate > 0 ? Math.round(((subtotal * item.taxRate) / (100 + item.taxRate)) * 100) / 100 : 0;
-      const total = subtotal;
 
       updated[index] = {
         ...item,
         quantity: newQty,
-        subtotal,
-        taxAmount,
-        total,
+        ...lineAmounts(item.unitPrice, newQty, item.taxRate),
       };
       return updated;
     });
@@ -205,8 +267,7 @@ export default function SellerPOSBilling() {
     showToast("Item removed from cart", "info");
   };
 
-  // Clear entire cart confirmation
-  const handleConfirmClearCart = () => {
+  const resetSale = () => {
     setCart([]);
     setDiscount(0);
     setCashReceived("");
@@ -215,6 +276,12 @@ export default function SellerPOSBilling() {
     setCustomerPhone("");
     setIsWalkIn(true);
     setOrderNotes("");
+    setError("");
+  };
+
+  // Clear entire cart confirmation
+  const handleConfirmClearCart = () => {
+    resetSale();
     setShowClearCartModal(false);
     showToast("Active sale cart cleared", "info");
     if (searchInputRef.current) {
@@ -233,99 +300,123 @@ export default function SellerPOSBilling() {
 
   // Filter products by search text & selected category
   const displayedProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    // When the list already came from a server search for this text, the server
+    // matched it (incl. tags / variant SKUs), so don't filter it out again.
+    const skipTextFilter = !q || q === serverQuery.toLowerCase();
     return products.filter((p) => {
       const matchCat = selectedCategory === "ALL" || p.categoryName === selectedCategory;
       const matchSearch =
-        !searchQuery ||
-        p.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.barcode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(searchQuery.toLowerCase());
+        skipTextFilter ||
+        p.productName.toLowerCase().includes(q) ||
+        p.barcode?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q) ||
+        (p.hasVariations && p.variations.some((v) => v.sku?.toLowerCase().includes(q)));
       return matchCat && matchSearch;
     });
-  }, [products, selectedCategory, searchQuery]);
+  }, [products, selectedCategory, searchQuery, serverQuery]);
 
   // POS Totals Calculations
   const cartSubtotal = useMemo(() => {
-    return Math.round(cart.reduce((sum, item) => sum + item.subtotal, 0) * 100) / 100;
+    return round2(cart.reduce((sum, item) => sum + item.subtotal, 0));
   }, [cart]);
 
+  // Keep the discount within the bill and drop it when the cart empties.
+  useEffect(() => {
+    if (cart.length === 0 && discount !== 0) setDiscount(0);
+    else if (discount > cartSubtotal) setDiscount(cartSubtotal);
+  }, [cart.length, cartSubtotal, discount]);
+
+  const effectiveDiscount = Math.min(Math.max(0, round2(discount)), cartSubtotal);
+
+  // GST embedded in the bill after the discount (same rule as the server).
   const cartTotalTax = useMemo(() => {
-    return Math.round(cart.reduce((sum, item) => sum + item.taxAmount, 0) * 100) / 100;
-  }, [cart]);
+    return allocateDiscountAndTax(
+      cart.map((item) => ({ amount: item.subtotal, taxRate: item.taxRate })),
+      effectiveDiscount
+    ).totalTax;
+  }, [cart, effectiveDiscount]);
 
-  const rawGrandTotal = useMemo(() => {
-    return Math.max(0, Math.round((cartSubtotal - discount) * 100) / 100);
-  }, [cartSubtotal, discount]);
+  const grandTotal = Math.max(0, round2(cartSubtotal - effectiveDiscount));
 
-  const grandTotal = rawGrandTotal;
+  // A new checkout attempt id whenever the sale itself changes.
+  useEffect(() => {
+    setClientSaleId(newClientSaleId());
+  }, [cart, effectiveDiscount, paymentMethod]);
 
   // Change to return when Cash is selected
   const changeDue = useMemo(() => {
     const received = parseFloat(cashReceived) || 0;
     if (received <= 0 || received < grandTotal) return 0;
-    return Math.round((received - grandTotal) * 100) / 100;
+    return round2(received - grandTotal);
   }, [cashReceived, grandTotal]);
 
   // Complete & Submit Offline Sale
   const handleCompleteSale = async () => {
+    if (submitting) return;
     if (cart.length === 0) {
       showToast("Active cart is empty! Add products before checking out.", "error");
       return;
     }
 
-    if (!isWalkIn && customerPhone && customerPhone.length < 10) {
+    const phoneDigits = isWalkIn ? "" : normalizeMobile(customerPhone);
+    if (!isWalkIn && customerPhone.trim() && !isValidIndianMobile(phoneDigits)) {
       showToast("Please enter a valid 10-digit mobile number for WhatsApp receipt.", "error");
       return;
     }
 
-    const parsedCash = paymentMethod === "Cash" ? parseFloat(cashReceived) || grandTotal : undefined;
-    if (paymentMethod === "Cash" && parsedCash !== undefined && parsedCash < grandTotal) {
-      showToast(`Cash received (₹${parsedCash}) cannot be less than Grand Total (₹${grandTotal}).`, "error");
-      return;
+    let parsedCash: number | undefined;
+    if (paymentMethod === "Cash") {
+      if (cashReceived.trim() === "") {
+        parsedCash = grandTotal; // Exact amount tendered
+      } else {
+        parsedCash = Number(cashReceived);
+        if (!Number.isFinite(parsedCash) || parsedCash < 0) {
+          showToast("Please enter a valid cash received amount.", "error");
+          return;
+        }
+        if (round2(parsedCash) < grandTotal) {
+          showToast(`Cash received (₹${parsedCash}) cannot be less than Grand Total (₹${grandTotal}).`, "error");
+          return;
+        }
+      }
     }
 
     setSubmitting(true);
     setError("");
 
     try {
-      const payload = {
+      const payload: CreateOfflineSalePayload = {
+        clientSaleId,
         items: cart.map((item) => ({
           productId: item.productId,
-          productName: item.productName,
           variation: item.variation,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          taxRate: item.taxRate,
         })),
-        customerName: isWalkIn ? "Walk-in Customer" : customerName || "Walk-in Customer",
-        customerPhone: isWalkIn ? undefined : customerPhone || undefined,
+        isWalkIn,
+        customerName: isWalkIn ? undefined : customerName.trim() || undefined,
+        customerPhone: isWalkIn ? undefined : phoneDigits || undefined,
         paymentMethod,
-        discount: discount > 0 ? discount : undefined,
+        discount: effectiveDiscount > 0 ? effectiveDiscount : undefined,
         cashReceived: parsedCash,
-        changeDue: changeDue > 0 ? changeDue : undefined,
-        paymentReference: paymentReference || undefined,
-        orderNotes: orderNotes || undefined,
+        paymentReference: paymentMethod !== "Cash" ? paymentReference.trim() || undefined : undefined,
+        orderNotes: orderNotes.trim() || undefined,
       };
 
       const res = await createOfflineSale(payload);
 
-      if (res.success && (res.data || (res as any).bill)) {
-        const generatedBill = res.data || (res as any).bill;
+      if (res.success && res.data) {
+        const generatedBill = res.data;
         setSuccessBill(generatedBill);
         setIsBillModalOpen(true);
         setIsMobileCartOpen(false);
 
         showToast(`Bill #${generatedBill.billNumber} generated successfully!`, "success");
 
-        // Reset POS Billing form
-        setCart([]);
-        setDiscount(0);
-        setCashReceived("");
-        setPaymentReference("");
-        setCustomerName("");
-        setCustomerPhone("");
-        setIsWalkIn(true);
-        setOrderNotes("");
+        // Reset POS Billing form for the next customer
+        resetSale();
+        setSearchQuery("");
+        setClientSaleId(newClientSaleId());
 
         // Refresh product stock list in background
         fetchProducts();
@@ -338,6 +429,8 @@ export default function SellerPOSBilling() {
       const msg = err?.response?.data?.message || err?.message || "Failed to create offline sale";
       setError(msg);
       showToast(msg, "error");
+      // Stock may have changed since the catalog was loaded.
+      if (err?.response?.status === 400) fetchProducts(serverQuery);
     } finally {
       setSubmitting(false);
     }
@@ -498,7 +591,7 @@ export default function SellerPOSBilling() {
                           <span className="text-xs font-black text-purple-700">
                             ₹{prod.effectivePrice.toFixed(2)}
                           </span>
-                          {prod.discPrice > 0 && (
+                          {prod.discPrice > 0 && prod.discPrice < prod.price && (
                             <span className="text-[10px] text-slate-400 line-through">
                               ₹{prod.price.toFixed(2)}
                             </span>
@@ -513,27 +606,32 @@ export default function SellerPOSBilling() {
                             Select Variant:
                           </span>
                           <div className="flex flex-wrap gap-1">
-                            {prod.variations.map((v) => (
+                            {prod.variations.map((v) => {
+                              const variantUnavailable = v.stock <= 0 || v.status === "Sold out";
+                              return (
                               <button
                                 key={v.id || v.value}
-                                disabled={v.stock <= 0}
+                                type="button"
+                                disabled={variantUnavailable}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   addToCart(prod, v.id || v.value);
                                 }}
                                 className={`rounded-lg px-2 py-1.5 text-[10px] font-bold border transition-colors min-h-[36px] flex items-center justify-center ${
-                                  v.stock <= 0
+                                  variantUnavailable
                                     ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
                                     : "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-600 hover:text-white"
                                 }`}
                               >
                                 {v.value || v.name} (₹{v.effectivePrice})
                               </button>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ) : (
                         <button
+                          type="button"
                           disabled={isOutOfStock}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -547,6 +645,20 @@ export default function SellerPOSBilling() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Pagination: load the next page of the catalog */}
+            {!loading && currentPage < totalPages && (
+              <div className="flex justify-center pt-4">
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={() => fetchProducts(serverQuery, currentPage + 1, true)}
+                  className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-2 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-colors min-h-[40px] disabled:opacity-60"
+                >
+                  {loadingMore ? "Loading..." : "Load more products"}
+                </button>
               </div>
             )}
           </div>
@@ -691,8 +803,9 @@ export default function SellerPOSBilling() {
                 />
                 <input
                   type="tel"
+                  inputMode="numeric"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  onChange={(e) => setCustomerPhone(normalizeMobile(e.target.value))}
                   placeholder="Mobile (WhatsApp)"
                   className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 focus:border-purple-600 outline-none min-h-[40px]"
                 />
@@ -730,6 +843,8 @@ export default function SellerPOSBilling() {
                   <span className="text-xs font-bold text-purple-900">Cash Received (₹):</span>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={cashReceived}
                     onChange={(e) => setCashReceived(e.target.value)}
                     placeholder={grandTotal.toString()}
@@ -796,8 +911,12 @@ export default function SellerPOSBilling() {
                   type="number"
                   min="0"
                   max={cartSubtotal}
+                  step="0.01"
                   value={discount || ""}
-                  onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setDiscount(Number.isFinite(value) ? Math.min(Math.max(0, round2(value)), cartSubtotal) : 0);
+                  }}
                   placeholder="0"
                   className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-xs font-bold text-slate-900 outline-none focus:border-purple-600 min-h-[36px]"
                 />

@@ -293,6 +293,15 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
   const sellerId = req.user!.userId;
   const requested = String(req.body.status || "");
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+  // Counter (POS) sales are completed at billing time and have their own
+  // cancel path that restores stock; the online fulfilment flow must not touch them.
+  const channelCheck = await Order.findById(id).select("orderChannel").lean();
+  if (channelCheck?.orderChannel === "OFFLINE") {
+    return res.status(400).json({
+      success: false,
+      message: "Counter (POS) sales are completed at billing. To cancel one, use Bills & Invoices.",
+    });
+  }
   const result = await changeSellerStage(id, sellerId, requested);
   const io = req.app.get("io") as SocketIOServer;
   if (io) {

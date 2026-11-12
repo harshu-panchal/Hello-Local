@@ -26,6 +26,10 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string)
     );
 
+  /** Variant label to print; history bills use "Standard" for no variant. */
+  const variantOf = (it: BillData["items"][number]) =>
+    it.variantTitle || (it.unit && it.unit !== "Standard" ? it.unit : "");
+
   const formatDate = (d?: string | Date) => {
     if (!d) return new Date().toLocaleString("en-IN");
     return new Date(d).toLocaleString("en-IN", {
@@ -48,7 +52,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
         <tr>
           <td style="padding: 3px 0; font-size: 11px; line-height: 1.2;">
             <div style="font-weight: 600;">${esc(it.product || it.productName)}</div>
-            ${it.unit || it.variantTitle ? `<div style="font-size: 10px; color: #555;">${esc(it.unit || it.variantTitle)}</div>` : ""}
+            ${variantOf(it) ? `<div style="font-size: 10px; color: #555;">${esc(variantOf(it))}</div>` : ""}
           </td>
           <td style="padding: 3px 0; text-align: center; font-size: 11px;">${it.qty || it.quantity}</td>
           <td style="padding: 3px 0; text-align: right; font-size: 11px;">₹${(it.price || it.unitPrice || 0).toFixed(2)}</td>
@@ -167,7 +171,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
           <td style="padding: 10px 12px; font-size: 12px; color: #374151;">${i + 1}</td>
           <td style="padding: 10px 12px; font-size: 12px;">
             <div style="font-weight: 600; color: #111827;">${esc(it.product || it.productName)}</div>
-            ${it.unit || it.variantTitle ? `<div style="font-size: 11px; color: #6b7280;">Variant: ${esc(it.unit || it.variantTitle)}</div>` : ""}
+            ${variantOf(it) ? `<div style="font-size: 11px; color: #6b7280;">Variant: ${esc(variantOf(it))}</div>` : ""}
           </td>
           <td style="padding: 10px 12px; text-align: center; font-size: 12px; color: #374151;">${it.qty || it.quantity}</td>
           <td style="padding: 10px 12px; text-align: right; font-size: 12px; color: #374151;">₹${(it.price || it.unitPrice || 0).toFixed(2)}</td>
@@ -363,19 +367,45 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
     yPos += 6;
 
     doc.setFont("helvetica", "normal");
+    const pageBottom = 280;
+    const ensureSpace = (needed: number) => {
+      if (yPos + needed > pageBottom) {
+        doc.addPage();
+        yPos = 20;
+      }
+    };
     bill.items.forEach((it) => {
-      doc.text(String(it.product || it.productName).slice(0, 35), margin, yPos);
+      ensureSpace(7);
+      const variant = it.variantTitle || (it.unit && it.unit !== "Standard" ? it.unit : "");
+      const label = `${it.product || it.productName || ""}${variant ? ` (${variant})` : ""}`;
+      doc.text(label.slice(0, 48), margin, yPos);
       doc.text(String(it.qty || it.quantity), 120, yPos);
       doc.text(`Rs.${(it.price || it.unitPrice || 0).toFixed(2)}`, 145, yPos);
       doc.text(`Rs.${(it.total || it.subtotal || 0).toFixed(2)}`, 175, yPos);
       yPos += 7;
     });
 
+    ensureSpace(45);
     yPos += 5;
     doc.line(margin, yPos, 195, yPos);
     yPos += 8;
+    doc.text(`Subtotal: Rs.${bill.pricing.subtotal.toFixed(2)}`, 140, yPos);
+    if ((bill.pricing.discount || 0) > 0) {
+      yPos += 6;
+      doc.text(`Discount: -Rs.${(bill.pricing.discount || 0).toFixed(2)}`, 140, yPos);
+    }
+    if (bill.pricing.tax > 0) {
+      yPos += 6;
+      doc.text(`Incl. GST: Rs.${bill.pricing.tax.toFixed(2)}`, 140, yPos);
+    }
+    yPos += 8;
     doc.setFont("helvetica", "bold");
     doc.text(`Grand Total: Rs.${bill.pricing.total.toFixed(2)}`, 140, yPos);
+    if (bill.payment.reference) {
+      yPos += 7;
+      doc.setFont("helvetica", "normal");
+      doc.text(`Ref / UTR: ${bill.payment.reference}`, 140, yPos);
+    }
 
     doc.save(`Bill_${bill.billNumber}.pdf`);
     showToast(`Invoice Bill_${bill.billNumber}.pdf downloaded!`, "success");
@@ -388,17 +418,23 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
     const phone = bill.customer?.phone?.replace(/\D/g, "") || "";
     const itemsText = bill.items
       .map((it) => `• ${it.product || it.productName} (${it.qty || it.quantity}x) = ₹${(it.total || it.subtotal || 0).toFixed(2)}`)
-      .join("%0A");
+      .join("\n");
 
-    const message = `*INVOICE FROM ${encodeURIComponent(bill.seller?.storeName || "Store")}*%0A` +
-      `Bill No: ${bill.billNumber}%0A` +
-      `Date: ${encodeURIComponent(formatDate(bill.orderDate || bill.date))}%0A` +
-      `----------------------------%0A` +
-      `${itemsText}%0A` +
-      `----------------------------%0A` +
-      `*Grand Total: ₹${bill.pricing.total.toFixed(2)}*%0A` +
-      `Payment: ${bill.payment.method} (${bill.payment.status})%0A%0A` +
-      `Thank you for shopping with us!`;
+    const lines = [
+      `*INVOICE FROM ${bill.seller?.storeName || "Store"}*`,
+      `Bill No: ${bill.billNumber}`,
+      `Date: ${formatDate(bill.orderDate || bill.date)}`,
+      `----------------------------`,
+      itemsText,
+      `----------------------------`,
+      ...((bill.pricing.discount || 0) > 0 ? [`Discount: -₹${(bill.pricing.discount || 0).toFixed(2)}`] : []),
+      `*Grand Total: ₹${bill.pricing.total.toFixed(2)}*`,
+      `Payment: ${bill.payment.method} (${bill.payment.status})`,
+      ``,
+      `Thank you for shopping with us!`,
+    ];
+    // Encode the whole message so names containing &, # or + don't cut it off.
+    const message = encodeURIComponent(lines.join("\n"));
 
     const url = phone.length >= 10
       ? `https://wa.me/${phone.length === 10 ? "91" + phone : phone}?text=${message}`
@@ -504,8 +540,8 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
                 <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-neutral-100 last:border-0">
                   <div className="flex-1 pr-2">
                     <span className="font-medium text-neutral-900">{item.product || item.productName}</span>
-                    {(item.unit || item.variantTitle) && (
-                      <span className="text-neutral-500 ml-1">({item.unit || item.variantTitle})</span>
+                    {variantOf(item) && (
+                      <span className="text-neutral-500 ml-1">({variantOf(item)})</span>
                     )}
                   </div>
                   <div className="text-neutral-600 w-12 text-center">{item.qty || item.quantity}x</div>

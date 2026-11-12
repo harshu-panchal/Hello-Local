@@ -152,15 +152,24 @@ export interface CreateOfflineSalePayload {
     variation?: string;
     quantity: number;
   }>;
+  /** Id of this checkout attempt; retries with the same id never bill twice. */
+  clientSaleId?: string;
+  isWalkIn?: boolean;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   customer?: {
     name?: string;
     phone?: string;
     email?: string;
   };
   paymentMethod: 'Cash' | 'UPI' | 'Card';
+  /** Cash tendered by the customer (Cash only). Server computes the change. */
+  cashReceived?: number;
+  paymentReference?: string;
+  orderNotes?: string;
   offlinePaymentDetails?: {
     receivedAmount?: number;
-    changeReturned?: number;
     paymentReference?: string;
     paymentNotes?: string;
   };
@@ -180,6 +189,8 @@ export interface BillItem {
   qty: number;
   quantity?: number;
   subtotal: number;
+  /** Share of the bill discount allocated to this line. */
+  discount?: number;
   taxRate: number;
   taxAmount: number;
   total: number;
