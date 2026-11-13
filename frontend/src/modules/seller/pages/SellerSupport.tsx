@@ -58,7 +58,7 @@ export default function SellerSupport() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 pb-20">
       {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-lg">
+      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-lg user-safe-top">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

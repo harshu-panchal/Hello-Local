@@ -107,7 +107,7 @@ export default function Categories() {
   return (
     <div className="pb-24 md:pb-12 bg-[#F8FAFC] min-h-screen">
       {/* Top Header */}
-      <div className="px-4 py-3.5 sm:px-6 lg:px-8 bg-white border-b border-slate-100 sticky top-0 z-30 shadow-2xs">
+      <div className="px-4 pb-3.5 pt-[calc(0.875rem_+_env(safe-area-inset-top,0px))] sm:px-6 lg:px-8 bg-white border-b border-slate-100 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-base md:text-xl font-bold text-slate-900 tracking-tight">

@@ -3,7 +3,133 @@ import mongoose from "mongoose";
 import Product from "../../../models/Product";
 import Shop from "../../../models/Shop";
 import Seller from "../../../models/Seller";
+import Category from "../../../models/Category";
+import SubCategory from "../../../models/SubCategory";
+import Tax from "../../../models/Tax";
 import { asyncHandler } from "../../../utils/asyncHandler";
+
+function toSlug(str: string): string {
+  return (
+    str
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "item"
+  );
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Resolve or dynamically create Category if merchant typed "Other" or custom name
+ */
+async function resolveDynamicCategory(
+  catInput: any,
+  customCatInput: any,
+  headerCatId?: any
+): Promise<mongoose.Types.ObjectId | null> {
+  const custom = String(customCatInput || "").trim();
+  const raw = String(catInput || "").trim();
+  const targetName = custom || (raw !== "__other__" && !mongoose.Types.ObjectId.isValid(raw) ? raw : "");
+
+  if (targetName) {
+    let doc = await Category.findOne({
+      name: { $regex: new RegExp(`^${escapeRegExp(targetName)}$`, "i") },
+    });
+    if (!doc) {
+      doc = await Category.create({
+        name: targetName,
+        slug: `${toSlug(targetName)}-${Date.now().toString(36)}`,
+        headerCategoryId: headerCatId || undefined,
+        status: "Active",
+      });
+    }
+    return doc._id as mongoose.Types.ObjectId;
+  }
+
+  if (raw && raw !== "__other__" && mongoose.Types.ObjectId.isValid(raw)) {
+    return new mongoose.Types.ObjectId(raw);
+  }
+  return null;
+}
+
+/**
+ * Resolve or dynamically create SubCategory if merchant typed "Other" or custom name
+ */
+async function resolveDynamicSubcategory(
+  subcatInput: any,
+  customSubcatInput: any,
+  categoryId?: any
+): Promise<mongoose.Types.ObjectId | null> {
+  const custom = String(customSubcatInput || "").trim();
+  const raw = String(subcatInput || "").trim();
+  const targetName = custom || (raw !== "__other__" && !mongoose.Types.ObjectId.isValid(raw) ? raw : "");
+
+  if (targetName) {
+    const query: any = {
+      name: { $regex: new RegExp(`^${escapeRegExp(targetName)}$`, "i") },
+    };
+    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+      query.category = categoryId;
+    }
+
+    let doc = await SubCategory.findOne(query);
+    if (!doc) {
+      if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+        return null;
+      }
+      doc = await SubCategory.create({
+        name: targetName,
+        category: categoryId,
+      });
+    }
+    return doc._id as mongoose.Types.ObjectId;
+  }
+
+  if (raw && raw !== "__other__" && mongoose.Types.ObjectId.isValid(raw)) {
+    return new mongoose.Types.ObjectId(raw);
+  }
+  return null;
+}
+
+/**
+ * Resolve or dynamically create Tax if merchant typed "Other" or custom rate
+ */
+async function resolveDynamicTax(
+  taxInput: any,
+  customTaxInput: any
+): Promise<mongoose.Types.ObjectId | null> {
+  const custom = String(customTaxInput || "").trim();
+  const raw = String(taxInput || "").trim();
+
+  let rateStr = custom || (raw !== "__other__" && !mongoose.Types.ObjectId.isValid(raw) ? raw : "");
+  if (rateStr) {
+    const num = parseFloat(rateStr.replace(/[^0-9.]/g, ""));
+    if (!isNaN(num) && num >= 0 && num <= 100) {
+      let doc = await Tax.findOne({
+        $or: [
+          { percentage: num },
+          { name: { $regex: new RegExp(`^GST ${num}%$`, "i") } },
+        ],
+      });
+      if (!doc) {
+        doc = await Tax.create({
+          name: `GST ${num}%`,
+          percentage: num,
+          status: "Active",
+        });
+      }
+      return doc._id as mongoose.Types.ObjectId;
+    }
+  }
+
+  if (raw && raw !== "__other__" && mongoose.Types.ObjectId.isValid(raw)) {
+    return new mongoose.Types.ObjectId(raw);
+  }
+  return null;
+}
 
 /**
  * Ensure the authenticated seller's account is approved before allowing
@@ -29,7 +155,7 @@ async function ensureSellerApproved(sellerId: string): Promise<string | null> {
  */
 export const createProduct = asyncHandler(
   async (req: Request, res: Response) => {
-    const sellerId = (req as any).user.userId;
+    const sellerId = (req as any).user?.userId || (req as any).user?.id || (req as any).user?._id;
     const productData = req.body;
 
     // Block pending/rejected sellers from creating products (#148/#306)
@@ -63,6 +189,7 @@ export const createProduct = asyncHandler(
       "pack", "shelfLife", "marketer", "tags",
       "isShopByStoreOnly", "shopId", "tax",
       "isHomemade", "homemadeCategory", "homemadeSubcategory",
+      "customCategory", "customSubcategory", "customTaxRate",
     ];
 
     const safeData: Record<string, any> = {};
@@ -77,15 +204,32 @@ export const createProduct = asyncHandler(
       }
     }
 
+    const resolvedCategory = await resolveDynamicCategory(
+      productData.categoryId || productData.category,
+      productData.customCategory,
+      productData.headerCategoryId
+    );
+
+    const resolvedSubcategory = await resolveDynamicSubcategory(
+      productData.subcategoryId || productData.subcategory,
+      productData.customSubcategory,
+      resolvedCategory
+    );
+
+    const resolvedTax = await resolveDynamicTax(
+      productData.taxId || productData.tax,
+      productData.customTaxRate
+    );
+
     const newProductData: any = {
       ...safeData,
       seller: sellerId, // Map sellerId to seller
       headerCategoryId: productData.headerCategoryId || null,
-      category: productData.categoryId || productData.category,
-      subcategory: productData.subcategoryId || productData.subcategory || null,
+      category: resolvedCategory,
+      subcategory: resolvedSubcategory,
       subSubCategory: productData.subSubCategoryId || productData.subSubCategory || null,
       brand: productData.brandId || productData.brand || null,
-      tax: productData.taxId || productData.tax || null,
+      tax: resolvedTax,
       mainImage: productData.mainImageUrl || productData.mainImage,
       galleryImages: productData.galleryImageUrls || productData.galleryImages || [],
     };
@@ -147,14 +291,20 @@ export const createProduct = asyncHandler(
     if (!newProductData.shopId) delete newProductData.shopId;
     if (newProductData.isShopByStoreOnly && !newProductData.category) {
       delete newProductData.category;
+    } else if (!newProductData.category) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select or provide a valid category for the product.",
+      });
     }
 
-    // Handle Tax: Frontend sends taxId, Model expects 'tax' (string) or something else?
-    if (productData.taxId) {
-      newProductData.tax = productData.taxId;
-    } else if (!newProductData.tax) {
+    if (!newProductData.tax) {
       delete newProductData.tax;
     }
+
+    delete newProductData.customCategory;
+    delete newProductData.customSubcategory;
+    delete newProductData.customTaxRate;
 
     // Validate variation prices
     if (productData.variations && Array.isArray(productData.variations)) {
@@ -342,7 +492,7 @@ export const getProductById = asyncHandler(
  */
 export const updateProduct = asyncHandler(
   async (req: Request, res: Response) => {
-    const sellerId = (req as any).user.userId;
+    const sellerId = (req as any).user?.userId || (req as any).user?.id || (req as any).user?._id;
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -358,7 +508,7 @@ export const updateProduct = asyncHandler(
       return res.status(403).json({ success: false, message: approvalError });
     }
 
-    const allowed = new Set(["productName", "smallDescription", "description", "mainImage", "mainImageUrl", "galleryImages", "galleryImageUrls", "price", "discPrice", "compareAtPrice", "stock", "sku", "barcode", "variationType", "variations", "publish", "popular", "dealOfDay", "manufacturer", "madeIn", "fssaiLicNo", "foodType", "totalAllowedQuantity", "isReturnable", "maxReturnDays", "returnPolicyText", "seoTitle", "seoKeywords", "seoDescription", "seoImageAlt", "pack", "shelfLife", "marketer", "tags", "isShopByStoreOnly", "shopId", "tax", "taxId", "isHomemade", "homemadeCategory", "homemadeSubcategory", "headerCategoryId", "category", "categoryId", "subcategory", "subcategoryId", "subSubCategory", "subSubCategoryId", "brand", "brandId"]);
+    const allowed = new Set(["productName", "smallDescription", "description", "mainImage", "mainImageUrl", "galleryImages", "galleryImageUrls", "price", "discPrice", "compareAtPrice", "stock", "sku", "barcode", "variationType", "variations", "publish", "popular", "dealOfDay", "manufacturer", "madeIn", "fssaiLicNo", "foodType", "totalAllowedQuantity", "isReturnable", "maxReturnDays", "returnPolicyText", "seoTitle", "seoKeywords", "seoDescription", "seoImageAlt", "pack", "shelfLife", "marketer", "tags", "isShopByStoreOnly", "shopId", "tax", "taxId", "isHomemade", "homemadeCategory", "homemadeSubcategory", "headerCategoryId", "category", "categoryId", "subcategory", "subcategoryId", "subSubCategory", "subSubCategoryId", "brand", "brandId", "customCategory", "customSubcategory", "customTaxRate"]);
     const updateData: any = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.has(key)));
 
     // Remove sellerId from update data if present (cannot change owner)
@@ -388,6 +538,38 @@ export const updateProduct = asyncHandler(
     if (updateData.taxId !== undefined) {
       updateData.tax = updateData.taxId || null;
       delete updateData.taxId;
+    }
+
+    // Dynamically resolve custom / "Other" category, subcategory and tax
+    if (updateData.category !== undefined || updateData.customCategory !== undefined) {
+      const resolvedCategory = await resolveDynamicCategory(
+        updateData.category,
+        updateData.customCategory,
+        updateData.headerCategoryId
+      );
+      if (resolvedCategory) {
+        updateData.category = resolvedCategory;
+      }
+      delete updateData.customCategory;
+    }
+
+    if (updateData.subcategory !== undefined || updateData.customSubcategory !== undefined) {
+      const resolvedSubcategory = await resolveDynamicSubcategory(
+        updateData.subcategory,
+        updateData.customSubcategory,
+        updateData.category
+      );
+      updateData.subcategory = resolvedSubcategory;
+      delete updateData.customSubcategory;
+    }
+
+    if (updateData.tax !== undefined || updateData.customTaxRate !== undefined) {
+      const resolvedTax = await resolveDynamicTax(
+        updateData.tax,
+        updateData.customTaxRate
+      );
+      updateData.tax = resolvedTax;
+      delete updateData.customTaxRate;
     }
     if (updateData.subcategory === "") updateData.subcategory = null;
     if (updateData.subSubCategory === "") updateData.subSubCategory = null;

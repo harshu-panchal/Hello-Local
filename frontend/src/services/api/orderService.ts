@@ -226,6 +226,7 @@ export interface BillData {
     email?: string;
     gstin?: string;
     logo?: string;
+    fssaiLicNo?: string;
   };
   items: BillItem[];
   pricing: {

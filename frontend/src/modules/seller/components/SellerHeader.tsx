@@ -111,7 +111,7 @@ export default function SellerHeader({ onMenuClick }: SellerHeaderProps) {
   const initial = displayName.trim().charAt(0).toUpperCase() || 'S';
 
   return (
-    <header className="bg-white shadow-xs border-b border-neutral-200/80 sticky top-0 z-30">
+    <header className="bg-white shadow-xs border-b border-neutral-200/80 sticky top-0 z-30 user-safe-top">
       <div className="flex items-center justify-between px-4 py-3">
         {/* Left: Hamburger Menu & Brand Logo */}
         <div className="flex items-center gap-3">

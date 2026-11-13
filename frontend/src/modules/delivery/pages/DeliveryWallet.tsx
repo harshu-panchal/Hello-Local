@@ -193,7 +193,7 @@ export default function DeliveryWallet() {
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       {/* Header with Live Refresh */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-2xs user-safe-top">
         <div className="px-4 py-3 flex items-center justify-between max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <button

@@ -244,12 +244,87 @@ export interface BulkUploadResult {
 }
 
 /**
- * Download sample CSV template for bulk product upload
+ * Download sample CSV template for bulk product upload (supports optional category filter)
  */
-export const downloadBulkProductTemplate = async (): Promise<Blob> => {
-  const response = await api.get("/products/bulk-template", {
+export const downloadBulkProductTemplate = async (category?: string): Promise<Blob> => {
+  const url = category && category !== "All"
+    ? `/products/bulk-template?category=${encodeURIComponent(category)}`
+    : "/products/bulk-template";
+  const response = await api.get(url, {
     responseType: "blob",
   });
+  return response.data;
+};
+
+export interface MasterCatalogItem {
+  id: string;
+  name: string;
+  headerCategory: string;
+  category: string;
+  subcategory: string;
+  brand: string;
+  mrp: number;
+  suggestedPrice: number;
+  defaultStock: number;
+  unit: string;
+  foodType: "Veg" | "Non-Veg" | "None";
+  taxPercent: number;
+  barcode: string;
+  imageUrl: string;
+  description: string;
+}
+
+export interface MasterCatalogResponse {
+  products: MasterCatalogItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  categories: string[];
+}
+
+/**
+ * Fetch master catalogue items with optional category and search query
+ */
+export const getMasterCatalogue = async (params?: {
+  category?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ApiResponse<MasterCatalogResponse>> => {
+  const response = await api.get<ApiResponse<MasterCatalogResponse>>(
+    "/products/master-catalogue",
+    { params }
+  );
+  return response.data;
+};
+
+/**
+ * Export master catalogue products as CSV
+ */
+export const exportMasterCatalogueCsv = async (category?: string): Promise<Blob> => {
+  const url = category && category !== "All"
+    ? `/products/master-catalogue/export?category=${encodeURIComponent(category)}`
+    : "/products/master-catalogue/export";
+  const response = await api.get(url, {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
+/**
+ * Quick-add a master catalogue item directly to the seller's active store inventory
+ */
+export const quickAddMasterProductToStore = async (data: {
+  masterProductId: string;
+  customPrice?: number;
+  customStock?: number;
+  customMrp?: number;
+}): Promise<ApiResponse<Product>> => {
+  const response = await api.post<ApiResponse<Product>>(
+    "/products/master-catalogue/add-to-store",
+    data
+  );
   return response.data;
 };
 

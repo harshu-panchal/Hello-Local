@@ -96,8 +96,8 @@ export default function UserTopHeader({ onLocationClick, onPlaceClick }: UserTop
   };
 
   return (
-    <div className="w-full bg-white border-b border-slate-100/80 sticky top-0 z-30 transition-all">
-      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-2.5 pb-2.5 space-y-2">
+    <div className="w-full bg-white border-b border-slate-100/80 sticky top-0 z-30 transition-all user-safe-top">
+      <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-2 sm:pt-2.5 pb-2.5 space-y-2">
         {/* MOBILE TOP BAR (md:hidden): Location Pill | HelloLocal Wordmark | Notification Bell */}
         <div className="flex md:hidden items-center justify-between gap-2">
           {/* Location Pill */}
@@ -125,7 +125,7 @@ export default function UserTopHeader({ onLocationClick, onPlaceClick }: UserTop
               <span className="text-xl font-black text-[#FF8A00] tracking-tight">Hello</span>
               <span className="text-xl font-black text-[#FF2E7A] tracking-tight">Local</span>
             </div>
-            <span className="text-[9px] text-slate-500 font-semibold tracking-tight mt-0.5">
+            <span className="text-[9px] text-slate-500 font-semibold tracking-tight mt-0.5 truncate max-w-full text-center">
               Sab kuch, aapke Local mein
             </span>
           </div>

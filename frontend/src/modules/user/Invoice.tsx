@@ -95,7 +95,7 @@ export default function Invoice() {
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       {/* Sticky Header */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-30 print:hidden shadow-2xs">
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-30 print:hidden shadow-2xs user-safe-top">
         <div className="max-w-4xl mx-auto px-3.5 sm:px-6 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

@@ -12,6 +12,7 @@ import { clampPagination } from "./middleware/pagination";
 import { generalRateLimiter } from "./middleware/rateLimiter";
 import { ensureDefaultAdmin } from "./utils/ensureDefaultAdmin";
 import { seedHeaderCategories } from "./utils/seedHeaderCategories";
+import { seedStandardTaxes } from "./utils/seedStandardTaxes";
 import { ensureSubscriptionHealth } from "./utils/ensureSubscriptionHealth";
 import { initializeSocket } from "./socket/socketService";
 import { initializeFirebaseAdmin } from "./services/firebaseAdmin";
@@ -137,6 +138,7 @@ async function startServer() {
   void retryFinancialTasks();
   await ensureDefaultAdmin();
   await seedHeaderCategories();
+  await seedStandardTaxes();
   await ensureSubscriptionHealth();
 
   // Initialize Firebase Admin SDK for push notifications

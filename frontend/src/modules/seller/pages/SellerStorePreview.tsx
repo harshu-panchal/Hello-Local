@@ -239,7 +239,7 @@ export default function SellerStorePreview() {
       />
 
       {/* Top Header with Segmented Mode Switcher */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs user-safe-top">
         <div className="max-w-4xl mx-auto px-3.5 sm:px-6 py-2.5 flex items-center justify-between gap-3">
           {/* Back button */}
           <button

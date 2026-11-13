@@ -31,7 +31,7 @@ import {
   round2,
 } from "../../../utils/posBilling";
 
-const SELLER_BILL_FIELDS = "status sellerName storeName address city mobile email taxNumber storeBanner";
+const SELLER_BILL_FIELDS = "status sellerName storeName address city mobile email taxNumber storeBanner fssaiLicNo";
 const MAX_POS_LINES = 200;
 const ALLOWED_PAYMENT_METHODS = ["Cash", "UPI", "Card"];
 const BILL_SORT_FIELDS = ["orderDate", "createdAt", "total", "billNumber", "orderNumber"];
@@ -86,6 +86,7 @@ function sellerBillInfo(sellerInfo: any) {
     email: sellerInfo?.email || "",
     gstin: sellerInfo?.taxNumber || "",
     logo: sellerInfo?.storeBanner || "",
+    fssaiLicNo: sellerInfo?.fssaiLicNo || "",
   };
 }
 

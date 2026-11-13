@@ -616,7 +616,7 @@ export default function Checkout() {
       />
 
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs">
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs user-safe-top">
         <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
           <button
             type="button"

@@ -21,7 +21,7 @@ export default function DeliveryPrivacy() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 pb-24">
       {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs user-safe-top">
         <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

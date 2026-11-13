@@ -107,6 +107,11 @@ export default function SellerAddProduct() {
   );
   const [shops, setShops] = useState<Shop[]>([]);
 
+  // "Other" manual input states for custom values
+  const [customCategory, setCustomCategory] = useState("");
+  const [customSubcategory, setCustomSubcategory] = useState("");
+  const [customTaxRate, setCustomTaxRate] = useState("");
+
   // Memoized options for SearchableSelect
   const headerCategoryOptions = useMemo(
     () =>
@@ -128,20 +133,26 @@ export default function SellerAddProduct() {
         return hId === formData.headerCategory;
       });
     }
-    return list.map((c) => ({
+    const standard = list.map((c) => ({
       value: c._id,
       label: c.name,
     }));
+    return [
+      ...standard,
+      { value: "__other__", label: "➕ Other (Type Custom Category...)" },
+    ];
   }, [categories, formData.headerCategory]);
 
-  const subcategoryOptions = useMemo(
-    () =>
-      subcategories.map((s) => ({
-        value: s._id,
-        label: s.subcategoryName,
-      })),
-    [subcategories]
-  );
+  const subcategoryOptions = useMemo(() => {
+    const standard = subcategories.map((s) => ({
+      value: s._id,
+      label: s.subcategoryName || (s as any).name || "",
+    }));
+    return [
+      ...standard,
+      { value: "__other__", label: "➕ Other (Type Custom Subcategory...)" },
+    ];
+  }, [subcategories]);
 
   const brandOptions = useMemo(
     () =>
@@ -152,14 +163,16 @@ export default function SellerAddProduct() {
     [brands]
   );
 
-  const taxOptions = useMemo(
-    () =>
-      taxes.map((t) => ({
-        value: t._id,
-        label: `${t.name} (${t.percentage}%)`,
-      })),
-    [taxes]
-  );
+  const taxOptions = useMemo(() => {
+    const standard = taxes.map((t) => ({
+      value: t._id,
+      label: `${t.name} (${t.percentage}%)`,
+    }));
+    return [
+      ...standard,
+      { value: "__other__", label: "➕ Other (Type Custom GST %...)" },
+    ];
+  }, [taxes]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -289,7 +302,7 @@ export default function SellerAddProduct() {
 
   useEffect(() => {
     const fetchSubs = async () => {
-      if (formData.category) {
+      if (formData.category && formData.category !== "__other__") {
         try {
           const res = await getSubcategories(formData.category);
           if (res.success) setSubcategories(res.data);
@@ -298,7 +311,9 @@ export default function SellerAddProduct() {
         }
       } else {
         setSubcategories([]);
-        setFormData((prev) => ({ ...prev, subcategory: "" }));
+        if (formData.category !== "__other__") {
+          setFormData((prev) => ({ ...prev, subcategory: "" }));
+        }
       }
     };
     if (formData.category) {
@@ -508,6 +523,25 @@ export default function SellerAddProduct() {
         showToast(msg, "error");
         return;
       }
+      if (formData.category === "__other__" && !customCategory.trim()) {
+        const msg = "Please enter your custom category name.";
+        setUploadError(msg);
+        showToast(msg, "error");
+        return;
+      }
+      if (formData.subcategory === "__other__" && !customSubcategory.trim()) {
+        const msg = "Please enter your custom subcategory name.";
+        setUploadError(msg);
+        showToast(msg, "error");
+        return;
+      }
+    }
+
+    if (formData.tax === "__other__" && !customTaxRate.trim()) {
+      const msg = "Please enter your custom GST tax percentage (e.g. 5, 12, 18).";
+      setUploadError(msg);
+      showToast(msg, "error");
+      return;
     }
 
     if (!mainImageFile && !formData.mainImageUrl) {
@@ -613,11 +647,17 @@ export default function SellerAddProduct() {
         productData.headerCategoryId = formData.headerCategory;
       }
 
-      if (formData.category) {
+      if (formData.category === "__other__") {
+        productData.category = "__other__";
+        productData.customCategory = customCategory.trim();
+      } else if (formData.category) {
         productData.category = formData.category;
       }
 
-      if (formData.subcategory) {
+      if (formData.subcategory === "__other__") {
+        productData.subcategory = "__other__";
+        productData.customSubcategory = customSubcategory.trim();
+      } else if (formData.subcategory) {
         productData.subcategory = formData.subcategory;
       }
 
@@ -629,7 +669,10 @@ export default function SellerAddProduct() {
         productData.brand = formData.brand;
       }
 
-      if (formData.tax) {
+      if (formData.tax === "__other__") {
+        productData.tax = "__other__";
+        productData.customTaxRate = customTaxRate.trim();
+      } else if (formData.tax) {
         productData.tax = formData.tax;
       }
 
@@ -797,6 +840,18 @@ export default function SellerAddProduct() {
                   clearValue=""
                   accentColor="purple"
                 />
+                {formData.category === "__other__" && (
+                  <div className="mt-2 animate-in fade-in duration-150">
+                    <input
+                      type="text"
+                      placeholder="Type custom category name (e.g. Organic Staples, Handloom)"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      className="w-full rounded-xl border-2 border-purple-300 bg-purple-50/40 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 focus:bg-white min-h-[40px] font-medium transition-all"
+                      autoFocus
+                    />
+                  </div>
+                )}
               </SellerFormField>
             </div>
 
@@ -829,6 +884,18 @@ export default function SellerAddProduct() {
                   clearValue=""
                   accentColor="purple"
                 />
+                {formData.subcategory === "__other__" && (
+                  <div className="mt-2 animate-in fade-in duration-150">
+                    <input
+                      type="text"
+                      placeholder="Type custom subcategory name (e.g. Whole Grains, Screwdrivers)"
+                      value={customSubcategory}
+                      onChange={(e) => setCustomSubcategory(e.target.value)}
+                      className="w-full rounded-xl border-2 border-purple-300 bg-purple-50/40 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 focus:bg-white min-h-[40px] font-medium transition-all"
+                      autoFocus
+                    />
+                  </div>
+                )}
               </SellerFormField>
             </div>
 
@@ -1103,6 +1170,24 @@ export default function SellerAddProduct() {
                   clearValue=""
                   accentColor="purple"
                 />
+                {formData.tax === "__other__" && (
+                  <div className="mt-2 animate-in fade-in duration-150">
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder="Type custom GST rate (e.g. 5, 12, 18)"
+                        value={customTaxRate}
+                        onChange={(e) => setCustomTaxRate(e.target.value)}
+                        className="w-full rounded-xl border-2 border-purple-300 bg-purple-50/40 px-3.5 py-2 pr-8 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 focus:bg-white min-h-[40px] font-medium transition-all"
+                        autoFocus
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+                    </div>
+                  </div>
+                )}
               </SellerFormField>
             </div>
 
