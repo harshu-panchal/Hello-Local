@@ -261,7 +261,7 @@ export default function CheckoutAddress() {
   return (
     <div className="pb-28 md:pb-16 bg-[#F8FAFC] min-h-screen">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs">
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs user-safe-top">
         <div className="max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

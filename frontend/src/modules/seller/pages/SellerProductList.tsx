@@ -12,6 +12,7 @@ import { SellerDataTable, ColumnDef } from "../components/common/SellerDataTable
 import { SellerButton } from "../components/common/SellerButton";
 import { SellerModal } from "../components/common/SellerModal";
 import SellerBulkProductModal from "../components/SellerBulkProductModal";
+import MasterCatalogueModal from "../components/MasterCatalogueModal";
 import { useToast } from "../../../context/ToastContext";
 
 export default function SellerProductList() {
@@ -41,6 +42,9 @@ export default function SellerProductList() {
 
   // Bulk upload modal state
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
+
+  // Master catalogue modal state
+  const [masterCatalogModalOpen, setMasterCatalogModalOpen] = useState(false);
 
   // 300ms Search Debouncing
   useEffect(() => {
@@ -381,6 +385,15 @@ export default function SellerProductList() {
             <SellerButton
               variant="outline"
               size="md"
+              onClick={() => setMasterCatalogModalOpen(true)}
+              className="min-h-[44px] bg-purple-50/70 border-purple-200 text-purple-700 hover:bg-purple-100 hover:border-purple-300 font-bold"
+              icon={<span>📚</span>}
+            >
+              Master Catalogue
+            </SellerButton>
+            <SellerButton
+              variant="outline"
+              size="md"
               onClick={() => setBulkModalOpen(true)}
               className="min-h-[44px]"
               icon={
@@ -625,6 +638,13 @@ export default function SellerProductList() {
       <SellerBulkProductModal
         isOpen={bulkModalOpen}
         onClose={() => setBulkModalOpen(false)}
+        onSuccess={fetchProducts}
+      />
+
+      {/* Master Catalogue Modal */}
+      <MasterCatalogueModal
+        isOpen={masterCatalogModalOpen}
+        onClose={() => setMasterCatalogModalOpen(false)}
         onSuccess={fetchProducts}
       />
     </div>

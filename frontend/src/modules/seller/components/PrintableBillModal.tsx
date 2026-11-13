@@ -89,6 +89,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
             ${bill.seller?.address ? `<div class="meta-line">${esc(bill.seller.address)}</div>` : ""}
             ${bill.seller?.phone ? `<div class="meta-line">Tel: ${esc(bill.seller.phone)}</div>` : ""}
             ${bill.seller?.gstin ? `<div class="meta-line">GSTIN: ${esc(bill.seller.gstin)}</div>` : ""}
+            ${bill.seller?.fssaiLicNo ? `<div class="meta-line">FSSAI: ${esc(bill.seller.fssaiLicNo)}</div>` : ""}
           </div>
 
           <div class="divider"></div>
@@ -161,9 +162,13 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
   };
 
   /**
-   * Standard A4 Tax Invoice HTML Generation & Print
+   * Standard A4 Tax Invoice / Bill of Supply HTML Generation & Print
    */
   const handlePrintA4 = () => {
+    const docTitle = bill.seller?.gstin ? "TAX INVOICE" : "BILL OF SUPPLY / CASH MEMO";
+    const sellerFssai = bill.seller?.fssaiLicNo || (bill.seller as any)?.fssai;
+    const taxableValue = Math.max(0, bill.pricing.total - (bill.pricing.tax || 0));
+
     const rows = bill.items
       .map(
         (it, i) => `
@@ -186,7 +191,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
       <html>
         <head>
           <meta charset="utf-8"/>
-          <title>Tax Invoice - ${esc(bill.billNumber)}</title>
+          <title>${esc(docTitle)} - ${esc(bill.billNumber)}</title>
           <style>
             @page { size: A4; margin: 15mm; }
             * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -213,7 +218,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
               <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Verified Merchant • HelloLocal 10-Minute Network</div>
             </div>
             <div>
-              <div class="invoice-tag">TAX INVOICE</div>
+              <div class="invoice-tag">${esc(docTitle)}</div>
               <div style="font-size: 12px; color: #4b5563; text-align: right; margin-top: 2px;">#${esc(bill.billNumber)}</div>
               <div style="font-size: 11px; color: #9ca3af; text-align: right;">${esc(formatDate(bill.orderDate || bill.date))}</div>
             </div>
@@ -227,7 +232,8 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
                 ${bill.seller?.address ? `${esc(bill.seller.address)}<br/>` : ""}
                 ${bill.seller?.phone ? `Phone: ${esc(bill.seller.phone)}<br/>` : ""}
                 ${bill.seller?.email ? `Email: ${esc(bill.seller.email)}<br/>` : ""}
-                ${bill.seller?.gstin ? `<strong>GSTIN:</strong> ${esc(bill.seller.gstin)}` : ""}
+                ${bill.seller?.gstin ? `<strong>GSTIN:</strong> ${esc(bill.seller.gstin)}<br/>` : "<em>Not registered under GST</em><br/>"}
+                ${sellerFssai ? `<strong>FSSAI Lic:</strong> ${esc(sellerFssai)}` : ""}
               </div>
             </div>
 
@@ -239,6 +245,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
                 ${bill.customer?.email ? `Email: ${esc(bill.customer.email)}<br/>` : ""}
                 <strong>Channel:</strong> ${esc(bill.channel)} (${esc(bill.saleType || "COUNTER_POS")})<br/>
                 <strong>Payment:</strong> ${esc(bill.payment.method)} • ${esc(bill.payment.status)}
+                ${bill.payment.reference ? `<br/><strong>Ref / UTR:</strong> ${esc(bill.payment.reference)}` : ""}
               </div>
             </div>
           </div>
@@ -260,16 +267,21 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
           </table>
 
           <table class="totals-table">
-            <tr>
-              <td>Subtotal:</td>
-              <td style="text-align: right; font-weight: 600;">₹${bill.pricing.subtotal.toFixed(2)}</td>
-            </tr>
             ${bill.pricing.tax > 0 ? `
               <tr>
-                <td>Incl. Taxes (GST):</td>
+                <td>Taxable Value:</td>
+                <td style="text-align: right; font-weight: 600;">₹${taxableValue.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td>Taxes (GST):</td>
                 <td style="text-align: right; font-weight: 600;">₹${bill.pricing.tax.toFixed(2)}</td>
               </tr>
-            ` : ""}
+            ` : `
+              <tr>
+                <td>Subtotal:</td>
+                <td style="text-align: right; font-weight: 600;">₹${bill.pricing.subtotal.toFixed(2)}</td>
+              </tr>
+            `}
             ${(bill.pricing.discount || 0) > 0 ? `
               <tr>
                 <td>Discount:</td>
@@ -289,7 +301,7 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
           ` : ""}
 
           <div class="footer">
-            <div>This is a computer-generated tax invoice issued by ${esc(bill.seller?.storeName || "HelloLocal Store")}.</div>
+            <div>This is a computer-generated ${esc(docTitle.toLowerCase())} issued by ${esc(bill.seller?.storeName || "HelloLocal Store")}.</div>
             <div style="margin-top: 2px;">Thank you for your business! Powered by HelloLocal.</div>
           </div>
         </body>
@@ -328,100 +340,425 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
   };
 
   /**
+   * Helper to format numbers into Indian English words with Paise support
+   */
+  const numberToIndianWords = (num: number): string => {
+    const a = [
+      "", "One ", "Two ", "Three ", "Four ", "Five ", "Six ", "Seven ", "Eight ", "Nine ", "Ten ",
+      "Eleven ", "Twelve ", "Thirteen ", "Fourteen ", "Fifteen ", "Sixteen ", "Seventeen ", "Eighteen ", "Nineteen "
+    ];
+    const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+    const absNum = Math.abs(num);
+    const rupees = Math.floor(absNum);
+    const paise = Math.round((absNum - rupees) * 100);
+
+    const numToWords = (val: number): string => {
+      let str = "";
+      if (val > 99) {
+        str += a[Math.floor(val / 100)] + "Hundred ";
+        val %= 100;
+      }
+      if (val > 19) {
+        str += b[Math.floor(val / 10)] + " " + a[val % 10];
+      } else if (val > 0) {
+        str += a[val];
+      }
+      return str;
+    };
+
+    let rupeesStr = "";
+    if (rupees === 0) {
+      rupeesStr = "Zero";
+    } else {
+      const crore = Math.floor(rupees / 10000000);
+      const lakh = Math.floor((rupees % 10000000) / 100000);
+      const thousand = Math.floor((rupees % 100000) / 1000);
+      const remainder = rupees % 1000;
+
+      if (crore > 0) rupeesStr += numToWords(crore) + "Crore ";
+      if (lakh > 0) rupeesStr += numToWords(lakh) + "Lakh ";
+      if (thousand > 0) rupeesStr += numToWords(thousand) + "Thousand ";
+      if (remainder > 0) rupeesStr += numToWords(remainder);
+    }
+
+    let result = `Rupees ${rupeesStr.trim()}`;
+    if (paise > 0) {
+      result += ` and ${numToWords(paise).trim()} Paise`;
+    }
+    return `${result} Only`;
+  };
+
+  /**
+   * Generate high-quality professional PDF invoice using jsPDF
+   */
+  const generateInvoicePDF = (billData: BillData): jsPDF => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const docTitle = billData.seller?.gstin ? "TAX INVOICE" : "BILL OF SUPPLY / CASH MEMO";
+    const sellerFssai = (billData.seller as any)?.fssaiLicNo || (billData.seller as any)?.fssai;
+
+    const pageWidth = 210;
+    const margin = 14;
+    const contentWidth = pageWidth - margin * 2; // 182mm
+    let yPos = 14;
+
+    // 1. Top Header Banner
+    doc.setFillColor(30, 27, 75); // Deep Indigo
+    doc.roundedRect(margin, yPos, contentWidth, 22, 2, 2, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text((billData.seller?.storeName || "HelloLocal Store").slice(0, 36), margin + 6, yPos + 8);
+
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(199, 210, 254);
+    doc.text((billData.seller?.address || "Hyperlocal Retail Store").slice(0, 48), margin + 6, yPos + 15);
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text(docTitle, pageWidth - margin - 6, yPos + 8, { align: "right" });
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(224, 231, 255);
+    doc.text("ORIGINAL FOR RECIPIENT", pageWidth - margin - 6, yPos + 15, { align: "right" });
+
+    yPos += 27;
+
+    // 2. Info Grid: Seller (Left) and Customer/Invoice Meta (Right)
+    const boxWidth = (contentWidth - 6) / 2; // 88mm
+    const boxHeight = 40;
+
+    // Seller Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(margin, yPos, boxWidth, boxHeight, 2, 2, "FD");
+
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(79, 70, 229);
+    doc.text("SOLD BY / MERCHANT DETAILS", margin + 4, yPos + 6);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text((billData.seller?.storeName || "HelloLocal Store").slice(0, 38), margin + 4, yPos + 12);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    const sellerAddr = billData.seller?.address ? billData.seller.address.slice(0, 48) : "Local Partner Store";
+    doc.text(sellerAddr, margin + 4, yPos + 17);
+    if (billData.seller?.phone) {
+      doc.text(`Phone: ${billData.seller.phone}`, margin + 4, yPos + 22);
+    }
+    if (billData.seller?.gstin) {
+      doc.setFont("helvetica", "bold");
+      doc.text(`GSTIN: ${billData.seller.gstin}`, margin + 4, yPos + 27);
+    } else {
+      doc.text("Not registered under GST", margin + 4, yPos + 27);
+    }
+    doc.setFont("helvetica", "normal");
+    if (sellerFssai) {
+      doc.text(`FSSAI Lic: ${sellerFssai}`, margin + 4, yPos + 32);
+    }
+
+    // Customer / Invoice Meta Box
+    const rightBoxX = margin + boxWidth + 6;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(rightBoxX, yPos, boxWidth, boxHeight, 2, 2, "FD");
+
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(79, 70, 229);
+    doc.text("INVOICE & BILLED TO", rightBoxX + 4, yPos + 6);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Invoice No:", rightBoxX + 4, yPos + 12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(billData.billNumber, rightBoxX + 24, yPos + 12);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Date & Time:", rightBoxX + 4, yPos + 17);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatDate(billData.orderDate || billData.date), rightBoxX + 24, yPos + 17);
+
+    doc.setTextColor(71, 85, 105);
+    doc.text("Customer:", rightBoxX + 4, yPos + 22);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    const custLabel = `${billData.customer?.name || "Walk-in Customer"} ${billData.customer?.phone ? `(${billData.customer.phone})` : ""}`;
+    doc.text(custLabel.slice(0, 32), rightBoxX + 24, yPos + 22);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Payment:", rightBoxX + 4, yPos + 27);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(5, 150, 105); // emerald
+    doc.text(`${billData.payment.method} (${billData.payment.status})`, rightBoxX + 24, yPos + 27);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Channel:", rightBoxX + 4, yPos + 32);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${billData.channel} • ${billData.saleType || "COUNTER_POS"}`, rightBoxX + 24, yPos + 32);
+
+    if (billData.payment.reference) {
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+      doc.text("Ref / UTR:", rightBoxX + 4, yPos + 37);
+      doc.setTextColor(15, 23, 42);
+      doc.text(String(billData.payment.reference).slice(0, 26), rightBoxX + 24, yPos + 37);
+    } else if (billData.payment.method === "Cash" && (billData.payment.receivedAmount || 0) > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Cash: Rs.${(billData.payment.receivedAmount || 0).toFixed(2)} | Change: Rs.${(billData.payment.changeReturned || 0).toFixed(2)}`, rightBoxX + 4, yPos + 37);
+    }
+
+    yPos += boxHeight + 8;
+
+    // 3. Table Header
+    const printTableHeader = (curY: number) => {
+      doc.setFillColor(79, 70, 229); // Purple 600
+      doc.roundedRect(margin, curY, contentWidth, 8, 1, 1, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+
+      doc.text("#", margin + 3, curY + 5.5);
+      doc.text("Item & Specification", margin + 14, curY + 5.5);
+      doc.text("Qty", margin + 98, curY + 5.5, { align: "center" });
+      doc.text("Rate", margin + 124, curY + 5.5, { align: "right" });
+      doc.text("GST Rate", margin + 152, curY + 5.5, { align: "right" });
+      doc.text("Amount", pageWidth - margin - 4, curY + 5.5, { align: "right" });
+    };
+
+    printTableHeader(yPos);
+    yPos += 8;
+
+    // 4. Item Rows
+    const pageBottomThreshold = 240;
+    billData.items.forEach((item, index) => {
+      if (yPos > pageBottomThreshold) {
+        doc.addPage();
+        yPos = 16;
+        printTableHeader(yPos);
+        yPos += 8;
+      }
+
+      if (index % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(margin, yPos, contentWidth, 7.5, "F");
+      }
+
+      doc.setDrawColor(241, 245, 249);
+      doc.line(margin, yPos + 7.5, pageWidth - margin, yPos + 7.5);
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text(String(index + 1), margin + 3, yPos + 5);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      const variant = variantOf(item);
+      const itemName = `${item.product || item.productName || "Item"}${variant ? ` (${variant})` : ""}`;
+      doc.text(itemName.slice(0, 45), margin + 14, yPos + 5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(51, 65, 85);
+      doc.text(String(item.qty || item.quantity || 1), margin + 98, yPos + 5, { align: "center" });
+
+      const price = item.price || item.unitPrice || 0;
+      doc.text(`Rs.${price.toFixed(2)}`, margin + 124, yPos + 5, { align: "right" });
+
+      const taxRate = item.taxRate ? `${item.taxRate}%` : "0%";
+      doc.text(taxRate, margin + 152, yPos + 5, { align: "right" });
+
+      const total = item.total || item.subtotal || price * (item.qty || item.quantity || 1);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Rs.${total.toFixed(2)}`, pageWidth - margin - 4, yPos + 5, { align: "right" });
+
+      yPos += 7.5;
+    });
+
+    if (yPos > 210) {
+      doc.addPage();
+      yPos = 16;
+    }
+
+    yPos += 4;
+
+    // 5. Bottom Financial Summary Box & Legal Signatory
+    const summaryWidth = 80;
+    const summaryX = pageWidth - margin - summaryWidth;
+
+    // Financial Table Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(summaryX, yPos, summaryWidth, 42, 2, 2, "FD");
+
+    let sumY = yPos + 6;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+
+    if (billData.pricing.tax > 0) {
+      const taxableValue = Math.max(0, billData.pricing.total - billData.pricing.tax);
+      doc.text("Taxable Value:", summaryX + 4, sumY);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Rs.${taxableValue.toFixed(2)}`, pageWidth - margin - 4, sumY, { align: "right" });
+      sumY += 5.5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+      doc.text("Total GST (Taxes):", summaryX + 4, sumY);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Rs.${billData.pricing.tax.toFixed(2)}`, pageWidth - margin - 4, sumY, { align: "right" });
+      sumY += 5.5;
+    } else {
+      doc.text("Subtotal:", summaryX + 4, sumY);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Rs.${billData.pricing.subtotal.toFixed(2)}`, pageWidth - margin - 4, sumY, { align: "right" });
+      sumY += 5.5;
+    }
+
+    if ((billData.pricing.discount || 0) > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(225, 29, 72); // rose
+      doc.text("Discount Applied:", summaryX + 4, sumY);
+      doc.setFont("helvetica", "bold");
+      doc.text(`-Rs.${(billData.pricing.discount || 0).toFixed(2)}`, pageWidth - margin - 4, sumY, { align: "right" });
+      sumY += 5.5;
+    }
+
+    // Grand Total Highlight Bar
+    doc.setFillColor(30, 27, 75);
+    doc.roundedRect(summaryX + 2, sumY - 1, summaryWidth - 4, 11, 1.5, 1.5, "F");
+
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("GRAND TOTAL:", summaryX + 6, sumY + 6.5);
+    doc.setFontSize(11);
+    doc.text(`Rs.${billData.pricing.total.toFixed(2)}`, pageWidth - margin - 6, sumY + 6.5, { align: "right" });
+
+    // Left Details: Words & Terms
+    const leftWidth = contentWidth - summaryWidth - 6;
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(71, 85, 105);
+    doc.text("AMOUNT IN WORDS:", margin, yPos + 6);
+
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 27, 75);
+    doc.text(numberToIndianWords(billData.pricing.total), margin, yPos + 12);
+
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.text("Terms & Conditions:", margin, yPos + 22);
+    doc.text("1. Goods once sold are subject to store return & warranty policy.", margin, yPos + 26);
+    doc.text("2. Please retain this invoice for any exchange or service inquiry.", margin, yPos + 30);
+    doc.text("3. This is an authentic computer-generated digital tax invoice.", margin, yPos + 34);
+
+    // Signatory Box
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(margin, yPos + 40, leftWidth, 22, 1, 1, "D");
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(71, 85, 105);
+    doc.text(`For ${(billData.seller?.storeName || "HelloLocal Store").slice(0, 36)}`, margin + 4, yPos + 46);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184);
+    doc.text("Authorized Signatory (Digital Stamp)", margin + 4, yPos + 58);
+
+    // 6. Page Bottom Footer
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, 285, pageWidth - margin, 285);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184);
+    doc.text("Generated via HelloLocal Merchant Point of Sale • Hyperlocal 10-Minute Network", pageWidth / 2, 290, { align: "center" });
+
+    return doc;
+  };
+
+  /**
    * Download PDF using jsPDF
    */
   const handleDownloadPDF = () => {
-    const doc = new jsPDF();
-    const margin = 15;
-    let yPos = 20;
+    try {
+      const doc = generateInvoicePDF(bill);
+      const filename = `Invoice_${bill.billNumber}.pdf`;
+      doc.save(filename);
+      showToast(`Invoice ${filename} downloaded successfully!`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to generate invoice PDF", "error");
+    }
+  };
 
-    doc.setFillColor(79, 57, 246);
-    doc.rect(margin, yPos, 180, 10, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text(bill.seller?.storeName || "HelloLocal Store", margin + 5, yPos + 7);
+  /**
+   * Direct PDF Sharing (Native Mobile Share Sheet / Web Share API with Desktop Fallback)
+   */
+  const handleSharePDF = async () => {
+    try {
+      const doc = generateInvoicePDF(bill);
+      const fileName = `Invoice_${bill.billNumber}.pdf`;
+      const pdfBlob = doc.output("blob");
+      const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
 
-    yPos += 20;
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Bill Number: ${bill.billNumber}`, margin, yPos);
-    doc.text(`Date: ${formatDate(bill.orderDate || bill.date)}`, 130, yPos);
-    yPos += 6;
-    doc.text(`Customer: ${bill.customer?.name || "Walk-in Customer"}`, margin, yPos);
-    doc.text(`Payment: ${bill.payment.method} (${bill.payment.status})`, 130, yPos);
-
-    yPos += 12;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, yPos, 195, yPos);
-    yPos += 8;
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Item", margin, yPos);
-    doc.text("Qty", 120, yPos);
-    doc.text("Rate", 145, yPos);
-    doc.text("Total", 175, yPos);
-    yPos += 6;
-    doc.line(margin, yPos, 195, yPos);
-    yPos += 6;
-
-    doc.setFont("helvetica", "normal");
-    const pageBottom = 280;
-    const ensureSpace = (needed: number) => {
-      if (yPos + needed > pageBottom) {
-        doc.addPage();
-        yPos = 20;
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({
+          files: [pdfFile],
+          title: `Invoice #${bill.billNumber}`,
+          text: `${bill.seller?.gstin ? "Tax Invoice" : "Bill of Supply"} for your purchase at ${bill.seller?.storeName || "HelloLocal Store"}. Grand Total: ₹${bill.pricing.total.toFixed(2)}`,
+        });
+        showToast("Invoice shared successfully!", "success");
+      } else {
+        // Desktop / browser fallback: save PDF and trigger WhatsApp invoice
+        doc.save(fileName);
+        showToast(`Invoice PDF downloaded. Opening WhatsApp receipt for customer...`, "info");
+        handleShareWhatsApp();
       }
-    };
-    bill.items.forEach((it) => {
-      ensureSpace(7);
-      const variant = it.variantTitle || (it.unit && it.unit !== "Standard" ? it.unit : "");
-      const label = `${it.product || it.productName || ""}${variant ? ` (${variant})` : ""}`;
-      doc.text(label.slice(0, 48), margin, yPos);
-      doc.text(String(it.qty || it.quantity), 120, yPos);
-      doc.text(`Rs.${(it.price || it.unitPrice || 0).toFixed(2)}`, 145, yPos);
-      doc.text(`Rs.${(it.total || it.subtotal || 0).toFixed(2)}`, 175, yPos);
-      yPos += 7;
-    });
-
-    ensureSpace(45);
-    yPos += 5;
-    doc.line(margin, yPos, 195, yPos);
-    yPos += 8;
-    doc.text(`Subtotal: Rs.${bill.pricing.subtotal.toFixed(2)}`, 140, yPos);
-    if ((bill.pricing.discount || 0) > 0) {
-      yPos += 6;
-      doc.text(`Discount: -Rs.${(bill.pricing.discount || 0).toFixed(2)}`, 140, yPos);
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        showToast(err.message || "Failed to share invoice PDF", "error");
+      }
     }
-    if (bill.pricing.tax > 0) {
-      yPos += 6;
-      doc.text(`Incl. GST: Rs.${bill.pricing.tax.toFixed(2)}`, 140, yPos);
-    }
-    yPos += 8;
-    doc.setFont("helvetica", "bold");
-    doc.text(`Grand Total: Rs.${bill.pricing.total.toFixed(2)}`, 140, yPos);
-    if (bill.payment.reference) {
-      yPos += 7;
-      doc.setFont("helvetica", "normal");
-      doc.text(`Ref / UTR: ${bill.payment.reference}`, 140, yPos);
-    }
-
-    doc.save(`Bill_${bill.billNumber}.pdf`);
-    showToast(`Invoice Bill_${bill.billNumber}.pdf downloaded!`, "success");
   };
 
   /**
    * WhatsApp Sharing
    */
   const handleShareWhatsApp = () => {
+    const docTitle = bill.seller?.gstin ? "TAX INVOICE" : "BILL OF SUPPLY";
     const phone = bill.customer?.phone?.replace(/\D/g, "") || "";
     const itemsText = bill.items
       .map((it) => `• ${it.product || it.productName} (${it.qty || it.quantity}x) = ₹${(it.total || it.subtotal || 0).toFixed(2)}`)
       .join("\n");
 
     const lines = [
-      `*INVOICE FROM ${bill.seller?.storeName || "Store"}*`,
+      `*${docTitle} FROM ${bill.seller?.storeName || "Store"}*`,
       `Bill No: ${bill.billNumber}`,
       `Date: ${formatDate(bill.orderDate || bill.date)}`,
       `----------------------------`,
@@ -430,10 +767,11 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
       ...((bill.pricing.discount || 0) > 0 ? [`Discount: -₹${(bill.pricing.discount || 0).toFixed(2)}`] : []),
       `*Grand Total: ₹${bill.pricing.total.toFixed(2)}*`,
       `Payment: ${bill.payment.method} (${bill.payment.status})`,
+      ...(bill.payment.reference ? [`Ref / UTR: ${bill.payment.reference}`] : []),
       ``,
       `Thank you for shopping with us!`,
+      `Invoice details for your purchase at ${bill.seller?.storeName || "HelloLocal Store"}.`,
     ];
-    // Encode the whole message so names containing &, # or + don't cut it off.
     const message = encodeURIComponent(lines.join("\n"));
 
     const url = phone.length >= 10
@@ -564,7 +902,21 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({
 
         {/* Modal Footer / Actions */}
         <div className="bg-neutral-50 px-6 py-4 border-t border-neutral-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleSharePDF}
+              className="flex items-center gap-1.5 rounded-lg bg-purple-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-800 transition-colors shadow-xs"
+              title="Share PDF invoice directly to WhatsApp, Email or Apps"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+              </svg>
+              Share PDF
+            </button>
             <button
               onClick={handleShareWhatsApp}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-xs"

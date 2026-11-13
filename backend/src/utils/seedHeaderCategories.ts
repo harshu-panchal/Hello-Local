@@ -56,6 +56,30 @@ const DEFAULT_CATEGORIES = [
         slug: 'sports',
         status: 'Published',
         order: 7
+    },
+    {
+        name: 'Medical',
+        iconLibrary: 'Custom',
+        iconName: 'medical',
+        slug: 'medical',
+        status: 'Published',
+        order: 8
+    },
+    {
+        name: 'Hardware',
+        iconLibrary: 'Custom',
+        iconName: 'hardware',
+        slug: 'hardware',
+        status: 'Published',
+        order: 9
+    },
+    {
+        name: 'Stationery',
+        iconLibrary: 'Custom',
+        iconName: 'stationery',
+        slug: 'stationery',
+        status: 'Published',
+        order: 10
     }
 ];
 
@@ -72,4 +96,24 @@ export async function seedHeaderCategories() {
     } catch (error) {
         console.error('Error seeding header categories:', error);
     }
+}
+
+/**
+ * Manual, one-off top-up (NOT run on server start): adds any default header
+ * category that is missing by slug or name, e.g. Medical / Hardware / Stationery
+ * on an existing database. Existing headers are never modified.
+ * Run with: npm run seed:missing-header-categories
+ */
+export async function seedMissingHeaderCategories(): Promise<string[]> {
+    const added: string[] = [];
+    for (const cat of DEFAULT_CATEGORIES) {
+        const exists = await HeaderCategory.findOne({
+            $or: [{ slug: cat.slug }, { name: { $regex: new RegExp(`^${cat.name}$`, 'i') } }],
+        });
+        if (!exists) {
+            await HeaderCategory.create(cat);
+            added.push(cat.name);
+        }
+    }
+    return added;
 }

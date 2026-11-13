@@ -37,6 +37,7 @@ export default function SellerBulkProductModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [templateCategory, setTemplateCategory] = useState("All");
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -53,16 +54,19 @@ export default function SellerBulkProductModal({
   const handleDownloadTemplate = async () => {
     try {
       setDownloadingTemplate(true);
-      const blob = await downloadBulkProductTemplate();
+      const blob = await downloadBulkProductTemplate(templateCategory);
       const url = window.URL.createObjectURL(new Blob([blob], { type: "text/csv;charset=utf-8;" }));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "hello_local_sample_product_import.csv");
+      const safeSuffix = templateCategory && templateCategory !== "All"
+        ? `_${templateCategory.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
+        : "";
+      link.setAttribute("download", `hello_local_sample_template${safeSuffix}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      showToast("Sample template downloaded successfully!", "success");
+      showToast(`${templateCategory} sample template downloaded!`, "success");
     } catch (err: any) {
       showToast(err.response?.data?.message || "Failed to download sample template", "error");
     } finally {
@@ -180,11 +184,22 @@ export default function SellerBulkProductModal({
     reader.readAsText(file);
   };
 
+  const isCsvOrText = (file: File) => {
+    const name = file.name.toLowerCase();
+    return (
+      name.endsWith(".csv") ||
+      name.endsWith(".txt") ||
+      file.type === "text/csv" ||
+      file.type === "text/plain" ||
+      file.type === "application/vnd.ms-excel"
+    );
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.name.toLowerCase().endsWith(".csv")) {
-        showToast("Please select a valid CSV file (.csv)", "error");
+      if (!isCsvOrText(file)) {
+        showToast("Please select a valid CSV spreadsheet file (.csv)", "error");
         return;
       }
       setSelectedFile(file);
@@ -198,8 +213,8 @@ export default function SellerBulkProductModal({
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      if (!file.name.toLowerCase().endsWith(".csv")) {
-        showToast("Please drop a valid CSV file (.csv)", "error");
+      if (!isCsvOrText(file)) {
+        showToast("Please drop a valid CSV spreadsheet file (.csv)", "error");
         return;
       }
       setSelectedFile(file);
@@ -287,8 +302,8 @@ export default function SellerBulkProductModal({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
           {/* Step 1: Download Sample Template Card */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-            <div className="space-y-0.5">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+            <div className="space-y-1">
               <span className="text-[11px] font-black uppercase tracking-wider text-purple-600 block">
                 Step 1: Get the Format
               </span>
@@ -296,7 +311,7 @@ export default function SellerBulkProductModal({
                 Download Official Sample Template
               </h4>
               <p className="text-[11px] text-slate-500">
-                Pre-configured with sample products and your store's approved categories.
+                Choose your shop category to download pre-configured sample products:
               </p>
               <div className="pt-1">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-purple-700 bg-purple-100/70 px-2.5 py-1 rounded-lg">
@@ -305,14 +320,31 @@ export default function SellerBulkProductModal({
                 </span>
               </div>
             </div>
-            <button
-              onClick={handleDownloadTemplate}
-              disabled={downloadingTemplate}
-              className="bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 text-xs font-black px-4 py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-95 flex-shrink-0 cursor-pointer min-h-[40px]"
-            >
-              <span>{downloadingTemplate ? "⏳" : "📄"}</span>
-              <span>{downloadingTemplate ? "Downloading..." : "Download Sample CSV"}</span>
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
+              <select
+                value={templateCategory}
+                onChange={(e) => setTemplateCategory(e.target.value)}
+                className="text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 bg-white text-slate-800 outline-none focus:border-purple-600 cursor-pointer min-h-[40px]"
+              >
+                <option value="All">All Categories (Universal)</option>
+                <option value="Grocery">Grocery & Daily Essentials</option>
+                <option value="Electronics">Electronics & Mobile</option>
+                <option value="Medical">Medical & Pharmacy</option>
+                <option value="Fashion">Fashion & Apparel</option>
+                <option value="Hardware">Hardware & Electricals</option>
+                <option value="Stationery">Stationery & General</option>
+              </select>
+
+              <button
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate}
+                className="bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 text-xs font-black px-4 py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-95 flex-shrink-0 cursor-pointer min-h-[40px]"
+              >
+                <span>{downloadingTemplate ? "⏳" : "📄"}</span>
+                <span>{downloadingTemplate ? "Downloading..." : "Download CSV"}</span>
+              </button>
+            </div>
           </div>
 
           {/* Step 2: Upload Area */}
@@ -343,7 +375,7 @@ export default function SellerBulkProductModal({
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept=".csv,text/csv"
+                  accept=".csv,text/csv,text/plain"
                   className="hidden"
                 />
 

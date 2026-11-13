@@ -101,13 +101,17 @@ export const uploadCsvFile = multer({
     fileSize: 10 * 1024 * 1024, // 10MB
   },
   fileFilter: (_req: Request, file: any, cb: multer.FileFilterCallback) => {
-    const isCsvName = file.originalname.toLowerCase().endsWith(".csv") || file.originalname.toLowerCase().endsWith(".txt");
-    if (
-      isCsvName ||
-      file.mimetype.includes("csv") ||
-      file.mimetype.includes("text") ||
-      file.mimetype === "application/vnd.ms-excel"
-    ) {
+    const originalName = (file.originalname || "").toLowerCase();
+    const mime = (file.mimetype || "").toLowerCase();
+    const isCsvName = originalName.endsWith(".csv") || originalName.endsWith(".txt");
+    const isCsvMime =
+      mime.includes("csv") ||
+      mime.includes("text") ||
+      mime.includes("excel") ||
+      mime === "application/vnd.ms-excel" ||
+      mime === "application/octet-stream";
+
+    if (isCsvName || isCsvMime) {
       cb(null, true);
     } else {
       cb(new Error("Invalid file type. Only CSV files (.csv) are allowed for bulk upload."));

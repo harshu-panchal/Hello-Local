@@ -17,6 +17,11 @@ import {
   downloadSampleTemplate,
   bulkUploadProducts,
 } from "../modules/seller/controllers/sellerBulkProductController";
+import {
+  getMasterCatalogue,
+  exportMasterCatalogueCsv,
+  quickAddMasterProductToStore,
+} from "../modules/seller/controllers/sellerMasterCatalogController";
 import { uploadCsvFile } from "../middleware/upload";
 
 const router = Router();
@@ -33,8 +38,13 @@ router.get("/shops", requireUserType("Seller", "Admin"), getShops);
 // Remaining routes require seller user type
 router.use(requireUserType("Seller"));
 
-// Download sample CSV template for bulk product upload
+// Download sample CSV template for bulk product upload (supports ?category=...)
 router.get("/bulk-template", downloadSampleTemplate);
+
+// Master Catalogue: browse, export CSV, and quick-add to seller store
+router.get("/master-catalogue", getMasterCatalogue);
+router.get("/master-catalogue/export", exportMasterCatalogueCsv);
+router.post("/master-catalogue/add-to-store", quickAddMasterProductToStore);
 
 // Bulk upload products from CSV file
 router.post("/bulk-upload", uploadCsvFile.single("file"), bulkUploadProducts);

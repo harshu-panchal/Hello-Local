@@ -407,7 +407,7 @@ export const ICON_LIBRARY: IconDef[] = [
     {
         name: 'medicine',
         label: 'Medicine',
-        tags: ['medicine', 'health', 'doctor', 'pill', 'hospital', 'care', 'pharmacy'],
+        tags: ['medicine', 'medical', 'health', 'doctor', 'pill', 'hospital', 'care', 'pharmacy'],
         svg: (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -564,6 +564,30 @@ export const ICON_LIBRARY: IconDef[] = [
                 <line x1="6" y1="1" x2="6" y2="4" />
                 <line x1="10" y1="1" x2="10" y2="4" />
                 <line x1="14" y1="1" x2="14" y2="4" />
+            </svg>
+        )
+    },
+    // --- STORE TYPES (Master Catalogue headers) ---
+    // Specific, multi-letter tags only, so existing category names keep matching
+    // the same icons they did before.
+    {
+        name: 'hardware',
+        label: 'Hardware & Electricals',
+        tags: ['hardware', 'wrench', 'plumbing', 'electricals'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+        )
+    },
+    {
+        name: 'stationery',
+        label: 'Stationery',
+        tags: ['stationery', 'stationary', 'pencil'],
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
         )
     }

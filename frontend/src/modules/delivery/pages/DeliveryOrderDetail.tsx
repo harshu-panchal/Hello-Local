@@ -565,7 +565,7 @@ export default function DeliveryOrderDetail() {
         <div className="min-h-screen bg-neutral-50 pb-32 relative">
 
             {/* Top Bar with Back Button */}
-            <div className="sticky top-0 z-20 bg-white border-b border-neutral-100 px-4 py-3 flex items-center shadow-sm">
+            <div className="sticky top-0 z-20 bg-white border-b border-neutral-100 px-4 pb-3 pt-[calc(0.75rem_+_env(safe-area-inset-top,0px))] flex items-center shadow-sm">
                 <button
                     onClick={() => navigate(-1)}
                     className="p-2 -ml-2 text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors"

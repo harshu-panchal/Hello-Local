@@ -206,7 +206,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <div className="w-full bg-[#F8FAFC] min-h-screen flex flex-col overflow-x-hidden">
         {/* 1. Desktop Navigation Bar — Reference-Fidelity Two-Tone Branding & Navigation */}
         {showFooter && (
-          <nav className="hidden md:block sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs">
+          <nav className="hidden md:block sticky top-0 z-40 bg-white border-b border-slate-100 shadow-2xs user-safe-top">
             <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-6">
               {/* Brand Logo */}
@@ -304,7 +304,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* 2. Sub-Header (For Search Page) */}
         {(showHeader || isSearchPage) && (
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-2xs border-b border-slate-100">
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-2xs border-b border-slate-100 user-safe-top">
             {showSearchBar && (
               <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-3 w-full">
                 <div className="relative flex-1 max-w-xl md:mx-auto">

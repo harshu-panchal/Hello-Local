@@ -43,7 +43,7 @@ export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
   }, []);
 
   return (
-    <div className="bg-white shadow-2xs border-b border-slate-200/80 sticky top-0 z-30">
+    <div className="bg-white shadow-2xs border-b border-slate-200/80 sticky top-0 z-30 user-safe-top">
       {/* Offline Banner */}
       {!isOnline && (
         <div className="px-4 py-1.5 bg-slate-700 text-white text-xs font-bold text-center tracking-wide">
