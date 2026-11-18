@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import express from 'express';
 import mongoose from 'mongoose';
 import { authenticate } from '../middleware/auth';
-import { getOrReuseRazorpayOrder, capturePayment, handleWebhook } from '../services/paymentService';
+import { getOrReuseRazorpayOrder, capturePayment, handleWebhook, reconcileRazorpayIntent } from '../services/paymentService';
 import Order from '../models/Order';
 import SellerAdRequest from '../models/SellerAdRequest';
 
@@ -89,6 +89,28 @@ router.post('/create-order', authenticate, async (req: Request, res: Response) =
         }
 
         const result = await getOrReuseRazorpayOrder(loaded.doc, loaded.amountDue);
+
+        // Razorpay says this intent is already paid but our record is not:
+        // the earlier /verify call was lost. Credit the captured payment now
+        // instead of leaving the customer charged on an unpaid order.
+        if (result.isPaid && loaded.doc.razorpayOrderId) {
+            try {
+                await reconcileRazorpayIntent(String(loaded.doc.razorpayOrderId), req.app.get('io'));
+            } catch (reconcileError: any) {
+                console.error('Payment reconciliation failed:', reconcileError?.message || reconcileError);
+            }
+            const fresh: any = type === 'Order'
+                ? await Order.findById(orderId).select('paymentStatus')
+                : await SellerAdRequest.findById(orderId).select('paymentStatus');
+            if (fresh?.paymentStatus === 'Paid') {
+                return res.status(409).json({
+                    success: false,
+                    alreadyPaid: true,
+                    message: 'Your payment was received. This order is already paid.',
+                });
+            }
+        }
+
         if (!result.success || !result.data) {
             return res.status(400).json(result);
         }
@@ -174,9 +196,11 @@ router.post(
             const io = req.app.get('io');
             const result = await handleWebhook(rawBody, signature, io);
 
-            // Per payment provider best practices, acknowledge webhook receipt (200 OK)
-            // for logged rejections to prevent infinite retry storms from Razorpay.
-            return res.status(200).json(result);
+            // 200 = processed or a permanent business rejection (no point retrying).
+            // 4xx/5xx = bad signature, missing secret or a transient failure, so
+            // Razorpay shows it and retries instead of the event being lost.
+            const { statusCode = 200, ...body } = result;
+            return res.status(statusCode).json(body);
         } catch (error: any) {
             console.error('Error handling webhook:', error?.message || error);
             // If signature verification failed, return 200 to acknowledge and prevent retry storms

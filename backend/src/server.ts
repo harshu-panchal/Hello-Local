@@ -92,8 +92,14 @@ const corsOptions = {
 // Apply CORS middleware - This handles everything including preflight
 app.use(cors(corsOptions));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// The Razorpay webhook must receive the exact bytes Razorpay signed, so the
+// global parsers skip it; its route mounts express.raw() instead.
+const jsonParser = express.json();
+const urlencodedParser = express.urlencoded({ extended: true });
+const isRazorpayWebhook = (req: express.Request) =>
+  req.method === "POST" && /\/payment\/webhook\/?(\?.*)?$/.test(req.originalUrl);
+app.use((req, res, next) => (isRazorpayWebhook(req) ? next() : jsonParser(req, res, next)));
+app.use((req, res, next) => (isRazorpayWebhook(req) ? next() : urlencodedParser(req, res, next)));
 
 // Initialize Socket.io
 const io = initializeSocket(httpServer);
