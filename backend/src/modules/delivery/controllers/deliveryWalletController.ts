@@ -6,6 +6,7 @@ import {
 } from "../../../services/walletManagementService";
 import { getCommissionSummary } from "../../../services/commissionService";
 import Delivery from "../../../models/Delivery";
+import WalletTransaction from "../../../models/WalletTransaction";
 import { createRazorpayOrder } from "../../../services/paymentService";
 import {
   assertGatewayPayment,
@@ -142,6 +143,22 @@ export const verifyAdminPayout = async (req: Request, res: Response) => {
 
     const intent = (deliveryBoy as any).codPayoutIntent;
     if (!intent?.razorpayOrderId) {
+      // The Razorpay webhook may already have settled this exact payment.
+      const settled = await WalletTransaction.findOne({
+        reference: `PAYOUT-${razorpayPaymentId}`,
+        userId: deliveryBoy._id,
+      });
+      if (settled) {
+        return res.status(200).json({
+          success: true,
+          message: "Payout successful",
+          data: {
+            pendingAdminPayout: (deliveryBoy as any).pendingAdminPayout,
+            cashCollected: (deliveryBoy as any).cashCollected,
+            amountPaid: settled.amount,
+          },
+        });
+      }
       return res.status(400).json({
         success: false,
         message: "No payout was started. Please start the payout again.",

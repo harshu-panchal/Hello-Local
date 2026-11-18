@@ -16,6 +16,7 @@ import { checkoutIdentity, prepareCheckout } from "../../../services/checkoutSer
 import { orderError, withOrderTransaction } from "../../../services/orderTransactionService";
 import { cancelOrderLifecycle } from "../../../services/orderLifecycleService";
 import { runOrderEffects } from "../../../services/orderEffectService";
+import { PaymentVerificationError } from "../../../services/razorpayVerificationService";
 
 // Create a new order
 export const quoteOrder = async (req: Request, res: Response) => {
@@ -87,10 +88,29 @@ export const createOrder = async (req: Request, res: Response) => {
  * returning reserved stock to the shelf and releasing unused coupons.
  */
 export async function cleanupExpiredPendingOrders(customerFilter?: string): Promise<number> {
-  const expired = await Order.find({ ...(customerFilter ? { customer: customerFilter } : {}), status: "Pending", paymentStatus: "Pending", createdAt: { $lt: new Date(Date.now() - 1800000) } }).select("_id");
+  const expired = await Order.find({ ...(customerFilter ? { customer: customerFilter } : {}), status: "Pending", paymentStatus: "Pending", createdAt: { $lt: new Date(Date.now() - 1800000) } }).select("_id razorpayOrderId paymentMethod createdAt");
   let cancelled = 0;
   for (const order of expired) {
     try {
+      // Before cancelling, ask Razorpay whether the customer actually paid but
+      // the /verify call never reached us. A paid order is credited, not cancelled.
+      if (order.razorpayOrderId && order.paymentMethod !== "COD") {
+        try {
+          const { reconcileRazorpayIntent } = await import("../../../services/paymentService");
+          const { captured, inProgress } = await reconcileRazorpayIntent(String(order.razorpayOrderId));
+          if (captured > 0) continue; // credited: do not cancel
+          // Still being paid at the gateway: wait, but not forever (a later capture
+          // on a cancelled order is refunded automatically).
+          if (inProgress && order.createdAt > new Date(Date.now() - 24 * 60 * 60 * 1000)) continue;
+        } catch (gatewayError: any) {
+          // Gateway not configured => no online payment can exist; cancel as before.
+          // Any other lookup failure => skip this round rather than risk cancelling a paid order.
+          if (!(gatewayError instanceof PaymentVerificationError && gatewayError.statusCode === 503)) {
+            console.error(`Pending order ${order._id}: could not confirm payment with Razorpay, will retry`, gatewayError?.message || gatewayError);
+            continue;
+          }
+        }
+      }
       const result = await cancelOrderLifecycle(String(order._id), "system", { expiredOnly: true, reason: "Online payment timed out / abandoned" });
       if (!result.unchanged) cancelled++;
       await runOrderEffects(String(order._id));

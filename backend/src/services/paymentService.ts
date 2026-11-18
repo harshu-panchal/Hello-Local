@@ -1038,11 +1038,21 @@ export const handleWebhook = async (
     signature: string,
     io?: any,
     options?: { paymentFetcher?: PaymentFetcher; refundProcessor?: RefundProcessor }
-): Promise<{ success: boolean; message: string }> => {
+): Promise<{ success: boolean; message: string; statusCode?: number }> => {
+    // Signature / configuration problems are reported with a non-2xx status so
+    // they are visible in the Razorpay dashboard instead of silently "succeeding".
     try {
         if (!verifyWebhookSignature(rawBody, signature)) {
-            throw new Error('Invalid webhook signature');
+            console.error('Error handling webhook: Invalid webhook signature');
+            return { success: false, message: 'Invalid webhook signature', statusCode: 400 };
         }
+    } catch (error: any) {
+        const statusCode = error instanceof PaymentVerificationError ? error.statusCode : 500;
+        console.error('Error handling webhook:', error?.message || error);
+        return { success: false, message: error?.message || 'Webhook verification failed', statusCode };
+    }
+
+    try {
 
         const body = typeof rawBody === 'string' ? JSON.parse(rawBody) : JSON.parse(rawBody.toString('utf8'));
         const event = body?.event;
@@ -1067,10 +1077,13 @@ export const handleWebhook = async (
                 console.log('Unhandled webhook event:', event);
         }
 
-        return { success: true, message: 'Webhook processed successfully' };
+        return { success: true, message: 'Webhook processed successfully', statusCode: 200 };
     } catch (error: any) {
         console.error('Error handling webhook:', error?.message || error);
-        return { success: false, message: error?.message || 'Failed to process webhook' };
+        // A business-rule rejection (e.g. amount mismatch) will never succeed on
+        // retry, so acknowledge it; anything else (DB/gateway outage) is retried.
+        const statusCode = error instanceof PaymentVerificationError && error.statusCode < 500 ? 200 : 500;
+        return { success: false, message: error?.message || 'Failed to process webhook', statusCode };
     }
 };
 
@@ -1281,6 +1294,11 @@ export const handlePaymentCaptured = async (
                     'WEBHOOK_VERIFIED', { ...options, webhookVerified: true });
                 return;
             }
+            // Seller subscription payments and courier COD deposits.
+            const { recoverNonOrderIntent } = await import('./razorpayIntentRecoveryService');
+            if (await recoverNonOrderIntent(razorpayOrderId, razorpayPaymentId, { paymentFetcher: options?.paymentFetcher })) {
+                return;
+            }
             console.warn(
                 `[Webhook payment.captured] No Order found matching razorpayOrderId: ${razorpayOrderId}, paymentId: ${razorpayPaymentId}`
             );
@@ -1486,6 +1504,49 @@ export const handlePaymentCaptured = async (
         console.error('[Webhook payment.captured] Error handling payment captured:', error?.message || error);
         throw error;
     }
+};
+
+export type OrderPaymentsLister = (razorpayOrderId: string) => Promise<{ items?: any[] } | any[]>;
+
+/**
+ * Ask Razorpay which payments exist for one of our payment intents and credit
+ * every captured one through the same verified path the webhook uses.
+ *
+ * This is the safety net for a payment whose /verify call never reached us
+ * (app closed, network drop) when no webhook arrived either.
+ *
+ * @returns captured: payments credited; inProgress: a payment is still
+ *          authorized/created at the gateway (do not give up on it yet).
+ */
+export const reconcileRazorpayIntent = async (
+    razorpayOrderId: string,
+    io?: any,
+    options?: {
+        paymentsLister?: OrderPaymentsLister;
+        paymentFetcher?: PaymentFetcher;
+        refundProcessor?: RefundProcessor;
+    }
+): Promise<{ captured: number; inProgress: boolean }> => {
+    const list: OrderPaymentsLister =
+        options?.paymentsLister ??
+        ((id: string) => getRazorpayInstance().orders.fetchPayments(id) as Promise<any>);
+
+    const response: any = await list(razorpayOrderId);
+    const items: any[] = Array.isArray(response) ? response : Array.isArray(response?.items) ? response.items : [];
+
+    let captured = 0;
+    let inProgress = false;
+    for (const p of items) {
+        if (!p?.id) continue;
+        if (p.order_id && p.order_id !== razorpayOrderId) continue;
+        if (p.status === 'captured') {
+            await handlePaymentCaptured({ id: p.id, order_id: razorpayOrderId }, io, options);
+            captured++;
+        } else if (p.status === 'authorized' || p.status === 'created') {
+            inProgress = true;
+        }
+    }
+    return { captured, inProgress };
 };
 
 const handlePaymentFailed = async (payload: any) => {

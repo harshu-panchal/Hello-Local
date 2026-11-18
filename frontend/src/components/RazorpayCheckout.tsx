@@ -121,6 +121,11 @@ const RazorpayCheckout: React.FC<RazorpayCheckoutProps> = ({
                 checkout = razorpay;
                 razorpay.open();
             } catch (error: any) {
+                // The server found an earlier payment for this order and credited it.
+                if (error?.response?.status === 409 && error.response.data?.alreadyPaid) {
+                    onSuccess('');
+                    return;
+                }
                 console.error('Payment initiation error:', error);
                 onFailure(error.response?.data?.message || 'Failed to initiate payment');
             }

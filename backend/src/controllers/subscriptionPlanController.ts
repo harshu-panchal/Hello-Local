@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import mongoose from 'mongoose';
 import SubscriptionPlan from '../models/SubscriptionPlan';
 import SubscriptionPayment from '../models/SubscriptionPayment';
 import Seller from '../models/Seller';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createRazorpayOrder } from '../services/paymentService';
 import { assertGatewayPayment } from '../services/razorpayVerificationService';
+import { activateSellerSubscription } from '../services/subscriptionActivationService';
 
 // Default starter plans if database has none
 const DEFAULT_PLANS = [
@@ -417,61 +417,33 @@ export const renewSubscriptionSeller = asyncHandler(async (req: Request, res: Re
     expectedCurrency: 'INR',
   });
 
-  const now = new Date();
-  let startDate = now;
-  // If seller has an active, future subscription, stack the duration onto current end date
-  if (seller.subscription?.endDate && new Date(seller.subscription.endDate) > now) {
-    startDate = new Date(seller.subscription.endDate);
-  }
+  // 4 + 5. Atomically claim the intent and activate the seller's subscription
+  // (shared with the webhook fallback so it is credited exactly once).
+  const activation = await activateSellerSubscription({
+    seller,
+    plan,
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature,
+  });
 
-  const endDate = new Date(startDate.getTime() + plan.durationInDays * 24 * 60 * 60 * 1000);
-
-  // 4. ATOMIC CLAIM: Update the pending payment intent to SUCCESS atomically
-  const paymentRecord = await SubscriptionPayment.findOneAndUpdate(
-    { razorpayOrderId, status: 'PENDING' },
-    {
-      $set: {
-        sellerId: seller._id,
-        sellerName: seller.sellerName,
-        sellerMobile: seller.mobile,
-        planId: plan._id,
-        planName: plan.name,
-        amount: plan.price,
-        durationInDays: plan.durationInDays,
-        razorpayPaymentId,
-        razorpaySignature,
-        status: 'SUCCESS',
-        startDate,
-        endDate,
-        paymentDate: now,
-      },
-    },
-    { new: true }
-  );
-
-  if (!paymentRecord) {
+  if (!activation.claimed) {
+    // The webhook may have credited this exact payment first: report success.
+    const credited = await SubscriptionPayment.findOne({ razorpayOrderId, razorpayPaymentId, status: 'SUCCESS' });
+    if (credited && String(credited.sellerId) === String(seller._id)) {
+      const fresh = await Seller.findById(seller._id);
+      return res.json({
+        success: true,
+        message: `Subscription successfully activated! Valid until ${new Date(credited.endDate as any).toLocaleDateString('en-IN')}`,
+        data: fresh?.subscription,
+      });
+    }
     return res.status(409).json({
       success: false,
       message: 'This payment has already been claimed or processed by another request.',
     });
   }
-
-  // 5. Update seller subscription
-  seller.subscription = {
-    planId: plan._id as mongoose.Types.ObjectId,
-    planName: plan.name,
-    amount: plan.price,
-    durationInDays: plan.durationInDays,
-    startDate,
-    endDate,
-    status: 'active',
-    razorpayOrderId,
-    razorpayPaymentId,
-    paymentDate: now,
-  };
-  seller.commission = 0;
-  seller.commissionRate = 0;
-  await seller.save();
+  const endDate = activation.endDate as Date;
 
   return res.json({
     success: true,
