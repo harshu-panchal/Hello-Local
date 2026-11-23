@@ -126,7 +126,7 @@ export default function Cart() {
                   {/* Thumbnail */}
                   <div
                     onClick={() => navigate(`/product/${pId}`)}
-                    className="w-18 h-18 sm:w-20 sm:h-20 bg-slate-50 rounded-xl flex items-center justify-center flex-shrink-0 p-1 cursor-pointer overflow-hidden border border-slate-100"
+                    className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-50 rounded-xl flex items-center justify-center flex-shrink-0 p-1 cursor-pointer overflow-hidden border border-slate-100"
                   >
                     <UserImage
                       src={item.product.imageUrl || (item.product as any).mainImage}
