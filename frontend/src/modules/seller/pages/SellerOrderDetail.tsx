@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { getOrderById, updateOrderStatus, OrderDetail } from '../../../services/api/orderService';
+import { getOrderById, updateOrderStatus, markReadyForPickup, OrderDetail } from '../../../services/api/orderService';
 import jsPDF from 'jspdf';
 import { SellerPageHeader } from '../components/common/SellerPageHeader';
 import { SellerCard } from '../components/common/SellerCard';
@@ -18,6 +18,37 @@ export default function SellerOrderDetail() {
   const [error, setError] = useState<string>('');
   const [orderStatus, setOrderStatus] = useState<string>('');
   const [updating, setUpdating] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
+  const [confirmReady, setConfirmReady] = useState(false);
+
+  // Re-read the order so the shipment/readiness state always reflects the server.
+  const refreshShipment = async () => {
+    if (!id) return;
+    try {
+      const response = await getOrderById(id);
+      if (response.success && response.data) {
+        setOrderDetail(response.data);
+        setOrderStatus(response.data.status);
+      }
+    } catch {
+      /* keep the current view; the next action re-validates on the server */
+    }
+  };
+
+  const handleMarkReady = async () => {
+    if (!orderDetail || markingReady) return; // no duplicate requests
+    setMarkingReady(true);
+    try {
+      const response = await markReadyForPickup(orderDetail.id);
+      showToast(response.message || 'Marked ready for pickup', response.success ? 'success' : 'error');
+      setConfirmReady(false);
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || 'Could not mark ready for pickup', 'error');
+    } finally {
+      setMarkingReady(false);
+      void refreshShipment();
+    }
+  };
 
   // Fetch order detail from API
   useEffect(() => {
@@ -59,6 +90,7 @@ export default function SellerOrderDetail() {
         setOrderStatus(newStatus);
         setOrderDetail({ ...orderDetail, status: newStatus as any });
         showToast(`Order #${orderDetail.orderNumber} updated to ${newStatus}`, 'success');
+        void refreshShipment();
       } else {
         showToast(response.message || 'Failed to update order status', 'error');
       }
@@ -360,6 +392,74 @@ export default function SellerOrderDetail() {
         </SellerCard>
 
         {/* Status Transition Control Card */}
+        {orderDetail.shipment && (
+          <SellerCard title="Pickup Readiness">
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Your shipment</span>
+                <span className="font-bold text-slate-800">{orderDetail.shipment.statusLabel}</span>
+              </div>
+              {orderDetail.shipment.readyForPickupAt && (
+                <p className="text-green-700 font-semibold">
+                  Ready for pickup since {new Date(orderDetail.shipment.readyForPickupAt).toLocaleString()}
+                </p>
+              )}
+              {orderDetail.shipment.returnedItemCount > 0 && (
+                <p className="text-slate-500">{orderDetail.shipment.returnedItemCount} item(s) returned</p>
+              )}
+              {orderDetail.shipment.external && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-0.5">
+                  <p className="font-semibold text-slate-800">
+                    {orderDetail.shipment.external.provider}:{" "}
+                    {orderDetail.shipment.external.booked
+                      ? orderDetail.shipment.external.providerStatusLabel || "Booked, awaiting rider"
+                      : orderDetail.shipment.readyForPickupAt ? "Arranging pickup" : "Booked after you confirm ready for pickup"}
+                  </p>
+                  {orderDetail.shipment.external.riderName && <p className="text-slate-600">Rider: {orderDetail.shipment.external.riderName}</p>}
+                  {orderDetail.shipment.external.pickupOtp && (
+                    <p className="text-slate-800">Pickup code: <span className="font-mono font-bold tracking-widest">{orderDetail.shipment.external.pickupOtp}</span>
+                      <span className="text-slate-500"> (give it to the rider when you hand over the parcel)</span></p>
+                  )}
+                  {orderDetail.shipment.external.returnOtp && (
+                    <p className="text-orange-800">Return code: <span className="font-mono font-bold tracking-widest">{orderDetail.shipment.external.returnOtp}</span>
+                      <span> (give it to the rider only when the parcel is back with you)</span></p>
+                  )}
+                  {orderDetail.shipment.external.returnToOrigin && <p className="text-orange-700">Being returned to your store</p>}
+                  {orderDetail.shipment.external.cancellation && <p className="text-amber-700">Pickup cancellation: {orderDetail.shipment.external.cancellation.toLowerCase()}</p>}
+                </div>
+              )}
+              {orderDetail.shipment.canMarkReady ? (
+                confirmReady ? (
+                  <div role="alertdialog" aria-label="Confirm ready for pickup" className="rounded-xl border border-purple-200 bg-purple-50 p-3 space-y-2">
+                    <p className="text-slate-700">Confirm all your items in this order are packed and ready to be collected?</p>
+                    <div className="flex gap-2">
+                      <SellerButton onClick={() => void handleMarkReady()} disabled={markingReady}>
+                        {markingReady ? 'Saving…' : 'Yes, ready for pickup'}
+                      </SellerButton>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmReady(false)}
+                        disabled={markingReady}
+                        className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 min-h-[44px]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <SellerButton onClick={() => setConfirmReady(true)} disabled={markingReady}>
+                    Mark ready for pickup
+                  </SellerButton>
+                )
+              ) : (
+                orderDetail.shipment.status === 'PREPARING' && orderDetail.shipment.persisted && (
+                  <p className="text-slate-500">Set the stage to Processed once your items are prepared, then confirm they are ready for pickup.</p>
+                )
+              )}
+            </div>
+          </SellerCard>
+        )}
+
         <SellerCard title="Fulfillment Status">
           <div className="space-y-3">
             <div className="flex items-center justify-between">

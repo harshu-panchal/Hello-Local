@@ -7,6 +7,7 @@ import {
 } from "../../../services/api/admin/adminOrderService";
 import { useToast } from "../../../context/ToastContext";
 import AssignDeliveryBoyModal from "../components/AssignDeliveryBoyModal";
+import { getInHouseDeliverySettings } from "../../../services/api/admin/adminSettingsService";
 
 export default function AdminOrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +19,14 @@ export default function AdminOrderDetail() {
   const [error, setError] = useState<string>("");
   const [updating, setUpdating] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  // Display only; the backend refuses assignment while in-house delivery is off.
+  const [inHouseEnabled, setInHouseEnabled] = useState(true);
+
+  useEffect(() => {
+    getInHouseDeliverySettings()
+      .then(response => { if (response.success) setInHouseEnabled(response.data.enabled); })
+      .catch(() => { /* keep showing controls; the server still enforces the switch */ });
+  }, []);
 
   // Fetch order detail from API
   const fetchOrderDetail = useCallback(async () => {
@@ -212,6 +221,7 @@ export default function AdminOrderDetail() {
             </svg>
             <span>Print Invoice</span>
           </button>
+          {inHouseEnabled && (
           <button
             type="button"
             onClick={() => setAssignModalOpen(true)}
@@ -225,6 +235,7 @@ export default function AdminOrderDetail() {
             </svg>
             <span>{deliveryBoy ? "Reassign Courier" : "Assign Courier"}</span>
           </button>
+          )}
         </div>
       </div>
 
@@ -364,6 +375,7 @@ export default function AdminOrderDetail() {
               <h2 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
                 Assigned Courier
               </h2>
+              {inHouseEnabled && (
               <button
                 type="button"
                 onClick={() => setAssignModalOpen(true)}
@@ -371,7 +383,15 @@ export default function AdminOrderDetail() {
               >
                 {deliveryBoy ? "Change" : "+ Assign"}
               </button>
+              )}
             </div>
+            {!inHouseEnabled && (
+              <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                In-house delivery is disabled. {deliveryBoy
+                  ? "This already assigned delivery can continue until completion."
+                  : "New in-house assignments are paused, so this order is waiting for a courier."}
+              </div>
+            )}
 
             {deliveryBoy ? (
               <div className="bg-purple-50/60 rounded-xl p-3 border border-purple-100 text-xs space-y-1">

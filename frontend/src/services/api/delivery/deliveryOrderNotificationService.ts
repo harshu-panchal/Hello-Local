@@ -22,6 +22,8 @@ export interface OrderNotificationData {
 export interface AcceptOrderResponse {
     success: boolean;
     message: string;
+    /** e.g. IN_HOUSE_DELIVERY_DISABLED when the admin has paused in-house delivery. */
+    reason?: string;
 }
 
 export interface RejectOrderResponse {

@@ -231,6 +231,13 @@ export async function processReturn(params: {
   const totalReturned = priorReturned + ret.quantity;
 
   if (totalReturned >= orderItem.quantity) {
+    // Durable marker FIRST (orders with shipment records only): if anything
+    // below fails, the background reconciliation still brings the shipment in
+    // line with the item. Legacy orders have nothing to reconcile.
+    const parent = await Order.findById(ret.order);
+    if (parent?.shipmentsCreated) {
+      await Order.updateOne({ _id: ret.order }, { $set: { shipmentSyncPending: true } });
+    }
     await OrderItem.updateOne({ _id: ret.orderItem }, { $set: { status: "Returned" } });
   }
 
@@ -241,6 +248,17 @@ export async function processReturn(params: {
     const allReturned = items.length > 0 && items.every((i) => i.status === "Returned");
     if (allReturned) {
       await Order.updateOne({ _id: order._id }, { $set: { status: "Returned" } });
+    }
+    // Bring shipments in line now, transactionally, and clear the marker. A
+    // failure never blocks the completed return: the marker stays set and the
+    // background worker retries (idempotent, derived from current data).
+    if (order.shipmentsCreated) {
+      try {
+        const { reconcileOrderShipments } = await import("./shipmentService");
+        await reconcileOrderShipments(String(order._id));
+      } catch (error) {
+        console.error("Shipment sync after return failed; queued for retry:", error);
+      }
     }
 
     if (["Paid", "PartiallyRefunded"].includes(order.paymentStatus) && order.paymentMethod !== "COD") {

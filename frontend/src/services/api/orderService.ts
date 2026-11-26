@@ -61,6 +61,24 @@ export interface OrderDetail {
   paymentMethod: string;
   paymentStatus: string;
   deliveryAddress: DeliveryAddress;
+  /** This seller's own shipment (absent for older orders). */
+  shipment?: SellerShipment | null;
+}
+
+export interface SellerShipment {
+  shipmentNumber?: string;
+  status: 'CREATED' | 'PREPARING' | 'READY_FOR_PICKUP' | 'PICKED_UP' | 'DELIVERED' | 'RETURNED' | 'CANCELLED';
+  statusLabel: string;
+  itemCount: number;
+  returnedItemCount: number;
+  readyForPickupAt?: string;
+  waitingForPickup: boolean;
+  /** false for older orders: readiness cannot be recorded for them. */
+  persisted: boolean;
+  /** Server-computed: whether the "ready for pickup" action is currently allowed. */
+  canMarkReady?: boolean;
+  /** Verified delivery-partner facts when this shipment is delivered externally (Adloggs). */
+  external?: { provider: string; booked: boolean; providerStatusLabel?: string; riderName?: string; returnToOrigin?: string; cancellation?: string; cancellationRequest?: string; pickupOtp?: string; returnOtp?: string };
 }
 
 export interface UpdateOrderStatusData {
@@ -320,6 +338,14 @@ export const getOrderById = async (id: string): Promise<ApiResponse<OrderDetail>
  */
 export const updateOrderStatus = async (id: string, data: UpdateOrderStatusData): Promise<ApiResponse<{ id: string; status: string }>> => {
   const response = await api.patch<ApiResponse<{ id: string; status: string }>>(`/orders/${id}/status`, data);
+  return response.data;
+};
+
+/**
+ * Confirm this seller's items are packed and ready for pickup
+ */
+export const markReadyForPickup = async (id: string): Promise<ApiResponse<{ shipment: SellerShipment | null; unchanged: boolean }>> => {
+  const response = await api.post<ApiResponse<{ shipment: SellerShipment | null; unchanged: boolean }>>(`/orders/${id}/ready-for-pickup`);
   return response.data;
 };
 

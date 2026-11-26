@@ -9,6 +9,7 @@ import GoogleMapsTracking from "../../components/GoogleMapsTracking";
 import { useDeliveryTracking } from "../../hooks/useDeliveryTracking";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import DeliveryPartnerCard from "../../components/DeliveryPartnerCard";
+import OrderShipmentsCard from "../../components/OrderShipmentsCard";
 import {
   cancelOrder,
   updateOrderNotes,
@@ -84,6 +85,13 @@ export default function OrderDetail() {
         setOrder(existingOrder);
         setOrderStatus(existingOrder.status);
         setLoading(false);
+        // The cached list entry lacks detail-only data (e.g. per-seller
+        // shipments); refresh from the order-detail API in the background.
+        const fresh = await fetchOrderById(id);
+        if (fresh) {
+          setOrder(fresh);
+          setOrderStatus(fresh.status);
+        }
         return;
       }
 
@@ -631,6 +639,9 @@ export default function OrderDetail() {
                 deliveryOtp={order.deliveryOtp}
               />
             )}
+
+            {/* Per-seller shipment progress (complements in-house live tracking above) */}
+            <OrderShipmentsCard shipments={order.shipments} />
 
             {/* Order Items Card */}
             <div className="bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-4 shadow-2xs">

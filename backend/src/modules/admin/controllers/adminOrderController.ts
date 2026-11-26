@@ -15,6 +15,7 @@ import Delivery from "../../../models/Delivery";
 import Return from "../../../models/Return";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { Server as SocketIOServer } from "socket.io";
+import { syncOrderShipments, getOrderShipments, summarizeShipments } from "../../../services/shipmentService";
 
 /**
  * Get all orders with filters
@@ -127,6 +128,11 @@ export const getOrderById = asyncHandler(
       success: true,
       message: "Order fetched successfully",
       data: order,
+      // Additive: every seller shipment of the order plus a read-only roll-up.
+      ...(await (async () => {
+        const shipments = await getOrderShipments(order, { audience: "admin" });
+        return { shipments, shipmentSummary: summarizeShipments(shipments) };
+      })()),
     });
   }
 );
@@ -183,6 +189,7 @@ export const updateOrderStatus = asyncHandler(
           }
         }
         await current!.save({ session });
+        await syncOrderShipments(current, session, "admin");
         return current;
       });
     }

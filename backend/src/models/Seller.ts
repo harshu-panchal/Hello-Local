@@ -43,6 +43,15 @@ export interface ISeller extends Document {
   };
   // Service radius in kilometers
   serviceRadiusKm?: number;
+  /**
+   * Pickup details an external delivery provider (Adloggs) requires and the
+   * seller profile did not record before Phase 6. Optional, no defaults:
+   * booking is blocked until an admin sets them from verified information.
+   */
+  pickupPincode?: string;
+  pickupState?: string;
+  /** Adloggs order category for this seller's goods, set explicitly by an admin. */
+  adloggsOrderCategory?: "Food and Beverage" | "Grocery";
 
   // Payment Details
   accountName?: string;
@@ -224,6 +233,21 @@ const SellerSchema = new Schema<ISeller>(
       default: 10,
       min: [0.1, 'Service radius must be at least 0.1 km'],
       max: [20000, 'Service radius cannot exceed 20000 km'],
+    },
+    // External-provider pickup details (Phase 6). No defaults on purpose.
+    pickupPincode: {
+      type: String,
+      trim: true,
+      match: [/^[1-9][0-9]{5}$/, 'Pickup pincode must be a 6-digit Indian pincode'],
+    },
+    pickupState: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
+    adloggsOrderCategory: {
+      type: String,
+      enum: ['Food and Beverage', 'Grocery'],
     },
 
     // Payment Details

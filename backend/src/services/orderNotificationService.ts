@@ -7,6 +7,8 @@ import DeliveryTracking from '../models/DeliveryTracking';
 import AppSettings from '../models/AppSettings';
 import mongoose from 'mongoose';
 import { sendNotificationToUser } from './firebaseAdmin';
+import { canStartNewInHouseDelivery, isInHouseDeliveryError } from './inHouseDeliveryService';
+import { orderDeliveryProvider } from './deliveryProviderService';
 
 /**
  * Calculate estimated delivery boy earning for a new order
@@ -360,19 +362,52 @@ export async function findDeliveryBoysNearSellerLocations(
  * Emit new order notification to delivery boys near seller locations
  * Prioritizes delivery boys within the seller's service radius
  */
+/** What a dispatch attempt did; used by waiting-order recovery for reporting. */
+export type CourierOfferOutcome =
+    | 'offered'
+    | 'ineligible'      // gone, already assigned, not in an offer status, or unpaid
+    | 'alreadyOffered'  // an open offer exists for this order (recovery only)
+    | 'disabled'        // in-house delivery switched off or its state unreadable
+    | 'noCouriers'
+    | 'allBusy'
+    | 'error';
+
 export async function notifyDeliveryBoysOfNewOrder(
     io: SocketIOServer,
-    order: any
-): Promise<void> {
+    order: any,
+    options: { skipIfOfferOpen?: boolean } = {}
+): Promise<CourierOfferOutcome> {
     try {
         const current = await Order.findById(order._id);
-        if (!current || current.deliveryBoy || !courierOfferStatuses.includes(current.status) || !payableForDelivery(current)) return;
+        if (!current || current.deliveryBoy || !courierOfferStatuses.includes(current.status) || !payableForDelivery(current)) return 'ineligible';
+        // In-house couriers are only offered orders committed to the in-house fleet.
+        if (orderDeliveryProvider(current) !== 'IN_HOUSE') return 'ineligible';
+        if (options.skipIfOfferOpen) {
+            const open = notificationStates.get(String(current._id));
+            if (open && !open.acceptedBy) return 'alreadyOffered';
+        }
+        // No courier offers while in-house delivery is switched off (or its
+        // state cannot be read). The order keeps its status and is flagged to
+        // admins, who can see it waiting for a courier.
+        const availability = await canStartNewInHouseDelivery();
+        if (!availability.allowed) {
+            io.to('admin-notifications').emit('delivery-unavailable', {
+                orderId: String(current._id),
+                orderNumber: current.orderNumber,
+                reason: availability.reason,
+                message: availability.reason === 'IN_HOUSE_DELIVERY_DISABLED'
+                    ? 'In-house delivery is disabled. This order is waiting for a courier and was not offered to delivery partners.'
+                    : 'In-house delivery availability could not be verified. This order was not offered to delivery partners.',
+            });
+            console.log(`⛔ Courier offer for order ${current.orderNumber} skipped: ${availability.reason}`);
+            return 'disabled';
+        }
         // Find delivery boys near seller locations (within service radius)
         let nearbyDeliveryBoyIds = await findDeliveryBoysNearSellerLocations(order);
 
         if (nearbyDeliveryBoyIds.length === 0) {
             console.log('No available delivery boys to notify (including fallback)');
-            return;
+            return 'noCouriers';
         }
 
         // --- FILTER BUSY DELIVERY BOYS ---
@@ -396,10 +431,16 @@ export async function notifyDeliveryBoysOfNewOrder(
             if (nearbyDeliveryBoyIds.length === 0) {
                 console.log('⚠️ All nearby delivery boys are currently busy with other orders.');
                 // Optionally: could emit to admin or retry later
-                return;
+                return 'allBusy';
             }
         }
         // ---------------------------------
+
+        // Re-check before publishing anything (DB notifications, pushes, socket
+        // offers): the courier search above takes time and the admin may have
+        // switched in-house delivery off meanwhile. Acceptance is refused
+        // regardless; this keeps couriers from seeing a dead offer.
+        if (!(await canStartNewInHouseDelivery()).allowed) return 'disabled';
 
         // Calculate estimated delivery boy earning for this order
         const deliveryBoyEarning = await calculateEstimatedDeliveryBoyEarning(order);
@@ -498,8 +539,10 @@ export async function notifyDeliveryBoysOfNewOrder(
 
         io.to('delivery-notifications').emit('new-order', orderData);
         console.log(`📢 Broadcasted new order ${order.orderNumber} to delivery-notifications room (${notifiedIds.size} delivery boy(s) tracked for consensus)`);
+        return 'offered';
     } catch (error) {
         console.error('Error notifying delivery boys:', error);
+        return 'error';
     }
 }
 
@@ -510,7 +553,7 @@ export async function handleOrderAcceptance(
     io: SocketIOServer,
     orderId: string,
     deliveryBoyId: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; reason?: string }> {
     try {
         const state = notificationStates.get(orderId);
         const normalizedDeliveryBoyId = String(deliveryBoyId).trim();
@@ -610,6 +653,11 @@ export async function handleOrderAcceptance(
         return { success: true, message: 'Order accepted successfully' };
     } catch (error) {
         console.error('Error handling order acceptance:', error);
+        if (isInHouseDeliveryError(error)) {
+            // The offer is void: forget it so it is not replayed.
+            notificationStates.delete(orderId);
+            return { success: false, message: error.message, reason: error.reason };
+        }
         return { success: false, message: 'Error accepting order' };
     }
 }
@@ -675,6 +723,22 @@ export async function handleOrderRejection(
         console.error('Error handling order rejection:', error);
         return { success: false, message: 'Error rejecting order', allRejected: false };
     }
+}
+
+/**
+ * Void every outstanding courier offer (used when in-house delivery is
+ * switched off). Couriers are told to drop the offer cards; any late accept
+ * is still refused by the assignment guard.
+ */
+export function withdrawPendingCourierOffers(io: SocketIOServer | undefined): string[] {
+    const orderIds = Array.from(notificationStates.entries())
+        .filter(([, state]) => !state.acceptedBy)
+        .map(([orderId]) => orderId);
+    for (const orderId of orderIds) {
+        notificationStates.delete(orderId);
+        io?.to('delivery-notifications').emit('order-offer-withdrawn', { orderId, reason: 'IN_HOUSE_DELIVERY_DISABLED' });
+    }
+    return orderIds;
 }
 
 /**

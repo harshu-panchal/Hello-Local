@@ -157,3 +157,7 @@ export const deleteSellerAccount = async (): Promise<any> => {
   const response = await api.delete('/auth/seller/account');
   return response.data;
 };
+
+/** Pickup details for the external delivery partner (pincode, state, goods category). */
+export const updateSellerPickupProfile = async (body: { pickupPincode: string; pickupState: string; adloggsOrderCategory: string }) =>
+  (await api.put<{ success: boolean; message: string }>('/auth/seller/delivery-pickup-profile', body)).data;

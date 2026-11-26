@@ -3,6 +3,37 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import AppSettings from "../../../models/AppSettings";
 import PaymentMethod from "../../../models/PaymentMethod";
 import Seller from "../../../models/Seller";
+import {
+  getInHouseDeliveryStatus,
+  setInHouseDeliveryEnabled,
+  isInHouseDeliveryError,
+  IN_HOUSE_DELIVERY_DISABLED,
+  IN_HOUSE_DELIVERY_DISABLED_MESSAGE,
+  IN_HOUSE_DELIVERY_STATE_EVENT,
+} from "../../../services/inHouseDeliveryService";
+import { withdrawPendingCourierOffers } from "../../../services/orderNotificationService";
+import {
+  getDeliveryProviderState,
+  setActiveDeliveryProvider,
+  isDeliveryProviderError,
+} from "../../../services/deliveryProviderService";
+import {
+  runInHouseDeliveryRecovery,
+  requestInHouseDeliveryRecovery,
+  type RecoveryResult,
+} from "../../../services/inHouseDeliveryRecoveryService";
+
+function recoverySummary(recovery: RecoveryResult | undefined): string {
+  if (!recovery) return "";
+  if (recovery.status === "skipped") return " Waiting-order recovery is already running or queued.";
+  if (recovery.status === "aborted") return " Waiting-order recovery stopped because in-house delivery was switched off.";
+  if (recovery.status === "failed") return " Waiting-order recovery failed and will be retried automatically.";
+  const parts = [`${recovery.offered} waiting order${recovery.offered === 1 ? "" : "s"} re-offered to delivery partners`];
+  if (recovery.noCouriers) parts.push(`${recovery.noCouriers} had no available courier`);
+  if (recovery.failed) parts.push(`${recovery.failed} failed`);
+  if (recovery.stale) parts.push(`${recovery.stale} older than 4h need manual action`);
+  return ` ${parts.join("; ")}.`;
+}
 
 /**
  * Get app settings
@@ -28,6 +59,139 @@ export const getAppSettings = asyncHandler(
   }
 );
 
+// Keys owned by dedicated, validated endpoints; never writable via PUT /admin/settings.
+const PROTECTED_SETTING_ROOTS = ["inHouseDelivery", "deliveryProvider", "adloggsDiagnostics"];
+const isInHouseDeliveryKey = (key: string) => PROTECTED_SETTING_ROOTS.some(root => key === root || key.startsWith(`${root}.`));
+
+/** Remove protected delivery settings (in-house switch, provider selection) from a generic update, including operator forms like `$set`. */
+export function stripInHouseDeliveryKeys(update: any): void {
+  if (!update || typeof update !== "object") return;
+  for (const key of Object.keys(update)) {
+    if (isInHouseDeliveryKey(key)) delete update[key];
+    else if (key.startsWith("$") && update[key] && typeof update[key] === "object") {
+      for (const inner of Object.keys(update[key])) if (isInHouseDeliveryKey(inner)) delete update[key][inner];
+    }
+  }
+}
+
+/**
+ * GET /admin/settings/in-house-delivery
+ */
+export const getInHouseDeliverySettings = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getInHouseDeliveryStatus();
+  return res.status(200).json({ success: true, message: "In-house delivery settings fetched successfully", data });
+});
+
+/**
+ * PUT /admin/settings/in-house-delivery   body: { enabled: boolean }
+ *
+ * Switching off stops NEW in-house assignments only (drain mode): deliveries
+ * that already have a courier carry on to completion.
+ */
+export const updateInHouseDeliverySettings = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body;
+  const keys = body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body) : null;
+  if (!keys || keys.length !== 1 || keys[0] !== "enabled" || typeof body.enabled !== "boolean") {
+    return res.status(400).json({ success: false, message: "Request body must be exactly { \"enabled\": true | false }." });
+  }
+  try {
+    const result = await setInHouseDeliveryEnabled(body.enabled, req.user?.userId);
+    const io = req.app.get("io");
+    let recovery: RecoveryResult | undefined;
+    if (result.changed && io) {
+      if (!result.enabled) withdrawPendingCourierOffers(io);
+      const payload = {
+        inHouseDeliveryEnabled: result.enabled,
+        reason: result.enabled ? undefined : IN_HOUSE_DELIVERY_DISABLED,
+        message: result.enabled ? undefined : IN_HOUSE_DELIVERY_DISABLED_MESSAGE,
+      };
+      io.to("delivery-notifications").emit(IN_HOUSE_DELIVERY_STATE_EVENT, payload);
+      io.to("admin-notifications").emit(IN_HOUSE_DELIVERY_STATE_EVENT, payload);
+    }
+    // Re-offer orders that became ready while delivery was OFF. Only the request
+    // that actually turned it ON runs this; repeats are no-ops (changed=false).
+    if (result.changed && result.enabled) {
+      try {
+        recovery = await runInHouseDeliveryRecovery(io, { trigger: "admin-enable" });
+      } catch (error) {
+        console.error("Waiting-order recovery could not start; the worker will retry:", error);
+      }
+    }
+    const data = await getInHouseDeliveryStatus();
+    return res.status(200).json({
+      success: true,
+      message: !result.changed
+        ? `In-house delivery is already ${result.enabled ? "enabled" : "disabled"}.`
+        : result.enabled
+          ? `In-house delivery enabled. New assignments can be made again.${recoverySummary(recovery)}`
+          : "In-house delivery disabled. New assignments have stopped; already assigned deliveries can continue until completion.",
+      data: { ...data, changed: result.changed, recovery },
+    });
+  } catch (error) {
+    if (isInHouseDeliveryError(error)) {
+      return res.status(error.statusCode).json({ success: false, message: error.message, reason: error.reason });
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /admin/settings/in-house-delivery/recover
+ * Re-run the waiting-order recovery (e.g. after failures). Refused while OFF.
+ */
+export const retryInHouseDeliveryRecovery = asyncHandler(async (req: Request, res: Response) => {
+  const requested = await requestInHouseDeliveryRecovery();
+  if (!requested) {
+    return res.status(409).json({ success: false, message: IN_HOUSE_DELIVERY_DISABLED_MESSAGE, reason: IN_HOUSE_DELIVERY_DISABLED });
+  }
+  const recovery = await runInHouseDeliveryRecovery(req.app.get("io"), { trigger: "admin-retry" });
+  const data = await getInHouseDeliveryStatus();
+  return res.status(200).json({
+    success: true,
+    message: `Waiting-order recovery ${recovery.status}.${recoverySummary(recovery)}`,
+    data: { ...data, recovery },
+  });
+});
+
+/**
+ * GET /admin/settings/delivery-provider
+ * Active global provider plus each provider's readiness.
+ */
+export const getDeliveryProviderSettings = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getDeliveryProviderState();
+  return res.status(200).json({ success: true, message: "Delivery provider settings fetched successfully", data });
+});
+
+/**
+ * PUT /admin/settings/delivery-provider   body: { provider: "IN_HOUSE" | "ADDLOGS" }
+ * Only an operational provider can be selected. Existing orders keep the
+ * provider they were placed with.
+ */
+export const updateDeliveryProviderSettings = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body;
+  const keys = body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body) : null;
+  if (!keys || keys.length !== 1 || keys[0] !== "provider" || typeof body.provider !== "string") {
+    return res.status(400).json({ success: false, message: "Request body must be exactly { \"provider\": \"IN_HOUSE\" | \"ADDLOGS\" }." });
+  }
+  try {
+    const { state, changed } = await setActiveDeliveryProvider(body.provider, req.user?.userId);
+    if (changed) req.app.get("io")?.to("admin-notifications").emit("delivery-provider-state", state);
+    const active = state.providers.find(provider => provider.id === state.activeProvider);
+    return res.status(200).json({
+      success: true,
+      message: changed
+        ? `${active?.label} is now the active delivery provider for new orders. Existing orders keep their current provider.`
+        : `${active?.label} is already the active delivery provider.`,
+      data: { ...state, changed },
+    });
+  } catch (error) {
+    if (isDeliveryProviderError(error)) {
+      return res.status(error.statusCode).json({ success: false, message: error.message, reason: error.reason });
+    }
+    throw error;
+  }
+});
+
 /**
  * Update app settings
  */
@@ -35,6 +199,10 @@ export const updateAppSettings = asyncHandler(
   async (req: Request, res: Response) => {
     const updateData = req.body;
     updateData.updatedBy = req.user?.userId;
+    // The in-house delivery switch is audited and changed only through
+    // PUT /admin/settings/in-house-delivery. Settings screens send the whole
+    // document back, so a stale copy here must not flip the fleet on or off.
+    stripInHouseDeliveryKeys(updateData);
 
     console.log(`[DEBUG Settings] Incoming update payload:`, JSON.stringify(updateData.deliveryConfig, null, 2));
 

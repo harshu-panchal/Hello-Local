@@ -208,17 +208,23 @@ export default function CheckoutAddress() {
 
       const formattedType = (addressType.charAt(0).toUpperCase() + addressType.slice(1)) as 'Home' | 'Work' | 'Hotel' | 'Other';
 
+      const trimmedFlat = address.flat.trim();
+      const trimmedStreet = address.street.trim();
+
       const payload: Partial<Address> & { flat?: string; street?: string } = {
-        fullName: address.name,
-        phone: address.phone,
-        city: address.city,
-        state: address.state,
-        pincode: address.pincode,
-        landmark: address.landmark || undefined,
+        fullName: address.name.trim(),
+        phone: address.phone.trim(),
+        flat: trimmedFlat,
+        street: trimmedStreet,
+        city: address.city.trim(),
+        state: address.state?.trim(),
+        pincode: address.pincode.trim(),
+        landmark: address.landmark?.trim() || undefined,
         type: formattedType,
-        address: `${address.flat}, ${address.street}`,
+        address: `${trimmedFlat}, ${trimmedStreet}`,
         latitude: finalLat,
         longitude: finalLng,
+        ...(savedAddresses.length === 0 && !editAddress ? { isDefault: true } : {}),
       };
 
       if (editAddress && (editAddress.id || editAddress._id)) {
@@ -232,19 +238,23 @@ export default function CheckoutAddress() {
         await updateGlobalLocation({
           latitude: finalLat,
           longitude: finalLng,
-          address: `${address.flat}, ${address.street}, ${address.city}, ${address.state}`,
-          city: address.city,
-          state: address.state,
-          pincode: address.pincode
+          address: `${trimmedFlat}, ${trimmedStreet}, ${address.city.trim()}, ${(address.state || '').trim()}`,
+          city: address.city.trim(),
+          state: address.state?.trim(),
+          pincode: address.pincode.trim()
         });
       }
+
+      showToast('Address saved successfully!', 'success');
 
       setTimeout(() => {
         setIsSaving(false);
         navigate('/checkout', { replace: true });
       }, 400);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving address:', error);
+      const errMsg = error?.response?.data?.message || error?.message || 'Failed to save address. Please try again.';
+      showToast(errMsg, 'error');
       setIsSaving(false);
     }
   };

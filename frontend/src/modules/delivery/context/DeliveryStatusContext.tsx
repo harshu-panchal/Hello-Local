@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
-import { updateStatus, getDeliveryProfile, updateGeneralLocation, getSellersInRadius } from '../../../services/api/delivery/deliveryService';
+import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
+import { updateStatus, getDeliveryProfile, updateGeneralLocation, getSellersInRadius, getServiceStatus } from '../../../services/api/delivery/deliveryService';
+
+const SERVICE_STATUS_POLL_MS = 60000;
 
 export interface SellerInRange {
   _id: string;
@@ -23,6 +25,14 @@ interface DeliveryStatusContextType {
   locationError: string | null;
   isLoadingSellers: boolean;
   refreshSellersInRange: () => Promise<void>;
+  /** Admin switch from the backend: false = no NEW in-house assignments (drain mode). */
+  inHouseDeliveryEnabled: boolean;
+  /** This courier's deliveries still in progress; they can always be finished. */
+  activeDeliveries: number;
+  serviceMessage?: string;
+  refreshServiceStatus: () => Promise<void>;
+  /** Apply a pushed state change immediately, then re-sync with the backend. */
+  applyServiceState: (enabled: boolean) => void;
 }
 
 const DeliveryStatusContext = createContext<DeliveryStatusContextType | undefined>(undefined);
@@ -36,6 +46,39 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
   const [locationError, setLocationError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
+  // The backend is authoritative; this mirrors it for display only.
+  const [inHouseDeliveryEnabled, setInHouseDeliveryEnabled] = useState(true);
+  const [activeDeliveries, setActiveDeliveries] = useState(0);
+  const [serviceMessage, setServiceMessage] = useState<string | undefined>(undefined);
+
+  const refreshServiceStatus = useCallback(async () => {
+    try {
+      const status = await getServiceStatus();
+      setInHouseDeliveryEnabled(status.inHouseDeliveryEnabled !== false);
+      setActiveDeliveries(status.activeDeliveries || 0);
+      setServiceMessage(status.message);
+    } catch (error) {
+      // Keep the last known state; the server still refuses disabled actions.
+      console.error("Failed to fetch in-house delivery status", error);
+    }
+  }, []);
+
+  const applyServiceState = useCallback((enabled: boolean) => {
+    setInHouseDeliveryEnabled(enabled);
+    void refreshServiceStatus();
+  }, [refreshServiceStatus]);
+
+  // Load on mount, poll, and re-sync whenever the app returns to the foreground.
+  useEffect(() => {
+    void refreshServiceStatus();
+    const timer = setInterval(() => { void refreshServiceStatus(); }, SERVICE_STATUS_POLL_MS);
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshServiceStatus(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshServiceStatus]);
 
   // Fetch initial status
   useEffect(() => {
@@ -197,6 +240,11 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
       locationError,
       isLoadingSellers,
       refreshSellersInRange,
+      inHouseDeliveryEnabled,
+      activeDeliveries,
+      serviceMessage,
+      refreshServiceStatus,
+      applyServiceState,
     }}>
       {children}
     </DeliveryStatusContext.Provider>

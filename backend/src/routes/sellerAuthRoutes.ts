@@ -25,6 +25,14 @@ router.get("/check-existence", loginRateLimiter, sellerAuthController.checkExist
 // Profile routes (protected)
 router.get("/profile", authenticate, requireUserType('Seller'), sellerAuthController.getProfile);
 router.put("/profile", authenticate, requireUserType('Seller'), sellerAuthController.updateProfile);
+// Pickup details used by the external delivery partner (Adloggs); same validation as the admin endpoint.
+router.put("/delivery-pickup-profile", authenticate, requireUserType('Seller'), async (req, res, next) => {
+  try {
+    const { updateSellerAdloggsProfile } = await import("../services/adloggs/adloggsAdminService");
+    const result = await updateSellerAdloggsProfile(String(req.user!.userId), req.body);
+    return res.status(result.ok ? 200 : result.status ?? 400).json({ success: result.ok, message: result.message });
+  } catch (error) { return next(error); }
+});
 router.put("/toggle-shop-status", authenticate, requireUserType('Seller'), sellerAuthController.toggleShopStatus);
 router.delete("/account", authenticate, requireUserType('Seller'), sellerAuthController.deleteAccount);
 

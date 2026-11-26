@@ -241,6 +241,8 @@ export interface BulkUploadResult {
   successCount: number;
   failedCount: number;
   errors: BulkUploadErrorItem[];
+  /** Imported products that still have no shipping weight (informational). */
+  missingShippingWeightCount?: number;
 }
 
 /**
@@ -320,6 +322,8 @@ export const quickAddMasterProductToStore = async (data: {
   customPrice?: number;
   customStock?: number;
   customMrp?: number;
+  /** Shipping weight per unit (kg); validated server-side (0.001-1000). */
+  shippingWeightKg?: number;
 }): Promise<ApiResponse<Product>> => {
   const response = await api.post<ApiResponse<Product>>(
     "/products/master-catalogue/add-to-store",

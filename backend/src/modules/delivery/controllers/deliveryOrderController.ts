@@ -10,6 +10,7 @@ import {
   verifyDeliveryOtp,
 } from "../../../services/deliveryOtpService";
 import { runOrderEffects } from "../../../services/orderEffectService";
+import { getOrderShipments } from "../../../services/shipmentService";
 import { changeCourierStage, confirmOrderPickup, sellerStage } from "../../../services/orderLifecycleService";
 import {
   ACTIVE_COURIER_STATUSES,
@@ -243,6 +244,8 @@ export const getOrderDetails = asyncHandler(
       createdAt: order.createdAt,
       distance: null,
       deliveryEarning: commission ? commission.commissionAmount : 0,
+      // Assigned courier only (query above is scoped to deliveryBoy): seller + status per pickup.
+      shipments: (await getOrderShipments(order, { audience: "courier" })).map(({ seller, status, shipmentNumber }) => ({ seller, status, shipmentNumber })),
       sellerPickups: order.sellerPickups || [],
       settlementStatus: order.settlementStatus,
       paymentMethod: order.paymentMethod,

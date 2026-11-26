@@ -9,6 +9,7 @@ import Inventory from "../../../models/Inventory";
 import Seller from "../../../models/Seller";
 import HeaderCategory from "../../../models/HeaderCategory";
 import { cache } from "../../../utils/cache";
+import { normalizeShippingWeight, SHIPPING_WEIGHT_MESSAGE } from "../../../utils/shippingWeight";
 
 // ==================== Category Controllers ====================
 
@@ -1213,6 +1214,12 @@ export const createProduct = asyncHandler(
         return res.status(400).json({ success: false, message: "Select the seller/store responsible for this product and pickup location" });
       }
 
+      if (productData.shippingWeightKg !== undefined) {
+        const weight = normalizeShippingWeight(productData.shippingWeightKg);
+        if (weight === "INVALID") return res.status(400).json({ success: false, message: SHIPPING_WEIGHT_MESSAGE });
+        if (weight === null) delete productData.shippingWeightKg; else productData.shippingWeightKg = weight;
+      }
+
       // Map variations: Ensure 'title' from frontend is mapped to 'value' expected by Schema
       if (productData.variations && Array.isArray(productData.variations)) {
         productData.variations = productData.variations.map((v: any) => ({
@@ -1471,6 +1478,12 @@ export const updateProduct = asyncHandler(
     if (updateData.tax === "") updateData.tax = null;
     if (updateData.shopId === "") updateData.shopId = null;
 
+    if (updateData.shippingWeightKg !== undefined) {
+      const weight = normalizeShippingWeight(updateData.shippingWeightKg);
+      if (weight === "INVALID") return res.status(400).json({ success: false, message: SHIPPING_WEIGHT_MESSAGE });
+      updateData.shippingWeightKg = weight; // null clears it
+    }
+
     // Handle variations & pricing if provided
     if (updateData.variations && Array.isArray(updateData.variations)) {
       updateData.variations = updateData.variations.map((v: any) => ({
@@ -1663,6 +1676,16 @@ export const bulkImportProducts = asyncHandler(
             error: "Seller not found",
           });
           continue;
+        }
+
+        if (productData.shippingWeightKg !== undefined) {
+          const weight = normalizeShippingWeight(productData.shippingWeightKg);
+          if (weight === "INVALID") {
+            results.failed++;
+            results.errors.push({ index: i, error: SHIPPING_WEIGHT_MESSAGE });
+            continue;
+          }
+          if (weight === null) delete productData.shippingWeightKg; else productData.shippingWeightKg = weight;
         }
 
         // All products are published automatically without approval

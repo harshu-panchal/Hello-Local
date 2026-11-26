@@ -11,6 +11,7 @@ import { SellerCard } from '../components/common/SellerCard';
 import { SellerButton } from '../components/common/SellerButton';
 import { SellerFormField } from '../components/common/SellerFormField';
 import { SellerStatusBadge } from '../components/common/SellerStatusBadge';
+import SellerPickupDetailsCard from '../components/SellerPickupDetailsCard';
 
 export default function SellerAccountSettings() {
   const { user, updateUser, logout } = useAuth();
@@ -603,6 +604,7 @@ export default function SellerAccountSettings() {
           )}
         </form>
       )}
+      {!loading && activeTab === 'location' && <SellerPickupDetailsCard />}
       {/* Danger Zone: Store Deletion */}
       <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 sm:p-6 space-y-3 mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

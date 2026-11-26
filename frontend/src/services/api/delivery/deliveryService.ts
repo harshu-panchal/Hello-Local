@@ -281,6 +281,24 @@ export const updateProfile = async (data: any) => {
   }
 };
 
+export interface DeliveryServiceStatus {
+  /** Admin switch: whether in-house delivery accepts NEW assignments. */
+  inHouseDeliveryEnabled: boolean;
+  /** This courier's deliveries still in progress (always completable). */
+  activeDeliveries: number;
+  message?: string;
+}
+
+/** Authoritative in-house delivery state from the backend. */
+export const getServiceStatus = async (): Promise<DeliveryServiceStatus> => {
+  try {
+    const response = await api.get(`${BASE_URL}/service-status`);
+    return response.data.data;
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};
+
 export const updateStatus = async (isOnline: boolean) => {
   try {
     const response = await api.put(`${BASE_URL}/status`, { isOnline });

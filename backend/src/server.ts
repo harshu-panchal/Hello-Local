@@ -142,6 +142,69 @@ async function startServer() {
   const financeInterval = setInterval(retryFinancialTasks, 60000);
   financeInterval.unref();
   void retryFinancialTasks();
+
+  // Finishes a waiting-order recovery requested when in-house delivery was
+  // switched back ON but not completed (crash or DB error during the admin
+  // request). A no-op unless a recovery is pending; the settings-document
+  // lease prevents overlapping runs.
+  let deliveryRecoveryRunning = false;
+  const resumeDeliveryRecovery = async () => {
+    if (deliveryRecoveryRunning) return;
+    deliveryRecoveryRunning = true;
+    try {
+      const { runInHouseDeliveryRecovery } = await import("./services/inHouseDeliveryRecoveryService");
+      await runInHouseDeliveryRecovery(io, { trigger: "worker" });
+    } catch (error) { console.error("In-house delivery recovery worker:", error); }
+    // Retry shipment syncs left pending by flows outside an order transaction (returns).
+    try {
+      const { reconcilePendingShipmentSyncs } = await import("./services/shipmentService");
+      await reconcilePendingShipmentSyncs();
+    } catch (error) { console.error("Shipment reconciliation worker:", error); }
+    finally { deliveryRecoveryRunning = false; }
+  };
+  const deliveryRecoveryInterval = setInterval(resumeDeliveryRecovery, 60000);
+  deliveryRecoveryInterval.unref();
+
+  // Adloggs workers (Phase 6). Each is registered ONLY when its capability is
+  // explicitly enabled (development host only in this phase). Bounded batches,
+  // atomic claims and leases; an ambiguous booking is never retried.
+  const { adloggsCapabilities } = await import("./services/adloggs/adloggsConfig");
+  const adloggs = adloggsCapabilities();
+  const scheduleAdloggs = (name: string, enabled: boolean, everyMs: number, run: () => Promise<unknown>) => {
+    if (!enabled) return;
+    let running = false;
+    const timer = setInterval(async () => {
+      if (running) return;
+      running = true;
+      try { await run(); } catch (error: any) { console.error(`Adloggs ${name} worker:`, error?.message); }
+      finally { running = false; }
+    }, everyMs);
+    timer.unref();
+    console.log(`Adloggs ${name} worker enabled (${adloggs.environment}).`);
+  };
+  const { ADLOGGS_PICKUP_SEMANTICS_CONFIRMED } = await import("./services/adloggs/adloggsConfig");
+  scheduleAdloggs("booking", adloggs.bookingReady && ADLOGGS_PICKUP_SEMANTICS_CONFIRMED, 30_000, async () => {
+    const { runAdloggsBookingBatch } = await import("./services/adloggs/adloggsBookingService");
+    await runAdloggsBookingBatch(5);
+  });
+  scheduleAdloggs("status", adloggs.statusReconciliationReady, 30_000, async () => {
+    const { pollAdloggsStatuses } = await import("./services/adloggs/adloggsTrackingService");
+    await pollAdloggsStatuses({ limit: 10 });
+  });
+  scheduleAdloggs("cancellation", adloggs.cancellationReady, 30_000, async () => {
+    const { runAdloggsCancellationOnce } = await import("./services/adloggs/adloggsCancellationService");
+    for (let i = 0; i < 5; i++) if (["IDLE", "DISABLED"].includes((await runAdloggsCancellationOnce()).outcome)) break;
+  });
+  // Database-only (no provider calls): completes deferred cancellations whose
+  // provider side is already verified, or blocks them for admin escalation.
+  scheduleAdloggs("deferred-cancellation", true, 60_000, async () => {
+    const { runDeferredCancellationSweep, runExternalOutcomeSweep, runRtoEscalationSweep } = await import("./services/adloggs/adloggsCancellationWorkflow");
+    const { releaseHeldExternalSettlements } = await import("./services/adloggs/adloggsOrderOutcomeService");
+    await runDeferredCancellationSweep(20);
+    await runExternalOutcomeSweep(20);
+    await runRtoEscalationSweep();
+    await releaseHeldExternalSettlements(); // no-op while ADLOGGS_EXTERNAL_SETTLEMENT_ALLOWED = false
+  });
   await ensureDefaultAdmin();
   await seedHeaderCategories();
   await seedStandardTaxes();

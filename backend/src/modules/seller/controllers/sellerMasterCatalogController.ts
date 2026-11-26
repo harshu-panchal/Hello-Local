@@ -15,6 +15,7 @@ import {
   MASTER_CATALOG_CATEGORIES,
 } from "../../../data/masterCatalogData";
 import { generateAutoSku } from "./sellerBulkProductController";
+import { normalizeShippingWeight, SHIPPING_WEIGHT_MESSAGE } from "../../../utils/shippingWeight";
 
 /**
  * Ensure seller is approved and has active subscription
@@ -127,6 +128,7 @@ export const exportMasterCatalogueCsv = asyncHandler(async (req: Request, res: R
     "Selling Price",
     "Stock",
     "Unit / Variation",
+    "Shipping Weight (kg)",
     "SKU (Optional)",
     "Food Type",
     "Image URL",
@@ -142,6 +144,7 @@ export const exportMasterCatalogueCsv = asyncHandler(async (req: Request, res: R
     p.suggestedPrice,
     p.defaultStock,
     p.unit,
+    "", // Shipping weight per unit (kg): filled in by the seller
     "", // Leave blank for auto SKU generation
     p.foodType,
     p.imageUrl,
@@ -177,6 +180,11 @@ export const quickAddMasterProductToStore = asyncHandler(async (req: Request, re
   const { masterProductId, customPrice, customStock, customMrp } = req.body;
   if (!masterProductId) {
     return res.status(400).json({ success: false, message: "Master Product ID is required" });
+  }
+  // Optional for API compatibility; the seller UI asks for it. Validated when given.
+  const shippingWeightKg = req.body.shippingWeightKg === undefined ? null : normalizeShippingWeight(req.body.shippingWeightKg);
+  if (shippingWeightKg === "INVALID") {
+    return res.status(400).json({ success: false, message: SHIPPING_WEIGHT_MESSAGE });
   }
 
   const master = MASTER_CATALOG_PRODUCTS.find((p) => p.id === masterProductId);
@@ -287,6 +295,8 @@ export const quickAddMasterProductToStore = asyncHandler(async (req: Request, re
   if (existingProduct) {
     // Increment stock only: do NOT overwrite custom prices, discounts or unpublish status (#306)
     existingProduct.stock = (existingProduct.stock || 0) + finalStock;
+    // Fill a missing weight only; never overwrite one the seller already set.
+    if (shippingWeightKg !== null && (existingProduct as any).shippingWeightKg == null) (existingProduct as any).shippingWeightKg = shippingWeightKg;
 
     if (existingProduct.variations && existingProduct.variations.length > 0) {
       existingProduct.variations[0].stock =
@@ -333,6 +343,7 @@ export const quickAddMasterProductToStore = asyncHandler(async (req: Request, re
     barcode: master.barcode,
     foodType: master.foodType,
     variationType: "Unit",
+    ...(shippingWeightKg !== null ? { shippingWeightKg } : {}),
     variations: [
       {
         _id: variationId,

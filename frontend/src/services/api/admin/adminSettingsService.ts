@@ -143,6 +143,107 @@ export const updateAppSettings = async (
   return response.data;
 };
 
+export interface InHouseDeliverySettings {
+  enabled: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  /** Orders with an in-house courier still in progress (they keep running). */
+  activeAssignments: number;
+  /** Orders ready for a courier that have none yet. */
+  awaitingCourier: number;
+  /** A waiting-order recovery was requested (switch turned ON) and has not completed. */
+  recoveryPending?: boolean;
+  /** Outcome of the most recent waiting-order recovery. */
+  lastRecovery?: InHouseDeliveryRecoveryRun;
+  /** Present on the response that ran a recovery. */
+  recovery?: InHouseDeliveryRecoveryRun & { status?: string };
+  changed?: boolean;
+}
+
+export interface InHouseDeliveryRecoveryRun {
+  trigger?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  considered?: number;
+  offered?: number;
+  alreadyOffered?: number;
+  noCouriers?: number;
+  ineligible?: number;
+  stale?: number;
+  failed?: number;
+  aborted?: boolean;
+  errors?: string[];
+}
+
+/**
+ * Get the in-house delivery ON/OFF state
+ */
+export const getInHouseDeliverySettings = async (): Promise<ApiResponse<InHouseDeliverySettings>> => {
+  const response = await api.get<ApiResponse<InHouseDeliverySettings>>("/admin/settings/in-house-delivery");
+  return response.data;
+};
+
+/**
+ * Enable or disable in-house delivery (drain mode when disabling)
+ */
+export const updateInHouseDeliverySettings = async (
+  enabled: boolean
+): Promise<ApiResponse<InHouseDeliverySettings>> => {
+  const response = await api.put<ApiResponse<InHouseDeliverySettings>>(
+    "/admin/settings/in-house-delivery",
+    { enabled }
+  );
+  return response.data;
+};
+
+/**
+ * Re-offer orders still waiting for an in-house courier (only while enabled)
+ */
+export const retryInHouseDeliveryRecovery = async (): Promise<ApiResponse<InHouseDeliverySettings>> => {
+  const response = await api.post<ApiResponse<InHouseDeliverySettings>>("/admin/settings/in-house-delivery/recover");
+  return response.data;
+};
+
+export type DeliveryProviderId = "IN_HOUSE" | "ADDLOGS";
+
+export interface DeliveryProviderReadiness {
+  id: DeliveryProviderId;
+  label: string;
+  configured: boolean;
+  enabled: boolean;
+  operational: boolean;
+  status: "AVAILABLE" | "DISABLED" | "NOT_CONFIGURED";
+  reason?: string;
+}
+
+export interface DeliveryProviderState {
+  activeProvider: DeliveryProviderId;
+  providers: DeliveryProviderReadiness[];
+  /** Whether new delivery orders can be accepted right now. */
+  deliveryAvailable: boolean;
+  reason?: string;
+  updatedAt?: string;
+  changed?: boolean;
+}
+
+/**
+ * Get the global delivery provider and each provider's readiness
+ */
+export const getDeliveryProviderSettings = async (): Promise<ApiResponse<DeliveryProviderState>> => {
+  const response = await api.get<ApiResponse<DeliveryProviderState>>("/admin/settings/delivery-provider");
+  return response.data;
+};
+
+/**
+ * Select the global delivery provider (only operational providers are accepted)
+ */
+export const updateDeliveryProviderSettings = async (
+  provider: DeliveryProviderId
+): Promise<ApiResponse<DeliveryProviderState>> => {
+  const response = await api.put<ApiResponse<DeliveryProviderState>>("/admin/settings/delivery-provider", { provider });
+  return response.data;
+};
+
 /**
  * Get payment methods
  */

@@ -3,11 +3,12 @@ import mongoose from "mongoose";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import { changeSellerStage, sellerStage } from "../../../services/orderLifecycleService";
+import { changeSellerStage, sellerStage, markSellerReadyForPickup, payableForDelivery } from "../../../services/orderLifecycleService";
 import { runOrderEffects } from "../../../services/orderEffectService";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import { Server as SocketIOServer } from "socket.io";
 import { sendNotificationToUser } from "../../../services/firebaseAdmin";
+import { getOrderShipments, PREPARED_STAGES } from "../../../services/shipmentService";
 
 /**
  * Get seller's orders with filters, sorting, and pagination
@@ -253,8 +254,19 @@ export const getOrderById = asyncHandler(
     const sellerTax = formattedItems.reduce((sum, i) => sum + (i.tax || 0), 0);
     const sellerGrandTotal = sellerSubtotal; // Selling prices include tax.
 
+    // This seller's own shipment only (never other sellers').
+    const [ownShipment] = await getOrderShipments(order, { audience: "seller", sellerId });
+    // The server re-checks every condition; this only decides whether to offer the button.
+    const shipment = ownShipment ? {
+      ...ownShipment,
+      canMarkReady: ownShipment.persisted && ownShipment.status === "PREPARING" && !ownShipment.readyForPickupAt
+        && PREPARED_STAGES.includes(sellerStage(sellerItems, order)) && payableForDelivery(order)
+        && !["Cancelled", "Rejected", "Returned", "Delivered"].includes(order.status),
+    } : null;
+
     // Format order data for frontend
     const orderDetail = {
+      shipment: shipment || null,
       id: order._id,
       orderNumber: order.orderNumber || 'N/A',
       invoiceNumber: order.invoiceNumber || order.orderNumber || 'N/A',
@@ -284,6 +296,34 @@ export const getOrderById = asyncHandler(
     });
   }
 );
+
+/**
+ * POST /orders/:id/ready-for-pickup
+ * The seller confirms their own items are packed and ready to be collected.
+ * Informational for in-house orders (pickup rules unchanged); never assigns a
+ * courier or contacts a delivery provider.
+ */
+export const markReadyForPickup = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const sellerId = req.user!.userId;
+  if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+  const channelCheck = await Order.findById(id).select("orderChannel").lean();
+  if (!channelCheck) return res.status(404).json({ success: false, message: "Order not found" });
+  if (channelCheck.orderChannel === "OFFLINE") {
+    return res.status(400).json({ success: false, message: "Counter (POS) sales have no pickup." });
+  }
+  const result = await markSellerReadyForPickup(id, sellerId);
+  const [shipment] = await getOrderShipments(result.order, { audience: "seller", sellerId });
+  if (!result.unchanged) {
+    const io = req.app.get("io") as SocketIOServer;
+    io?.to(`order-${id}`).emit("shipment-updated", { orderId: id, sellerId, status: shipment?.status });
+  }
+  return res.json({
+    success: true,
+    message: result.unchanged ? "Your items were already marked ready for pickup." : "Your items are marked ready for pickup.",
+    data: { shipment: shipment || null, unchanged: result.unchanged },
+  });
+});
 
 /**
  * Update order status (seller can update: Accepted, On the way, Delivered, Cancelled)
@@ -317,7 +357,10 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
     title: "Order updated", body: `Order #${result.order.orderNumber}: ${result.order.status}`,
     data: { type: "ORDER_STATUS_UPDATE", orderId: id, status: result.order.status },
   }).catch(error => console.error("Order notification failed", error));
-  return res.json({ success: true, message: ["Cancelled", "Rejected"].includes(requested)
-    ? "Your items are cancelled. Any prepaid refund is being processed." : "Your fulfilment stage was updated.",
-    data: { id, status: requested, sellerStatus: requested, orderStatus: result.order.status } });
+  const deferred = "deferredSellers" in result && (result.deferredSellers?.length ?? 0) > 0;
+  return res.json({ success: true, message: !["Cancelled", "Rejected"].includes(requested) ? "Your fulfilment stage was updated."
+    : deferred ? "Cancellation requested. Your shipment is booked with the delivery partner; your items are cancelled once the partner confirms."
+    : "Your items are cancelled. Any prepaid refund is being processed.",
+    data: { id, status: deferred ? undefined : requested, sellerStatus: deferred ? undefined : requested, orderStatus: result.order.status,
+      cancellationPendingWithPartner: deferred } });
 });

@@ -26,8 +26,29 @@ const advanceQueue = (prev: NotificationState): NotificationState => {
     };
 };
 
-export const useDeliveryOrderNotifications = () => {
+interface DeliveryOrderNotificationOptions {
+    /**
+     * Whether in-house delivery currently accepts new work (backend-authoritative,
+     * mirrored by the caller). While false, incoming offers are discarded.
+     */
+    offersEnabled?: boolean;
+    /** Called when the server pushes an in-house delivery ON/OFF change. */
+    onServiceState?: (enabled: boolean) => void;
+}
+
+/** Remove one offer from the visible card / queue. */
+const dropOffer = (prev: NotificationState, orderId: string): NotificationState =>
+    prev.currentNotification?.orderId === orderId
+        ? advanceQueue(prev)
+        : { ...prev, notificationQueue: prev.notificationQueue.filter(n => n.orderId !== orderId) };
+
+export const useDeliveryOrderNotifications = (options: DeliveryOrderNotificationOptions = {}) => {
     const { isAuthenticated, user } = useAuth();
+    // Refs so socket handlers always see the latest values without reconnecting.
+    const offersEnabledRef = useRef(options.offersEnabled !== false);
+    const onServiceStateRef = useRef(options.onServiceState);
+    offersEnabledRef.current = options.offersEnabled !== false;
+    onServiceStateRef.current = options.onServiceState;
     const [state, setState] = useState<NotificationState>({
         currentNotification: null,
         notificationQueue: [],
@@ -106,8 +127,26 @@ export const useDeliveryOrderNotifications = () => {
             }));
         });
 
+        // Admin switched in-house delivery on/off. When off, discard every open offer.
+        socket.on('in-house-delivery-state', (data: { inHouseDeliveryEnabled: boolean }) => {
+            const enabled = data?.inHouseDeliveryEnabled !== false;
+            offersEnabledRef.current = enabled;
+            onServiceStateRef.current?.(enabled);
+            if (!enabled) {
+                setState(prev => ({ ...prev, currentNotification: null, notificationQueue: [] }));
+            }
+        });
+
+        socket.on('order-offer-withdrawn', (data: { orderId: string }) => {
+            setState(prev => dropOffer(prev, data.orderId));
+        });
+
         socket.on('new-order', (orderData: OrderNotificationData & { isPendingRenotification?: boolean }) => {
             console.log('📦 New order notification received:', orderData.orderId, orderData.isPendingRenotification ? '(re-notification)' : '(fresh)');
+            if (!offersEnabledRef.current) {
+                console.log('⛔ Offer ignored: in-house delivery is disabled');
+                return;
+            }
 
             setState(prev => {
                 // ── 1. De-duplicate: the backend emits to both individual room and
@@ -320,6 +359,14 @@ export const useDeliveryOrderNotifications = () => {
     const clearCurrentNotification = useCallback(() => {
         setState(prev => advanceQueue(prev));
     }, []);
+
+    // A polled/REST "disabled" state also clears any offer still on screen.
+    useEffect(() => {
+        if (options.offersEnabled === false) {
+            setState(prev => (prev.currentNotification || prev.notificationQueue.length
+                ? { ...prev, currentNotification: null, notificationQueue: [] } : prev));
+        }
+    }, [options.offersEnabled]);
 
     useEffect(() => {
         if (!isAuthenticated || user?.userType !== 'Delivery' || !user?.id) {

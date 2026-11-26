@@ -25,6 +25,10 @@ function escapeRegExp(str: string): string {
 /**
  * Resolve or dynamically create Category if merchant typed "Other" or custom name
  */
+/** Shipping weight per unit, used by external delivery (Adloggs) bookings. Empty clears it. */
+import { normalizeShippingWeight, SHIPPING_WEIGHT_MESSAGE } from "../../../utils/shippingWeight";
+export { normalizeShippingWeight, SHIPPING_WEIGHT_MESSAGE };
+
 async function resolveDynamicCategory(
   catInput: any,
   customCatInput: any,
@@ -190,11 +194,17 @@ export const createProduct = asyncHandler(
       "isShopByStoreOnly", "shopId", "tax",
       "isHomemade", "homemadeCategory", "homemadeSubcategory",
       "customCategory", "customSubcategory", "customTaxRate",
+      "shippingWeightKg",
     ];
 
     const safeData: Record<string, any> = {};
     for (const f of SELLER_WRITABLE_FIELDS) {
       if (productData[f] !== undefined) safeData[f] = productData[f];
+    }
+    if (safeData.shippingWeightKg !== undefined) {
+      const weight = normalizeShippingWeight(safeData.shippingWeightKg);
+      if (weight === "INVALID") return res.status(400).json({ success: false, message: SHIPPING_WEIGHT_MESSAGE });
+      if (weight === null) delete safeData.shippingWeightKg; else safeData.shippingWeightKg = weight;
     }
 
     if (safeData.isHomemade !== undefined) {
@@ -510,6 +520,11 @@ export const updateProduct = asyncHandler(
 
     const allowed = new Set(["productName", "smallDescription", "description", "mainImage", "mainImageUrl", "galleryImages", "galleryImageUrls", "price", "discPrice", "compareAtPrice", "stock", "sku", "barcode", "variationType", "variations", "publish", "popular", "dealOfDay", "manufacturer", "madeIn", "fssaiLicNo", "foodType", "totalAllowedQuantity", "isReturnable", "maxReturnDays", "returnPolicyText", "seoTitle", "seoKeywords", "seoDescription", "seoImageAlt", "pack", "shelfLife", "marketer", "tags", "isShopByStoreOnly", "shopId", "tax", "taxId", "isHomemade", "homemadeCategory", "homemadeSubcategory", "headerCategoryId", "category", "categoryId", "subcategory", "subcategoryId", "subSubCategory", "subSubCategoryId", "brand", "brandId", "customCategory", "customSubcategory", "customTaxRate"]);
     const updateData: any = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.has(key)));
+    if (req.body.shippingWeightKg !== undefined) {
+      const weight = normalizeShippingWeight(req.body.shippingWeightKg);
+      if (weight === "INVALID") return res.status(400).json({ success: false, message: SHIPPING_WEIGHT_MESSAGE });
+      updateData.shippingWeightKg = weight; // null clears it
+    }
 
     // Remove sellerId from update data if present (cannot change owner)
     delete updateData.sellerId;

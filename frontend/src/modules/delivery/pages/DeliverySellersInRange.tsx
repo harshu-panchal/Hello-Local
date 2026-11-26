@@ -60,6 +60,7 @@ export default function DeliverySellersInRange() {
     currentLocation,
     refreshSellersInRange,
     sellersInRangeCount,
+    inHouseDeliveryEnabled,
   } = useDeliveryStatus();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -98,6 +99,26 @@ export default function DeliverySellersInRange() {
           <h2 className="text-lg font-black text-slate-900">Pending Admin Approval</h2>
           <p className="text-slate-500 text-xs font-medium leading-relaxed">
             Your delivery partner profile is currently undergoing verification. You can access live pickup zones once approved.
+          </p>
+          <button
+            onClick={() => navigate('/delivery')}
+            className="w-full bg-rose-600 text-white py-3 rounded-2xl font-black text-xs hover:bg-rose-700 transition-all shadow-md min-h-[44px]"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+        <DeliveryBottomNav />
+      </div>
+    );
+  }
+
+  if (!inHouseDeliveryEnabled) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center pb-24 px-4 text-center">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 max-w-sm w-full space-y-4">
+          <h2 className="text-lg font-black text-slate-900">New Assignments Paused</h2>
+          <p className="text-slate-500 text-xs font-medium leading-relaxed">
+            In-house delivery is currently unavailable. New delivery assignments are temporarily disabled.
           </p>
           <button
             onClick={() => navigate('/delivery')}

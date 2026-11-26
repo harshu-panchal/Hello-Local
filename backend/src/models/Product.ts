@@ -67,6 +67,12 @@ export interface IProduct extends Document {
 
   // Details
   pack?: string;
+  /**
+   * Shipping weight of ONE unit in kilograms (Phase 6, external delivery).
+   * Optional with no default: never derived from `pack`; an external booking
+   * is blocked while any item in the shipment lacks it.
+   */
+  shippingWeightKg?: number;
   shelfLife?: string;
   marketer?: string;
 
@@ -316,6 +322,7 @@ const ProductSchema = new Schema<IProduct>(
 
     // Details
     pack: { type: String, trim: true },
+    shippingWeightKg: { type: Number, min: [0.001, "Shipping weight must be positive"], max: [1000, "Shipping weight is too large"] },
     shelfLife: { type: String, trim: true },
     marketer: { type: String, trim: true },
 

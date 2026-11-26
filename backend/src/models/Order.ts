@@ -95,6 +95,31 @@ export interface IOrder extends Document {
   | "Returned"
   | "Completed";
 
+  /**
+   * Delivery provider this online order was committed to when it was placed.
+   * Absent on orders placed before provider selection existed (read as
+   * IN_HOUSE) and on POS sales (no delivery). Never rewritten afterwards.
+   */
+  deliveryProvider?: "IN_HOUSE" | "ADDLOGS";
+  /**
+   * True when per-seller Shipment records were created with this order
+   * (Phase 3A onwards). Absent on older orders, whose shipments are only
+   * computed for display.
+   */
+  shipmentsCreated?: boolean;
+  /** Durable "shipments need re-syncing" marker, set by flows that run outside an order transaction (returns). */
+  shipmentSyncPending?: boolean;
+  /**
+   * Phase 7: aggregated outcome of an external-provider (Adloggs) order across
+   * its seller shipments. Set only by adloggsOrderOutcomeService.
+   */
+  externalDeliveryOutcome?: {
+    state: "IN_PROGRESS" | "PARTIALLY_DELIVERED" | "ALL_DELIVERED" | "DELIVERED_AND_CANCELLED" | "ALL_CANCELLED"
+      | "DELIVERED_AND_RTO" | "ALL_RTO" | "UNRESOLVED";
+    delivered: number; active: number; cancelled: number; returnedToOrigin: number; unresolved: number;
+    evaluatedAt: Date; completedAt?: Date; attention?: string;
+  };
+
   // Delivery Assignment
   deliveryBoy?: mongoose.Types.ObjectId;
   deliveryBoyStatus?:
@@ -415,6 +440,26 @@ const OrderSchema = new Schema<IOrder>(
         "Completed",
       ],
       default: "Received",
+    },
+
+    deliveryProvider: {
+      type: String,
+      enum: ["IN_HOUSE", "ADDLOGS"],
+    },
+    shipmentsCreated: {
+      type: Boolean,
+    },
+    shipmentSyncPending: {
+      type: Boolean,
+    },
+    externalDeliveryOutcome: {
+      type: new Schema({
+        state: { type: String, enum: ["IN_PROGRESS", "PARTIALLY_DELIVERED", "ALL_DELIVERED", "DELIVERED_AND_CANCELLED", "ALL_CANCELLED",
+          "DELIVERED_AND_RTO", "ALL_RTO", "UNRESOLVED"], required: true },
+        delivered: Number, active: Number, cancelled: Number, returnedToOrigin: Number, unresolved: Number,
+        evaluatedAt: { type: Date, required: true }, completedAt: Date, attention: { type: String, maxlength: 300 },
+      }, { _id: false }),
+      default: undefined,
     },
 
     // Delivery Assignment

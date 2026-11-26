@@ -158,6 +158,7 @@ const AdminCustomerAppPolicy = lazy(() => import("./modules/admin/pages/AdminCus
 const AdminDeliveryAppPolicy = lazy(() => import("./modules/admin/pages/AdminDeliveryAppPolicy"));
 const AdminOrders = lazy(() => import("./modules/admin/pages/AdminOrders"));
 const AdminOrderDetail = lazy(() => import("./modules/admin/pages/AdminOrderDetail"));
+const AdminShipments = lazy(() => import("./modules/admin/pages/AdminShipments"));
 const AdminManageCustomer = lazy(() => import("./modules/admin/pages/AdminManageCustomer"));
 const AdminProfile = lazy(() => import("./modules/admin/pages/AdminProfile"));
 
@@ -438,6 +439,7 @@ function App() {
                                 <Route path="orders/delivered" element={<AdminDeliveredOrders />} />
                                 <Route path="orders/cancelled" element={<AdminCancelledOrders />} />
                                 <Route path="orders/:id" element={<AdminOrderDetail />} />
+                                <Route path="shipments" element={<AdminShipments />} />
 
                                 <Route path="withdrawals" element={<AdminWithdrawals />} />
                                 <Route path="payments" element={<AdminPayments />} />

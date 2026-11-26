@@ -115,6 +115,8 @@ class Cache {
 export const cache = new Cache();
 
 // Clean expired entries every 5 minutes
+// unref(): the timer alone never keeps the process alive (the HTTP server does),
+// so scripts and tests that import this module can exit. Server behaviour is unchanged.
 setInterval(() => {
   cache.cleanExpired();
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref?.();

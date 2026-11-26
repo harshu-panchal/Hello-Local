@@ -18,6 +18,10 @@ import * as deliveryController from "../modules/admin/controllers/adminDeliveryC
 
 // Settings Controllers
 import * as settingsController from "../modules/admin/controllers/adminSettingsController";
+// Shipment operations (Phase 5)
+import * as shipmentController from "../modules/admin/controllers/adminShipmentController";
+// Adloggs (Phase 6)
+import * as adloggsController from "../modules/admin/controllers/adminAdloggsController";
 
 // Coupon Controllers
 import * as couponController from "../modules/admin/controllers/adminCouponController";
@@ -162,6 +166,22 @@ router.get("/orders/:id", orderController.getOrderById);
 router.patch("/orders/:id/status", orderController.updateOrderStatus);
 router.patch("/orders/:id/assign-delivery", orderController.assignDeliveryBoy);
 
+// ==================== Shipment Operations (read-only + idempotent re-sync) ====================
+router.get("/shipments", shipmentController.getShipments);
+router.get("/shipments/exceptions", shipmentController.getShipmentExceptionSummary);
+router.get("/shipments/:id/reconciliation", shipmentController.getShipmentReconciliationView);
+router.post("/shipments/orders/:orderId/reconcile", shipmentController.reconcileOrderShipmentsNow);
+router.post("/shipments/:id/adloggs/resolve-outcome", adloggsController.resolveBookingOutcome);
+router.post("/shipments/:id/adloggs/cancellation", adloggsController.resolveExternalCancellation);
+router.get("/shipments/:id/adloggs/rto-preview", adloggsController.getRtoPreview);
+
+// ==================== Adloggs (admin-only; no secrets returned, no bookings made) ====================
+router.get("/delivery-providers/adloggs", adloggsController.getAdloggsStatus);
+router.post("/delivery-providers/adloggs/connectivity-test", adloggsController.testAdloggsConnectivity);
+router.get("/delivery-providers/adloggs/wallet", adloggsController.getAdloggsWallet);
+router.get("/delivery-providers/adloggs/readiness", adloggsController.getAdloggsReadiness);
+router.put("/delivery-providers/adloggs/sellers/:sellerId/profile", adloggsController.updateSellerProfile);
+
 // ==================== Return Request Routes ====================
 router.get("/return-requests", orderController.getReturnRequests);
 router.get("/return-requests/:id", orderController.getReturnRequestById);
@@ -199,6 +219,13 @@ router.get(
 // ==================== Settings Routes ====================
 router.get("/settings", settingsController.getAppSettings);
 router.put("/settings", settingsController.updateAppSettings);
+// In-house delivery ON/OFF (audited, drain mode). Admin-only via router.use above.
+router.get("/settings/in-house-delivery", settingsController.getInHouseDeliverySettings);
+router.put("/settings/in-house-delivery", settingsController.updateInHouseDeliverySettings);
+router.post("/settings/in-house-delivery/recover", settingsController.retryInHouseDeliveryRecovery);
+// Global delivery provider selection (readiness-checked, audited). Admin-only.
+router.get("/settings/delivery-provider", settingsController.getDeliveryProviderSettings);
+router.put("/settings/delivery-provider", settingsController.updateDeliveryProviderSettings);
 router.get("/settings/payment-methods", settingsController.getPaymentMethods);
 router.put(
   "/settings/payment-methods",

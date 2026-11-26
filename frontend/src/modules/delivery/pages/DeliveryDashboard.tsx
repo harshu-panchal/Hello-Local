@@ -12,7 +12,9 @@ import { useToast } from "../../../context/ToastContext";
 export default function DeliveryDashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { isOnline, sellersInRangeCount, locationError } = useDeliveryStatus();
+  const { isOnline: courierOnline, sellersInRangeCount, locationError, inHouseDeliveryEnabled } = useDeliveryStatus();
+  // While in-house delivery is paused the availability card shows as inactive.
+  const isOnline = courierOnline && inHouseDeliveryEnabled;
   const { user } = useAuth();
   const isPendingApproval = ((user as any)?.status ?? "Active") === "Inactive";
   const [stats, setStats] = useState<any>(null);
@@ -414,12 +416,14 @@ export default function DeliveryDashboard() {
               <div>
                 <h3
                   className={`text-xs sm:text-sm font-black ${isOnline ? "text-rose-950" : "text-slate-700"}`}>
-                  {isOnline ? "Active Service Areas" : "Courier Offline"}
+                  {isOnline ? "Active Service Areas" : !inHouseDeliveryEnabled ? "New Assignments Paused" : "Courier Offline"}
                 </h3>
                 <p className="text-[11px] text-slate-500 font-medium">
                   {isOnline
                     ? `You are within range of ${sellersInRangeCount} store${sellersInRangeCount !== 1 ? 's' : ''}`
-                    : "Go online to receive incoming order alerts"}
+                    : !inHouseDeliveryEnabled
+                      ? "In-house delivery is paused by admin. Finish any active deliveries."
+                      : "Go online to receive incoming order alerts"}
                 </p>
               </div>
             </div>

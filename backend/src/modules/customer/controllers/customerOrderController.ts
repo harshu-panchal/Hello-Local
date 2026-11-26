@@ -12,11 +12,18 @@ import crypto from "crypto";
 import { variationLabel } from "../../../utils/productVariation";
 import { consumeCoupon } from "../../../services/orderPricingService";
 import { reserveMany } from "../../../services/stockService";
-import { checkoutIdentity, prepareCheckout } from "../../../services/checkoutService";
+import { checkoutIdentity, prepareCheckout, precheckAdloggsCheckout } from "../../../services/checkoutService";
 import { orderError, withOrderTransaction } from "../../../services/orderTransactionService";
 import { cancelOrderLifecycle } from "../../../services/orderLifecycleService";
+import { createOrderShipments, getOrderShipments, summarizeShipments } from "../../../services/shipmentService";
 import { runOrderEffects } from "../../../services/orderEffectService";
 import { PaymentVerificationError } from "../../../services/razorpayVerificationService";
+
+/** Additive shipment fields for order-detail responses. */
+async function shipmentFields(order: any, options: { audience: "customer" }) {
+    const shipments = await getOrderShipments(order, options);
+    return { shipments, shipmentSummary: summarizeShipments(shipments) };
+}
 
 // Create a new order
 export const quoteOrder = async (req: Request, res: Response) => {
@@ -27,7 +34,9 @@ export const quoteOrder = async (req: Request, res: Response) => {
         return res.json({ success: true, data: { total: existing.total, pricing: existing, replayed: true } });
       }
     }
-    const quote = await prepareCheckout(req.user!.userId, req.body);
+    // Adloggs serviceability is checked before (never inside) any transaction.
+    const adloggsVerification = await precheckAdloggsCheckout(req.body);
+    const quote = await prepareCheckout(req.user!.userId, req.body, undefined, { adloggsVerification });
     return res.json({ success: true, data: { total: quote.pricing.total, pricing: quote.pricing, warning: quote.pricing.couponRejectionReason } });
   } catch (error: any) { return res.status(error.statusCode || 400).json({ success: false, message: error.message }); }
 };
@@ -39,20 +48,23 @@ export const createOrder = async (req: Request, res: Response) => {
     const checkoutKey = req.body.idempotencyKey || crypto.randomUUID();
     if (typeof checkoutKey !== "string" || checkoutKey.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(checkoutKey)) return res.status(400).json({ success: false, message: "Invalid checkout key" });
     const hash = checkoutIdentity(req.body);
+    // External network check happens here, outside the checkout transaction; the
+    // transaction re-validates that it covers exactly this cart and is still fresh.
+    const adloggsVerification = await precheckAdloggsCheckout(req.body);
     const result = await withOrderTransaction(`checkout:${userId}`, async session => {
       const existing = await Order.findOne({ customer: userId, checkoutKey }).session(session);
       if (existing) {
         if (existing.checkoutHash !== hash) orderError("Checkout changed. Start a new checkout attempt.", 409);
         return { order: existing, replayed: true, warning: undefined };
       }
-      const { customer, resolved, latitude, longitude, paymentMethod, gstin, pricing, lines } = await prepareCheckout(userId, req.body, session);
+      const { customer, resolved, latitude, longitude, paymentMethod, gstin, pricing, lines, deliveryProvider } = await prepareCheckout(userId, req.body, session, { adloggsVerification });
       if (req.body.expectedTotal !== undefined && (!Number.isFinite(Number(req.body.expectedTotal)) || Math.abs(Number(req.body.expectedTotal) - pricing.total) > 0.009)) orderError("Checkout total changed. Please review the updated quote before placing your order.", 409);
       await reserveMany(resolved.map(line => ({ productId: String(line.product._id), quantity: line.quantity, variation: line.selector })), session);
       const order = new Order({ customer: userId, customerName: customer.name, customerEmail: customer.email, customerPhone: customer.phone,
         deliveryAddress: { address: req.body.address.address || req.body.address.street || "N/A", city: req.body.address.city || "N/A",
           state: req.body.address.state, pincode: req.body.address.pincode || "000000", landmark: req.body.address.landmark, latitude, longitude },
         gstin: gstin || undefined, checkoutKey, checkoutHash: hash, originalTotal: pricing.total,
-        paymentMethod, paymentStatus: "Pending", status: paymentMethod === "COD" ? "Received" : "Pending",
+        paymentMethod, paymentStatus: "Pending", status: paymentMethod === "COD" ? "Received" : "Pending", deliveryProvider,
         subtotal: pricing.subtotal, tax: pricing.tax, shipping: pricing.shipping, platformFee: pricing.platformFee, discount: pricing.discount,
         couponCode: pricing.couponCode, couponFunding: pricing.couponFunding, tipAmount: pricing.tip, total: pricing.total,
         deliveryDistanceKm: pricing.deliveryDistanceKm, isFreeDelivery: pricing.isFreeDelivery, freeDeliverySubsidy: pricing.freeDeliverySubsidy,
@@ -68,7 +80,11 @@ export const createOrder = async (req: Request, res: Response) => {
           variation: selected.selector || undefined, variantTitle: variationLabel(selected.variation), status: "Pending", fulfillmentStatus: "Received" }], { session });
         order.items.push(item._id as mongoose.Types.ObjectId);
       }
+      order.shipmentsCreated = true;
       await order.save({ session });
+      // One internal shipment per seller, in the same transaction: the order
+      // and its shipments commit or roll back together.
+      await createOrderShipments(order, resolved.map(line => ({ seller: line.product.seller })), session);
       await consumeCoupon(pricing.couponCode, session);
       return { order, replayed: false, warning: pricing.couponRejectionReason };
     });
@@ -250,7 +266,9 @@ export const getOrderById = async (req: Request, res: Response) => {
             // Include customer's permanent delivery OTP
             deliveryOtp,
             // Map deliveryBoy to deliveryPartner for frontend
-            deliveryPartner: orderObj.deliveryBoy ? { ...(orderObj.deliveryBoy as any), phone: (orderObj.deliveryBoy as any).mobile || (orderObj.deliveryBoy as any).phone } : null
+            deliveryPartner: orderObj.deliveryBoy ? { ...(orderObj.deliveryBoy as any), phone: (orderObj.deliveryBoy as any).mobile || (orderObj.deliveryBoy as any).phone } : null,
+            // Per-seller shipment progress (read-only; order is already scoped to this customer).
+            ...(await shipmentFields(order, { audience: "customer" })),
         };
 
         return res.status(200).json({
@@ -327,9 +345,14 @@ export const cancelOrder = async (req: Request, res: Response) => {
     const result = await cancelOrderLifecycle(req.params.id, "customer", { userId: req.user!.userId, reason: String(req.body.reason) });
     await runOrderEffects(req.params.id);
     const io = req.app.get("io");
-    io?.to(`order-${req.params.id}`).emit("order-cancelled", { orderId: req.params.id, status: result.order.status });
+    const fullyDeferred = result.unchanged && (result.deferredSellers?.length ?? 0) > 0;
+    if (!fullyDeferred) io?.to(`order-${req.params.id}`).emit("order-cancelled", { orderId: req.params.id, status: result.order.status });
     if (io && !result.unchanged) await notifySellersOfOrderUpdate(io, result.order, "ORDER_CANCELLED");
-    return res.json({ success: true, message: "Order cancelled. Any prepaid refund is being processed.", data: { id: result.order._id, status: result.order.status } });
+    const waiting = result.deferredSellers?.length ?? 0;
+    const message = !waiting ? "Order cancelled. Any prepaid refund is being processed."
+      : result.unchanged ? "Cancellation requested. The delivery partner must confirm it first; your refund follows their confirmation."
+      : "Part of your order was cancelled and its refund is being processed. Items already booked with the delivery partner are cancelled and refunded once the partner confirms.";
+    return res.json({ success: true, message, data: { id: result.order._id, status: result.order.status, cancellationPendingWithPartner: waiting > 0 } });
   } catch (error: any) { return res.status(error.statusCode || 500).json({ success: false, message: error.message }); }
 };
 

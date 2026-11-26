@@ -4,6 +4,8 @@ import { validateSession, sessionRoom } from '../services/authSessionService';
 import { handleOrderAcceptance, handleOrderRejection, calculateEstimatedDeliveryBoyEarning, notificationStates } from '../services/orderNotificationService';
 import Order from '../models/Order';
 import DeliveryTracking from '../models/DeliveryTracking';
+import { canStartNewInHouseDelivery, IN_HOUSE_DELIVERY_STATE_EVENT } from '../services/inHouseDeliveryService';
+import { IN_HOUSE_ORDER_FILTER } from '../services/deliveryProviderService';
 
 // In-memory cache for order destinations (lat, lng) to avoid DB reads on every update
 // Key: orderId, Value: { latitude, longitude }
@@ -300,12 +302,25 @@ export const initializeSocket = (httpServer: HttpServer) => {
             //   • the order has not already been accepted by someone else
             // We also CREATE a notificationState for these re-sent orders so that
             // the accept/reject socket handlers work correctly.
+            // Replaying offers is new in-house work: skip it while the fleet is
+            // switched off (or its state cannot be read) and tell the app why.
+            const availability = await canStartNewInHouseDelivery().catch(() => ({ allowed: false, reason: 'IN_HOUSE_DELIVERY_STATE_UNAVAILABLE', message: undefined as string | undefined }));
+            socket.emit(IN_HOUSE_DELIVERY_STATE_EVENT, {
+                inHouseDeliveryEnabled: availability.allowed,
+                reason: availability.reason,
+                message: availability.message,
+            });
+            if (!availability.allowed) {
+                console.log(`⛔ Skipping pending-order replay for ${normalizedDeliveryBoyId}: ${availability.reason}`);
+                return;
+            }
             try {
                 const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours (was 24h)
                 const pendingOrders = await Order.find({
                     status: { $in: ['Accepted', 'Processed', 'Shipped'] },
                     $or: [{ paymentMethod: 'COD' }, { paymentStatus: { $in: ['Paid', 'PartiallyRefunded'] } }],
                     deliveryBoy: null,
+                    ...IN_HOUSE_ORDER_FILTER, // never replay another provider's orders
                     createdAt: { $gte: cutoff },
                 }).lean();
 

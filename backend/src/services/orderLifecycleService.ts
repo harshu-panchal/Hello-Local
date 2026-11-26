@@ -11,20 +11,17 @@ import { withOrderTransaction, orderError } from "./orderTransactionService";
 import { releaseMany, reservationsFromOrderItems } from "./stockService";
 import { releaseCoupon } from "./orderPricingService";
 import { queueOrderEffect } from "./orderEffectService";
+import { claimInHouseAssignment, ensureInHouseDeliverySettings } from "./inHouseDeliveryService";
+import { orderDeliveryProvider } from "./deliveryProviderService";
+import { syncOrderShipments, PREPARED_STAGES, TERMINAL_SHIPMENT_STATUSES } from "./shipmentService";
+import Shipment from "../models/Shipment";
+import { deferExternalCancellations } from "./adloggs/adloggsDeferredCancellation";
 
-const stages = ["Received", "Accepted", "Processed", "Shipped"];
+import { stages, sellerStage } from "./sellerFulfillmentStage";
+export { sellerStage };
 export const courierOfferStatuses = ["Accepted", "Processed", "Shipped"];
 export function payableForDelivery(order: any) {
   return order.paymentMethod === "COD" || ["Paid", "PartiallyRefunded"].includes(order.paymentStatus);
-}
-export function sellerStage(items: any[], order: any): string {
-  const active = items.filter(item => item.status !== "Cancelled");
-  if (!active.length) return "Cancelled";
-  if (!stages.includes(order.status) && order.status !== "Pending") return order.status;
-  return stages[Math.min(...active.map(item => {
-    const stage = item.fulfillmentStatus || (stages.includes(order.status) ? order.status : "Received");
-    return Math.max(0, stages.indexOf(stage));
-  }))];
 }
 async function load(id: string, session: ClientSession) {
   const order = await Order.findById(id).session(session);
@@ -40,9 +37,54 @@ async function restore(items: any[], session: ClientSession) {
   await releaseMany(reservations, session);
 }
 
+/**
+ * Existing refund rule for a (partial) cancellation, shared by the lifecycle and
+ * by read-only previews so they can never disagree: items cancelled while other
+ * items stay active refund their own totals net of their discount; cancelling
+ * the last active items refunds the whole remaining refundable balance
+ * (`undefined` = refundOrder refunds what is still refundable).
+ */
+export function sellerCancellationRefundAmount(selected: Array<{ total: number; discountAmount?: number }>, remaining: unknown[]): number | undefined {
+  return remaining.length ? Math.round(selected.reduce((sum, item) => sum + Math.max(0, item.total - (item.discountAmount || 0)), 0) * 100) / 100 : undefined;
+}
+
+/**
+ * Read-only preview of what cancelling one seller's active items would refund
+ * under the existing rules (used before an admin confirms an RTO resolution).
+ * Changes nothing.
+ */
+export async function previewSellerCancellationRefund(orderId: string, sellerId: string) {
+  const order: any = await Order.findById(orderId).select("orderNumber paymentMethod paymentStatus total subtotal shipping platformFee discount tipAmount").lean();
+  if (!order) orderError("Order not found", 404);
+  const items: any[] = await OrderItem.find({ order: orderId }).select("seller productName quantity total discountAmount status").lean();
+  const selected = items.filter(item => item.status !== "Cancelled" && String(item.seller) === sellerId);
+  const remaining = items.filter(item => item.status !== "Cancelled" && String(item.seller) !== sellerId);
+  const lines = selected.map(item => ({ productName: item.productName ?? "", quantity: item.quantity, total: item.total,
+    discount: item.discountAmount || 0, net: Math.round(Math.max(0, item.total - (item.discountAmount || 0)) * 100) / 100 }));
+  const prepaid = order.paymentMethod !== "COD" && ["Paid", "PartiallyRefunded"].includes(order.paymentStatus);
+  if (!prepaid) return { eligible: false, basis: "NOT_PREPAID" as const, amount: 0, lines, note: "No prepaid amount to refund (existing eligibility rules)." };
+  const amount = sellerCancellationRefundAmount(selected, remaining);
+  if (amount !== undefined) return { eligible: amount > 0, basis: "ITEMS" as const, amount, lines,
+    note: "Other items in this order stay active: only these items are refunded, net of their discounts. Delivery, platform fee and tip are not refunded." };
+  const Refund = (await import("../models/Refund")).default;
+  const refunded = ((await Refund.find({ order: orderId, status: "Completed" }).select("amount").lean()) as any[])
+    .reduce((sum, refund) => sum + (refund.amount || 0), 0);
+  return { eligible: true, basis: "REMAINING_BALANCE" as const, amount: Math.max(0, Math.round((order.total - refunded) * 100) / 100), lines,
+    components: { orderTotal: order.total, alreadyRefunded: Math.round(refunded * 100) / 100, shipping: order.shipping ?? 0, platformFee: order.platformFee ?? 0, tip: order.tipAmount ?? 0 },
+    note: "These are the last active items: the whole remaining refundable balance is refunded (existing rule), including delivery charge, platform fee and tip. Final amount is capped at what is still refundable." };
+}
+
 export async function cancelOrderLifecycle(id: string, actor: OrderActor, options: {
   userId?: string; sellerId?: string; reason?: string; status?: "Cancelled" | "Rejected"; expiredOnly?: boolean;
-}) {
+  /**
+   * Internal only (adloggsCancellationWorkflow): Adloggs has verifiably
+   * cancelled this seller's provider order, so the deferred local cancellation
+   * and refund may now be completed. Never set from a request body.
+   */
+  externalCancellationConfirmed?: boolean;
+  /** Internal only (RTO resolution): false = do not return the items to stock. Default: restock, as before. */
+  restock?: boolean;
+}): Promise<{ order: any; unchanged: boolean; notifyCouriers?: boolean; deferredSellers?: string[] }> {
   return withOrderTransaction(id, async session => {
     const order = await load(id, session);
     const previousStatus = order.status;
@@ -57,11 +99,28 @@ export async function cancelOrderLifecycle(id: string, actor: OrderActor, option
     }
     if (actor === "customer" && (!["Pending", "Received", "Accepted", "Processed"].includes(order.status) || order.sellerPickups?.some(pickup => pickup.pickedUpAt))) orderError("This order has already been dispatched. Contact support to cancel.");
     if (options.sellerId && order.sellerPickups?.some(pickup => String(pickup.seller) === options.sellerId && pickup.pickedUpAt)) orderError("Picked-up items cannot be cancelled by the seller.");
+    // External deliveries (Adloggs): the provider does not allow cancellation
+    // after pickup, so customers and sellers cannot cancel (and be refunded
+    // for) items whose shipment a provider rider has already collected.
+    if ((actor === "customer" || actor === "seller") && order.shipmentsCreated && order.deliveryProvider && order.deliveryProvider !== "IN_HOUSE") {
+      const collected = await Shipment.find({ order: id, ...(options.sellerId ? { seller: options.sellerId } : {}),
+        status: { $in: ["PICKED_UP", "DELIVERED", "RETURNED_TO_ORIGIN"] } }).select("_id").session(session);
+      if (collected.length) orderError("The delivery partner has already collected these items. Contact support.");
+    }
     const check = validateTransition(order.status, options.status || "Cancelled", actor);
     if (!check.valid) orderError(check.message!);
-    const selected = items.filter(item => item.status !== "Cancelled" && (!options.sellerId || String(item.seller) === options.sellerId));
-    if (!selected.length) return { order, unchanged: true };
-    await restore(selected, session);
+    // Adloggs orders that exist (or may exist) are cancelled at the provider
+    // FIRST: record the request and queue the provider cancellation; those
+    // sellers' items stay active and unrefunded until Adloggs confirms.
+    let deferredSellers: string[] = [];
+    if (!options.externalCancellationConfirmed && order.shipmentsCreated && order.deliveryProvider === "ADDLOGS") {
+      deferredSellers = await deferExternalCancellations(id, options.sellerId,
+        { actor, userId: options.userId, reason: options.reason, status: options.status }, session);
+    }
+    const selected = items.filter(item => item.status !== "Cancelled" && (!options.sellerId || String(item.seller) === options.sellerId)
+      && !deferredSellers.includes(String(item.seller)));
+    if (!selected.length) return { order, unchanged: true, deferredSellers };
+    if (options.restock !== false) await restore(selected, session);
     const ids = selected.map(item => item._id);
     await OrderItem.updateMany({ _id: { $in: ids }, status: { $ne: "Cancelled" } },
       { $set: { status: "Cancelled", fulfillmentStatus: "Cancelled" } }, { session });
@@ -92,12 +151,17 @@ export async function cancelOrderLifecycle(id: string, actor: OrderActor, option
       }
     }
     if (order.paymentMethod !== "COD" && ["Paid", "PartiallyRefunded"].includes(order.paymentStatus)) {
-      const amount = remaining.length ? Math.round(selected.reduce((sum, item) => sum + Math.max(0, item.total - (item.discountAmount || 0)), 0) * 100) / 100 : undefined;
+      const amount = sellerCancellationRefundAmount(selected, remaining);
+      // An order-level request with deferred sellers refunds only the sellers cancelled now (keyed by them).
+      const partialKey = options.sellerId ? `${id}:cancel:seller:${options.sellerId}`
+        : `${id}:cancel:sellers:${[...new Set(selected.map(item => String(item.seller)))].sort().join(",")}`;
       if (amount === undefined || amount > 0) await queueOrderEffect(order, "Refund",
-        remaining.length ? `${id}:cancel:seller:${options.sellerId}` : `${id}:cancel:remaining`, session, amount, options.reason || "Seller cancelled items");
+        remaining.length ? partialKey : `${id}:cancel:remaining`, session, amount, options.reason || "Seller cancelled items");
     }
     await order.save({ session });
-    return { order, unchanged: false, notifyCouriers: courierOfferStatuses.includes(order.status) && !courierOfferStatuses.includes(previousStatus) };
+    // Seller-scoped cancellation cancels only that seller's shipment.
+    await syncOrderShipments(order, session, actor === "delivery" ? "delivery" : actor);
+    return { order, unchanged: false, deferredSellers, notifyCouriers: courierOfferStatuses.includes(order.status) && !courierOfferStatuses.includes(previousStatus) };
   });
 }
 
@@ -122,21 +186,76 @@ export async function changeSellerStage(id: string, sellerId: string, requested:
     const previous = order.status;
     order.status = sellerStage(items, order) as any;
     await order.save({ session });
+    await syncOrderShipments(order, session, "seller"); // only this seller's items changed
     return { order, sellerStatus: requested, unchanged: false,
       notifyCouriers: courierOfferStatuses.includes(order.status) && !courierOfferStatuses.includes(previous) };
   });
 }
 
+/**
+ * Seller's explicit "ready for pickup" confirmation for their own shipment
+ * (Phase 4). Persists a readiness fact on the shipment; it never assigns a
+ * courier, never changes item stages and never contacts a provider. For
+ * in-house orders it is informational: the existing pickup gate
+ * (Processed/Shipped) is unchanged. Idempotent; serialized with cancellation,
+ * pickup and other sellers' actions by the per-order transaction lock.
+ */
+export async function markSellerReadyForPickup(id: string, sellerId: string) {
+  return withOrderTransaction(id, async session => {
+    const order = await load(id, session);
+    const items = await OrderItem.find({ order: id }).session(session);
+    const mine = items.filter(item => String(item.seller) === sellerId);
+    if (!mine.length) orderError("Order not found", 404); // not this seller's order
+    const own = mine.filter(item => item.status !== "Cancelled");
+    if (!own.length) orderError("Your items in this order are cancelled; the shipment cannot be marked ready.", 409);
+    if (!order.shipmentsCreated) orderError("Ready-for-pickup confirmation is not available for orders placed before shipments were introduced.", 409);
+    const shipment = await Shipment.findOne({ order: id, seller: sellerId }).session(session);
+    if (!shipment) orderError("No shipment exists for your items in this order.", 409);
+    if (shipment!.readyForPickupAt) return { order, shipment: shipment!, unchanged: true };
+    if (TERMINAL_SHIPMENT_STATUSES.includes(shipment!.status) || ["PICKED_UP", "DELIVERED"].includes(shipment!.status)) {
+      orderError("This shipment has already been collected or closed and cannot be marked ready.", 409);
+    }
+    if (["Cancelled", "Rejected", "Returned", "Delivered"].includes(order.status)) orderError("This order is closed.", 409);
+    if (!payableForDelivery(order)) orderError("Online payment has not been confirmed.");
+    const stage = sellerStage(own, order);
+    if (!PREPARED_STAGES.includes(stage)) {
+      orderError(stage === "Received"
+        ? "Accept the order before marking it ready for pickup."
+        : "Mark your items as Processed (prepared) before confirming they are ready for pickup.");
+    }
+    const now = new Date();
+    const written = await Shipment.updateOne(
+      { _id: shipment!._id, readyForPickupAt: null },
+      { $set: { readyForPickupAt: now, readyBy: new mongoose.Types.ObjectId(sellerId) } },
+      { session },
+    );
+    if (!written.modifiedCount) return { order, shipment: shipment!, unchanged: true };
+    await syncOrderShipments(order, session, "seller");
+    return { order, shipment: shipment!, unchanged: false };
+  });
+}
+
 export async function acceptDeliveryOrder(id: string, courierId: string, options: { allowReassignment?: boolean; assignedBy?: string } = {}) {
+  // The assignment gate writes the settings singleton, so it must exist
+  // before the transaction (creating it inside would not serialize).
+  await ensureInHouseDeliverySettings();
   return withOrderTransaction(id, async session => {
     const courier = await Delivery.findById(courierId).session(session);
     if (!courier || courier.status !== "Active") orderError("An active delivery account is required.", 403);
     const order = await load(id, session);
+    // A courier can only be put on an order committed to the in-house fleet;
+    // orders committed to another provider are never rerouted here.
+    if (orderDeliveryProvider(order) !== "IN_HOUSE") orderError("This order is handled by another delivery provider.", 409);
     const eligible = courierOfferStatuses.includes(order.status) || (options.allowReassignment && order.status === "Received");
     if (!eligible || !payableForDelivery(order)) orderError("This order is no longer available for delivery.");
     const changingCourier = order.deliveryBoy && String(order.deliveryBoy) !== courierId;
     if (changingCourier && (!options.allowReassignment || order.sellerPickups?.some(pickup => pickup.pickedUpAt))) orderError("Order already assigned to another delivery partner.", 409);
     if (!order.deliveryBoy || changingCourier) {
+      // Creating or moving an in-house assignment is new work. The claim is a
+      // conditional write on the settings document inside this transaction, so
+      // it serializes against the admin toggle: no assignment can commit after
+      // in-house delivery has been switched off (strict OFF, no exceptions).
+      await claimInHouseAssignment(session);
       order.deliveryBoy = new mongoose.Types.ObjectId(courierId);
       order.deliveryBoyStatus = "Assigned";
       order.assignedAt = new Date();
@@ -198,6 +317,7 @@ export async function confirmOrderPickup(id: string, courierId: string, sellerId
       order.deliveryBoyStatus = "In Transit";
     }
     await order.save({ session });
+    await syncOrderShipments(order, session, "delivery"); // marks this seller's shipment picked up
     return { order, allPickedUp, pickedUpSellers: order.sellerPickups.length, totalSellers: sellers.length };
   });
 }

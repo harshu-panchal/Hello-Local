@@ -242,6 +242,12 @@ for (const role of ['Seller', 'Delivery'] as const) {
       '../components/common/SellerButton': { SellerButton: 'SellerButton' },
       '../components/common/SellerFormField': { SellerFormField: 'SellerFormField' },
       '../components/common/SellerCard': { SellerCard: 'SellerCard' },
+      // Seller signup offers paid plans (subscription feature). This test covers the free-trial
+      // path, which must never load plans or create a payment order.
+      '../../../services/api/subscriptionService': {
+        getActiveSubscriptionPlans: async () => { throw new Error('free-trial signup must not load paid plans'); },
+        createSubscriptionOrder: async () => { throw new Error('free-trial signup must not create a payment order'); },
+      },
     };
     const fixture = { sellerName: 'Owner', name: 'Courier', mobile: '9876543210', email: 'test@example.test',
       storeName: 'Shop', category: 'Grocery', categories: ['Grocery'], address: 'Street', city: 'Mumbai',
@@ -253,9 +259,20 @@ for (const role of ['Seller', 'Delivery'] as const) {
     assert.deepEqual(calls, ['send']);
     tree = render();
     await elements(tree, 'OTPInput')[0].props.onComplete('5829');
+    // Seller signup is a wizard since the subscription feature: verified phone -> store
+    // details -> location -> free-trial launch. Registration happens at the launch step,
+    // and retrying it reuses the phone proof (no second OTP).
+    const launchButton = () => elements(render(), 'SellerButton').find(button => button.props.onClick && String(button.props.children).includes('Free Trial'));
+    if (role === 'Seller') {
+      assert.deepEqual(calls, ['send', 'verify'], 'verification alone does not register a seller');
+      elements(render(), 'form')[0].props.onSubmit({ preventDefault() {} }); // store details
+      elements(render(), 'form')[0].props.onSubmit({ preventDefault() {} }); // location
+      await launchButton().props.onClick();
+    }
     assert.deepEqual(calls, ['send', 'verify', 'register']);
     tree = render();
-    const retry = elements(tree, role === 'Seller' ? 'SellerButton' : 'button').find(button => button.props.children === 'Retry Registration');
+    const retry = role === 'Seller' ? launchButton()
+      : elements(tree, 'button').find(button => button.props.children === 'Retry Registration');
     assert.ok(retry, 'verified applicants can retry without entering an already-consumed OTP');
     await retry.props.onClick();
     assert.deepEqual(calls, ['send', 'verify', 'register', 'register']);

@@ -6,7 +6,9 @@ import Order from "../models/Order";
 const Lease = mongoose.models.OrderFinanceLease || mongoose.model("OrderFinanceLease",
   new Schema({ _id: String, token: String, until: Date }));
 
-export async function queueOrderEffect(order: any, kind: "Refund" | "Settlement" | "Reversal", key: string,
+export type OrderEffectKind = "Refund" | "Settlement" | "Reversal" | "ExternalSettlement";
+
+export async function queueOrderEffect(order: any, kind: OrderEffectKind, key: string,
   session: ClientSession | undefined, amount?: number, reason?: string) {
   await OrderEffect.updateOne({ _id: key }, { $setOnInsert: {
     order: order._id, kind, amount, reason, status: "Pending", nextAttemptAt: new Date(),
@@ -46,15 +48,38 @@ export async function processOrderEffects(orderId?: string) {
         const { reverseCommissions } = await import("./commissionService");
         const result = await reverseCommissions(key);
         if (!result.success) throw new Error(result.message || "Commission reversal failed");
-      } else {
+      } else if (task.kind === "Settlement" || task.kind === "ExternalSettlement") {
         const { processOrderStatusTransition } = await import("./orderService");
-        const order = await Order.findById(key).select("status");
+        const order = await Order.findById(key).select("status deliveryProvider paymentMethod");
         if (order?.status !== "Delivered") {
           await OrderEffect.updateOne({ _id: task._id }, { $set: { status: "Complete", lastError: "Order no longer delivered" } });
           continue;
         }
+        const external = order.deliveryProvider === "ADDLOGS";
+        if (task.kind === "Settlement" && external) {
+          // External deliveries never settle through the in-house branch.
+          await OrderEffect.updateOne({ _id: task._id }, { $set: { status: "Held", lastError: "External delivery orders settle only through ExternalSettlement." } });
+          continue;
+        }
+        if (task.kind === "ExternalSettlement") {
+          const { ADLOGGS_EXTERNAL_SETTLEMENT_ALLOWED } = await import("./adloggs/adloggsConfig");
+          if (!external || !ADLOGGS_EXTERNAL_SETTLEMENT_ALLOWED || order.paymentMethod === "COD") {
+            // COD: the existing COD payout assumes our own courier collected the cash; external
+            // COD settlement must be reconciled with the provider's COD Settlement report first.
+            await OrderEffect.updateOne({ _id: task._id }, { $set: { status: "Held",
+              lastError: !external ? "Not an external delivery order."
+                : order.paymentMethod === "COD" ? "External COD seller settlement waits for reconciliation with the provider's COD Settlement report."
+                : "External seller settlement is not approved yet." } });
+            continue;
+          }
+        }
+        // Same calculations and timing as in-house Online settlement (commissions on delivery).
         await processOrderStatusTransition(key, "Delivered");
         await Order.updateOne({ _id: key }, { $set: { settlementStatus: "Complete", settlementError: null } });
+      } else {
+        // Unknown kinds never fall through to a money-moving branch.
+        await OrderEffect.updateOne({ _id: task._id }, { $set: { status: "Held", lastError: `Unknown effect kind "${String(task.kind)}"; not executed.` } });
+        continue;
       }
       await OrderEffect.updateOne({ _id: task._id }, { $set: { status: "Complete", lastError: null } });
     } catch (error: any) {
@@ -79,7 +104,8 @@ export function runOrderEffects(orderId: string) {
 export async function recoverOrderEffects() {
   const orders = await Order.find({ $or: [
     { status: { $in: ["Cancelled", "Rejected", "Returned"] }, paymentMethod: { $ne: "COD" }, paymentStatus: { $in: ["Paid", "PartiallyRefunded"] } },
-    { status: "Delivered", settlementStatus: { $in: ["Pending", "Failed"] } },
+    // External-provider orders are settled only through their own held ExternalSettlement effect.
+    { status: "Delivered", settlementStatus: { $in: ["Pending", "Failed"] }, deliveryProvider: { $ne: "ADDLOGS" } },
   ] }).limit(100).select("status paymentStatus");
   for (const order of orders) {
     const settlement = order.status === "Delivered";

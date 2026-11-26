@@ -33,6 +33,7 @@ import customerTrackingRoutes from "../modules/customer/routes/trackingRoutes";
 import deliveryTrackingRoutes from "../modules/delivery/routes/trackingRoutes";
 import fcmTokenRoutes from "./fcmTokenRoutes";
 import paymentRoutes from "./paymentRoutes";
+import { handleAdloggsWebhook } from "../services/adloggs/adloggsWebhookService";
 import subscriptionPlanRoutes from "./subscriptionPlanRoutes";
 import sellerWalletRoutes from "./sellerWalletRoutes";
 import deliveryWalletRoutes from "./deliveryWalletRoutes";
@@ -169,6 +170,10 @@ router.use("/seller/store-preview", authenticate, requireUserType("Seller"), sel
 
 // Payment routes (Razorpay integration)
 router.use("/payment", paymentRoutes);
+
+// Adloggs status webhook. Disabled by default; authentication fails closed until the
+// provider confirms its mechanism, so no request can change state today.
+router.post("/webhooks/adloggs", handleAdloggsWebhook);
 
 // Subscription routes (Plans & Verification)
 router.use("/subscription-plans", subscriptionPlanRoutes);

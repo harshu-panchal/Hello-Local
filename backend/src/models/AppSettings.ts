@@ -66,6 +66,60 @@ export interface IAppSettings extends Document {
     deliveryBoyKmRate?: number;
   };
 
+  /**
+   * Admin switch for the in-house courier fleet. Only an explicit `false`
+   * disables it; a missing field (legacy settings documents) means enabled.
+   * Changed only through the dedicated admin endpoint, never the generic
+   * settings update.
+   */
+  inHouseDelivery?: {
+    enabled: boolean;
+    updatedAt?: Date;
+    updatedBy?: mongoose.Types.ObjectId;
+    /** Bumped by every new assignment; makes assignments write-conflict with the toggle. */
+    assignmentSeq?: number;
+    /** Waiting-order recovery requested when the switch is turned back ON. */
+    recovery?: {
+      pending?: boolean;
+      requestSeq?: number;
+      leaseUntil?: Date;
+      leaseToken?: string;
+      lastRun?: {
+        trigger?: string;
+        requestSeq?: number;
+        startedAt?: Date;
+        finishedAt?: Date;
+        considered?: number;
+        offered?: number;
+        alreadyOffered?: number;
+        noCouriers?: number;
+        ineligible?: number;
+        stale?: number;
+        failed?: number;
+        aborted?: boolean;
+        errors?: string[];
+      };
+    };
+  };
+
+  /**
+   * Global delivery provider (Phase 2). Missing = IN_HOUSE. Changed only via
+   * the dedicated, readiness-checked admin endpoint.
+   */
+  deliveryProvider?: {
+    active: "IN_HOUSE" | "ADDLOGS";
+    updatedAt?: Date;
+    updatedBy?: mongoose.Types.ObjectId;
+  };
+
+  /** Adloggs diagnostics (Phase 6): results of admin-run, non-booking API checks. Never secrets. */
+  adloggsDiagnostics?: {
+    lastConnectivityCheckAt?: Date;
+    lastConnectivityOk?: boolean;
+    lastConnectivityError?: string;
+    wallet?: { state: "VERIFIED" | "WALLET_NOT_ENABLED"; balance?: string; retrievedAt: Date };
+  };
+
   // Tip Settings
   tipSettings?: {
     enabled: boolean;
@@ -294,6 +348,48 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       baseDistance: { type: Number, default: 0 },
       kmRate: { type: Number, default: 0 },
       deliveryBoyKmRate: { type: Number, default: 0 },
+    },
+    inHouseDelivery: {
+      enabled: { type: Boolean, default: true },
+      updatedAt: { type: Date },
+      updatedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+      assignmentSeq: { type: Number, default: 0 },
+      recovery: {
+        pending: { type: Boolean, default: false },
+        requestSeq: { type: Number, default: 0 },
+        leaseUntil: { type: Date },
+        leaseToken: { type: String },
+        lastRun: {
+          trigger: String,
+          requestSeq: Number,
+          startedAt: Date,
+          finishedAt: Date,
+          considered: Number,
+          offered: Number,
+          alreadyOffered: Number,
+          noCouriers: Number,
+          ineligible: Number,
+          stale: Number,
+          failed: Number,
+          aborted: Boolean,
+          errors: [String],
+        },
+      },
+    },
+    deliveryProvider: {
+      active: { type: String, enum: ["IN_HOUSE", "ADDLOGS"], default: "IN_HOUSE" },
+      updatedAt: { type: Date },
+      updatedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    },
+    adloggsDiagnostics: {
+      lastConnectivityCheckAt: { type: Date },
+      lastConnectivityOk: { type: Boolean },
+      lastConnectivityError: { type: String, maxlength: 300 },
+      wallet: {
+        type: new Schema({ state: { type: String, enum: ["VERIFIED", "WALLET_NOT_ENABLED"], required: true },
+          balance: { type: String, maxlength: 30 }, retrievedAt: { type: Date, required: true } }, { _id: false }),
+        default: undefined,
+      },
     },
     // Tip Settings
     tipSettings: {

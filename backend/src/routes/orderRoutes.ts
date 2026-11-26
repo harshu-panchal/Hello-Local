@@ -3,6 +3,7 @@ import {
   getOrders,
   getOrderById,
   updateOrderStatus,
+  markReadyForPickup,
 } from "../modules/seller/controllers/orderController";
 import {
   getPOSProducts,
@@ -42,5 +43,8 @@ router.get("/:id", getOrderById);
 
 // Update order status
 router.patch("/:id/status", updateOrderStatus);
+
+// Seller confirms their own shipment is ready for pickup (Phase 4)
+router.post("/:id/ready-for-pickup", markReadyForPickup);
 
 export default router;

@@ -24,6 +24,9 @@ router.put("/notifications/:id/read", deliveryNotificationController.markNotific
 // Dashboard Stats
 router.get("/dashboard/stats", deliveryDashboardController.getDashboardStats);
 
+// In-house delivery availability (admin switch + this courier's active work)
+router.get("/service-status", deliveryDashboardController.getServiceStatus);
+
 // Help & Support & Legal Policy
 router.get("/help", deliveryDashboardController.getHelpSupport);
 router.get("/policy", deliveryDashboardController.getDeliveryAppPolicy);

@@ -51,7 +51,7 @@ export default function Checkout() {
   const checkoutAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0);
-  const { location: userLocation } = useLocationContext();
+  const { location: userLocation, updateLocation: updateGlobalLocation } = useLocationContext();
   const { showToast: showGlobalToast } = useToast();
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
@@ -406,7 +406,13 @@ export default function Checkout() {
     if (placingOrder.current) return;
     const bypassProfileCheck = arg === true;
 
-    if (!selectedAddress || cart.items.length === 0) {
+    if (cart.items.length === 0) {
+      return;
+    }
+
+    if (!selectedAddress) {
+      showGlobalToast("Please add a delivery address to continue.", "error");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -519,7 +525,36 @@ export default function Checkout() {
   };
 
   const handleUpdateLocation = async () => {
-    if (!selectedAddress?.id || !mapLocation) return;
+    if (!mapLocation || !mapLocation.lat || !mapLocation.lng) {
+      showGlobalToast("Please move the map pin to select your delivery location.", "error");
+      return;
+    }
+
+    if (!selectedAddress?.id) {
+      setIsUpdatingLocation(true);
+      try {
+        const pinnedAddressText = mapLocation.address
+          ? [mapLocation.address.street, mapLocation.address.city, mapLocation.address.state].filter(Boolean).join(", ")
+          : userLocation?.address || "Pinned Location";
+        await updateGlobalLocation({
+          latitude: mapLocation.lat,
+          longitude: mapLocation.lng,
+          address: pinnedAddressText || "Pinned Location",
+          city: mapLocation.address?.city || userLocation?.city,
+          state: mapLocation.address?.state || userLocation?.state,
+          pincode: mapLocation.address?.pincode || userLocation?.pincode,
+        });
+        setShowMapPicker(false);
+        showGlobalToast("Location pinned! Please tap 'Add Address' to add your flat and street details.", "info");
+      } catch (err: any) {
+        console.error(err);
+        showGlobalToast("Failed to update pinned location. Please try again.", "error");
+      } finally {
+        setIsUpdatingLocation(false);
+      }
+      return;
+    }
+
     setIsUpdatingLocation(true);
     try {
       const updatePayload: any = {
@@ -557,8 +592,12 @@ export default function Checkout() {
       setShowMapPicker(false);
       setIsMapSelected(true);
       showGlobalToast("Location and address updated successfully!");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showGlobalToast(
+        err?.response?.data?.message || "Failed to update location. Please try again.",
+        "error"
+      );
     } finally {
       setIsUpdatingLocation(false);
     }
@@ -608,7 +647,7 @@ export default function Checkout() {
   };
 
   return (
-    <div className="bg-[#F8FAFC] min-h-screen flex flex-col pb-32 md:pb-16">
+    <div className="bg-[#F8FAFC] min-h-screen flex flex-col pb-32 lg:pb-16">
       {/* Party Popper Animation */}
       <PartyPopper
         show={showPartyPopper}
@@ -1096,7 +1135,7 @@ export default function Checkout() {
                   type="button"
                   onClick={() => handlePlaceOrder()}
                   disabled={cart.items.length === 0 || isPlacingOrder || showRazorpayCheckout}
-                  className={`w-full py-2.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95 touch-target-min flex items-center justify-center gap-1.5 ${
+                  className={`hidden lg:flex w-full py-2.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-xs transition-all active:scale-95 touch-target-min items-center justify-center gap-1.5 ${
                     cart.items.length > 0
                       ? "bg-[#FF2E7A] text-white hover:bg-[#E02269]"
                       : "bg-slate-200 text-slate-400 cursor-not-allowed"

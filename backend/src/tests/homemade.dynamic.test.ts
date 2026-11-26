@@ -44,12 +44,16 @@ test("HOMEMADE DYNAMIC END-TO-END SUITE", async (t) => {
       return { ...data, _id: new mongoose.Types.ObjectId() };
     }) as any;
 
-    Seller.findById = (() => createMockQuery({ _id: dummySellerId, status: "Approved" })) as any;
+    // Product management requires an approved seller on an active plan (subscription feature).
+    Seller.findById = (() => createMockQuery({ _id: dummySellerId, status: "Approved",
+      subscription: { status: "active", endDate: new Date(Date.now() + 86400000) } })) as any;
 
     const req: any = {
       user: { userId: dummySellerId.toString() },
       body: {
         productName: "Aai Special Handmade Pickle",
+        // A category is required for every product (the seller form enforces it too).
+        category: new mongoose.Types.ObjectId().toString(),
         price: 250,
         discPrice: 220,
         stock: 50,

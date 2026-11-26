@@ -220,11 +220,11 @@ export default function AdminStoreSettings() {
             />
           </svg>
           <div className="text-xs sm:text-sm text-rose-900 leading-relaxed">
-            <span className="font-bold">How Admin Store is used:</span> Whenever
-            products are added by an administrator without specifying an
-            external vendor, they are automatically tied to this Admin Store.
-            Customers will see this store name, and delivery distances/charges
-            are measured from these coordinates.
+            <span className="font-bold">How Admin Store is used:</span> Select
+            this store under <span className="font-semibold">Seller / pickup store</span> when
+            adding direct admin catalog products. Customers will see this store
+            name, and delivery availability, pickup, and distances are measured
+            from these saved coordinates.
             {storeId && (
               <span className="block mt-1 text-xs text-rose-700 font-mono">
                 Store ID: {storeId}

@@ -319,6 +319,10 @@ export default function SellerBulkProductModal({
                   <span>SKU is 100% optional — leave blank and Hello Local auto-generates unique SKUs!</span>
                 </span>
               </div>
+              <p className="text-[11px] text-slate-500">
+                Fill the <span className="font-semibold">Shipping Weight (kg)</span> column with the packed weight of one unit.
+                It is needed for partner delivery; products without it can be updated later.
+              </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
@@ -512,6 +516,11 @@ export default function SellerBulkProductModal({
                     ? "The valid items have been saved to your catalog and inventory."
                     : "None of the products could be imported due to validation errors."}
                 </p>
+                {!!result.missingShippingWeightCount && (
+                  <p className="text-xs font-medium mt-1 text-amber-800">
+                    {result.missingShippingWeightCount} product(s) have no shipping weight yet. Add it from the product edit screen to enable partner delivery.
+                  </p>
+                )}
               </div>
 
               {/* Errors Breakdown */}

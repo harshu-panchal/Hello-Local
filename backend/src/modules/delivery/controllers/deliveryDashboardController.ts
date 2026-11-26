@@ -4,6 +4,17 @@ import Delivery from "../../../models/Delivery";
 import Order from "../../../models/Order";
 import AppSettings from "../../../models/AppSettings";
 import mongoose from "mongoose";
+import { getCourierServiceStatus } from "../../../services/inHouseDeliveryService";
+
+/**
+ * GET /delivery/service-status
+ * Whether in-house delivery accepts new work, and how many deliveries this
+ * courier still has to finish (those continue even while it is switched off).
+ */
+export const getServiceStatus = asyncHandler(async (req: Request, res: Response) => {
+  const data = await getCourierServiceStatus(String(req.user!.userId));
+  return res.status(200).json({ success: true, data });
+});
 
 /**
  * Get Dashboard Stats

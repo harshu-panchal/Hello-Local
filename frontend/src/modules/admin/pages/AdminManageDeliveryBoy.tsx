@@ -9,6 +9,9 @@ import {
 } from "../../../services/api/admin/adminDeliveryService";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
+import InHouseDeliveryToggleCard from "../components/InHouseDeliveryToggleCard";
+import DeliveryProviderCard from "../components/DeliveryProviderCard";
+import AdloggsStatusCard from "../components/AdloggsStatusCard";
 
 export default function AdminManageDeliveryBoy() {
   const navigate = useNavigate();
@@ -17,6 +20,8 @@ export default function AdminManageDeliveryBoy() {
   const { showToast } = useToast();
 
   const [deliveryBoys, setDeliveryBoys] = useState<DeliveryBoy[]>([]);
+  // Bumped when the in-house switch changes so provider readiness reloads.
+  const [deliverySettingsVersion, setDeliverySettingsVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tableError, setTableError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -305,6 +310,13 @@ export default function AdminManageDeliveryBoy() {
           <span className="mx-2 text-neutral-300">/</span>
           <span className="text-neutral-700 font-medium">Delivery Boys</span>
         </nav>
+      </div>
+
+      {/* In-house delivery ON/OFF (drain mode) and global provider selection */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <InHouseDeliveryToggleCard onChanged={() => setDeliverySettingsVersion(version => version + 1)} />
+        <DeliveryProviderCard refreshKey={deliverySettingsVersion} />
+        <div className="xl:col-span-2"><AdloggsStatusCard /></div>
       </div>
 
       {/* Main Container Card */}

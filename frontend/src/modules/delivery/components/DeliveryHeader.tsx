@@ -11,13 +11,17 @@ interface DeliveryHeaderProps {
 
 export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
   const navigate = useNavigate();
-  const { isOnline, setIsOnline } = useDeliveryStatus();
+  const { isOnline, setIsOnline, inHouseDeliveryEnabled } = useDeliveryStatus();
   const { userName: contextUserName } = useDeliveryUser();
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Unapproved partners cannot go online (#98/#140)
   const isPendingApproval = ((user as any)?.status ?? 'Active') === 'Inactive';
+  // While in-house delivery is paused there is no new work to go on duty for;
+  // going off duty is still allowed.
+  const blockGoOnline = !inHouseDeliveryEnabled && !isOnline;
+  const toggleDisabled = isPendingApproval || blockGoOnline;
   const displayName = userName || contextUserName;
 
   useEffect(() => {
@@ -110,12 +114,12 @@ export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
             {/* Toggle Switch — disabled until admin approval (#98/#140) */}
             <button
               onClick={() => {
-                if (!isPendingApproval) setIsOnline(!isOnline);
+                if (!toggleDisabled) setIsOnline(!isOnline);
               }}
-              disabled={isPendingApproval}
-              title={isPendingApproval ? 'Available after admin approval' : isOnline ? 'Go Offline' : 'Go Online'}
+              disabled={toggleDisabled}
+              title={isPendingApproval ? 'Available after admin approval' : blockGoOnline ? 'In-house delivery is paused by admin' : isOnline ? 'Go Offline' : 'Go Online'}
               className={`relative w-12 h-7 rounded-full transition-colors min-h-[44px] flex items-center px-1 shadow-2xs ${
-                isPendingApproval
+                toggleDisabled
                   ? 'bg-slate-200 cursor-not-allowed opacity-60'
                   : isOnline
                   ? 'bg-rose-600'

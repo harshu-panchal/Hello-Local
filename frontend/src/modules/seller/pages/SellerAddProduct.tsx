@@ -69,6 +69,7 @@ export default function SellerAddProduct() {
     fssaiLicNo: "",
     foodType: "None",
     totalAllowedQuantity: "10",
+    shippingWeightKg: "",
     mainImageUrl: "",
     galleryImageUrls: [] as string[],
     isShopByStoreOnly: "No",
@@ -265,6 +266,7 @@ export default function SellerAddProduct() {
               foodType: (product as any).foodType || "None",
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
+              shippingWeightKg: (product as any).shippingWeightKg != null ? String((product as any).shippingWeightKg) : "",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
               galleryImageUrls: product.galleryImageUrls || product.galleryImages || [],
               isShopByStoreOnly: (product as any).isShopByStoreOnly ? "Yes" : "No",
@@ -537,6 +539,23 @@ export default function SellerAddProduct() {
       }
     }
 
+    // Shipping weight: required for NEW products; on edit it may stay empty for
+    // older products, but any value entered must be valid (0.001 - 1000 kg).
+    const weightText = formData.shippingWeightKg.trim();
+    const weight = Number(weightText);
+    if (!id && !weightText) {
+      const msg = "Please enter the shipping weight per unit (kg).";
+      setUploadError(msg);
+      showToast(msg, "error");
+      return;
+    }
+    if (weightText && (!Number.isFinite(weight) || weight < 0.001 || weight > 1000)) {
+      const msg = "Shipping weight must be between 0.001 and 1000 kg.";
+      setUploadError(msg);
+      showToast(msg, "error");
+      return;
+    }
+
     if (formData.tax === "__other__" && !customTaxRate.trim()) {
       const msg = "Please enter your custom GST tax percentage (e.g. 5, 12, 18).";
       setUploadError(msg);
@@ -635,6 +654,8 @@ export default function SellerAddProduct() {
         fssaiLicNo: formData.fssaiLicNo,
         foodType: formData.foodType,
         totalAllowedQuantity: parseInt(formData.totalAllowedQuantity) || 10,
+        // Empty clears it; the server validates 0.001-1000 kg.
+        shippingWeightKg: formData.shippingWeightKg.trim() === "" ? null : Number(formData.shippingWeightKg),
         mainImageUrl: mainImageUrl,
         galleryImageUrls: galleryImageUrls,
         isShopByStoreOnly: formData.isShopByStoreOnly === "Yes",
@@ -1254,6 +1275,28 @@ export default function SellerAddProduct() {
                   onChange={handleChange}
                   className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
                 />
+              </SellerFormField>
+            </div>
+
+            <div>
+              <SellerFormField label="Shipping weight per unit (kg)" required={!id}>
+                <input
+                  type="number"
+                  name="shippingWeightKg"
+                  required={!id}
+                  min="0.001"
+                  max="1000"
+                  step="0.001"
+                  inputMode="decimal"
+                  placeholder="e.g. 0.5"
+                  value={formData.shippingWeightKg}
+                  onChange={handleChange}
+                  aria-describedby="shipping-weight-help"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm text-slate-900 outline-none focus:border-purple-600 min-h-[42px]"
+                />
+                <p id="shipping-weight-help" className="mt-1 text-[11px] text-slate-500">
+                  Packed weight of one unit. Needed when orders are delivered by our delivery partner.
+                </p>
               </SellerFormField>
             </div>
 

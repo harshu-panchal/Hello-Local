@@ -67,6 +67,7 @@ export default function AdminAddProduct() {
     maxReturnDays: "",
     fssaiLicNo: "",
     totalAllowedQuantity: "10",
+    shippingWeightKg: "",
     mainImageUrl: "",
     galleryImageUrls: [] as string[],
     isShopByStoreOnly: "No",
@@ -196,6 +197,7 @@ export default function AdminAddProduct() {
               fssaiLicNo: product.fssaiLicNo || "",
               totalAllowedQuantity:
                 product.totalAllowedQuantity?.toString() || "10",
+              shippingWeightKg: (product as any).shippingWeightKg != null ? String((product as any).shippingWeightKg) : "",
               mainImageUrl: product.mainImageUrl || product.mainImage || "",
               galleryImageUrls:
                 product.galleryImageUrls || product.galleryImages || [],
@@ -416,6 +418,14 @@ export default function AdminAddProduct() {
       return;
     }
 
+    const weightText = formData.shippingWeightKg.trim();
+    const weight = Number(weightText);
+    if (weightText && (!Number.isFinite(weight) || weight < 0.001 || weight > 1000)) {
+      setUploadError("Shipping weight must be between 0.001 and 1000 kg.");
+      showToast("Shipping weight must be between 0.001 and 1000 kg.", "error");
+      return;
+    }
+
     if (formData.isShopByStoreOnly !== "Yes") {
       if (!formData.headerCategory) {
         setUploadError("Please select a header category.");
@@ -501,6 +511,8 @@ export default function AdminAddProduct() {
           ? parseInt(formData.maxReturnDays)
           : undefined,
         totalAllowedQuantity: parseInt(formData.totalAllowedQuantity || "10"),
+        // Empty clears it; the server validates 0.001-1000 kg.
+        shippingWeightKg: formData.shippingWeightKg.trim() === "" ? null : Number(formData.shippingWeightKg),
         fssaiLicNo: formData.fssaiLicNo || undefined,
         mainImage: mainImageUrl || undefined,
         galleryImages: galleryImageUrls,
@@ -1504,6 +1516,28 @@ export default function AdminAddProduct() {
                 />
                 <span className="text-[11px] text-neutral-400 mt-1 block">
                   Capped limit on single cart checkout
+                </span>
+              </div>
+
+              {/* Shipping weight (partner delivery) */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5 uppercase tracking-wider">
+                  Shipping Weight Per Unit (kg)
+                </label>
+                <input
+                  type="number"
+                  min="0.001"
+                  max="1000"
+                  step="0.001"
+                  inputMode="decimal"
+                  name="shippingWeightKg"
+                  value={formData.shippingWeightKg}
+                  onChange={handleChange}
+                  placeholder="e.g. 0.5"
+                  className="w-full px-3.5 py-2.5 border border-neutral-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-600/20 focus:border-rose-600 transition-colors bg-white min-h-[44px]"
+                />
+                <span className="text-[11px] text-neutral-400 mt-1 block">
+                  Packed weight of one unit; needed for partner delivery
                 </span>
               </div>
             </div>

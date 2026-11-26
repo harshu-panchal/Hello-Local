@@ -4,23 +4,25 @@ import Address from "../../../models/Address";
 // Add a new address
 export const addAddress = async (req: Request, res: Response) => {
     try {
-        const { name, fullName, phone, flat, street, city, state, pincode, landmark, type, isDefault, latitude, longitude } = req.body;
+        const { name, fullName, phone, flat, street, address: bodyAddress, city, state, pincode, landmark, type, isDefault, latitude, longitude } = req.body;
         const userId = req.user!.userId;
 
-        const finalName = fullName || name;
+        const finalName = (fullName || name || "").trim();
+        const trimmedFlat = typeof flat === "string" ? flat.trim() : "";
+        const trimmedStreet = typeof street === "string" ? street.trim() : "";
+        const fullAddress =
+            trimmedFlat && trimmedStreet
+                ? `${trimmedFlat}, ${trimmedStreet}`
+                : typeof bodyAddress === "string"
+                ? bodyAddress.trim()
+                : "";
 
-        if (!finalName || !phone || !flat || !street || !city || !pincode) {
+        if (!finalName || !phone || !fullAddress || !city || !pincode) {
             return res.status(400).json({
                 success: false,
-                message: "All fields are required (name, phone, flat, street, city, pincode)",
+                message: "All fields are required (name, phone, address, city, pincode)",
             });
         }
-
-        // Combine flat and street for the single 'address' field in schema,
-        // or we could change schema. For now, we store them combined or rely on schema update.
-        // Looking at the schema, it has 'address', 'city', 'pincode'.
-        // We will store "Flat, Street" in 'address'.
-        const fullAddress = `${flat}, ${street}`;
 
         if (isDefault) {
             // If this is default, unsettle others
@@ -38,7 +40,10 @@ export const addAddress = async (req: Request, res: Response) => {
             existingAddress.city = city;
             existingAddress.state = state;
             existingAddress.pincode = pincode;
-            existingAddress.isDefault = isDefault || false;
+            if (landmark !== undefined) existingAddress.landmark = landmark;
+            if (latitude !== undefined) existingAddress.latitude = latitude;
+            if (longitude !== undefined) existingAddress.longitude = longitude;
+            if (isDefault !== undefined) existingAddress.isDefault = isDefault;
 
             await existingAddress.save();
 

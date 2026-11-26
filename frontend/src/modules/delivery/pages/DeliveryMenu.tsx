@@ -12,7 +12,7 @@ export default function DeliveryMenu() {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const { userName } = useDeliveryUser();
-  const { isOnline, sellersInRangeCount } = useDeliveryStatus();
+  const { isOnline, sellersInRangeCount, inHouseDeliveryEnabled } = useDeliveryStatus();
   const { showToast } = useToast();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -30,7 +30,10 @@ export default function DeliveryMenu() {
     { id: "menu-w", title: "Courier Wallet", subtitle: "Balance & COD settlements", route: "/delivery/wallet" },
     { id: "menu-history", title: "Delivery History", subtitle: "All completed orders", route: "/delivery/orders/all" },
     { id: "menu-2", title: "Earnings & Payouts", subtitle: "Commission withdrawals", route: "/delivery/earnings" },
-    { id: "menu-service-areas", title: "Active Service Areas", subtitle: `${sellersInRangeCount} stores in range`, route: "/delivery/sellers-in-range" },
+    // New-work screen: hidden while in-house delivery is paused.
+    ...(inHouseDeliveryEnabled
+      ? [{ id: "menu-service-areas", title: "Active Service Areas", subtitle: `${sellersInRangeCount} stores in range`, route: "/delivery/sellers-in-range" }]
+      : []),
     { id: "menu-3", title: "Settings & Sound", subtitle: "App & notification preferences", route: "/delivery/settings" },
     { id: "menu-4", title: "Help & Support Desk", subtitle: "FAQs & emergency lines", route: "/delivery/help" },
     { id: "menu-5", title: "About Hello Local", subtitle: "App policies & legal terms", route: "/delivery/about" },

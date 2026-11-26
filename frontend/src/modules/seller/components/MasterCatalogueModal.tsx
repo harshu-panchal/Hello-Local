@@ -41,6 +41,8 @@ export default function MasterCatalogueModal({
   // Local price & stock modifications per item
   const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
   const [customStocks, setCustomStocks] = useState<Record<string, number>>({});
+  // Shipping weight per unit (kg), as typed; empty = not provided.
+  const [customWeights, setCustomWeights] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isOpen) return;
@@ -111,6 +113,13 @@ export default function MasterCatalogueModal({
       return;
     }
 
+    const weightText = (customWeights[product.id] ?? "").trim();
+    const weight = Number(weightText);
+    if (weightText && (!Number.isFinite(weight) || weight < 0.001 || weight > 1000)) {
+      showToast("Shipping weight must be between 0.001 and 1000 kg.", "error");
+      return;
+    }
+
     try {
       setAddingId(product.id);
       const res = await quickAddMasterProductToStore({
@@ -118,6 +127,7 @@ export default function MasterCatalogueModal({
         customPrice: finalPrice,
         customStock: finalStock,
         customMrp: product.mrp,
+        ...(weightText ? { shippingWeightKg: weight } : {}),
       });
 
       if (res.success) {
@@ -313,6 +323,25 @@ export default function MasterCatalogueModal({
                                 ...prev,
                                 [item.id]: parseInt(e.target.value, 10) || 0,
                               }))
+                            }
+                            className="w-full text-xs font-bold rounded-lg border border-slate-300 bg-white py-1.5 px-2.5 text-slate-900 outline-none focus:border-purple-600"
+                          />
+                        </div>
+
+                        <div className="col-span-2">
+                          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                            Shipping weight per unit (kg)
+                          </label>
+                          <input
+                            type="number"
+                            min="0.001"
+                            max="1000"
+                            step="0.001"
+                            inputMode="decimal"
+                            placeholder="e.g. 0.5 (needed for partner delivery)"
+                            value={customWeights[item.id] ?? ""}
+                            onChange={(e) =>
+                              setCustomWeights((prev) => ({ ...prev, [item.id]: e.target.value }))
                             }
                             className="w-full text-xs font-bold rounded-lg border border-slate-300 bg-white py-1.5 px-2.5 text-slate-900 outline-none focus:border-purple-600"
                           />

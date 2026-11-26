@@ -5,6 +5,7 @@ import OrderItem from "../models/OrderItem";
 import { orderError, withOrderTransaction } from "./orderTransactionService";
 import { payableForDelivery } from "./orderLifecycleService";
 import { queueOrderEffect } from "./orderEffectService";
+import { syncOrderShipments } from "./shipmentService";
 
 export async function generateDeliveryOtp(orderId: string, options: { refresh?: boolean; courierId?: string } = {}): Promise<{ success: boolean; message: string }> {
   const order = await withOrderTransaction(orderId, async session => {
@@ -66,6 +67,8 @@ export async function verifyDeliveryOtp(orderId: string, otp: string, courierId?
     await OrderItem.updateMany({ order: orderId, status: { $ne: "Cancelled" } }, { $set: { status: "Delivered" } }, { session });
     await queueOrderEffect(order!, "Settlement", `${orderId}:settlement`, session);
     await order!.save({ session });
+    // One customer delivery (and one OTP) completes every remaining shipment.
+    await syncOrderShipments(order!, session, "delivery");
     return { invalid: false, alreadyDelivered: false };
   });
   if (result.invalid) orderError("Invalid OTP. Please check and try again.");
