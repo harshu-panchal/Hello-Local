@@ -84,3 +84,18 @@ export interface RtoPreview {
 /** Read-only: provider evidence, reason and the refund the existing rules would produce. */
 export const getAdloggsRtoPreview = async (shipmentId: string) =>
   (await api.get<{ success: boolean; data: RtoPreview }>(`/admin/shipments/${shipmentId}/adloggs/rto-preview`)).data;
+
+export interface AdloggsWebhookEventRow {
+  receivedAt: string;
+  statusCode: number;
+  statusLabel: string;
+  partnerOrderId: string | null;
+  orderUuid: string;
+  riderName: string | null;
+  /** APPLIED = matched a Hello Local shipment; UNMATCHED = received and stored; DUPLICATE etc. */
+  result: string;
+}
+
+/** Latest received Adloggs status webhooks (evidence for the Go-Live test cases). */
+export const getAdloggsWebhookEvents = async () =>
+  (await api.get<{ success: boolean; data: AdloggsWebhookEventRow[] }>("/admin/delivery-providers/adloggs/webhook-events")).data;

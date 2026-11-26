@@ -174,6 +174,8 @@ router.use("/payment", paymentRoutes);
 // Adloggs status webhook. Disabled by default; authentication fails closed until the
 // provider confirms its mechanism, so no request can change state today.
 router.post("/webhooks/adloggs", handleAdloggsWebhook);
+// Preferred registration: the URL carries our secret (Adloggs offers no signature or header).
+router.post("/webhooks/adloggs/:token", handleAdloggsWebhook);
 
 // Subscription routes (Plans & Verification)
 router.use("/subscription-plans", subscriptionPlanRoutes);

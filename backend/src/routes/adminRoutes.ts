@@ -180,6 +180,7 @@ router.get("/delivery-providers/adloggs", adloggsController.getAdloggsStatus);
 router.post("/delivery-providers/adloggs/connectivity-test", adloggsController.testAdloggsConnectivity);
 router.get("/delivery-providers/adloggs/wallet", adloggsController.getAdloggsWallet);
 router.get("/delivery-providers/adloggs/readiness", adloggsController.getAdloggsReadiness);
+router.get("/delivery-providers/adloggs/webhook-events", adloggsController.getAdloggsWebhookEvents);
 router.put("/delivery-providers/adloggs/sellers/:sellerId/profile", adloggsController.updateSellerProfile);
 
 // ==================== Return Request Routes ====================

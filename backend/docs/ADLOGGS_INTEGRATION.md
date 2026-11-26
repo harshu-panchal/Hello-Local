@@ -253,3 +253,15 @@ Cancelled items are excluded before allocation; a partial cancellation re-alloca
   - Multi-seller order (one customer, two shops, two pickup addresses): `HLT5003703-S1` (Indiranagar, ₹73, 3.2 km) and `HLT5003703-S2` (MG Road, ₹125, 7.1 km). This confirms per-seller pickup addresses under one account.
   - Earlier: `HLTEST063988-S1`, Online, cancelled before pickup.
 - **Prepared but not sent** (needs COD enabled by Adloggs): a single-seller COD order (collect ₹185), a multi-seller COD order (₹112.50 + ₹202.50 = ₹315.00 order total), and a COD cancel-before-pickup test.
+
+### Webhook for the Adloggs Go-Live validation (4 test cases)
+
+Adloggs' "Integration & Go-Live Guide" requires a webhook registered in their dashboard (Webhook section, with a "Test Webhook" tool) and four validated cases: happy flow, cancel from our side, cancel from the Adloggs dashboard, and RTO. Adloggs specifies no webhook signature or header, so Hello Local uses its own secret:
+- `ADLOGGS_WEBHOOK_TOKEN`: at least 32 URL-safe characters (for example `openssl rand -hex 32`), stored only in the server `.env`.
+- URL to register: `https://api.hellolocal.in/api/v1/webhooks/adloggs/<ADLOGGS_WEBHOOK_TOKEN>`. The `x-hellolocal-webhook-token` header is also accepted if Adloggs lets us add headers.
+- Token comparison is constant-time. A wrong or missing token returns 401 and writes nothing. With the switch off, or no valid token, the endpoint returns 404.
+- Receiving webhooks needs only `ADLOGGS_WEBHOOK_ENABLED=true` and the token, not the API key. The live server can receive the test events while the rest of the integration stays off.
+- Status codes may arrive as numbers or numeric strings. Events for orders not in our database (API-created test orders) are stored as `UNMATCHED` and acknowledged with HTTP 200.
+- Admins see the latest events under Adloggs Integration > "Recent webhook events" (`GET /api/v1/admin/delivery-providers/adloggs/webhook-events`). OTPs, phones and locations are never stored.
+- The status model accepts all four Go-Live sequences: skipped intermediate statuses move forward, "Arrived at delivery" -> "RTO Delivered" is applied, and RTO never counts as delivered.
+- Note: the token appears in the server's nginx access log (URL). Keep the logs root-only, or ask Adloggs for header support.

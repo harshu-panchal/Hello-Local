@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import { getAdloggsAdminStatus, checkAdloggsWallet, updateSellerAdloggsProfile, getAdloggsDataReadiness } from "../../../services/adloggs/adloggsAdminService";
+import { getAdloggsAdminStatus, checkAdloggsWallet, updateSellerAdloggsProfile, getAdloggsDataReadiness, listRecentAdloggsWebhookEvents } from "../../../services/adloggs/adloggsAdminService";
 import { resolveUnknownBookingOutcome, UNKNOWN_OUTCOME_ACTIONS } from "../../../services/adloggs/adloggsBookingService";
 import { handleExternalCancellation, PROVIDER_CANCELLATION_ACTIONS, getRtoResolutionPreview } from "../../../services/adloggs/adloggsCancellationWorkflow";
 import { processOrderEffects } from "../../../services/orderEffectService";
@@ -22,6 +22,11 @@ export const testAdloggsConnectivity = asyncHandler(async (_req: Request, res: R
 /** GET /admin/delivery-providers/adloggs/readiness — missing seller/product data (read-only, no provider calls). */
 export const getAdloggsReadiness = asyncHandler(async (_req: Request, res: Response) => {
   return res.status(200).json({ success: true, data: await getAdloggsDataReadiness() });
+});
+
+/** GET /admin/delivery-providers/adloggs/webhook-events — latest received status webhooks (no OTP/phone data). */
+export const getAdloggsWebhookEvents = asyncHandler(async (_req: Request, res: Response) => {
+  return res.status(200).json({ success: true, data: await listRecentAdloggsWebhookEvents(30) });
 });
 
 /** GET /admin/delivery-providers/adloggs/wallet */

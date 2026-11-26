@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getAdloggsStatus,
   getAdloggsReadiness,
+  getAdloggsWebhookEvents,
   testAdloggsConnectivity,
   type AdloggsAdminStatus,
   type AdloggsDataReadiness,
+  type AdloggsWebhookEventRow,
   type AdloggsWallet,
 } from "../../../services/api/admin/adminAdloggsService";
 import { useToast } from "../../../context/ToastContext";
@@ -52,14 +54,17 @@ export default function AdloggsStatusCard() {
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [readiness, setReadiness] = useState<AdloggsDataReadiness | null>(null);
+  const [events, setEvents] = useState<AdloggsWebhookEventRow[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [response, data] = await Promise.all([getAdloggsStatus(), getAdloggsReadiness().catch(() => null)]);
+      const [response, data, hooks] = await Promise.all([getAdloggsStatus(), getAdloggsReadiness().catch(() => null),
+        getAdloggsWebhookEvents().catch(() => null)]);
       setStatus(response.data);
       setReadiness(data?.data ?? null);
+      setEvents(hooks?.data ?? null);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Could not load Adloggs status.");
     } finally {
@@ -153,6 +158,32 @@ export default function AdloggsStatusCard() {
                 </details>
               )}
             </div>
+          )}
+          {events && (
+            <details className="mt-3 text-xs text-neutral-700">
+              <summary className="cursor-pointer font-semibold">Recent webhook events ({events.length})</summary>
+              {events.length === 0 ? (
+                <p className="mt-1 text-neutral-500">No status webhook received yet.</p>
+              ) : (
+                <div className="mt-1 overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="text-neutral-500">
+                      <tr><th className="pr-2">Received</th><th className="pr-2">Status</th><th className="pr-2">Our order ID</th><th>Result</th></tr>
+                    </thead>
+                    <tbody>
+                      {events.map((event, index) => (
+                        <tr key={`${event.orderUuid}-${event.statusCode}-${index}`} className="border-t border-neutral-100">
+                          <td className="pr-2 whitespace-nowrap">{when(event.receivedAt)}</td>
+                          <td className="pr-2">{event.statusLabel} ({event.statusCode})</td>
+                          <td className="pr-2 font-mono">{event.partnerOrderId ?? "—"}</td>
+                          <td>{event.result}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </details>
           )}
           {!!status.capabilities.blockers.length && (
             <details className="mt-3 text-xs text-neutral-700">

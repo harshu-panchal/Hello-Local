@@ -123,3 +123,27 @@ export async function getAdloggsDataReadiness(limit = 20) {
     },
   };
 }
+
+/**
+ * Latest received Adloggs webhook events (admin evidence for the Go-Live test
+ * cases). Only stored facts: no OTPs, phones or locations are ever kept.
+ */
+export async function listRecentAdloggsWebhookEvents(limit = 30) {
+  const AdloggsWebhookEvent = (await import("../../models/AdloggsWebhookEvent")).default;
+  const { ADLOGGS_STATUS_BY_CODE, ADLOGGS_STATUS_LABELS } = await import("./adloggsStatus");
+  const events: any[] = await AdloggsWebhookEvent.find({}).sort({ receivedAt: -1 }).limit(Math.min(Math.max(limit, 1), 100))
+    .select("orderUuid partnerOrderId statusCode riderName receivedAt state").lean();
+  return events.map(event => {
+    const status = ADLOGGS_STATUS_BY_CODE[event.statusCode];
+    return {
+      receivedAt: event.receivedAt,
+      statusCode: event.statusCode,
+      statusLabel: status ? ADLOGGS_STATUS_LABELS[status] : `Unknown code ${event.statusCode}`,
+      partnerOrderId: event.partnerOrderId ?? null,
+      orderUuid: event.orderUuid,
+      riderName: event.riderName ?? null,
+      // APPLIED = matched a Hello Local shipment; UNMATCHED = received and stored (e.g. API-created test orders).
+      result: event.state,
+    };
+  });
+}

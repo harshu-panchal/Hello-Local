@@ -33,11 +33,16 @@ export const ADLOGGS_COD_ALLOWED = true;
  */
 export const ADLOGGS_EXTERNAL_SETTLEMENT_ALLOWED = false;
 /**
- * The webhook authentication mechanism is not specified by the provider
- * ("client authentication" only). Until it is confirmed, webhooks are never
- * accepted, whatever the env flags say.
+ * Webhook authentication. Adloggs documents no signature or header (API doc:
+ * "client authentication"; Go-Live guide: just "enter the URL"). We therefore
+ * use a mechanism we control: a long random secret, ADLOGGS_WEBHOOK_TOKEN,
+ * which must appear in the registered URL (/webhooks/adloggs/<token>) or in the
+ * x-hellolocal-webhook-token header, compared in constant time. Without a
+ * configured token every webhook call is rejected.
  */
-export const ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED = false;
+export const ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED = true;
+/** Minimum length of ADLOGGS_WEBHOOK_TOKEN (URL-safe characters only). */
+export const ADLOGGS_WEBHOOK_TOKEN_MIN_LENGTH = 32;
 
 /**
  * APPROVED initial pickup window (business decision). Used when
@@ -76,7 +81,8 @@ export const ADLOGGS_ACTIVATION_REQUIREMENTS: Readonly<Record<string, { met: boo
   cancellationRefund: { met: false, scope: "BOTH", label: "Cancellation and refund handling verified end to end" },
   sellerSettlement: { met: ADLOGGS_EXTERNAL_SETTLEMENT_ALLOWED, scope: "BOTH", label: "Seller settlement for external deliveries approved, tested and enabled" },
   rtoResolution: { met: false, scope: "BOTH", label: "Operational RTO resolution process approved" },
-  statusUpdates: { met: ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED, scope: "BOTH", label: "Authenticated webhooks, or an approved polling-only alternative" },
+  // Mechanism exists (secret-token URL); met only once Adloggs validates the 4 Go-Live webhook test cases.
+  statusUpdates: { met: false, scope: "BOTH", label: "Authenticated webhooks validated by Adloggs (4 Go-Live test cases)" },
   databaseVerification: { met: false, scope: "BOTH", label: "Database and concurrency verification on a dedicated test database" },
   // COD (simultaneous launch): nothing here is assumed; each needs Adloggs' COD documentation.
   codEnabledInCode: { met: ADLOGGS_COD_ALLOWED, scope: "COD", label: "Adloggs COD gate enabled in a reviewed change (ADLOGGS_COD_ALLOWED)" },
@@ -111,6 +117,8 @@ export interface AdloggsConfig {
   statusPollingEnabled: boolean;
   cancellationWorkerEnabled: boolean;
   webhookEnabled: boolean;
+  /** A valid ADLOGGS_WEBHOOK_TOKEN is configured (the value itself is never exposed). */
+  hasWebhookToken: boolean;
   codRequested: boolean;
   /** Minutes after booking used for pickup_date_time; no policy is assumed when unset. */
   pickupWindowMinutes: number | null;
@@ -162,6 +170,7 @@ export function loadAdloggsConfig(env: NodeJS.ProcessEnv = process.env): Adloggs
     statusPollingEnabled: flag(env.ADLOGGS_STATUS_POLLING_ENABLED),
     cancellationWorkerEnabled: flag(env.ADLOGGS_CANCELLATION_WORKER_ENABLED),
     webhookEnabled: flag(env.ADLOGGS_WEBHOOK_ENABLED),
+    hasWebhookToken: adloggsWebhookToken(env) !== null,
     codRequested: flag(env.ADLOGGS_COD_ENABLED),
     pickupWindowMinutes,
     requestTimeoutMs: boundedInt(env.ADLOGGS_REQUEST_TIMEOUT_MS, 1000, 30000) ?? 10000,
@@ -202,6 +211,8 @@ export function adloggsCapabilities(config: AdloggsConfig = loadAdloggsConfig())
   if (config.pickupWindowMinutes === null) blockers.push("Pickup deadline policy is not configured (ADLOGGS_PICKUP_WINDOW_MINUTES); none is assumed.");
   if (!ADLOGGS_PICKUP_SEMANTICS_CONFIRMED) blockers.push("Real bookings are blocked until Adloggs confirms pickup_date_time semantics (the 30-minute window is approved but not yet usable).");
   if (!ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED) blockers.push("Webhook authentication contract is not confirmed by Adloggs; webhooks are rejected.");
+  else if (!config.webhookEnabled) blockers.push("Webhooks are switched off (ADLOGGS_WEBHOOK_ENABLED); status comes from polling.");
+  else if (!config.hasWebhookToken) blockers.push(`Webhooks need ADLOGGS_WEBHOOK_TOKEN (at least ${ADLOGGS_WEBHOOK_TOKEN_MIN_LENGTH} URL-safe characters).`);
   if (!config.codRequested) blockers.push("Adloggs COD is switched off (ADLOGGS_COD_ENABLED).");
   for (const missing of adloggsActivationBlockers()) blockers.push(`Live activation requires: ${missing}.`);
   return {
@@ -212,10 +223,18 @@ export function adloggsCapabilities(config: AdloggsConfig = loadAdloggsConfig())
     bookingReady,
     statusReconciliationReady: apiAccessAllowed && config.statusPollingEnabled,
     cancellationReady: apiAccessAllowed && config.cancellationWorkerEnabled,
-    webhookReady: ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED && apiAccessAllowed && config.webhookEnabled,
+    // Receiving webhooks needs no API key: only the switch and our own secret token.
+    webhookReady: ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED && config.webhookEnabled && config.hasWebhookToken,
     onlinePaymentReady: bookingReady,
     codReady: bookingReady && config.codRequested && ADLOGGS_COD_ALLOWED,
     productionActivationEligible: false,
     blockers: [...new Set(blockers)],
   };
+}
+
+/** Webhook secret for the server only (never exported through any status API). */
+export function adloggsWebhookToken(env: NodeJS.ProcessEnv = process.env): string | null {
+  const token = env.ADLOGGS_WEBHOOK_TOKEN?.trim();
+  if (!token || token.length < ADLOGGS_WEBHOOK_TOKEN_MIN_LENGTH || token.length > 256 || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
+  return token;
 }

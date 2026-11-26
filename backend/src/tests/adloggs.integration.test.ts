@@ -762,32 +762,44 @@ test("RTO: return-to-origin is tracked separately and never counts as delivered"
   assert.equal(summarizeShipments([{ status: "RETURNED_TO_ORIGIN" }]).state, "RETURNED_TO_ORIGIN");
 });
 
-test("webhook route: disabled → 404; enabled but unauthenticated → 401 and nothing written", async t => {
-  const writes = t.mock.method(AdloggsWebhookEvent, "create", async () => ({}));
-  const call = async (env: NodeJS.ProcessEnv) => {
+const HOOK_TOKEN = "t".repeat(40);
+test("webhook route: off or without a token → 404; wrong/missing token → 401 and nothing written; right token → processed", async t => {
+  const writes: any[] = [];
+  t.mock.method(AdloggsWebhookEvent, "create", async (record: any) => { writes.push(record); return {}; });
+  t.mock.method(AdloggsWebhookEvent, "updateOne", async () => ({}));
+  t.mock.method(Shipment, "findOne", () => lean(() => null)); // test order not in our DB -> UNMATCHED, still acknowledged
+  const call = async (env: NodeJS.ProcessEnv, params: any = {}, headers: any = {}) => {
     const saved = { ...process.env };
     Object.assign(process.env, env);
     try {
       let status = 0;
       const res: any = { status(code: number) { status = code; return res; }, json() { return res; } };
-      await handleAdloggsWebhook({ headers: { "content-length": "100" }, body: { order_uuid: "u", order_status_id: 5 } } as any, res);
+      await handleAdloggsWebhook({ headers: { "content-length": "100", ...headers }, params, body: { order_uuid: "u", order_status_id: "5" } } as any, res);
       return status;
     } finally { process.env = saved; }
   };
-  assert.equal(await call({ ADLOGGS_WEBHOOK_ENABLED: "false" }), 404);
-  assert.equal(await call({ ...DEV_ENV, ADLOGGS_WEBHOOK_ENABLED: "true" }), 401);
-  assert.equal(writes.mock.callCount(), 0);
+  assert.equal(await call({ ADLOGGS_WEBHOOK_ENABLED: "false", ADLOGGS_WEBHOOK_TOKEN: HOOK_TOKEN }), 404);
+  assert.equal(await call({ ADLOGGS_WEBHOOK_ENABLED: "true", ADLOGGS_WEBHOOK_TOKEN: "" }), 404, "no token configured: endpoint closed");
+  const on = { ADLOGGS_WEBHOOK_ENABLED: "true", ADLOGGS_WEBHOOK_TOKEN: HOOK_TOKEN };
+  assert.equal(await call(on), 401);
+  assert.equal(await call(on, { token: "x".repeat(40) }), 401);
+  assert.equal(writes.length, 0, "nothing written for unauthenticated calls");
+  assert.equal(await call(on, { token: HOOK_TOKEN }), 200, "URL token accepted (numeric string status tolerated)");
+  assert.equal(await call(on, {}, { "x-hellolocal-webhook-token": HOOK_TOKEN }), 200, "header token accepted");
+  assert.equal(writes[0].statusCode, 5);
 });
 
-test("webhook auth (Phase 7 Task 9): no guessed mechanism is accepted while the contract is unconfirmed", () => {
+test("webhook auth: only our own secret token is accepted; guesses (including the Adloggs API key) are not", () => {
   const key = DEV_ENV.ADLOGGS_API_KEY as string;
-  for (const headers of [{}, { "x-api-key": key }, { authorization: `Bearer ${key}` }, { authorization: key },
-    { "x-adloggs-signature": "sha256=abc" }, { "x-webhook-secret": key }]) {
-    const result = authenticateAdloggsWebhook({ headers } as any);
-    assert.equal(result.ok, false);
-    assert.equal(result.reason, "WEBHOOK_AUTH_CONTRACT_UNCONFIRMED");
+  const env = { ADLOGGS_WEBHOOK_TOKEN: HOOK_TOKEN } as NodeJS.ProcessEnv;
+  for (const headers of [{}, { "x-api-key": key }, { authorization: `Bearer ${key}` }, { authorization: HOOK_TOKEN },
+    { "x-adloggs-signature": "sha256=abc" }, { "x-webhook-secret": HOOK_TOKEN }]) {
+    assert.equal(authenticateAdloggsWebhook({ headers } as any, env).ok, false, JSON.stringify(Object.keys(headers)));
   }
-  assert.equal(ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED, false, "stays false until Adloggs documents the mechanism");
+  assert.equal(authenticateAdloggsWebhook({ headers: {}, params: { token: HOOK_TOKEN } } as any, env).ok, true);
+  assert.equal(authenticateAdloggsWebhook({ headers: {}, params: { token: HOOK_TOKEN } } as any, { ADLOGGS_WEBHOOK_TOKEN: "short" } as any).reason,
+    "WEBHOOK_TOKEN_NOT_CONFIGURED", "weak tokens are never accepted");
+  assert.equal(ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED, true, "mechanism is ours: secret-token URL");
 });
 
 test("webhook processing: durable receipt, dedupe, no OTP/phone stored, replay after booking", async t => {
@@ -916,7 +928,8 @@ test("routes: Adloggs admin endpoints are admin-only; webhook is the only public
     assert.ok(guard > 0 && guard < routes.indexOf(r), r);
   }
   assert.match(src("routes/index.ts"), /router\.post\("\/webhooks\/adloggs", handleAdloggsWebhook\)/);
-  assert.match(src("services/adloggs/adloggsConfig.ts"), /ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED = false/);
+  assert.match(src("routes/index.ts"), /router\.post\("\/webhooks\/adloggs\/:token", handleAdloggsWebhook\)/);
+  assert.match(src("services/adloggs/adloggsConfig.ts"), /ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED = true/);
 });
 
 test("safety: HTTP only in the client; no production activation; Adloggs still unselectable", () => {

@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { Request, Response } from "express";
 import AdloggsWebhookEvent from "../../models/AdloggsWebhookEvent";
-import { ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED, adloggsCapabilities, loadAdloggsConfig } from "./adloggsConfig";
+import { ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED, adloggsCapabilities, adloggsWebhookToken, loadAdloggsConfig } from "./adloggsConfig";
 import { applyAdloggsStatus, ApplyOutcome } from "./adloggsTrackingService";
 
 /**
@@ -19,10 +19,24 @@ export const MAX_WEBHOOK_BYTES = 16 * 1024;
 
 export interface WebhookAuthResult { ok: boolean; reason: string }
 
-/** Placeholder for the provider's (unconfirmed) mechanism. Never accepts today. */
-export function authenticateAdloggsWebhook(_req: Pick<Request, "headers">): WebhookAuthResult {
+export const WEBHOOK_TOKEN_HEADER = "x-hellolocal-webhook-token";
+
+/**
+ * Our own mechanism (Adloggs specifies none): the request must carry our secret
+ * ADLOGGS_WEBHOOK_TOKEN in the URL path (/webhooks/adloggs/<token>) or in the
+ * x-hellolocal-webhook-token header. Constant-time comparison of SHA-256 digests.
+ */
+export function authenticateAdloggsWebhook(req: Pick<Request, "headers"> & { params?: Record<string, string> },
+  env: NodeJS.ProcessEnv = process.env): WebhookAuthResult {
   if (!ADLOGGS_WEBHOOK_AUTH_CONTRACT_CONFIRMED) return { ok: false, reason: "WEBHOOK_AUTH_CONTRACT_UNCONFIRMED" };
-  return { ok: false, reason: "WEBHOOK_AUTH_NOT_IMPLEMENTED" };
+  const expected = adloggsWebhookToken(env);
+  if (!expected) return { ok: false, reason: "WEBHOOK_TOKEN_NOT_CONFIGURED" };
+  const header = req.headers?.[WEBHOOK_TOKEN_HEADER];
+  const supplied = typeof req.params?.token === "string" && req.params.token ? req.params.token
+    : typeof header === "string" ? header : "";
+  if (!supplied) return { ok: false, reason: "WEBHOOK_TOKEN_MISSING" };
+  const digest = (value: string) => crypto.createHash("sha256").update(value).digest();
+  return crypto.timingSafeEqual(digest(supplied), digest(expected)) ? { ok: true, reason: "OK" } : { ok: false, reason: "WEBHOOK_TOKEN_INVALID" };
 }
 
 export interface ValidWebhookPayload { orderUuid: string; code: number; partnerOrderId?: string; riderName?: string }
@@ -32,7 +46,9 @@ export function parseWebhookPayload(body: unknown): ValidWebhookPayload | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const record = body as Record<string, any>;
   const orderUuid = typeof record.order_uuid === "string" ? record.order_uuid.trim() : "";
-  const code = typeof record.order_status_id === "number" ? record.order_status_id : Number.NaN;
+  // Numbers or numeric strings ("5"): test tools and real events may differ.
+  const rawCode = record.order_status_id;
+  const code = typeof rawCode === "number" ? rawCode : typeof rawCode === "string" && /^\s*\d{1,3}\s*$/.test(rawCode) ? Number(rawCode) : Number.NaN;
   if (!orderUuid || orderUuid.length > 200 || !Number.isInteger(code)) return null;
   const partner = record.partner_order_id;
   const partnerOrderId = typeof partner === "string" || typeof partner === "number" ? String(partner).slice(0, 100) : undefined;
@@ -82,7 +98,7 @@ export async function replayUnmatchedWebhookEvents(orderUuid: string): Promise<n
 /** POST /api/v1/webhooks/adloggs */
 export async function handleAdloggsWebhook(req: Request, res: Response) {
   const config = loadAdloggsConfig();
-  if (!config.webhookEnabled || !adloggsCapabilities(config).apiAccessAllowed) {
+  if (!adloggsCapabilities(config).webhookReady) {
     return res.status(404).json({ success: false, message: "Not found" });
   }
   const length = Number(req.headers["content-length"] || 0);
